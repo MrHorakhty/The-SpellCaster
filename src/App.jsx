@@ -643,22 +643,24 @@ function App() {
                       </div>
                     </button>
                     {editMode && (
-                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                      <>
+                        {/* Edit Icon - Top Left */}
                         <button
                           onClick={() => handleEditCharacter(character.id)}
-                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Character"
                         >
                           <Edit size={12} />
                         </button>
+                        {/* Delete Icon - Top Right */}
                         <button
                           onClick={() => handleDeleteCharacter(character.id)}
-                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Character"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
                 ))}
@@ -679,22 +681,24 @@ function App() {
                       </div>
                     </button>
                     {editMode && (
-                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                      <>
+                        {/* Edit Icon - Top Left */}
                         <button
                           onClick={() => handleEditCategory(category.category)}
-                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Category"
                         >
                           <Edit size={12} />
                         </button>
+                        {/* Delete Icon - Top Right */}
                         <button
                           onClick={() => handleDeleteCategory(category.category)}
-                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Category"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
                 ))}
