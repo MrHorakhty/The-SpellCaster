@@ -732,10 +732,18 @@ function App() {
                       disabled={editMode}
                     >
                       <div className="flex items-center justify-center mb-2">
-                        {(() => {
-                          const IconComponent = getSoundIcon(sound.type)
-                          return <IconComponent size={24} className="mr-2" />
-                        })()}
+                        {sound.icon ? (
+                          <img 
+                            src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
+                            alt={sound.name}
+                            className="w-6 h-6 mr-2 object-contain"
+                          />
+                        ) : (
+                          (() => {
+                            const IconComponent = getSoundIcon(sound.type)
+                            return <IconComponent size={24} className="mr-2" />
+                          })()
+                        )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
                       </div>
                       <div className="text-xs text-slate-400 text-center">{sound.type}</div>
@@ -774,10 +782,18 @@ function App() {
                       disabled={editMode}
                     >
                       <div className="flex items-center justify-center mb-2">
-                        {(() => {
-                          const IconComponent = getSoundIcon(sound.type)
-                          return <IconComponent size={24} className="mr-2" />
-                        })()}
+                        {sound.icon ? (
+                          <img 
+                            src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
+                            alt={sound.name}
+                            className="w-6 h-6 mr-2 object-contain"
+                          />
+                        ) : (
+                          (() => {
+                            const IconComponent = getSoundIcon(sound.type)
+                            return <IconComponent size={24} className="mr-2" />
+                          })()
+                        )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
                       </div>
                       <div className="text-xs text-slate-400 text-center">{sound.type}</div>
@@ -874,17 +890,6 @@ function App() {
                         </button>
                       </div>
                     )}
-                    <div className="mt-1 text-xs text-slate-400">
-                      Or enter file name manually:
-                    </div>
-                    <input
-                      type="text"
-                      name="icon"
-                      value={soundFormData.icon}
-                      onChange={handleSoundFormChange}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                      placeholder="e.g., fire.svg, shield.png"
-                    />
                   </div>
                   
                   <div>
@@ -910,17 +915,6 @@ function App() {
                         </div>
                       </div>
                     )}
-                    <div className="mt-1 text-xs text-slate-400">
-                      Or enter file name manually:
-                    </div>
-                    <input
-                      type="text"
-                      name="file"
-                      value={soundFormData.file}
-                      onChange={handleSoundFormChange}
-                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                      placeholder="e.g., fire.wav, healing.mp3"
-                    />
                   </div>
                   
                   <div>
