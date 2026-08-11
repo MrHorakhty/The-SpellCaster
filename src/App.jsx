@@ -2037,28 +2037,6 @@ function App() {
                                 {/* Custom Color Picker */}
                                 <div>
                                     <h3 className="text-lg font-medium mb-3">Custom Color Theme</h3>
-                                    <div className="grid grid-cols-4 gap-3 mb-4">
-                                        {[
-                                            '#84cc16', '#10b981', '#3b82f6', '#ef4444',
-                                            '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899',
-                                            '#14b8a6', '#0ea5e9', '#f97316', '#a855f7',
-                                            '#64748b', '#94a3b8', '#cbd5e1', '#f1f5f9'
-                                        ].map((color) => (
-                                            <button
-                                                key={color}
-                                                onClick={() => {
-                                                    handleBackgroundSettingsChange('theme', color)
-                                                    handleBackgroundSettingsChange('type', 'color')
-                                                }}
-                                                className={`w-8 h-8 rounded border-2 transition-transform hover:scale-110 ${backgroundSettings.theme === color
-                                                    ? 'border-lime-500 scale-110'
-                                                    : 'border-dark-600'
-                                                    }`}
-                                                style={{ backgroundColor: color }}
-                                                title={color}
-                                            />
-                                        ))}
-                                    </div>
                                     <div className="flex items-center space-x-3">
                                         <span className="text-sm text-slate-400">Custom Color:</span>
                                         <input
@@ -2068,9 +2046,11 @@ function App() {
                                                 handleBackgroundSettingsChange('theme', e.target.value)
                                                 handleBackgroundSettingsChange('type', 'color')
                                             }}
-                                            className="w-12 h-8 rounded border border-dark-600"
+                                            className="w-12 h-8 rounded border border-dark-600 cursor-pointer"
                                         />
-                                        <span className="text-sm text-slate-400">{backgroundSettings.theme !== 'default' && !predefinedThemes[backgroundSettings.theme] ? backgroundSettings.theme : 'Select a color'}</span>
+                                        <span className="text-sm text-slate-400">
+                                            {backgroundSettings.theme !== 'default' && !predefinedThemes[backgroundSettings.theme] ? backgroundSettings.theme : 'Select a color'}
+                                        </span>
                                     </div>
                                 </div>
 
