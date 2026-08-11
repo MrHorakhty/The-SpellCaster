@@ -71,6 +71,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('')
   const [editMode, setEditMode] = useState(false)
   const [audioEnabled, setAudioEnabled] = useState(false)
+  const [masterVolume, setMasterVolume] = useState(1.0) // 0.0 to 1.0
   const [playingSounds, setPlayingSounds] = useState(new Set())
   const audioElementsRef = useRef(new Map())
   
@@ -118,6 +119,23 @@ function App() {
   // Enable audio after user interaction
   const enableAudio = () => {
     setAudioEnabled(true)
+  }
+
+  // Update master volume and apply to all playing sounds
+  const updateMasterVolume = (volume) => {
+    setMasterVolume(volume)
+    
+    // Enable audio if volume is increased from 0
+    if (volume > 0 && !audioEnabled) {
+      setAudioEnabled(true)
+    }
+    
+    // Update volume for all currently playing audio elements
+    audioElementsRef.current.forEach((audio, soundKey) => {
+      if (audio && typeof audio.volume !== 'undefined') {
+        audio.volume = audioEnabled ? volume : 0
+      }
+    })
   }
 
 // Sound management functions
@@ -567,6 +585,7 @@ function App() {
     
     const audio = new Audio(soundUrl)
     audio.loop = sound.loop || false // Use sound's loop property
+    audio.volume = audioEnabled ? masterVolume : 0 // Apply master volume if audio is enabled
     
     audioElementsRef.current.set(soundKey, audio)
     
@@ -650,23 +669,27 @@ function App() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Volume Slider */}
+              <div className="flex items-center space-x-2">
+                <Volume2 size={20} className="text-slate-300" />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={masterVolume}
+                  onChange={(e) => updateMasterVolume(parseFloat(e.target.value))}
+                  className="slider w-24"
+                  title={`Volume: ${Math.round(masterVolume * 100)}%`}
+                />
+                <span className="text-sm text-slate-400 w-8">{Math.round(masterVolume * 100)}%</span>
+              </div>
+              
+              {/* Dummy Button - Reserved for future functionality */}
               <button
-                onClick={enableAudio}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  audioEnabled 
-                    ? 'bg-lime-600 text-white' 
-                    : 'bg-red-600 text-white hover:bg-red-700'
-                }`}
-              >
-                {audioEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-              </button>
-              <button
-                onClick={() => setEditMode(!editMode)}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  editMode 
-                    ? 'bg-lime-600 text-white' 
-                    : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                }`}
+                className="px-4 py-2 rounded-lg bg-dark-700 text-slate-400 opacity-50 cursor-not-allowed"
+                title="Reserved for future functionality"
+                disabled
               >
                 <Settings size={20} />
               </button>
@@ -681,7 +704,21 @@ function App() {
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-dark-800 rounded-xl p-4">
-              <h2 className="text-lg font-semibold mb-4">Categories</h2>
+              {/* Edit Button - Moved to sidebar top left */}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">Categories</h2>
+                <button
+                  onClick={() => setEditMode(!editMode)}
+                  className={`px-3 py-2 rounded-lg transition-colors ${
+                    editMode 
+                      ? 'bg-lime-600 text-white' 
+                      : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                  }`}
+                  title={editMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
+                >
+                  <Edit size={16} />
+                </button>
+              </div>
               
               {/* Tab Type Selection */}
               <div className="flex space-x-2 mb-4">
