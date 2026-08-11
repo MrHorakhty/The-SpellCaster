@@ -437,6 +437,17 @@ function App() {
     }
   }
 
+  // Edit handlers (placeholder functions for now)
+  const handleEditCharacter = (characterId) => {
+    console.log('Edit character:', characterId)
+    // TODO: Implement character edit modal
+  }
+
+  const handleEditCategory = (categoryName) => {
+    console.log('Edit category:', categoryName)
+    // TODO: Implement category edit modal
+  }
+
   // File storage functions
   const storeFileInLocalStorage = (fileName, file) => {
     const reader = new FileReader()
@@ -632,13 +643,22 @@ function App() {
                       </div>
                     </button>
                     {editMode && (
-                      <button
-                        onClick={() => handleDeleteCharacter(character.id)}
-                        className="absolute -top-1 -right-1 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                        title="Delete Character"
-                      >
-                        <X size={12} />
-                      </button>
+                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                        <button
+                          onClick={() => handleEditCharacter(character.id)}
+                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          title="Edit Character"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCharacter(character.id)}
+                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          title="Delete Character"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -659,13 +679,22 @@ function App() {
                       </div>
                     </button>
                     {editMode && (
-                      <button
-                        onClick={() => handleDeleteCategory(category.category)}
-                        className="absolute -top-1 -right-1 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                        title="Delete Category"
-                      >
-                        <X size={12} />
-                      </button>
+                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                        <button
+                          onClick={() => handleEditCategory(category.category)}
+                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          title="Edit Category"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(category.category)}
+                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          title="Delete Category"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -751,22 +780,24 @@ function App() {
 
                     {/* Edit Mode Actions */}
                     {editMode && (
-                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                      <>
+                        {/* Edit Icon - Top Right */}
                         <button
                           onClick={() => openEditSoundModal(sound)}
-                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
                           <Edit size={12} />
                         </button>
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
                 ))}
@@ -801,22 +832,24 @@ function App() {
 
                     {/* Edit Mode Actions */}
                     {editMode && (
-                      <div className="absolute -top-2 -right-2 flex space-x-1 opacity-0 group-hover:opacity-100 z-10">
+                      <>
+                        {/* Edit Icon - Top Right */}
                         <button
                           onClick={() => openEditSoundModal(sound)}
-                          className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
                           <Edit size={12} />
                         </button>
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
                 ))}
