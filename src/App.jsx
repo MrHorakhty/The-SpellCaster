@@ -228,8 +228,19 @@ function App() {
     setAudioPreview('')
     
     // Reset multiple file states for editing
-    setAudioFiles([])
-    setAudioPreviews([])
+    // If editing existing sound with files, load them into state
+    if (sound.files && sound.files.length > 0) {
+      const existingFiles = sound.files.map(file => ({
+        file: null, // We don't have the File object, but we have the name
+        preview: getFileFromLocalStorage(file.name) || `/assets/${file.name}`,
+        name: file.name
+      }))
+      setAudioFiles(existingFiles)
+      setAudioPreviews(existingFiles.map(f => f.preview))
+    } else {
+      setAudioFiles([])
+      setAudioPreviews([])
+    }
     
     // Set icon preview for existing sound
     if (sound.icon) {
@@ -1519,9 +1530,6 @@ function App() {
                           className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
-className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
-                        isSoundPlaying(sound.id) ? 'ring-2 ring-lime-500' : ''
-                      } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                           <Edit size={12} />
                         </button>
                       </>
@@ -1981,7 +1989,7 @@ className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transitio
                       </button>
                       <button
                         type="submit"
-                        disabled={!soundFormData.name.trim() || (!audioFile && !soundFormData.file)}
+                        disabled={!soundFormData.name.trim() || (!audioFile && !soundFormData.file && audioFiles.length === 0 && !soundFormData.files?.length)}
                         className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                       >
                         {editingSound ? 'Save Changes' : 'Add Sound'}
