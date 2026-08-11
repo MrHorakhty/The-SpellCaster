@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Test</title>
+</head>
+<body>
+    <h1>Audio Test Page</h1>
+    <button onclick="testAudio()">Test Audio Playback</button>
+    <button onclick="testHowler()">Test Howler.js</button>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.3.3/howler.min.js"></script>
+    <script>
+        function testAudio() {
+            // Test Web Audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 440;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                console.log('Web Audio API test: SUCCESS - You should hear a beep');
+            } catch (error) {
+                console.error('Web Audio API test: FAILED', error);
+            }
+        }
+        
+        function testHowler() {
+            // Test Howler.js
+            try {
+                const sound = new Howl({
+                    src: ['https://assets.codepen.io/21542/howler-push-button.mp3'],
+                    volume: 0.5,
+                    onload: () => console.log('Howler.js test: Sound loaded successfully'),
+                    onplayerror: (id, error) => console.error('Howler.js test: FAILED', error),
+                    onend: () => console.log('Howler.js test: SUCCESS - Sound played successfully')
+                });
+                
+                sound.play();
+            } catch (error) {
+                console.error('Howler.js test: FAILED', error);
+            }
+        }
+        
+        console.log('Audio test page loaded');
+    </script>
+</body>
+</html>

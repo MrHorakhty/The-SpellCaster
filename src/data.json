@@ -1,0 +1,53 @@
+{
+  "characters": [
+    {
+      "id": "char_1",
+      "name": "Elf Sorcerer",
+      "sounds": [
+        { "id": "s_1", "name": "Caustic Blast", "type": "Acid", "icon": "acid.svg", "file": "acid.wav", "color": "#84cc16", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_2", "name": "Frostbite", "type": "Cold", "icon": "frost.svg", "file": "cold.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_3", "name": "Fireball", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_4", "name": "Chain Lightning", "type": "Lightning", "icon": "lightning.svg", "file": "lightning.wav", "color": "#eab308", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
+      ]
+    },
+    {
+      "id": "char_2", 
+      "name": "Human Paladin",
+      "sounds": [
+        { "id": "s_5", "name": "Lay on Hands", "type": "Healing", "icon": "heal.svg", "file": "healing.wav", "color": "#10b981", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_6", "name": "Divine Smite", "type": "Divine", "icon": "divine.svg", "file": "divine.wav", "color": "#fbbf24", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_7", "name": "Shield of Faith", "type": "Protection", "icon": "shield.svg", "file": "protection.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
+      ]
+    },
+    {
+      "id": "char_3",
+      "name": "Rogue Assassin", 
+      "sounds": [
+        { "id": "s_8", "name": "Sneak Attack", "type": "Stealth", "icon": "stealth.svg", "file": "stealth.wav", "color": "#a855f7", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_9", "name": "Rapier Strike", "type": "Weapon", "icon": "sword.svg", "file": "weapon.wav", "color": "#f59e0b", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_10", "name": "Test PNG Icon", "type": "Test", "icon": "test-icon.png", "file": "stealth.wav", "color": "#ef4444", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_11", "name": "Test JPG Icon", "type": "Test", "icon": "test-icon.jpg", "file": "stealth.wav", "color": "#3b82f6", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
+        { "id": "s_12", "name": "Test GIF Icon", "type": "Test", "icon": "test-icon.gif", "file": "stealth.wav", "color": "#10b981", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 }
+      ]
+    }
+  ],
+  "environmentSounds": [
+    {
+      "category": "Background Music",
+      "sounds": [
+        { "id": "env_1", "name": "Forest Ambience", "type": "Nature", "icon": "forest.svg", "file": "forest.wav", "color": "#10b981", "duration": 0, "fadeIn": 2.5, "fadeOut": 3.0, "isEnvironmental": true },
+        { "id": "env_2", "name": "Tavern Music", "type": "Music", "icon": "tavern.svg", "file": "tavern.wav", "color": "#f59e0b", "duration": 0, "fadeIn": 1.5, "fadeOut": 2.0, "isEnvironmental": true },
+        { "id": "env_3", "name": "Dungeon Echoes", "type": "Ambience", "icon": "dungeon.svg", "file": "dungeon.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 3.0, "fadeOut": 4.0, "isEnvironmental": true }
+      ]
+    },
+    {
+      "category": "Environmental Effects",
+      "sounds": [
+        { "id": "env_4", "name": "Rain", "type": "Weather", "icon": "rain.svg", "file": "rain.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 2.0, "fadeOut": 2.5, "isEnvironmental": true },
+        { "id": "env_5", "name": "Thunder", "type": "Weather", "icon": "thunder.svg", "file": "thunder.wav", "color": "#f97316", "duration": 5.0, "fadeIn": 0.5, "fadeOut": 1.0, "isEnvironmental": true },
+        { "id": "env_6", "name": "Wind", "type": "Weather", "icon": "wind.svg", "file": "wind.wav", "color": "#84cc16", "duration": 0, "fadeIn": 3.0, "fadeOut": 3.5, "isEnvironmental": true },
+        { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 1.0, "fadeOut": 1.5, "isEnvironmental": true }
+      ]
+    }
+  ]
+}
