@@ -1305,14 +1305,17 @@ function App() {
                                 <h1 className="text-2xl font-bold">TTRPG Soundboard</h1>
                             </div>
 
-                            {/* Split View Toggle - Moved to Header */}
-                            <div className="h-6 w-px bg-dark-600 mx-2 hidden sm:block"></div>
-                            <div className="hidden sm:flex items-center space-x-3 bg-dark-900 px-3 py-1.5 rounded-lg border border-dark-600">
-                                <span className="text-sm font-medium text-slate-300">Split View</span>
+                            {/* Split View Toggle - Responsive Layout */}
+                            <div className="h-6 w-px bg-dark-600 mx-1 hidden md:block"></div>
+                            <div className="flex items-center space-x-2 bg-dark-900 px-2.5 py-1 rounded-lg border border-dark-600 shrink-0">
+                                <span className="text-xs font-medium text-slate-300 leading-tight text-center hidden sm:inline">
+                                    Split<br />View
+                                </span>
+                                <span className="text-xs font-medium text-slate-300 sm:hidden">Split</span>
                                 <button
                                     type="button"
                                     onClick={() => setIsSplitView(!isSplitView)}
-                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isSplitView ? 'bg-lime-600' : 'bg-dark-600'
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${isSplitView ? 'bg-lime-600' : 'bg-dark-600'
                                         }`}
                                 >
                                     <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isSplitView ? 'translate-x-5' : 'translate-x-1'
@@ -1382,7 +1385,7 @@ function App() {
                 {/* Edit Mode Controls (Hidden in Split View) */}
                 {editMode && !isSplitView && (
                     <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg w-full mx-auto">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
                             <div className="flex items-center space-x-2">
                                 <Settings size={16} />
                                 <span className="font-medium">Edit Mode Active</span>
