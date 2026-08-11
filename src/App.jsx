@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2 } from 'lucide-react'
+import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder } from 'lucide-react'
 import data from './data.json'
 
 // Function to get appropriate icon component based on sound type
@@ -55,6 +55,12 @@ function App() {
   // Character management states
   const [showCharacterModal, setShowCharacterModal] = useState(false)
   const [characterFormData, setCharacterFormData] = useState({
+    name: ''
+  })
+  
+  // Category management states
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [categoryFormData, setCategoryFormData] = useState({
     name: ''
   })
   
@@ -246,6 +252,8 @@ function App() {
       deleteSound(itemToDelete)
     } else if (deleteType === 'character' && itemToDelete) {
       deleteCharacter(itemToDelete)
+    } else if (deleteType === 'category' && itemToDelete) {
+      deleteCategory(itemToDelete)
     }
     setShowDeleteConfirm(false)
     setItemToDelete(null)
@@ -371,6 +379,60 @@ function App() {
     
     // If the deleted character was active, clear the active tab
     if (activeTab === characterId) {
+      setActiveTab('')
+    }
+  }
+
+  // Category management functions
+  const openAddCategoryModal = () => {
+    setCategoryFormData({ name: '' })
+    setShowCategoryModal(true)
+  }
+
+  const handleCategoryFormChange = (e) => {
+    const { name, value } = e.target
+    setCategoryFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleCategoryFormSubmit = (e) => {
+    e.preventDefault()
+    
+    if (!categoryFormData.name.trim()) {
+      console.log('Validation failed: Category name required')
+      return
+    }
+    
+    addCategory(categoryFormData)
+    setShowCategoryModal(false)
+  }
+
+  const addCategory = (categoryData) => {
+    const newCategory = {
+      category: categoryData.name.trim(),
+      sounds: []
+    }
+    
+    console.log('Adding new category:', newCategory)
+    
+    setEnvironmentSounds(prev => [...prev, newCategory])
+    // Set the new category as active
+    setActiveTab(newCategory.category)
+  }
+
+  const handleDeleteCategory = (categoryName) => {
+    setItemToDelete(categoryName)
+    setDeleteType('category')
+    setShowDeleteConfirm(true)
+  }
+
+  const deleteCategory = (categoryName) => {
+    setEnvironmentSounds(prev => prev.filter(category => category.category !== categoryName))
+    
+    // If the deleted category was active, clear the active tab
+    if (activeTab === categoryName) {
       setActiveTab('')
     }
   }
@@ -582,20 +644,30 @@ function App() {
                 ))}
                 
                 {tabType === 'environment' && environmentSounds.map(category => (
-                  <button
-                    key={category.category}
-                    onClick={() => setActiveTab(category.category)}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                      activeTab === category.category
-                        ? 'bg-lime-600 text-white'
-                        : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Music size={16} />
-                      <span>{category.category}</span>
-                    </div>
-                  </button>
+                  <div key={category.category} className="relative group">
+                    <button
+                      onClick={() => setActiveTab(category.category)}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                        activeTab === category.category
+                          ? 'bg-lime-600 text-white'
+                          : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Music size={16} />
+                        <span>{category.category}</span>
+                      </div>
+                    </button>
+                    {editMode && (
+                      <button
+                        onClick={() => handleDeleteCategory(category.category)}
+                        className="absolute -top-1 -right-1 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                        title="Delete Category"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -623,6 +695,13 @@ function App() {
                       >
                         <User size={16} />
                         <span>Add Character</span>
+                      </button>
+                      <button
+                        onClick={openAddCategoryModal}
+                        className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                      >
+                        <Folder size={16} />
+                        <span>Add Category</span>
                       </button>
                       <button
                         onClick={openAddSoundModal}
@@ -983,6 +1062,61 @@ function App() {
                         className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                       >
                         Add Character
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">Add New Category</h2>
+                <button
+                  onClick={() => setShowCategoryModal(false)}
+                  className="p-1 hover:bg-dark-700 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <form onSubmit={handleCategoryFormSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Category Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={categoryFormData.name}
+                      onChange={handleCategoryFormChange}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                      placeholder="e.g., Forest, Tavern, Battlefield"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="pt-4 border-t border-dark-700">
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCategoryModal(false)}
+                        className="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!categoryFormData.name.trim()}
+                        className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
+                      >
+                        Add Category
                       </button>
                     </div>
                   </div>
