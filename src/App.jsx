@@ -159,7 +159,14 @@ function App() {
     setAudioFile(null)
     setIconFile(null)
     setAudioPreview('')
-    setIconPreview('')
+    
+    // Set icon preview for existing sound
+    if (sound.icon) {
+      const iconUrl = getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
+      setIconPreview(iconUrl)
+    } else {
+      setIconPreview('')
+    }
     
     setSoundFormData({
       name: sound.name,
@@ -995,19 +1002,6 @@ function App() {
                       onChange={handleIconUpload}
                       className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500 file:bg-dark-600 file:border-0 file:text-slate-300 file:mr-4"
                     />
-                    {iconPreview && (
-                      <div className="mt-2 flex items-center space-x-3">
-                        <img src={iconPreview} alt="Icon preview" className="w-8 h-8 object-contain" />
-                        <span className="text-xs text-slate-400">{soundFormData.icon}</span>
-                        <button
-                          type="button"
-                          onClick={clearIconUpload}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
                   </div>
                   
                   <div>
@@ -1036,6 +1030,39 @@ function App() {
                   </div>
                   
                   <div>
+                    {/* Enhanced Icon Preview */}
+                    {(iconPreview || soundFormData.icon) && (
+                      <div className="mb-4 p-4 bg-dark-800 rounded-lg border border-dark-700">
+                        <label className="block text-sm font-medium mb-2">Icon Preview</label>
+                        <div className="flex items-center space-x-4">
+                          <img 
+                            src={iconPreview || (getFileFromLocalStorage(soundFormData.icon) || `/assets/${soundFormData.icon}`)} 
+                            alt="Icon preview" 
+                            className="w-16 h-16 object-contain"
+                            style={soundFormData.color === 'transparent' ? { 
+                              // Monochrome filtering for transparent mode
+                              filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
+                            } : soundFormData.color !== '#84cc16' ? { 
+                              // Gentle tinting for custom colors
+                              filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
+                            } : {}}
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm text-slate-300">{soundFormData.icon}</div>
+                            {iconPreview && (
+                              <button
+                                type="button"
+                                onClick={clearIconUpload}
+                                className="mt-1 text-xs text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <label className="block text-sm font-medium mb-1">Tint (Optional)</label>
                     <div className="space-y-3">
                       {/* Three-button color system */}
