@@ -820,10 +820,8 @@ function App() {
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
                             className="w-12 h-12 mb-2 object-contain"
-                            style={sound.color === 'transparent' ? { 
-                              // Monochrome filtering for transparent mode
-                              filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
-                            } : sound.color !== '#84cc16' ? { 
+
+                            style={sound.color !== '#84cc16' ? { 
                               // Gentle tinting for custom colors
                               filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
                             } : {}}
@@ -891,6 +889,11 @@ function App() {
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
                             className="w-12 h-12 mb-2 object-contain"
+
+                            style={sound.color !== '#84cc16' ? { 
+                              // Gentle tinting for custom colors
+                              filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                            } : {}}
                             style={sound.color === 'transparent' ? { 
                               // Monochrome filtering for transparent mode
                               filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
@@ -905,6 +908,10 @@ function App() {
                             return <IconComponent 
                               size={32} 
                               className="mb-2" 
+                              style={sound.color !== '#84cc16' ? { 
+                                // Gentle tinting for custom colors
+                                filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                              } : {}}
                               style={sound.color === 'transparent' ? { 
                                 // Monochrome filtering for transparent mode
                                 filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
@@ -1034,20 +1041,17 @@ function App() {
                     {(iconPreview || soundFormData.icon) && (
                       <div className="mb-4 p-4 bg-dark-800 rounded-lg border border-dark-700">
                         <label className="block text-sm font-medium mb-2">Icon Preview</label>
-                        <div className="flex items-center space-x-4">
+                        <div className="flex flex-col items-center justify-center space-y-2">
                           <img 
                             src={iconPreview || (getFileFromLocalStorage(soundFormData.icon) || `/assets/${soundFormData.icon}`)} 
                             alt="Icon preview" 
                             className="w-16 h-16 object-contain"
-                            style={soundFormData.color === 'transparent' ? { 
-                              // Monochrome filtering for transparent mode
-                              filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
-                            } : soundFormData.color !== '#84cc16' ? { 
+                            style={soundFormData.color !== '#84cc16' ? { 
                               // Gentle tinting for custom colors
                               filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
                             } : {}}
                           />
-                          <div className="flex-1">
+                          <div className="text-center">
                             <div className="text-sm text-slate-300">{soundFormData.icon}</div>
                             {iconPreview && (
                               <button
@@ -1065,7 +1069,7 @@ function App() {
                     
                     <label className="block text-sm font-medium mb-1">Tint (Optional)</label>
                     <div className="space-y-3">
-                      {/* Three-button color system */}
+                      {/* Two-button color system */}
                       <div className="flex space-x-2">
                         <input
                           type="color"
@@ -1085,21 +1089,10 @@ function App() {
                         >
                           Default
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setSoundFormData(prev => ({ ...prev, color: 'transparent' }))}
-                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
-                            soundFormData.color === 'transparent' 
-                              ? 'bg-blue-600 border-blue-500 text-white' 
-                              : 'bg-dark-700 border-dark-600 hover:bg-dark-600'
-                          }`}
-                        >
-                          Transparent Image
-                        </button>
                       </div>
                       
                       {/* Brightness control - only show when custom color is selected */}
-                      {soundFormData.color !== '#84cc16' && soundFormData.color !== 'transparent' && (
+                      {soundFormData.color !== '#84cc16' && (
                         <div>
                           <label className="block text-sm font-medium mb-1">Brightness: {Math.round((soundFormData.brightness || 1) * 100)}%</label>
                           <div className="flex items-center space-x-3">
