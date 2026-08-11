@@ -785,18 +785,18 @@ function App() {
                     {/* Edit Mode Actions */}
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Right */}
+                        {/* Edit Icon - Top Left */}
                         <button
                           onClick={() => openEditSoundModal(sound)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
                           <Edit size={12} />
                         </button>
-                        {/* Delete Icon - Top Left */}
+                        {/* Delete Icon - Top Right */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
@@ -837,18 +837,18 @@ function App() {
                     {/* Edit Mode Actions */}
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Right */}
+                        {/* Edit Icon - Top Left */}
                         <button
                           onClick={() => openEditSoundModal(sound)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
                           <Edit size={12} />
                         </button>
-                        {/* Delete Icon - Top Left */}
+                        {/* Delete Icon - Top Right */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
