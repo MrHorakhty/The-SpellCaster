@@ -689,20 +689,24 @@ function App() {
                       <span className="font-medium">Edit Mode Active</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={openAddCharacterModal}
-                        className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
-                      >
-                        <User size={16} />
-                        <span>Add Character</span>
-                      </button>
-                      <button
-                        onClick={openAddCategoryModal}
-                        className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
-                      >
-                        <Folder size={16} />
-                        <span>Add Category</span>
-                      </button>
+                      {tabType === 'characters' && (
+                        <button
+                          onClick={openAddCharacterModal}
+                          className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                        >
+                          <User size={16} />
+                          <span>Add Character</span>
+                        </button>
+                      )}
+                      {tabType === 'environment' && (
+                        <button
+                          onClick={openAddCategoryModal}
+                          className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                        >
+                          <Folder size={16} />
+                          <span>Add Category</span>
+                        </button>
+                      )}
                       <button
                         onClick={openAddSoundModal}
                         className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
