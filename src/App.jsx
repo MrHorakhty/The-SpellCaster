@@ -1938,10 +1938,10 @@ function App() {
                     {/* Glow Toggle */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-2">
-                        <Sparkles size={20} className="text-lime-500" />
                         <span className="text-slate-300">Enable Glow Effect</span>
                       </div>
                       <button
+                        type="button"
                         onClick={() => setSoundFormData(prev => ({ ...prev, glowEnabled: !prev.glowEnabled }))}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                           soundFormData.glowEnabled ? 'bg-lime-600' : 'bg-dark-600'
