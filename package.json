@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "backup": "powershell -Command \"git add .; git commit -m \"Backup: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')\"\"",
-    "backup-feature": "powershell -Command \"git add .; git commit -m \"Feature backup: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - %npm_config_message%\"\"",
+    "backup": "git add . && git commit -m \"Backup: Manual backup\"",
+    "backup-feature": "git add . && git commit -m \"Feature backup: $npm_config_message\"",
     "status": "git status",
     "log": "git log --oneline -10",
     "restore-last": "git reset --hard HEAD~1"
