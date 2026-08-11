@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn } from 'lucide-react'
+import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity } from 'lucide-react'
 import data from './data.json'
 
 // Function to get appropriate icon component based on sound type
@@ -69,8 +69,16 @@ const getGlowEffectStyle = (sound) => {
 }
 
 function App() {
-    const [characters, setCharacters] = useState(data.characters)
-    const [environmentSounds, setEnvironmentSounds] = useState(data.environmentSounds)
+    // Load from localStorage first, fallback to data.json if it's a first-time load
+    const [characters, setCharacters] = useState(() => {
+        const savedCharacters = localStorage.getItem('ttrpg_characters')
+        return savedCharacters ? JSON.parse(savedCharacters) : data.characters
+    })
+
+    const [environmentSounds, setEnvironmentSounds] = useState(() => {
+        const savedEnvironment = localStorage.getItem('ttrpg_environment')
+        return savedEnvironment ? JSON.parse(savedEnvironment) : data.environmentSounds
+    })
     const [tabType, setTabType] = useState('characters')
     const [activeTab, setActiveTab] = useState('')
     const [editMode, setEditMode] = useState(false)
@@ -999,6 +1007,16 @@ function App() {
         }
     }, [tabType, characters, environmentSounds, activeTab])
 
+    // Auto-save Characters to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('ttrpg_characters', JSON.stringify(characters))
+    }, [characters])
+
+    // Auto-save Environment Sounds to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('ttrpg_environment', JSON.stringify(environmentSounds))
+    }, [environmentSounds])
+
     useEffect(() => {
         if (characters.length > 0 && !activeCharacterId) {
             setActiveCharacterId(characters[0].id)
@@ -1093,27 +1111,25 @@ function App() {
 
                         {/* Loop Indicator */}
                         {!editMode && sound.loop && (
-                            <div
-                                className="absolute bg-blue-500 rounded-full"
+                            <Infinity
+                                className="absolute text-blue-500"
+                                size={12 * boxSize}
                                 style={{
                                     bottom: `${8 * boxSize}px`,
-                                    right: `${8 * boxSize}px`,
-                                    width: `${12 * boxSize}px`,
-                                    height: `${12 * boxSize}px`
+                                    right: `${8 * boxSize}px`
                                 }}
-                                title="Looping sound"
+                                title="Looping enabled"
                             />
                         )}
 
                         {/* Multi-file Indicator */}
                         {!editMode && sound.files && sound.files.length > 1 && (
-                            <div
-                                className="absolute bg-purple-500 rounded-full"
+                            <Shuffle
+                                className="absolute text-purple-500"
+                                size={12 * boxSize}
                                 style={{
                                     top: `${8 * boxSize}px`,
-                                    right: `${8 * boxSize}px`,
-                                    width: `${12 * boxSize}px`,
-                                    height: `${12 * boxSize}px`
+                                    right: `${8 * boxSize}px`
                                 }}
                                 title={`${sound.files.length} files available`}
                             />
