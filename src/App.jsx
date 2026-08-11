@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder } from 'lucide-react'
+import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square } from 'lucide-react'
 import data from './data.json'
 
 // Function to get appropriate icon component based on sound type
@@ -64,6 +64,21 @@ const getHueRotateFromColor = (color) => {
   return hueDegrees
 }
 
+// Function to generate glow effect style based on sound color and glow settings
+const getGlowEffectStyle = (sound) => {
+  if (!sound.glowEnabled) {
+    return {}
+  }
+  
+  // Calculate glow intensity based on prominence
+  const intensity = (sound.glowProminence || 0.5) * 0.5 + 0.1 // Range: 0.1 to 0.6
+  const spread = (sound.glowProminence || 0.5) * 10 + 5 // Range: 5 to 15
+  
+  return {
+    boxShadow: `0 0 ${spread}px ${intensity}px ${sound.color}, 0 4px 6px -1px rgba(0, 0, 0, 0.3)`
+  }
+}
+
 function App() {
   const [characters, setCharacters] = useState(data.characters)
   const [environmentSounds, setEnvironmentSounds] = useState(data.environmentSounds)
@@ -72,7 +87,7 @@ function App() {
   const [editMode, setEditMode] = useState(false)
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [masterVolume, setMasterVolume] = useState(1.0) // 0.0 to 1.0
-  const [playingSounds, setPlayingSounds] = useState(new Set())
+  const [soundInstances, setSoundInstances] = useState({}) // Track sound instances for UI updates
   const audioElementsRef = useRef(new Map())
   
   // Modal and form states
@@ -88,7 +103,9 @@ function App() {
     duration: 0,
     fadeIn: 0,
     fadeOut: 0,
-    loop: false
+    loop: false,
+    glowEnabled: false,
+    glowProminence: 0.5 // 0.0 to 1.0
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [itemToDelete, setItemToDelete] = useState(null)
@@ -105,6 +122,27 @@ function App() {
   const [categoryFormData, setCategoryFormData] = useState({
     name: ''
   })
+
+  // Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [backgroundSettings, setBackgroundSettings] = useState({
+    type: 'color', // 'color', 'image' - default is handled by theme system
+    theme: 'default', // 'default', custom color, or preset theme
+    color: '#84cc16', // Default accent color
+    imageFile: null,
+    imagePreview: '',
+    isLoading: false
+  })
+  
+  // Predefined themes
+  const predefinedThemes = {
+    'default': { name: 'Default', primary: '#84cc16' },
+    'forest': { name: 'Forest', primary: '#10b981' },
+    'ocean': { name: 'Ocean', primary: '#3b82f6' },
+    'fire': { name: 'Fire', primary: '#ef4444' },
+    'magic': { name: 'Magic', primary: '#8b5cf6' },
+    'gold': { name: 'Gold', primary: '#f59e0b' }
+  }
   
   // File upload states
   const [audioFile, setAudioFile] = useState(null)
@@ -196,7 +234,9 @@ function App() {
       duration: sound.duration || 0,
       fadeIn: sound.fadeIn || 0,
       fadeOut: sound.fadeOut || 0,
-      loop: loopValue
+      loop: loopValue,
+      glowEnabled: sound.glowEnabled || false,
+      glowProminence: sound.glowProminence || 0.5
     })
     setEditingSound(sound)
     setShowSoundModal(true)
@@ -466,6 +506,324 @@ function App() {
     }))
   }
 
+  // Settings modal handlers
+  const openSettingsModal = () => {
+    // Load saved settings from localStorage
+    const savedSettings = localStorage.getItem('backgroundSettings')
+    if (savedSettings) {
+      setBackgroundSettings(JSON.parse(savedSettings))
+    }
+    
+    setShowSettingsModal(true)
+  }
+
+  const handleBackgroundSettingsChange = (key, value) => {
+    setBackgroundSettings(prevSettings => {
+      const newSettings = {
+        ...prevSettings,
+        [key]: value
+      }
+      
+      // Apply changes immediately with the updated settings
+      applyBackgroundSettings(newSettings)
+      
+      // Save to localStorage
+      localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
+      
+      return newSettings
+    })
+  }
+
+  // Advanced color palette generation
+  const generateThemePalette = (baseColor) => {
+    // Convert hex to RGB
+    const hex = baseColor.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    
+    // Generate complementary color (rotate hue by 180°)
+    const compR = 255 - r
+    const compG = 255 - g
+    const compB = 255 - b
+    const complementary = `#${compR.toString(16).padStart(2, '0')}${compG.toString(16).padStart(2, '0')}${compB.toString(16).padStart(2, '0')}`
+    
+    // Generate triadic colors (rotate hue by 120° and 240°)
+    // Simplified approach using HSL manipulation
+    const hue = getHueFromRGB(r, g, b)
+    const triadic1 = adjustHue(baseColor, 120)
+    const triadic2 = adjustHue(baseColor, 240)
+    
+    // Generate darker/lighter variants
+    const darker = darkenColor(baseColor, 0.3)
+    const lighter = lightenColor(baseColor, 0.2)
+    
+    return {
+      primary: baseColor,
+      complementary,
+      triadic1,
+      triadic2,
+      darker,
+      lighter,
+      text: getTextColor(baseColor),
+      border: getBorderColor(baseColor)
+    }
+  }
+  
+  const getHueFromRGB = (r, g, b) => {
+    r /= 255; g /= 255; b /= 255
+    const max = Math.max(r, g, b)
+    const min = Math.min(r, g, b)
+    let h = 0
+    
+    if (max === min) {
+      h = 0
+    } else {
+      const d = max - min
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break
+        case g: h = (b - r) / d + 2; break
+        case b: h = (r - g) / d + 4; break
+      }
+      h /= 6
+    }
+    return h * 360
+  }
+  
+  const adjustHue = (color, degrees) => {
+    // Simplified hue adjustment - for demo purposes
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    
+    // Simple color shift for demo
+    const newR = Math.min(255, Math.max(0, r + degrees / 3))
+    const newG = Math.min(255, Math.max(0, g + degrees / 3))
+    const newB = Math.min(255, Math.max(0, b + degrees / 3))
+    
+    return `#${Math.round(newR).toString(16).padStart(2, '0')}${Math.round(newG).toString(16).padStart(2, '0')}${Math.round(newB).toString(16).padStart(2, '0')}`
+  }
+  
+  const darkenColor = (color, amount) => {
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    
+    return `#${Math.round(r * (1 - amount)).toString(16).padStart(2, '0')}${Math.round(g * (1 - amount)).toString(16).padStart(2, '0')}${Math.round(b * (1 - amount)).toString(16).padStart(2, '0')}`
+  }
+  
+  const lightenColor = (color, amount) => {
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    
+    return `#${Math.round(r + (255 - r) * amount).toString(16).padStart(2, '0')}${Math.round(g + (255 - g) * amount).toString(16).padStart(2, '0')}${Math.round(b + (255 - b) * amount).toString(16).padStart(2, '0')}`
+  }
+  
+  const getTextColor = (color) => {
+    // Return light text for dark backgrounds, dark for light backgrounds
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000
+    return brightness > 128 ? '#000000' : '#ffffff'
+  }
+  
+  const getBorderColor = (color) => {
+    // Return slightly darker/lighter border for contrast
+    const hex = color.replace('#', '')
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000
+    
+    if (brightness > 128) {
+      // Light background - darker border
+      return darkenColor(color, 0.2)
+    } else {
+      // Dark background - lighter border
+      return lightenColor(color, 0.2)
+    }
+  }
+  
+  const applyTheme = (theme) => {
+    const root = document.documentElement
+    
+    console.log('🎨 Applying theme:', theme)
+    
+    // Reset to default first
+    root.style.setProperty('--theme-bg-primary', '#090d16')
+    root.style.setProperty('--theme-bg-secondary', '#0f172a')
+    root.style.setProperty('--theme-accent', '#84cc16')
+    root.style.setProperty('--theme-text', '#f8fafc')
+    root.style.setProperty('--theme-border', '#334155')
+    
+    if (theme && theme !== 'default') {
+      console.log('🔄 Generating palette for theme:', theme)
+      const palette = generateThemePalette(theme.primary || theme)
+      
+      console.log('🎨 Setting theme palette:', palette)
+      root.style.setProperty('--theme-bg-primary', palette.darker)
+      root.style.setProperty('--theme-bg-secondary', palette.primary)
+      root.style.setProperty('--theme-accent', palette.complementary)
+      root.style.setProperty('--theme-text', palette.text)
+      root.style.setProperty('--theme-border', palette.border)
+    }
+    
+    // Verify CSS variables were set
+    setTimeout(() => {
+      const styles = getComputedStyle(root)
+      console.log('✅ Final CSS variables:')
+      console.log('  --theme-bg-primary:', styles.getPropertyValue('--theme-bg-primary'))
+      console.log('  --theme-accent:', styles.getPropertyValue('--theme-accent'))
+    }, 50)
+  }
+  
+  const applyBackgroundSettings = (settings) => {
+    console.log('🏗️ Applying background settings:', settings)
+    
+    const appContainer = document.querySelector('.app-container')
+    if (!appContainer) {
+      console.error('❌ App container not found!')
+      return
+    }
+
+    // Reset all background styles
+    appContainer.classList.remove('bg-cover', 'bg-center', 'bg-no-repeat')
+    appContainer.style.backgroundImage = ''
+    appContainer.style.backgroundColor = ''
+
+    // Apply background based on type
+    switch (settings.type) {
+      case 'color':
+        console.log('🎨 Applying color theme:', settings.theme)
+        // Apply selected color theme
+        appContainer.classList.add('bg-dark-900')
+        if (settings.theme === 'default') {
+          applyTheme('default')
+        } else if (predefinedThemes[settings.theme]) {
+          applyTheme(predefinedThemes[settings.theme].primary)
+        } else {
+          applyTheme(settings.theme)
+        }
+        break
+
+      case 'image':
+        // Apply image background with neutral theme for readability
+        applyTheme('#090d16') // Dark neutral theme for image backgrounds
+        
+        if (settings.imagePreview) {
+          // Remove conflicting background color classes
+          appContainer.classList.remove('bg-dark-900', 'bg-dark-800', 'bg-dark-700')
+          
+          // Add background image classes
+          appContainer.classList.add('bg-cover', 'bg-center', 'bg-no-repeat')
+          
+          // Apply background image with !important to ensure it takes precedence
+          appContainer.style.backgroundImage = `url(${settings.imagePreview})`
+          appContainer.style.backgroundColor = 'transparent' // Ensure no background color interference
+          
+          // Add error handling for image loading
+          const img = new Image()
+          img.onload = () => {
+            // Image loaded successfully
+            console.log('Background image loaded successfully')
+          }
+          img.onerror = () => {
+            // Image failed to load, fallback to default background
+            console.error('Background image failed to load')
+            appContainer.style.backgroundImage = ''
+            appContainer.style.backgroundColor = ''
+            appContainer.classList.remove('bg-cover', 'bg-center', 'bg-no-repeat')
+            appContainer.classList.add('bg-dark-900') // Restore default background
+          }
+          img.src = settings.imagePreview
+        }
+        break
+
+      default:
+        // Default behavior - apply default theme
+        appContainer.classList.add('bg-dark-900')
+        applyTheme('default')
+    }
+
+    // Apply header overlay for image backgrounds
+    const header = document.querySelector('.app-header')
+    if (header) {
+      if (settings.type === 'image' && settings.imagePreview) {
+        header.style.backgroundColor = 'rgba(15, 23, 42, 0.8)' // Semi-transparent overlay
+      } else {
+        header.style.backgroundColor = '' // Reset to default
+      }
+    }
+  }
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image file size must be less than 5MB')
+        return
+      }
+      
+      // Auto-switch to image type
+      handleBackgroundSettingsChange('type', 'image')
+      
+      // Set loading state
+      handleBackgroundSettingsChange('isLoading', true)
+      
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        // Update all image-related settings in a single call to avoid race conditions
+        const updatedSettings = {
+          ...backgroundSettings,
+          imagePreview: event.target.result,
+          imageFile: file,
+          isLoading: false
+        }
+        setBackgroundSettings(updatedSettings)
+        applyBackgroundSettings(updatedSettings)
+        localStorage.setItem('backgroundSettings', JSON.stringify(updatedSettings))
+      }
+      reader.onerror = () => {
+        alert('Error loading image file')
+        // Reset loading state on error
+        const errorSettings = {
+          ...backgroundSettings,
+          isLoading: false
+        }
+        setBackgroundSettings(errorSettings)
+        localStorage.setItem('backgroundSettings', JSON.stringify(errorSettings))
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const resetToDefault = () => {
+    const defaultSettings = {
+      type: 'color',
+      theme: 'default',
+      color: '#84cc16',
+      imageFile: null,
+      imagePreview: '',
+      isLoading: false
+    }
+    setBackgroundSettings(defaultSettings)
+    applyBackgroundSettings(defaultSettings)
+    localStorage.setItem('backgroundSettings', JSON.stringify(defaultSettings))
+  }
+
   const handleCategoryFormSubmit = (e) => {
     e.preventDefault()
     
@@ -559,35 +917,21 @@ function App() {
       console.log('Using file from /assets/ directory:', sound.file)
     }
     
-    // Stop if already playing
-    if (playingSounds.has(soundKey)) {
-      console.log('Stopping sound:', sound.name)
-      const existingAudio = audioElementsRef.current.get(soundKey)
-      if (existingAudio) {
-        existingAudio.pause()
-        existingAudio.currentTime = 0
-        
-        // Clear any active timer
-        if (existingAudio.timer) {
-          clearTimeout(existingAudio.timer)
-        }
-      }
-      setPlayingSounds(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(soundKey)
-        return newSet
-      })
-      audioElementsRef.current.delete(soundKey)
-      return
-    }
-    
     console.log('Playing sound:', sound.name, 'Loop property:', sound.loop, 'from URL:', soundUrl)
     
     const audio = new Audio(soundUrl)
     audio.loop = sound.loop || false // Use sound's loop property
     audio.volume = audioEnabled ? masterVolume : 0 // Apply master volume if audio is enabled
     
-    audioElementsRef.current.set(soundKey, audio)
+    // Generate a unique key for this audio instance to allow overlapping playback
+    const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    audioElementsRef.current.set(audioInstanceKey, audio)
+    
+    // Update sound instances state for UI
+    setSoundInstances(prev => ({
+      ...prev,
+      [audioInstanceKey]: true
+    }))
     
     // Timer functionality - only apply to non-looping sounds with duration > 0
     if (!sound.loop && sound.duration > 0) {
@@ -603,12 +947,15 @@ function App() {
         audio.pause()
         audio.currentTime = 0
         
-        setPlayingSounds(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(soundKey)
-          return newSet
+        // Remove this audio instance from the ref
+        audioElementsRef.current.delete(audioInstanceKey)
+        
+        // Update sound instances state for UI
+        setSoundInstances(prev => {
+          const newState = { ...prev }
+          delete newState[audioInstanceKey]
+          return newState
         })
-        audioElementsRef.current.delete(soundKey)
       }, timerDuration)
       
       // Store timer for cleanup
@@ -623,27 +970,105 @@ function App() {
         clearTimeout(audio.timer)
       }
       
-      setPlayingSounds(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(soundKey)
-        return newSet
+      // Remove this audio instance from the ref
+      audioElementsRef.current.delete(audioInstanceKey)
+      
+      // Update sound instances state for UI
+      setSoundInstances(prev => {
+        const newState = { ...prev }
+        delete newState[audioInstanceKey]
+        return newState
       })
-      audioElementsRef.current.delete(soundKey)
     })
-    
-    setPlayingSounds(prev => new Set(prev).add(soundKey))
     
     audio.play().then(() => {
       console.log('Sound play command sent successfully')
     }).catch(error => {
       console.error('Error playing sound:', error)
-      setPlayingSounds(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(soundKey)
-        return newSet
+      // Remove this audio instance from the ref if playback fails
+      audioElementsRef.current.delete(audioInstanceKey)
+      
+      // Update sound instances state for UI
+      setSoundInstances(prev => {
+        const newState = { ...prev }
+        delete newState[audioInstanceKey]
+        return newState
       })
-      audioElementsRef.current.delete(soundKey)
     })
+  }
+
+  // Check if a sound has any playing instances
+  const isSoundPlaying = (soundId) => {
+    return Object.keys(soundInstances).some(key => key.startsWith(`${soundId}_`))
+  }
+
+  // Stop all instances of a specific sound
+  const stopSound = (sound) => {
+    if (editMode) return // Don't stop sounds in edit mode
+    
+    console.log('Stopping all instances of sound:', sound.name, 'Sound ID:', sound.id)
+    
+    const soundKey = sound.id
+    
+    // Find all audio instances for this sound (they start with soundKey_)
+    const audioInstances = Array.from(audioElementsRef.current.entries())
+      .filter(([key, _]) => key.startsWith(`${soundKey}_`))
+    
+    console.log(`Found ${audioInstances.length} audio instances to stop`)
+    
+    // Stop each audio instance
+    audioInstances.forEach(([instanceKey, audio]) => {
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+        
+        // Clear any active timer
+        if (audio.timer) {
+          clearTimeout(audio.timer)
+        }
+      }
+      
+      // Remove from ref
+      audioElementsRef.current.delete(instanceKey)
+      
+      // Update sound instances state for UI
+      setSoundInstances(prev => {
+        const newState = { ...prev }
+        delete newState[instanceKey]
+        return newState
+      })
+    })
+  }
+
+  // Stop all currently playing sounds
+  const stopAllSounds = () => {
+    if (editMode) return // Don't stop sounds in edit mode
+    
+    console.log('Stopping all sounds')
+    
+    // Get all audio instances
+    const audioInstances = Array.from(audioElementsRef.current.entries())
+    
+    console.log(`Found ${audioInstances.length} audio instances to stop`)
+    
+    // Stop each audio instance
+    audioInstances.forEach(([instanceKey, audio]) => {
+      if (audio) {
+        audio.pause()
+        audio.currentTime = 0
+        
+        // Clear any active timer
+        if (audio.timer) {
+          clearTimeout(audio.timer)
+        }
+      }
+      
+      // Remove from ref
+      audioElementsRef.current.delete(instanceKey)
+    })
+    
+    // Clear all sound instances state for UI
+    setSoundInstances({})
   }
 
   // Initialize active tab
@@ -655,8 +1080,18 @@ function App() {
     }
   }, [tabType, characters, environmentSounds, activeTab])
 
+  // Load background settings on app start
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('backgroundSettings')
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings)
+      setBackgroundSettings(settings)
+      applyBackgroundSettings(settings)
+    }
+  }, [])
+
   return (
-    <div className="min-h-screen bg-dark-900 text-slate-200">
+    <div className="app-container min-h-screen bg-dark-900 text-slate-200">
       {/* Header */}
       <header className="bg-dark-800 border-b border-dark-700">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -685,11 +1120,21 @@ function App() {
                 <span className="text-sm text-slate-400 w-8">{Math.round(masterVolume * 100)}%</span>
               </div>
               
-              {/* Dummy Button - Reserved for future functionality */}
+              {/* Stop All Sounds Button */}
               <button
-                className="px-4 py-2 rounded-lg bg-dark-700 text-slate-400 opacity-50 cursor-not-allowed"
-                title="Reserved for future functionality"
-                disabled
+                onClick={stopAllSounds}
+                disabled={Object.keys(soundInstances).length === 0 || editMode}
+                className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                title="Stop All Sounds"
+              >
+                <Square size={20} />
+              </button>
+              
+              {/* Settings Button */}
+              <button
+                onClick={openSettingsModal}
+                className="px-4 py-2 rounded-lg bg-dark-700 text-slate-300 hover:bg-dark-600 transition-colors"
+                title="Settings"
               >
                 <Settings size={20} />
               </button>
@@ -884,9 +1329,15 @@ function App() {
                   <div key={sound.id} className="group relative">
                     <button
                       onClick={() => playSound(sound)}
-                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
-                        playingSounds.has(sound.id) ? 'ring-2 ring-lime-500' : ''
+                      className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
+                        isSoundPlaying(sound.id) ? 'ring-2 ring-lime-500' : ''
                       } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+
+                      style={{
+                        backgroundColor: 'var(--theme-bg-secondary)',
+                        borderColor: sound.color,
+                        ...getGlowEffectStyle(sound)
+                      }}
                       disabled={editMode}
                     >
                       <div className="flex flex-col items-center justify-center mb-2">
@@ -923,6 +1374,19 @@ function App() {
                         {!editMode && sound.loop && (
                           <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
                         )}
+{/* Stop Button - Bottom Left */}
+                        {!editMode && isSoundPlaying(sound.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopSound(sound)
+                            }}
+                            className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
+                            title="Stop Sound"
+                          >
+                            <Square size={12} />
+                          </button>
+                        )}
                         <div className="text-xs text-slate-400 text-center">
                           {sound.type}
                         </div>
@@ -949,6 +1413,9 @@ function App() {
                           className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Edit Sound"
                         >
+className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
+                        isSoundPlaying(sound.id) ? 'ring-2 ring-lime-500' : ''
+                      } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                           <Edit size={12} />
                         </button>
                       </>
@@ -961,9 +1428,14 @@ function App() {
                   <div key={sound.id} className="group relative">
                     <button
                       onClick={() => playSound(sound)}
-                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
-                        playingSounds.has(sound.id) ? 'ring-2 ring-lime-500' : ''
+                      className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
+                        isSoundPlaying(sound.id) ? 'ring-2 ring-lime-500' : ''
                       } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      style={{
+                        backgroundColor: 'var(--theme-bg-secondary)',
+                        borderColor: sound.color,
+                        ...getGlowEffectStyle(sound)
+                      }}
                       disabled={editMode}
                     >
                       <div className="flex flex-col items-center justify-center mb-2">
@@ -1008,9 +1480,43 @@ function App() {
                         <div className="text-lg font-medium text-center">{sound.name}</div>
 
                         {/* Loop Indicator */}
+{!editMode && sound.loop && (
+                          <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
+                        )}
+
+                        {/* Stop Button - Bottom Left */}
+                        {!editMode && isSoundPlaying(sound.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopSound(sound)
+                            }}
+                            className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
+                            title="Stop Sound"
+                          >
+                            <Square size={12} />
+                          </button>
+                        )}
+
+{/* Loop Indicator */}
                         {!editMode && sound.loop && (
                           <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
                         )}
+
+                        {/* Stop Button - Bottom Left */}
+                        {!editMode && isSoundPlaying(sound.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopSound(sound)
+                            }}
+                            className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
+                            title="Stop Sound"
+                          >
+                            <Square size={12} />
+                          </button>
+                        )}
+                        
                         <div className="text-xs text-slate-400 text-center">
                           {sound.type}
                         </div>
@@ -1273,6 +1779,53 @@ function App() {
                     </label>
                   </div>
                   
+                  {/* Glow Effect Controls */}
+                  <div className="pt-4 border-t border-dark-700">
+                    <h3 className="text-lg font-medium mb-3">Glow Effect</h3>
+                    
+                    {/* Glow Toggle */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <Sparkles size={20} className="text-lime-500" />
+                        <span className="text-slate-300">Enable Glow Effect</span>
+                      </div>
+                      <button
+                        onClick={() => setSoundFormData(prev => ({ ...prev, glowEnabled: !prev.glowEnabled }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          soundFormData.glowEnabled ? 'bg-lime-600' : 'bg-dark-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          soundFormData.glowEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    
+                    {/* Glow Prominence Slider */}
+                    {soundFormData.glowEnabled && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-400">Glow Prominence</span>
+                          <span className="text-sm text-slate-300">{Math.round(soundFormData.glowProminence * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          name="glowProminence"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={soundFormData.glowProminence}
+                          onChange={handleSoundFormChange}
+                          className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer slider"
+                        />
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>Subtle</span>
+                          <span>Prominent</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="pt-4 border-t border-dark-700">
                     <div className="flex justify-end space-x-3">
                       <button
@@ -1430,6 +1983,190 @@ function App() {
                 >
                   Delete
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">Background Settings</h2>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-1 hover:bg-dark-700 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                {/* Background Type Selection */}
+                <div>
+                  <h3 className="text-lg font-medium mb-3">Background Type</h3>
+                  <div className="flex space-x-2 mb-4">
+                    <button
+                      onClick={() => handleBackgroundSettingsChange('type', 'color')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        backgroundSettings.type === 'color'
+                          ? 'bg-lime-600 text-white'
+                          : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                      }`}
+                    >
+                      Color Theme
+                    </button>
+                    <button
+                      onClick={() => handleBackgroundSettingsChange('type', 'image')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        backgroundSettings.type === 'image'
+                          ? 'bg-lime-600 text-white'
+                          : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                      }`}
+                    >
+                      Background Image
+                    </button>
+                  </div>
+                </div>
+
+                {/* Theme Selection */}
+                <div>
+                  <h3 className="text-lg font-medium mb-3">Select Theme</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.entries(predefinedThemes).map(([key, theme]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          console.log('🔘 Theme button clicked:', key)
+                          handleBackgroundSettingsChange('theme', key)
+                          handleBackgroundSettingsChange('type', 'color')
+                        }}
+                        className={`p-3 rounded-lg transition-colors text-center ${
+                          backgroundSettings.theme === key 
+                            ? 'bg-lime-600 text-white' 
+                            : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                        }`}
+                      >
+                        <div 
+                          className="w-8 h-8 rounded-full mx-auto mb-2 border-2 border-white/20"
+                          style={{ backgroundColor: theme.primary }}
+                        />
+                        {theme.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Custom Color Picker */}
+                <div>
+                  <h3 className="text-lg font-medium mb-3">Custom Color Theme</h3>
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    {[
+                      '#84cc16', '#10b981', '#3b82f6', '#ef4444',
+                      '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899',
+                      '#14b8a6', '#0ea5e9', '#f97316', '#a855f7',
+                      '#64748b', '#94a3b8', '#cbd5e1', '#f1f5f9'
+                    ].map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                           console.log('🎨 Custom color clicked:', color)
+                          handleBackgroundSettingsChange('theme', color)
+                          handleBackgroundSettingsChange('type', 'color')
+                        }}
+                        className={`w-8 h-8 rounded border-2 transition-transform hover:scale-110 ${
+                          backgroundSettings.theme === color 
+                            ? 'border-lime-500 scale-110' 
+                            : 'border-dark-600'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm text-slate-400">Custom Color:</span>
+                    <input
+                      type="color"
+                      value={backgroundSettings.color}
+                      onChange={(e) => {
+                         console.log('🎨 Color input changed:', e.target.value)
+                        handleBackgroundSettingsChange('theme', e.target.value)
+                        handleBackgroundSettingsChange('type', 'color')
+                      }}
+                      className="w-12 h-8 rounded border border-dark-600"
+                    />
+                    <span className="text-sm text-slate-400">{backgroundSettings.theme !== 'default' && !predefinedThemes[backgroundSettings.theme] ? backgroundSettings.theme : 'Select a color'}</span>
+                  </div>
+                </div>
+                
+                {/* Image Upload Section */}
+                <div>
+                  <h3 className="text-lg font-medium mb-3">Background Image</h3>
+                    
+                    {/* Loading Indicator */}
+                    {backgroundSettings.isLoading && (
+                      <div className="border-2 border-dashed border-lime-500 rounded-lg p-4 text-center mb-4">
+                        <div className="text-lime-500 mb-2">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-500 mx-auto"></div>
+                        </div>
+                        <span className="text-lime-400">Loading image...</span>
+                      </div>
+                    )}
+                    
+                    {/* File Upload Area */}
+                    {!backgroundSettings.isLoading && (
+                      <div className="border-2 border-dashed border-dark-600 rounded-lg p-4 text-center mb-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                          id="background-image-upload"
+                        />
+                        <label
+                          htmlFor="background-image-upload"
+                          className="cursor-pointer block"
+                        >
+                          <div className="text-slate-400 mb-2">
+                            <Folder size={32} className="mx-auto" />
+                          </div>
+                          <span className="text-slate-300">Click to select an image</span>
+                          <p className="text-xs text-slate-500 mt-1">Max 5MB, PNG/JPG/WebP</p>
+                        </label>
+                      </div>
+                    )}
+                    
+                    {/* Image Preview or Empty State */}
+                    {backgroundSettings.imagePreview ? (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-medium mb-2">Preview:</h4>
+                        <div 
+                          className="w-full h-32 bg-cover bg-center rounded-lg border border-dark-600"
+                          style={{ backgroundImage: `url(${backgroundSettings.imagePreview})` }}
+                        />
+                      </div>
+                    ) : (
+                      !backgroundSettings.isLoading && backgroundSettings.type === 'image' && (
+                        <div className="text-center py-4">
+                          <span className="text-slate-400">No image selected</span>
+                        </div>
+                      )
+                    )}
+                </div>
+                
+                {/* Close Button */}
+                <div className="pt-4 border-t border-dark-700">
+                  <button
+                    onClick={() => setShowSettingsModal(false)}
+                    className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors w-full"
+                  >
+                    Close Settings
+                  </button>
+                </div>
               </div>
             </div>
           </div>
