@@ -1011,6 +1011,7 @@ function App() {
                     />
                   </div>
                   
+
                   <div>
                     <label className="block text-sm font-medium mb-1">Upload Audio File *</label>
                     <input
@@ -1122,6 +1123,34 @@ function App() {
                           </div>
                         </div>
                       )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Upload Audio File *</label>
+                    <input
+                      type="file"
+                      accept=".mp3,.wav,.ogg"
+                      onChange={handleAudioUpload}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500 file:bg-dark-600 file:border-0 file:text-slate-300 file:mr-4"
+                    />
+                    {audioPreview && (
+                      <div className="mt-2">
+                        <audio controls src={audioPreview} className="w-full" />
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-slate-400">{soundFormData.file}</span>
+                          <button
+                            type="button"
+                            onClick={clearAudioUpload}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4">
                     </div>
                   </div>
                   
