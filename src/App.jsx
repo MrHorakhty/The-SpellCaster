@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square } from 'lucide-react'
+import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn } from 'lucide-react'
 import data from './data.json'
 
 // Function to get appropriate icon component based on sound type
@@ -26,27 +26,21 @@ const getSoundIcon = (soundType) => {
 
 // Function to convert hex color to hue-rotate degrees for CSS filters
 const getHueRotateFromColor = (color) => {
-    // Handle transparent mode - use default color for hue calculation
     if (color === 'transparent') {
-        color = '#84cc16' // Default color
+        color = '#84cc16'
     }
 
-    // Remove # if present
     const hex = color.replace('#', '')
-
-    // Convert hex to RGB
     const r = parseInt(hex.substring(0, 2), 16) / 255
     const g = parseInt(hex.substring(2, 4), 16) / 255
     const b = parseInt(hex.substring(4, 6), 16) / 255
 
-    // Find max and min values
     const max = Math.max(r, g, b)
     const min = Math.min(r, g, b)
     let h = 0
 
-    // Calculate hue
     if (max === min) {
-        h = 0 // achromatic
+        h = 0
     } else {
         const d = max - min
         switch (max) {
@@ -57,22 +51,17 @@ const getHueRotateFromColor = (color) => {
         h /= 6
     }
 
-    // Convert hue to degrees (0-360)
     const hueDegrees = Math.round(h * 360)
-
-    // Return hue rotation value (adjust based on filter chain requirements)
     return hueDegrees
 }
 
-// Function to generate glow effect style based on sound color and glow settings
 const getGlowEffectStyle = (sound) => {
     if (!sound.glowEnabled) {
         return {}
     }
 
-    // Calculate glow intensity based on prominence
-    const intensity = (sound.glowProminence || 0.5) * 0.5 + 0.1 // Range: 0.1 to 0.6
-    const spread = (sound.glowProminence || 0.5) * 10 + 5 // Range: 5 to 15
+    const intensity = (sound.glowProminence || 0.5) * 0.5 + 0.1
+    const spread = (sound.glowProminence || 0.5) * 10 + 5
 
     return {
         boxShadow: `0 0 ${spread}px ${intensity}px ${sound.color}, 0 4px 6px -1px rgba(0, 0, 0, 0.3)`
@@ -86,8 +75,8 @@ function App() {
     const [activeTab, setActiveTab] = useState('')
     const [editMode, setEditMode] = useState(false)
     const [audioEnabled, setAudioEnabled] = useState(false)
-    const [masterVolume, setMasterVolume] = useState(1.0) // 0.0 to 1.0
-    const [soundInstances, setSoundInstances] = useState({}) // Track sound instances for UI updates
+    const [masterVolume, setMasterVolume] = useState(1.0)
+    const [soundInstances, setSoundInstances] = useState({})
     const audioElementsRef = useRef(new Map())
 
     // Split View & Active Tab States
@@ -103,20 +92,20 @@ function App() {
         type: '',
         icon: '',
         file: '',
-        files: [], // New: array for multiple files
-        randomPlay: false, // New: random playback flag
+        files: [],
+        randomPlay: false,
         color: '#84cc16',
-        brightness: 1, // 1.0 = 100% brightness, range: 0.0 to 2.0
+        brightness: 1,
         duration: 0,
         fadeIn: 0,
         fadeOut: 0,
         loop: false,
         glowEnabled: false,
-        glowProminence: 0.5 // 0.0 to 1.0
+        glowProminence: 0.5
     })
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [itemToDelete, setItemToDelete] = useState(null)
-    const [deleteType, setDeleteType] = useState('') // 'sound', 'character', 'category'
+    const [deleteType, setDeleteType] = useState('')
 
     // Character management states
     const [showCharacterModal, setShowCharacterModal] = useState(false)
@@ -133,12 +122,18 @@ function App() {
     // Settings modal state
     const [showSettingsModal, setShowSettingsModal] = useState(false)
     const [backgroundSettings, setBackgroundSettings] = useState({
-        type: 'color', // 'color', 'image' - default is handled by theme system
-        theme: 'default', // 'default', custom color, or preset theme
-        color: '#84cc16', // Default accent color
+        type: 'color',
+        theme: 'default',
+        color: '#84cc16',
         imageFile: null,
         imagePreview: '',
         isLoading: false
+    })
+
+    // Box size state with localStorage persistence
+    const [boxSize, setBoxSize] = useState(() => {
+        const savedBoxSize = localStorage.getItem('boxSize')
+        return savedBoxSize ? parseFloat(savedBoxSize) : 1.0
     })
 
     // Predefined themes
@@ -158,28 +153,28 @@ function App() {
     const [iconPreview, setIconPreview] = useState('')
 
     // Multiple file upload states
-    const [audioFiles, setAudioFiles] = useState([]) // Array of multiple audio files
-    const [audioPreviews, setAudioPreviews] = useState([]) // Array of preview URLs
+    const [audioFiles, setAudioFiles] = useState([])
+    const [audioPreviews, setAudioPreviews] = useState([])
+
+    // Get correct active IDs based on view mode
+    const currentActiveCharId = isSplitView ? activeCharacterId : activeTab
+    const currentActiveEnvId = isSplitView ? activeEnvironmentId : activeTab
 
     // Get active character or environment category
-    const activeCharacter = characters.find(char => char.id === activeTab)
-    const activeEnvironmentCategory = environmentSounds.find(cat => cat.category === activeTab)
+    const activeCharacter = characters.find(char => char.id === currentActiveCharId)
+    const activeEnvironmentCategory = environmentSounds.find(cat => cat.category === currentActiveEnvId)
 
-    // Enable audio after user interaction
     const enableAudio = () => {
         setAudioEnabled(true)
     }
 
-    // Update master volume and apply to all playing sounds
     const updateMasterVolume = (volume) => {
         setMasterVolume(volume)
 
-        // Enable audio if volume is increased from 0
         if (volume > 0 && !audioEnabled) {
             setAudioEnabled(true)
         }
 
-        // Update volume for all currently playing audio elements
         audioElementsRef.current.forEach((audio, soundKey) => {
             if (audio && typeof audio.volume !== 'undefined') {
                 audio.volume = audioEnabled ? volume : 0
@@ -187,12 +182,15 @@ function App() {
         })
     }
 
-    // Sound management functions
-    const openAddSoundModal = () => {
-        // Set default loop value based on tab type
-        const defaultLoop = tabType === 'environment'
+    const openAddSoundModal = (overrideType) => {
+        // Support overriding the tab type dynamically to handle asynchronous state issues in split view
+        const targetTabType = typeof overrideType === 'string' ? overrideType : tabType
+        const defaultLoop = targetTabType === 'environment'
 
-        // Reset all states
+        if (typeof overrideType === 'string') {
+            setTabType(overrideType)
+        }
+
         setSoundFormData({
             name: '',
             type: '',
@@ -209,7 +207,6 @@ function App() {
         setAudioPreview('')
         setIconPreview('')
 
-        // Clear multiple file states
         setAudioFiles([])
         setAudioPreviews([])
 
@@ -218,19 +215,15 @@ function App() {
     }
 
     const openEditSoundModal = (sound) => {
-        // Use existing loop value or tab-based default if undefined
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
 
-        // Reset file states for editing
         setAudioFile(null)
         setIconFile(null)
         setAudioPreview('')
 
-        // Reset multiple file states for editing
-        // If editing existing sound with files, load them into state
         if (sound.files && sound.files.length > 0) {
             const existingFiles = sound.files.map(file => ({
-                file: null, // We don't have the File object, but we have the name
+                file: null,
                 preview: getFileFromLocalStorage(file.name) || `/assets/${file.name}`,
                 name: file.name
             }))
@@ -241,7 +234,6 @@ function App() {
             setAudioPreviews([])
         }
 
-        // Set icon preview for existing sound
         if (sound.icon) {
             const iconUrl = getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
             setIconPreview(iconUrl)
@@ -254,8 +246,8 @@ function App() {
             type: sound.type,
             icon: sound.icon || '',
             file: sound.file || '',
-            files: sound.files || [], // New: multiple files
-            randomPlay: sound.randomPlay || false, // New: random playback flag
+            files: sound.files || [],
+            randomPlay: sound.randomPlay || false,
             color: sound.color || '#84cc16',
             brightness: sound.brightness || 1,
             duration: sound.duration || 0,
@@ -280,18 +272,14 @@ function App() {
     const handleSoundFormSubmit = (e) => {
         e.preventDefault()
 
-        // Validation based on historical pattern - require name and either file upload or existing file
-        // Updated to support multiple files
         const hasFiles = audioFiles.length > 0 || soundFormData.files?.length > 0 || soundFormData.file
         if (!soundFormData.name.trim() || !hasFiles) {
             return
         }
 
         if (editingSound) {
-            // Update existing sound
             updateSound(editingSound.id, soundFormData)
         } else {
-            // Add new sound
             addSound(soundFormData)
         }
 
@@ -299,7 +287,6 @@ function App() {
     }
 
     const addSound = (newSoundData) => {
-        // Generate unique ID
         const newId = `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
         const newSound = {
@@ -307,9 +294,9 @@ function App() {
             name: newSoundData.name,
             type: newSoundData.type || 'Sound',
             icon: newSoundData.icon,
-            file: newSoundData.file, // Keep for backward compatibility
-            files: newSoundData.files || [], // New: multiple files
-            randomPlay: newSoundData.randomPlay || false, // New: random playback flag
+            file: newSoundData.file,
+            files: newSoundData.files || [],
+            randomPlay: newSoundData.randomPlay || false,
             color: newSoundData.color,
             brightness: newSoundData.brightness || 1,
             duration: parseFloat(newSoundData.duration) || 0,
@@ -319,16 +306,14 @@ function App() {
         }
 
         if (tabType === 'characters' && activeCharacter) {
-            // Add to active character
             setCharacters(prev => prev.map(character =>
-                character.id === activeTab
+                character.id === currentActiveCharId
                     ? { ...character, sounds: [...character.sounds, newSound] }
                     : character
             ))
         } else if (tabType === 'environment' && activeEnvironmentCategory) {
-            // Add to active environment category
             setEnvironmentSounds(prev => prev.map(category =>
-                category.category === activeTab
+                category.category === currentActiveEnvId
                     ? { ...category, sounds: [...category.sounds, newSound] }
                     : category
             ))
@@ -342,13 +327,12 @@ function App() {
             fadeIn: parseFloat(newSoundData.fadeIn) || 0,
             fadeOut: parseFloat(newSoundData.fadeOut) || 0,
             loop: newSoundData.loop !== undefined ? newSoundData.loop : false,
-            randomPlay: newSoundData.randomPlay || false, // New: random playback flag
+            randomPlay: newSoundData.randomPlay || false,
         }
 
         if (tabType === 'characters' && activeCharacter) {
-            // Update in active character
             setCharacters(prev => prev.map(character =>
-                character.id === activeTab
+                character.id === currentActiveCharId
                     ? {
                         ...character,
                         sounds: character.sounds.map(sound =>
@@ -358,9 +342,8 @@ function App() {
                     : character
             ))
         } else if (tabType === 'environment' && activeEnvironmentCategory) {
-            // Update in active environment category
             setEnvironmentSounds(prev => prev.map(category =>
-                category.category === activeTab
+                category.category === currentActiveEnvId
                     ? {
                         ...category,
                         sounds: category.sounds.map(sound =>
@@ -372,30 +355,10 @@ function App() {
         }
     }
 
-    const handleDeleteSound = (soundId) => {
-        setItemToDelete(soundId)
-        setDeleteType('sound')
-        setShowDeleteConfirm(true)
-    }
-
-    const confirmDelete = () => {
-        if (deleteType === 'sound' && itemToDelete) {
-            deleteSound(itemToDelete)
-        } else if (deleteType === 'character' && itemToDelete) {
-            deleteCharacter(itemToDelete)
-        } else if (deleteType === 'category' && itemToDelete) {
-            deleteCategory(itemToDelete)
-        }
-        setShowDeleteConfirm(false)
-        setItemToDelete(null)
-        setDeleteType('')
-    }
-
     const deleteSound = (soundId) => {
         if (tabType === 'characters' && activeCharacter) {
-            // Delete from active character
             setCharacters(prev => prev.map(character =>
-                character.id === activeTab
+                character.id === currentActiveCharId
                     ? {
                         ...character,
                         sounds: character.sounds.filter(sound => sound.id !== soundId)
@@ -403,9 +366,8 @@ function App() {
                     : character
             ))
         } else if (tabType === 'environment' && activeEnvironmentCategory) {
-            // Delete from active environment category
             setEnvironmentSounds(prev => prev.map(category =>
-                category.category === activeTab
+                category.category === currentActiveEnvId
                     ? {
                         ...category,
                         sounds: category.sounds.filter(sound => sound.id !== soundId)
@@ -415,14 +377,12 @@ function App() {
         }
     }
 
-    // File upload handlers
     const handleAudioUpload = (e) => {
         const file = e.target.files[0]
         if (file) {
             setAudioFile(file)
             setAudioPreview(URL.createObjectURL(file))
             setSoundFormData(prev => ({ ...prev, file: file.name }))
-            // Store file in localStorage
             storeFileInLocalStorage(file.name, file)
         }
     }
@@ -433,12 +393,10 @@ function App() {
             setIconFile(file)
             setIconPreview(URL.createObjectURL(file))
             setSoundFormData(prev => ({ ...prev, icon: file.name }))
-            // Store file in localStorage
             storeFileInLocalStorage(file.name, file)
         }
     }
 
-    // Multiple audio file upload handlers
     const handleMultipleAudioUpload = (e) => {
         const files = Array.from(e.target.files)
         if (files.length > 0) {
@@ -451,14 +409,12 @@ function App() {
             setAudioFiles(prev => [...prev, ...newFiles])
             setAudioPreviews(prev => [...prev, ...newFiles.map(f => f.preview)])
 
-            // Update form data with file names
             const fileNames = newFiles.map(f => f.name)
             setSoundFormData(prev => ({
                 ...prev,
                 files: [...(prev.files || []), ...fileNames.map(name => ({ name, url: name }))]
             }))
 
-            // Store files in localStorage
             files.forEach(file => {
                 storeFileInLocalStorage(file.name, file)
             })
@@ -468,27 +424,22 @@ function App() {
     const removeAudioFile = (index) => {
         const fileToRemove = audioFiles[index]
 
-        // Remove from state
         setAudioFiles(prev => prev.filter((_, i) => i !== index))
         setAudioPreviews(prev => prev.filter((_, i) => i !== index))
 
-        // Remove from form data
         setSoundFormData(prev => ({
             ...prev,
             files: prev.files.filter((_, i) => i !== index)
         }))
 
-        // Remove from localStorage
         removeFileFromLocalStorage(fileToRemove.name)
     }
 
     const clearMultipleAudioUpload = () => {
-        // Remove all files from localStorage
         audioFiles.forEach(file => {
             removeFileFromLocalStorage(file.name)
         })
 
-        // Clear state
         setAudioFiles([])
         setAudioPreviews([])
         setSoundFormData(prev => ({ ...prev, files: [] }))
@@ -512,7 +463,6 @@ function App() {
         setSoundFormData(prev => ({ ...prev, icon: '' }))
     }
 
-    // Character management functions
     const openAddCharacterModal = () => {
         setCharacterFormData({ name: '' })
         setShowCharacterModal(true)
@@ -538,7 +488,6 @@ function App() {
     }
 
     const addCharacter = (characterData) => {
-        // Generate unique ID
         const newId = `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
         const newCharacter = {
@@ -548,8 +497,8 @@ function App() {
         }
 
         setCharacters(prev => [...prev, newCharacter])
-        // Set the new character as active
         setActiveTab(newId)
+        if (isSplitView) setActiveCharacterId(newId)
     }
 
     const handleDeleteCharacter = (characterId) => {
@@ -561,13 +510,14 @@ function App() {
     const deleteCharacter = (characterId) => {
         setCharacters(prev => prev.filter(character => character.id !== characterId))
 
-        // If the deleted character was active, clear the active tab
         if (activeTab === characterId) {
             setActiveTab('')
         }
+        if (activeCharacterId === characterId) {
+            setActiveCharacterId('')
+        }
     }
 
-    // Category management functions
     const openAddCategoryModal = () => {
         setCategoryFormData({ name: '' })
         setShowCategoryModal(true)
@@ -581,14 +531,11 @@ function App() {
         }))
     }
 
-    // Settings modal handlers
     const openSettingsModal = () => {
-        // Load saved settings from localStorage
         const savedSettings = localStorage.getItem('backgroundSettings')
         if (savedSettings) {
             setBackgroundSettings(JSON.parse(savedSettings))
         }
-
         setShowSettingsModal(true)
     }
 
@@ -599,36 +546,33 @@ function App() {
                 [key]: value
             }
 
-            // Apply changes immediately with the updated settings
             applyBackgroundSettings(newSettings)
-
-            // Save to localStorage
             localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
 
             return newSettings
         })
     }
 
-    // Advanced color palette generation
+    const handleBoxSizeChange = (newSize) => {
+        setBoxSize(newSize)
+        localStorage.setItem('boxSize', newSize.toString())
+    }
+
     const generateThemePalette = (baseColor) => {
-        // Convert hex to RGB
         const hex = baseColor.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
 
-        // Generate complementary color (rotate hue by 180°)
         const compR = 255 - r
         const compG = 255 - g
         const compB = 255 - b
         const complementary = `#${compR.toString(16).padStart(2, '0')}${compG.toString(16).padStart(2, '0')}${compB.toString(16).padStart(2, '0')}`
 
-        // Generate triadic colors (rotate hue by 120° and 240°)
         const hue = getHueFromRGB(r, g, b)
         const triadic1 = adjustHue(baseColor, 120)
         const triadic2 = adjustHue(baseColor, 240)
 
-        // Generate darker/lighter variants
         const darker = darkenColor(baseColor, 0.3)
         const lighter = lightenColor(baseColor, 0.2)
 
@@ -721,7 +665,6 @@ function App() {
     const applyTheme = (theme) => {
         const root = document.documentElement
 
-        // Reset to default first
         root.style.setProperty('--theme-bg-primary', '#090d16')
         root.style.setProperty('--theme-bg-secondary', '#0f172a')
         root.style.setProperty('--theme-accent', '#84cc16')
@@ -745,12 +688,10 @@ function App() {
             return
         }
 
-        // Reset all background styles
         appContainer.classList.remove('bg-cover', 'bg-center', 'bg-no-repeat')
         appContainer.style.backgroundImage = ''
         appContainer.style.backgroundColor = ''
 
-        // Apply background based on type
         switch (settings.type) {
             case 'color':
                 appContainer.classList.add('bg-dark-900')
@@ -764,7 +705,7 @@ function App() {
                 break
 
             case 'image':
-                applyTheme('#090d16') // Dark neutral theme for image backgrounds
+                applyTheme('#090d16')
 
                 if (settings.imagePreview) {
                     appContainer.classList.remove('bg-dark-900', 'bg-dark-800', 'bg-dark-700')
@@ -788,7 +729,6 @@ function App() {
                 applyTheme('default')
         }
 
-        // Apply header overlay for image backgrounds
         const header = document.querySelector('.app-header')
         if (header) {
             if (settings.type === 'image' && settings.imagePreview) {
@@ -870,9 +810,9 @@ function App() {
             category: categoryData.name.trim(),
             sounds: []
         }
-
         setEnvironmentSounds(prev => [...prev, newCategory])
         setActiveTab(newCategory.category)
+        if (isSplitView) setActiveEnvironmentId(newCategory.category)
     }
 
     const handleDeleteCategory = (categoryName) => {
@@ -883,13 +823,10 @@ function App() {
 
     const deleteCategory = (categoryName) => {
         setEnvironmentSounds(prev => prev.filter(category => category.category !== categoryName))
-
-        if (activeTab === categoryName) {
-            setActiveTab('')
-        }
+        if (activeTab === categoryName) setActiveTab('')
+        if (activeEnvironmentId === categoryName) setActiveEnvironmentId('')
     }
 
-    // Edit handlers
     const handleEditCharacter = (characterId) => {
         console.log('Edit character:', characterId)
     }
@@ -898,7 +835,6 @@ function App() {
         console.log('Edit category:', categoryName)
     }
 
-    // File storage functions
     const storeFileInLocalStorage = (fileName, file) => {
         const reader = new FileReader()
         reader.onload = (e) => {
@@ -915,7 +851,6 @@ function App() {
         localStorage.removeItem(`sound_file_${fileName}`)
     }
 
-    // Play sound
     const playSound = (sound) => {
         if (editMode) return
 
@@ -1003,12 +938,10 @@ function App() {
         })
     }
 
-    // Check if a sound has any playing instances
     const isSoundPlaying = (soundId) => {
         return Object.keys(soundInstances).some(key => key.startsWith(`${soundId}_`))
     }
 
-    // Stop all instances of a specific sound
     const stopSound = (sound) => {
         if (editMode) return
 
@@ -1037,7 +970,6 @@ function App() {
         })
     }
 
-    // Stop all currently playing sounds
     const stopAllSounds = () => {
         if (editMode) return
 
@@ -1059,7 +991,6 @@ function App() {
         setSoundInstances({})
     }
 
-    // Initialize active tab for normal mode
     useEffect(() => {
         if (tabType === 'characters' && characters.length > 0 && !activeTab) {
             setActiveTab(characters[0].id)
@@ -1068,7 +999,6 @@ function App() {
         }
     }, [tabType, characters, environmentSounds, activeTab])
 
-    // Initialize active tabs for split mode
     useEffect(() => {
         if (characters.length > 0 && !activeCharacterId) {
             setActiveCharacterId(characters[0].id)
@@ -1078,7 +1008,6 @@ function App() {
         }
     }, [characters, environmentSounds, activeCharacterId, activeEnvironmentId])
 
-    // Load background settings on app start
     useEffect(() => {
         const savedSettings = localStorage.getItem('backgroundSettings')
         if (savedSettings) {
@@ -1094,32 +1023,47 @@ function App() {
         const IconComponent = getSoundIcon(sound.type)
 
         return (
-            <div key={sound.id} className="group relative">
+            <div
+                key={sound.id}
+                className="group relative shrink-0"
+                style={{ width: `${140 * boxSize}px` }}
+            >
                 <button
                     onClick={() => playSound(sound)}
-                    className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${isPlaying ? 'ring-2 ring-lime-500' : ''
+                    className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying ? 'ring-2 ring-lime-500' : ''
                         } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{
                         backgroundColor: 'var(--theme-bg-secondary)',
                         borderColor: sound.color,
+                        padding: `${8 * boxSize}px`,
+                        borderRadius: `${12 * boxSize}px`,
                         ...getGlowEffectStyle(sound)
                     }}
                     disabled={editMode}
                 >
-                    <div className="flex flex-col items-center justify-center mb-2">
+                    <div
+                        className="flex flex-col items-center justify-center w-full"
+                        style={{
+                            marginBottom: `${4 * boxSize}px`
+                        }}
+                    >
                         {sound.icon ? (
                             <img
                                 src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`}
                                 alt={sound.name}
-                                className="w-12 h-12 mb-2 object-contain"
-                                style={sound.color !== '#84cc16' ? {
-                                    filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
-                                } : {}}
+                                className="mb-1 object-contain shrink-0"
+                                style={{
+                                    width: `${48 * boxSize}px`,
+                                    height: `${48 * boxSize}px`,
+                                    ...(sound.color !== '#84cc16' ? {
+                                        filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                                    } : {})
+                                }}
                             />
                         ) : (
                             <IconComponent
-                                size={32}
-                                className="mb-2"
+                                size={40 * boxSize}
+                                className="mb-1 shrink-0"
                                 style={sound.color === 'transparent' ? {
                                     filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
                                 } : sound.color !== '#84cc16' ? {
@@ -1128,17 +1072,51 @@ function App() {
                             />
                         )}
 
-                        <div className="text-lg font-medium text-center">{sound.name}</div>
-                        <div className="text-xs text-slate-400 text-center">{sound.type}</div>
+                        <div
+                            className="font-medium text-center truncate w-full px-1 shrink-0"
+                            style={{
+                                fontSize: `${16 * boxSize}px`,
+                                lineHeight: `${24 * boxSize}px`
+                            }}
+                        >
+                            {sound.name}
+                        </div>
+                        <div
+                            className="text-slate-400 text-center truncate w-full px-1 shrink-0"
+                            style={{
+                                fontSize: `${11 * boxSize}px`,
+                                lineHeight: `${16 * boxSize}px`
+                            }}
+                        >
+                            {sound.type}
+                        </div>
 
                         {/* Loop Indicator */}
                         {!editMode && sound.loop && (
-                            <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound" />
+                            <div
+                                className="absolute bg-blue-500 rounded-full"
+                                style={{
+                                    bottom: `${8 * boxSize}px`,
+                                    right: `${8 * boxSize}px`,
+                                    width: `${12 * boxSize}px`,
+                                    height: `${12 * boxSize}px`
+                                }}
+                                title="Looping sound"
+                            />
                         )}
 
                         {/* Multi-file Indicator */}
                         {!editMode && sound.files && sound.files.length > 1 && (
-                            <div className="absolute top-2 right-2 w-3 h-3 bg-purple-500 rounded-full" title={`${sound.files.length} files available`} />
+                            <div
+                                className="absolute bg-purple-500 rounded-full"
+                                style={{
+                                    top: `${8 * boxSize}px`,
+                                    right: `${8 * boxSize}px`,
+                                    width: `${12 * boxSize}px`,
+                                    height: `${12 * boxSize}px`
+                                }}
+                                title={`${sound.files.length} files available`}
+                            />
                         )}
 
                         {/* Stop Button */}
@@ -1201,22 +1179,74 @@ function App() {
             : environmentSounds.find(e => e.category === currentActiveId)
 
         return (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full">
+            <div className="flex flex-col md:flex-row gap-4 h-full">
                 {/* Mini Sidebar */}
-                <div className="md:col-span-1 bg-dark-800 rounded-xl p-4">
-                    <h3 className="text-md font-semibold mb-3 text-lime-400 capitalize">
-                        {isCharSection ? 'Characters' : 'Environment'}
-                    </h3>
-                    <div className="space-y-2">
+                <div className="w-full md:w-64 shrink-0 bg-dark-800 rounded-xl p-4 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-lime-400 capitalize">
+                            {isCharSection ? 'Characters' : 'Environment'}
+                        </h3>
+                        <button
+                            onClick={() => setEditMode(!editMode)}
+                            className={`p-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                }`}
+                            title="Toggle Edit Mode"
+                        >
+                            <Edit size={16} />
+                        </button>
+                    </div>
+
+                    {/* Panel-Specific Edit Actions */}
+                    {editMode && (
+                        <div className="flex flex-col gap-2 mb-4 pb-4 border-b border-dark-700">
+                            {isCharSection ? (
+                                <>
+                                    <button
+                                        onClick={openAddCharacterModal}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-slate-200"
+                                    >
+                                        <User size={16} />
+                                        <span>Add Character</span>
+                                    </button>
+                                    <button
+                                        onClick={() => openAddSoundModal('characters')}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
+                                    >
+                                        <Plus size={16} />
+                                        <span>Add Sound to Character</span>
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={openAddCategoryModal}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-slate-200"
+                                    >
+                                        <Folder size={16} />
+                                        <span>Add Category</span>
+                                    </button>
+                                    <button
+                                        onClick={() => openAddSoundModal('environment')}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
+                                    >
+                                        <Plus size={16} />
+                                        <span>Add Sound to Environment</span>
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                         {isCharSection
                             ? characters.map(c => (
                                 <button
                                     key={c.id}
                                     onClick={() => setActive(c.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center space-x-2 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                    className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
-                                    <User size={14} />
+                                    <User className="shrink-0" size={16} />
                                     <span className="truncate">{c.name}</span>
                                 </button>
                             ))
@@ -1224,10 +1254,10 @@ function App() {
                                 <button
                                     key={e.category}
                                     onClick={() => setActive(e.category)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center space-x-2 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                    className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
-                                    <Music size={14} />
+                                    <Music className="shrink-0" size={16} />
                                     <span className="truncate">{e.category}</span>
                                 </button>
                             ))}
@@ -1235,11 +1265,11 @@ function App() {
                 </div>
 
                 {/* Sound Grid */}
-                <div className="md:col-span-3 bg-dark-800 rounded-xl p-4">
-                    <h2 className="text-lg font-semibold mb-4 text-slate-200">
+                <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-4">
+                    <h2 className="text-lg font-semibold mb-4 text-slate-200 truncate">
                         {activeItem ? (isCharSection ? activeItem.name : activeItem.category) : 'Select Category'}
                     </h2>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="flex flex-wrap gap-4">
                         {activeItem?.sounds?.map(sound => renderSoundCard(sound))}
                     </div>
                 </div>
@@ -1251,12 +1281,27 @@ function App() {
         <div className="app-container min-h-screen bg-dark-900 text-slate-200">
             {/* Header */}
             <header className="bg-dark-800 border-b border-dark-700">
-                <div className="max-w-7xl mx-auto px-4 py-4">
+                <div className="w-full px-6 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
                                 <Music className="text-lime-500" size={32} />
                                 <h1 className="text-2xl font-bold">TTRPG Soundboard</h1>
+                            </div>
+
+                            {/* Split View Toggle - Moved to Header */}
+                            <div className="h-6 w-px bg-dark-600 mx-2 hidden sm:block"></div>
+                            <div className="hidden sm:flex items-center space-x-3 bg-dark-900 px-3 py-1.5 rounded-lg border border-dark-600">
+                                <span className="text-sm font-medium text-slate-300">Split View</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsSplitView(!isSplitView)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isSplitView ? 'bg-lime-600' : 'bg-dark-600'
+                                        }`}
+                                >
+                                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isSplitView ? 'translate-x-5' : 'translate-x-1'
+                                        }`} />
+                                </button>
                             </div>
                         </div>
 
@@ -1275,6 +1320,22 @@ function App() {
                                     title={`Volume: ${Math.round(masterVolume * 100)}%`}
                                 />
                                 <span className="text-sm text-slate-400 w-8">{Math.round(masterVolume * 100)}%</span>
+                            </div>
+
+                            {/* Box Size Slider */}
+                            <div className="flex items-center space-x-2">
+                                <ZoomIn size={20} className="text-slate-300" />
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="2.0"
+                                    step="0.1"
+                                    value={boxSize}
+                                    onChange={(e) => handleBoxSizeChange(parseFloat(e.target.value))}
+                                    className="slider w-20"
+                                    title={`Box Size: ${Math.round(boxSize * 100)}%`}
+                                />
+                                <span className="text-sm text-slate-400 w-8">{Math.round(boxSize * 100)}%</span>
                             </div>
 
                             {/* Stop All Sounds Button */}
@@ -1301,17 +1362,17 @@ function App() {
             </header>
 
             {/* Main Content */}
-            <div className="max-w-7xl mx-auto px-4 py-6">
-                {/* Edit Mode Controls */}
-                {editMode && (
-                    <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg max-w-7xl mx-auto">
+            <div className="w-full px-6 py-6">
+                {/* Edit Mode Controls (Hidden in Split View) */}
+                {editMode && !isSplitView && (
+                    <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg w-full mx-auto">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
                                 <Settings size={16} />
                                 <span className="font-medium">Edit Mode Active</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                                {(!isSplitView && tabType === 'characters' || isSplitView) && (
+                                {tabType === 'characters' && (
                                     <button
                                         onClick={openAddCharacterModal}
                                         className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
@@ -1320,7 +1381,7 @@ function App() {
                                         <span>Add Character</span>
                                     </button>
                                 )}
-                                {(!isSplitView && tabType === 'environment' || isSplitView) && (
+                                {tabType === 'environment' && (
                                     <button
                                         onClick={openAddCategoryModal}
                                         className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
@@ -1330,7 +1391,7 @@ function App() {
                                     </button>
                                 )}
                                 <button
-                                    onClick={openAddSoundModal}
+                                    onClick={() => openAddSoundModal()}
                                     className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
                                 >
                                     <Plus size={16} />
@@ -1344,10 +1405,23 @@ function App() {
 
                 {isSplitView ? (
                     /* SPLIT VIEW LAYOUT */
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
-                        <div className="pr-0 xl:pr-4">
+                    <div className="flex flex-col space-y-4">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
+                            <div className="pr-0 xl:pr-4">
+                                {renderPanelSection('characters')}
+                            </div>
+                            <div className="pt-6 xl:pt-0 xl:pl-4">
+                                {renderPanelSection('environment')}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    /* STANDARD SINGLE TAB VIEW LAYOUT */
+                    <div className="flex flex-col lg:flex-row gap-6">
+                        {/* Standard Sidebar */}
+                        <div className="w-full lg:w-64 shrink-0 bg-dark-800 rounded-xl p-4 flex flex-col">
                             <div className="flex justify-between items-center mb-4">
-                                <span className="text-transparent">Spacer</span>
+                                <h2 className="text-lg font-semibold">Categories</h2>
                                 <button
                                     onClick={() => setEditMode(!editMode)}
                                     className={`px-3 py-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
@@ -1356,84 +1430,57 @@ function App() {
                                     <Edit size={16} />
                                 </button>
                             </div>
-                            {renderPanelSection('characters')}
-                        </div>
-                        <div className="pt-6 xl:pt-0 xl:pl-4">
-                            <div className="flex justify-between items-center mb-4 invisible xl:visible">
-                                <span className="text-transparent">Spacer</span>
-                                <span className="text-transparent px-3 py-2"><Edit size={16} /></span>
+
+                            <div className="flex space-x-2 mb-4">
+                                <button
+                                    onClick={() => { setTabType('characters'); setActiveTab(characters[0]?.id || '') }}
+                                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                        }`}
+                                >
+                                    Characters
+                                </button>
+                                <button
+                                    onClick={() => { setTabType('environment'); setActiveTab(environmentSounds[0]?.category || '') }}
+                                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                        }`}
+                                >
+                                    Environment
+                                </button>
                             </div>
-                            {renderPanelSection('environment')}
-                        </div>
-                    </div>
-                ) : (
-                    /* STANDARD SINGLE TAB VIEW LAYOUT */
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        {/* Standard Sidebar */}
-                        <div className="lg:col-span-1">
-                            <div className="bg-dark-800 rounded-xl p-4">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-lg font-semibold">Categories</h2>
+
+                            <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
+                                {tabType === 'characters' && characters.map(char => (
                                     <button
-                                        onClick={() => setEditMode(!editMode)}
-                                        className={`px-3 py-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                        key={char.id}
+                                        onClick={() => setActiveTab(char.id)}
+                                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                             }`}
                                     >
-                                        <Edit size={16} />
+                                        <User className="shrink-0" size={16} />
+                                        <span className="truncate">{char.name}</span>
                                     </button>
-                                </div>
+                                ))}
 
-                                <div className="flex space-x-2 mb-4">
+                                {tabType === 'environment' && environmentSounds.map(cat => (
                                     <button
-                                        onClick={() => { setTabType('characters'); setActiveTab(characters[0]?.id || '') }}
-                                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                        key={cat.category}
+                                        onClick={() => setActiveTab(cat.category)}
+                                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                             }`}
                                     >
-                                        Characters
+                                        <Music className="shrink-0" size={16} />
+                                        <span className="truncate">{cat.category}</span>
                                     </button>
-                                    <button
-                                        onClick={() => { setTabType('environment'); setActiveTab(environmentSounds[0]?.category || '') }}
-                                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            }`}
-                                    >
-                                        Environment
-                                    </button>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {tabType === 'characters' && characters.map(char => (
-                                        <button
-                                            key={char.id}
-                                            onClick={() => setActiveTab(char.id)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center space-x-2 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                }`}
-                                        >
-                                            <User size={16} />
-                                            <span>{char.name}</span>
-                                        </button>
-                                    ))}
-
-                                    {tabType === 'environment' && environmentSounds.map(cat => (
-                                        <button
-                                            key={cat.category}
-                                            onClick={() => setActiveTab(cat.category)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center space-x-2 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                }`}
-                                        >
-                                            <Music size={16} />
-                                            <span>{cat.category}</span>
-                                        </button>
-                                    ))}
-                                </div>
+                                ))}
                             </div>
                         </div>
 
                         {/* Standard Sound Grid */}
-                        <div className="lg:col-span-3 bg-dark-800 rounded-xl p-6">
-                            <h2 className="text-xl font-semibold mb-4">
+                        <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-6">
+                            <h2 className="text-xl font-semibold mb-4 truncate">
                                 {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
                             </h2>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <div className="flex flex-wrap gap-4">
                                 {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || []).map(sound => renderSoundCard(sound))}
                             </div>
                         </div>
@@ -1494,7 +1541,6 @@ function App() {
                                         />
                                     </div>
 
-
                                     <div>
                                         {/* Enhanced Icon Preview */}
                                         {(iconPreview || soundFormData.icon) && (
@@ -1506,7 +1552,6 @@ function App() {
                                                         alt="Icon preview"
                                                         className="w-16 h-16 object-contain"
                                                         style={soundFormData.color !== '#84cc16' ? {
-                                                            // Gentle tinting for custom colors
                                                             filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
                                                         } : {}}
                                                     />
@@ -1528,7 +1573,6 @@ function App() {
 
                                         <label className="block text-sm font-medium mb-1">Tint (Optional)</label>
                                         <div className="space-y-3">
-                                            {/* Two-button color system */}
                                             <div className="flex space-x-2">
                                                 <input
                                                     type="color"
@@ -1541,15 +1585,14 @@ function App() {
                                                     type="button"
                                                     onClick={() => setSoundFormData(prev => ({ ...prev, color: '#84cc16' }))}
                                                     className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${soundFormData.color === '#84cc16'
-                                                            ? 'bg-lime-600 border-lime-500 text-white'
-                                                            : 'bg-dark-700 border-dark-600 hover:bg-dark-600'
+                                                        ? 'bg-lime-600 border-lime-500 text-white'
+                                                        : 'bg-dark-700 border-dark-600 hover:bg-dark-600'
                                                         }`}
                                                 >
                                                     Default
                                                 </button>
                                             </div>
 
-                                            {/* Brightness control - only show when custom color is selected */}
                                             {soundFormData.color !== '#84cc16' && (
                                                 <div>
                                                     <label className="block text-sm font-medium mb-1">Brightness: {Math.round((soundFormData.brightness || 1) * 100)}%</label>
@@ -1931,8 +1974,8 @@ function App() {
                                         <button
                                             onClick={() => handleBackgroundSettingsChange('type', 'color')}
                                             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${backgroundSettings.type === 'color'
-                                                    ? 'bg-lime-600 text-white'
-                                                    : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                ? 'bg-lime-600 text-white'
+                                                : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 }`}
                                         >
                                             Color Theme
@@ -1940,8 +1983,8 @@ function App() {
                                         <button
                                             onClick={() => handleBackgroundSettingsChange('type', 'image')}
                                             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${backgroundSettings.type === 'image'
-                                                    ? 'bg-lime-600 text-white'
-                                                    : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                ? 'bg-lime-600 text-white'
+                                                : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 }`}
                                         >
                                             Background Image
@@ -1961,8 +2004,8 @@ function App() {
                                                     handleBackgroundSettingsChange('type', 'color')
                                                 }}
                                                 className={`p-3 rounded-lg transition-colors text-center ${backgroundSettings.theme === key
-                                                        ? 'bg-lime-600 text-white'
-                                                        : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                    ? 'bg-lime-600 text-white'
+                                                    : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                     }`}
                                             >
                                                 <div
@@ -1992,8 +2035,8 @@ function App() {
                                                     handleBackgroundSettingsChange('type', 'color')
                                                 }}
                                                 className={`w-8 h-8 rounded border-2 transition-transform hover:scale-110 ${backgroundSettings.theme === color
-                                                        ? 'border-lime-500 scale-110'
-                                                        : 'border-dark-600'
+                                                    ? 'border-lime-500 scale-110'
+                                                    : 'border-dark-600'
                                                     }`}
                                                 style={{ backgroundColor: color }}
                                                 title={color}
@@ -2068,26 +2111,6 @@ function App() {
                                             </div>
                                         )
                                     )}
-                                </div>
-
-                                {/* Split View Toggle */}
-                                <div className="pt-4 border-t border-dark-700">
-                                    <h3 className="text-lg font-medium mb-3">Display Settings</h3>
-                                    <div className="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
-                                        <div>
-                                            <span className="text-slate-200 font-medium block">Split View Mode</span>
-                                            <span className="text-xs text-slate-400">View Characters and Environment side-by-side</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsSplitView(!isSplitView)}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isSplitView ? 'bg-lime-600' : 'bg-dark-600'
-                                                }`}
-                                        >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isSplitView ? 'translate-x-6' : 'translate-x-1'
-                                                }`} />
-                                        </button>
-                                    </div>
                                 </div>
 
                                 {/* Close Button */}
