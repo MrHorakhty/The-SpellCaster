@@ -35,18 +35,18 @@
     {
       "category": "Background Music",
       "sounds": [
-        { "id": "env_1", "name": "Forest Ambience", "type": "Nature", "icon": "forest.svg", "file": "forest.wav", "color": "#10b981", "duration": 0, "fadeIn": 2.5, "fadeOut": 3.0, "isEnvironmental": true },
-        { "id": "env_2", "name": "Tavern Music", "type": "Music", "icon": "tavern.svg", "file": "tavern.wav", "color": "#f59e0b", "duration": 0, "fadeIn": 1.5, "fadeOut": 2.0, "isEnvironmental": true },
-        { "id": "env_3", "name": "Dungeon Echoes", "type": "Ambience", "icon": "dungeon.svg", "file": "dungeon.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 3.0, "fadeOut": 4.0, "isEnvironmental": true }
+        { "id": "env_1", "name": "Forest Ambience", "type": "Nature", "icon": "forest.svg", "file": "forest.wav", "color": "#10b981", "duration": 0, "fadeIn": 2.5, "fadeOut": 3.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_2", "name": "Tavern Music", "type": "Music", "icon": "tavern.svg", "file": "tavern.wav", "color": "#f59e0b", "duration": 0, "fadeIn": 1.5, "fadeOut": 2.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_3", "name": "Dungeon Echoes", "type": "Ambience", "icon": "dungeon.svg", "file": "dungeon.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 3.0, "fadeOut": 4.0, "loop": true, "isEnvironmental": true }
       ]
     },
     {
       "category": "Environmental Effects",
       "sounds": [
-        { "id": "env_4", "name": "Rain", "type": "Weather", "icon": "rain.svg", "file": "rain.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 2.0, "fadeOut": 2.5, "isEnvironmental": true },
-        { "id": "env_5", "name": "Thunder", "type": "Weather", "icon": "thunder.svg", "file": "thunder.wav", "color": "#f97316", "duration": 5.0, "fadeIn": 0.5, "fadeOut": 1.0, "isEnvironmental": true },
-        { "id": "env_6", "name": "Wind", "type": "Weather", "icon": "wind.svg", "file": "wind.wav", "color": "#84cc16", "duration": 0, "fadeIn": 3.0, "fadeOut": 3.5, "isEnvironmental": true },
-        { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 1.0, "fadeOut": 1.5, "isEnvironmental": true }
+        { "id": "env_4", "name": "Rain", "type": "Weather", "icon": "rain.svg", "file": "rain.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 2.0, "fadeOut": 2.5, "loop": true, "isEnvironmental": true },
+        { "id": "env_5", "name": "Thunder", "type": "Weather", "icon": "thunder.svg", "file": "thunder.wav", "color": "#f97316", "duration": 5.0, "fadeIn": 0.5, "fadeOut": 1.0, "loop": false, "isEnvironmental": true },
+        { "id": "env_6", "name": "Wind", "type": "Weather", "icon": "wind.svg", "file": "wind.wav", "color": "#84cc16", "duration": 0, "fadeIn": 3.0, "fadeOut": 3.5, "loop": true, "isEnvironmental": true },
+        { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 1.0, "fadeOut": 1.5, "loop": true, "isEnvironmental": true }
       ]
     }
   ]

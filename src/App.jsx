@@ -262,6 +262,7 @@ function App() {
       duration: parseFloat(newSoundData.duration) || 0,
       fadeIn: parseFloat(newSoundData.fadeIn) || 0,
       fadeOut: parseFloat(newSoundData.fadeOut) || 0,
+      loop: newSoundData.loop !== undefined ? newSoundData.loop : false,
     }
     
     if (tabType === 'characters' && activeCharacter) {
@@ -547,6 +548,11 @@ function App() {
       if (existingAudio) {
         existingAudio.pause()
         existingAudio.currentTime = 0
+        
+        // Clear any active timer
+        if (existingAudio.timer) {
+          clearTimeout(existingAudio.timer)
+        }
       }
       setPlayingSounds(prev => {
         const newSet = new Set(prev)
@@ -557,15 +563,47 @@ function App() {
       return
     }
     
-    console.log('Playing sound:', sound.name, 'from URL:', soundUrl)
+    console.log('Playing sound:', sound.name, 'Loop property:', sound.loop, 'from URL:', soundUrl)
     
     const audio = new Audio(soundUrl)
-    audio.loop = false // Basic version - no loop functionality yet
+    audio.loop = sound.loop || false // Use sound's loop property
     
     audioElementsRef.current.set(soundKey, audio)
     
+    // Timer functionality - only apply to non-looping sounds with duration > 0
+    if (!sound.loop && sound.duration > 0) {
+      console.log('Timer setup:', { soundKey, duration: sound.duration, fadeOut: sound.fadeOut })
+      
+      const timerDuration = sound.duration * 1000 // Convert to milliseconds
+      console.log('Timer scheduled for', timerDuration, 'ms')
+      
+      const timer = setTimeout(() => {
+        console.log('Timer fired for sound:', soundKey)
+        
+        // Stop the sound
+        audio.pause()
+        audio.currentTime = 0
+        
+        setPlayingSounds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(soundKey)
+          return newSet
+        })
+        audioElementsRef.current.delete(soundKey)
+      }, timerDuration)
+      
+      // Store timer for cleanup
+      audio.timer = timer
+    }
+    
     audio.addEventListener('ended', () => {
       console.log('Sound ended:', sound.name)
+      
+      // Clear timer if sound ends naturally (not by timer)
+      if (audio.timer) {
+        clearTimeout(audio.timer)
+      }
+      
       setPlayingSounds(prev => {
         const newSet = new Set(prev)
         newSet.delete(soundKey)
@@ -844,6 +882,10 @@ function App() {
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
 
+                        {/* Loop Indicator */}
+                        {!editMode && sound.loop && (
+                          <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
+                        )}
                         <div className="text-xs text-slate-400 text-center">
                           {sound.type}
                         </div>
@@ -928,6 +970,10 @@ function App() {
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
 
+                        {/* Loop Indicator */}
+                        {!editMode && sound.loop && (
+                          <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
+                        )}
                         <div className="text-xs text-slate-400 text-center">
                           {sound.type}
                         </div>
