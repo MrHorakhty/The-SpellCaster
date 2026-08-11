@@ -146,12 +146,12 @@ function App() {
 
     // Predefined themes
     const predefinedThemes = {
-        'default': { name: 'Default', primary: '#84cc16' },
-        'forest': { name: 'Forest', primary: '#10b981' },
-        'ocean': { name: 'Ocean', primary: '#3b82f6' },
-        'fire': { name: 'Fire', primary: '#ef4444' },
-        'magic': { name: 'Magic', primary: '#8b5cf6' },
-        'gold': { name: 'Gold', primary: '#f59e0b' }
+        'default': { name: 'Default', primary: '#0f172a' },
+        'forest': { name: 'Forest', primary: '#0d350c' },
+        'ocean': { name: 'Ocean', primary: '#001d4c' },
+        'fire': { name: 'Fire', primary: '#991212' },
+        'magic': { name: 'Magic', primary: '#442981' },
+        'gold': { name: 'Gold', primary: '#8e5a02' }
     }
 
     // File upload states
