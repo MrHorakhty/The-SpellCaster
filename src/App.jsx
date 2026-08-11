@@ -644,21 +644,21 @@ function App() {
                     </button>
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Left */}
-                        <button
-                          onClick={() => handleEditCharacter(character.id)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                          title="Edit Character"
-                        >
-                          <Edit size={12} />
-                        </button>
-                        {/* Delete Icon - Top Right */}
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteCharacter(character.id)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Character"
                         >
                           <Trash2 size={12} />
+                        </button>
+                        {/* Edit Icon - Top Right */}
+                        <button
+                          onClick={() => handleEditCharacter(character.id)}
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          title="Edit Character"
+                        >
+                          <Edit size={12} />
                         </button>
                       </>
                     )}
@@ -682,21 +682,21 @@ function App() {
                     </button>
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Left */}
-                        <button
-                          onClick={() => handleEditCategory(category.category)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                          title="Edit Category"
-                        >
-                          <Edit size={12} />
-                        </button>
-                        {/* Delete Icon - Top Right */}
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteCategory(category.category)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Category"
                         >
                           <Trash2 size={12} />
+                        </button>
+                        {/* Edit Icon - Top Right */}
+                        <button
+                          onClick={() => handleEditCategory(category.category)}
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          title="Edit Category"
+                        >
+                          <Edit size={12} />
                         </button>
                       </>
                     )}
@@ -785,21 +785,21 @@ function App() {
                     {/* Edit Mode Actions */}
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Left */}
-                        <button
-                          onClick={() => openEditSoundModal(sound)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                          title="Edit Sound"
-                        >
-                          <Edit size={12} />
-                        </button>
-                        {/* Delete Icon - Top Right */}
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
+                        </button>
+                        {/* Edit Icon - Top Right */}
+                        <button
+                          onClick={() => openEditSoundModal(sound)}
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          title="Edit Sound"
+                        >
+                          <Edit size={12} />
                         </button>
                       </>
                     )}
@@ -837,21 +837,21 @@ function App() {
                     {/* Edit Mode Actions */}
                     {editMode && (
                       <>
-                        {/* Edit Icon - Top Left */}
-                        <button
-                          onClick={() => openEditSoundModal(sound)}
-                          className="absolute -top-2 -left-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
-                          title="Edit Sound"
-                        >
-                          <Edit size={12} />
-                        </button>
-                        {/* Delete Icon - Top Right */}
+                        {/* Delete Icon - Top Left */}
                         <button
                           onClick={() => handleDeleteSound(sound.id)}
-                          className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                           title="Delete Sound"
                         >
                           <Trash2 size={12} />
+                        </button>
+                        {/* Edit Icon - Top Right */}
+                        <button
+                          onClick={() => openEditSoundModal(sound)}
+                          className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          title="Edit Sound"
+                        >
+                          <Edit size={12} />
                         </button>
                       </>
                     )}
