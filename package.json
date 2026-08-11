@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backup": "powershell -Command \"git add .; git commit -m \"Backup: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')\"\"",
+    "backup-feature": "powershell -Command \"git add .; git commit -m \"Feature backup: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - %npm_config_message%\"\"",
+    "status": "git status",
+    "log": "git log --oneline -10",
+    "restore-last": "git reset --hard HEAD~1"
   },
   "dependencies": {
     "lucide-react": "^0.428.0",
