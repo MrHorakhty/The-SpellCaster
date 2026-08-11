@@ -147,3 +147,6 @@ jspm_packages/
 
 # Vite build cache
 .vite/
+
+# Git error stackdump files
+*.stackdump
