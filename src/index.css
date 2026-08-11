@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme CSS Custom Properties */
+:root {
+  --theme-bg-primary: #090d16;
+  --theme-bg-secondary: #0f172a;
+  --theme-accent: #84cc16;
+  --theme-text: #f8fafc;
+  --theme-border: #334155;
+}
+
+/* Apply theme variables to elements */
+body {
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text);
+}
+
+.bg-dark-800 {
+  background-color: var(--theme-bg-secondary);
+}
+
+.bg-dark-700 {
+  background-color: var(--theme-bg-secondary);
+}
+
+.bg-dark-900 {
+  background-color: var(--theme-bg-primary);
+}
+
+.border-dark-600 {
+  border-color: var(--theme-border);
+}
+
+.border-dark-700 {
+  border-color: var(--theme-border);
+}
+
+/* Ensure background images take precedence over background colors */
+.app-container[style*="background-image"] {
+  background-color: transparent !important;
+}
+
+.text-lime-500 {
+  color: var(--theme-accent);
+}
+
+.bg-lime-600 {
+  background-color: var(--theme-accent);
+}
+
 /* Custom styled scrollbars for a clean dark TTRPG look */
 ::-webkit-scrollbar {
   width: 6px;
@@ -9,16 +57,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: var(--theme-bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--theme-border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--theme-accent);
 }
 
 /* Custom CSS classes for future wheel/radial layout transition */
@@ -52,13 +100,13 @@
   height: 16px;
   width: 16px;
   border-radius: 50%;
-  background: #84cc16;
+  background: var(--theme-accent);
   cursor: pointer;
-  border: 2px solid #1e293b;
+  border: 2px solid var(--theme-border);
 }
 
 .slider::-webkit-slider-track {
-  background: #334155;
+  background: var(--theme-border);
   height: 4px;
   border-radius: 2px;
 }
@@ -67,13 +115,13 @@
   height: 16px;
   width: 16px;
   border-radius: 50%;
-  background: #84cc16;
+  background: var(--theme-accent);
   cursor: pointer;
-  border: 2px solid #1e293b;
+  border: 2px solid var(--theme-border);
 }
 
 .slider::-moz-range-track {
-  background: #334155;
+  background: var(--theme-border);
   height: 4px;
   border-radius: 2px;
 }

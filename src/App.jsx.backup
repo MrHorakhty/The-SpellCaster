@@ -98,8 +98,6 @@ function App() {
     type: '',
     icon: '',
     file: '',
-    files: [], // New: array for multiple files
-    randomPlay: false, // New: random playback flag
     color: '#84cc16',
     brightness: 1, // 1.0 = 100% brightness, range: 0.0 to 2.0
     duration: 0,
@@ -151,10 +149,6 @@ function App() {
   const [iconFile, setIconFile] = useState(null)
   const [audioPreview, setAudioPreview] = useState('')
   const [iconPreview, setIconPreview] = useState('')
-  
-  // Multiple file upload states
-  const [audioFiles, setAudioFiles] = useState([]) // Array of multiple audio files
-  const [audioPreviews, setAudioPreviews] = useState([]) // Array of preview URLs
 
   // Get active character or environment category
   const activeCharacter = characters.find(char => char.id === activeTab)
@@ -205,11 +199,6 @@ function App() {
     setIconFile(null)
     setAudioPreview('')
     setIconPreview('')
-    
-    // Clear multiple file states
-    setAudioFiles([])
-    setAudioPreviews([])
-    
     setEditingSound(null)
     setShowSoundModal(true)
   }
@@ -227,10 +216,6 @@ function App() {
     setIconFile(null)
     setAudioPreview('')
     
-    // Reset multiple file states for editing
-    setAudioFiles([])
-    setAudioPreviews([])
-    
     // Set icon preview for existing sound
     if (sound.icon) {
       const iconUrl = getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
@@ -244,8 +229,6 @@ function App() {
       type: sound.type,
       icon: sound.icon || '',
       file: sound.file || '',
-      files: sound.files || [], // New: multiple files
-      randomPlay: sound.randomPlay || false, // New: random playback flag
       color: sound.color || '#84cc16',
       brightness: sound.brightness || 1,
       duration: sound.duration || 0,
@@ -273,10 +256,8 @@ function App() {
     console.log('🎵 ADD/EDIT SOUND - Form data:', soundFormData)
     
     // Validation based on historical pattern - require name and either file upload or existing file
-    // Updated to support multiple files
-    const hasFiles = audioFiles.length > 0 || soundFormData.files?.length > 0 || soundFormData.file
-    if (!soundFormData.name.trim() || !hasFiles) {
-      console.log('Validation failed: Name and at least one audio file required')
+    if (!soundFormData.name.trim() || (!audioFile && !soundFormData.file)) {
+      console.log('Validation failed: Name and audio file required')
       return
     }
     
@@ -303,9 +284,7 @@ function App() {
       name: newSoundData.name,
       type: newSoundData.type || 'Sound',
       icon: newSoundData.icon,
-      file: newSoundData.file, // Keep for backward compatibility
-      files: newSoundData.files || [], // New: multiple files
-      randomPlay: newSoundData.randomPlay || false, // New: random playback flag
+      file: newSoundData.file,
       color: newSoundData.color,
       brightness: newSoundData.brightness || 1,
       duration: parseFloat(newSoundData.duration) || 0,
@@ -314,7 +293,7 @@ function App() {
       loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment')
     }
     
-    console.log('🎵 ADD SOUND - Final sound object:', newSound)
+    console.log('🎵 ADD SOUND - Final sound object loop:', newSound.loop)
     
     if (tabType === 'characters' && activeCharacter) {
       // Add to active character
@@ -342,7 +321,6 @@ function App() {
       fadeIn: parseFloat(newSoundData.fadeIn) || 0,
       fadeOut: parseFloat(newSoundData.fadeOut) || 0,
       loop: newSoundData.loop !== undefined ? newSoundData.loop : false,
-      randomPlay: newSoundData.randomPlay || false, // New: random playback flag
     }
     
     if (tabType === 'characters' && activeCharacter) {
@@ -436,62 +414,6 @@ function App() {
       // Store file in localStorage
       storeFileInLocalStorage(file.name, file)
     }
-  }
-
-  // Multiple audio file upload handlers
-  const handleMultipleAudioUpload = (e) => {
-    const files = Array.from(e.target.files)
-    if (files.length > 0) {
-      const newFiles = files.map(file => ({
-        file: file,
-        preview: URL.createObjectURL(file),
-        name: file.name
-      }))
-      
-      setAudioFiles(prev => [...prev, ...newFiles])
-      setAudioPreviews(prev => [...prev, ...newFiles.map(f => f.preview)])
-      
-      // Update form data with file names
-      const fileNames = newFiles.map(f => f.name)
-      setSoundFormData(prev => ({ 
-        ...prev, 
-        files: [...(prev.files || []), ...fileNames.map(name => ({ name, url: name }))]
-      }))
-      
-      // Store files in localStorage
-      files.forEach(file => {
-        storeFileInLocalStorage(file.name, file)
-      })
-    }
-  }
-
-  const removeAudioFile = (index) => {
-    const fileToRemove = audioFiles[index]
-    
-    // Remove from state
-    setAudioFiles(prev => prev.filter((_, i) => i !== index))
-    setAudioPreviews(prev => prev.filter((_, i) => i !== index))
-    
-    // Remove from form data
-    setSoundFormData(prev => ({
-      ...prev,
-      files: prev.files.filter((_, i) => i !== index)
-    }))
-    
-    // Remove from localStorage
-    removeFileFromLocalStorage(fileToRemove.name)
-  }
-
-  const clearMultipleAudioUpload = () => {
-    // Remove all files from localStorage
-    audioFiles.forEach(file => {
-      removeFileFromLocalStorage(file.name)
-    })
-    
-    // Clear state
-    setAudioFiles([])
-    setAudioPreviews([])
-    setSoundFormData(prev => ({ ...prev, files: [] }))
   }
 
   const clearAudioUpload = () => {
@@ -984,41 +906,18 @@ function App() {
     
     const soundKey = sound.id
     
-    // Determine which file to play (support for multiple files with random playback)
-    let fileToPlay
-    
-    if (sound.files && sound.files.length > 0) {
-      // Multiple files available
-      console.log('Multiple files available:', sound.files.length)
-      
-      if (sound.randomPlay && sound.files.length > 1) {
-        // Random selection from multiple files
-        const randomIndex = Math.floor(Math.random() * sound.files.length)
-        fileToPlay = sound.files[randomIndex]
-        console.log('Randomly selected file:', fileToPlay.name, 'from', sound.files.length, 'files')
-      } else {
-        // Play first file
-        fileToPlay = sound.files[0]
-        console.log('Playing first file:', fileToPlay.name)
-      }
-    } else {
-      // Backward compatibility: use single file property
-      fileToPlay = { name: sound.file }
-      console.log('Using single file (backward compatibility):', sound.file)
-    }
-    
     // Check if file exists in localStorage first, otherwise use /assets/
     let soundUrl
-    const storedFile = getFileFromLocalStorage(fileToPlay.name)
+    const storedFile = getFileFromLocalStorage(sound.file)
     if (storedFile) {
       soundUrl = storedFile
-      console.log('Using stored file from localStorage:', fileToPlay.name)
+      console.log('Using stored file from localStorage:', sound.file)
     } else {
-      soundUrl = `/assets/${fileToPlay.name}`
-      console.log('Using file from /assets/ directory:', fileToPlay.name)
+      soundUrl = `/assets/${sound.file}`
+      console.log('Using file from /assets/ directory:', sound.file)
     }
     
-    console.log('Playing sound:', sound.name, 'Loop property:', sound.loop, 'from URL:', soundUrl, 'Random Play:', sound.randomPlay)
+    console.log('Playing sound:', sound.name, 'Loop property:', sound.loop, 'from URL:', soundUrl)
     
     const audio = new Audio(soundUrl)
     audio.loop = sound.loop || false // Use sound's loop property
@@ -1141,37 +1040,6 @@ function App() {
     })
   }
 
-  // Stop all currently playing sounds
-  const stopAllSounds = () => {
-    if (editMode) return // Don't stop sounds in edit mode
-    
-    console.log('Stopping all sounds')
-    
-    // Get all audio instances
-    const audioInstances = Array.from(audioElementsRef.current.entries())
-    
-    console.log(`Found ${audioInstances.length} audio instances to stop`)
-    
-    // Stop each audio instance
-    audioInstances.forEach(([instanceKey, audio]) => {
-      if (audio) {
-        audio.pause()
-        audio.currentTime = 0
-        
-        // Clear any active timer
-        if (audio.timer) {
-          clearTimeout(audio.timer)
-        }
-      }
-      
-      // Remove from ref
-      audioElementsRef.current.delete(instanceKey)
-    })
-    
-    // Clear all sound instances state for UI
-    setSoundInstances({})
-  }
-
   // Initialize active tab
   useEffect(() => {
     if (tabType === 'characters' && characters.length > 0 && !activeTab) {
@@ -1220,16 +1088,6 @@ function App() {
                 />
                 <span className="text-sm text-slate-400 w-8">{Math.round(masterVolume * 100)}%</span>
               </div>
-              
-              {/* Stop All Sounds Button */}
-              <button
-                onClick={stopAllSounds}
-                disabled={Object.keys(soundInstances).length === 0 || editMode}
-                className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
-                title="Stop All Sounds"
-              >
-                <Square size={20} />
-              </button>
               
               {/* Settings Button */}
               <button
@@ -1475,11 +1333,6 @@ function App() {
                         {!editMode && sound.loop && (
                           <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
                         )}
-                        
-                        {/* Multi-file Indicator */}
-                        {!editMode && sound.files && sound.files.length > 1 && (
-                          <div className="absolute top-2 right-2 w-3 h-3 bg-purple-500 rounded-full" title={`${sound.files.length} files available`}></div>
-                        )}
 {/* Stop Button - Bottom Left */}
                         {!editMode && isSoundPlaying(sound.id) && (
                           <button
@@ -1589,11 +1442,6 @@ className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transitio
 {!editMode && sound.loop && (
                           <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
                         )}
-                        
-                        {/* Multi-file Indicator */}
-                        {!editMode && sound.files && sound.files.length > 1 && (
-                          <div className="absolute top-2 right-2 w-3 h-3 bg-purple-500 rounded-full" title={`${sound.files.length} files available`}></div>
-                        )}
 
                         {/* Stop Button - Bottom Left */}
                         {!editMode && isSoundPlaying(sound.id) && (
@@ -1609,6 +1457,11 @@ className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transitio
                           </button>
                         )}
 
+{/* Loop Indicator */}
+                        {!editMode && sound.loop && (
+                          <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
+                        )}
+
                         {/* Stop Button - Bottom Left */}
                         {!editMode && isSoundPlaying(sound.id) && (
                           <button
@@ -1622,7 +1475,22 @@ className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transitio
                             <Square size={12} />
                           </button>
                         )}
-                        
+                        {!editMode && sound.loop && (
+                          <div className="absolute bottom-2 right-2 w-3 h-3 bg-blue-500 rounded-full" title="Looping sound"></div>
+{/* Stop Button - Bottom Left */}
+                        {!editMode && isSoundPlaying(sound.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopSound(sound)
+                            }}
+                            className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
+                            title="Stop Sound"
+                          >
+                            <Square size={12} />
+                          </button>
+                        )}
+                        )}
                         <div className="text-xs text-slate-400 text-center">
                           {sound.type}
                         </div>
@@ -1804,64 +1672,26 @@ className={`w-full bg-dark-700 border rounded-xl p-4 hover:bg-dark-600 transitio
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Upload Audio Files *</label>
+                    <label className="block text-sm font-medium mb-1">Upload Audio File *</label>
                     <input
                       type="file"
                       accept=".mp3,.wav,.ogg"
-                      multiple
-                      onChange={handleMultipleAudioUpload}
+                      onChange={handleAudioUpload}
                       className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500 file:bg-dark-600 file:border-0 file:text-slate-300 file:mr-4"
                     />
-                    
-                    {/* Multiple files preview */}
-                    {audioFiles.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-slate-400">
-                            {audioFiles.length} file{audioFiles.length !== 1 ? 's' : ''} uploaded
-                          </span>
+                    {audioPreview && (
+                      <div className="mt-2">
+                        <audio controls src={audioPreview} className="w-full" />
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-slate-400">{soundFormData.file}</span>
                           <button
                             type="button"
-                            onClick={clearMultipleAudioUpload}
+                            onClick={clearAudioUpload}
                             className="text-xs text-red-400 hover:text-red-300"
                           >
-                            Remove All
+                            Remove
                           </button>
                         </div>
-                        
-                        {audioFiles.map((fileObj, index) => (
-                          <div key={index} className="flex items-center justify-between bg-dark-800 rounded-lg p-2">
-                            <div className="flex items-center space-x-2">
-                              <audio controls src={fileObj.preview} className="w-32" />
-                              <span className="text-xs text-slate-400 truncate max-w-[120px]">{fileObj.name}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeAudioFile(index)}
-                              className="text-xs text-red-400 hover:text-red-300 p-1"
-                              title="Remove file"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Random playback option */}
-                    {audioFiles.length > 1 && (
-                      <div className="flex items-center space-x-3 mt-3">
-                        <input
-                          type="checkbox"
-                          name="randomPlay"
-                          id="randomPlay"
-                          checked={soundFormData.randomPlay}
-                          onChange={(e) => setSoundFormData(prev => ({ ...prev, randomPlay: e.target.checked }))}
-                          className="w-4 h-4 text-lime-500 bg-dark-700 border-dark-600 rounded focus:ring-lime-500"
-                        />
-                        <label htmlFor="randomPlay" className="text-sm">
-                          Play random file from selection
-                        </label>
                       </div>
                     )}
                   </div>
