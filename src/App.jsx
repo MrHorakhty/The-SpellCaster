@@ -24,6 +24,46 @@ const getSoundIcon = (soundType) => {
   return iconMap[soundType] || Music // Default to Music icon
 }
 
+// Function to convert hex color to hue-rotate degrees for CSS filters
+const getHueRotateFromColor = (color) => {
+  // Handle transparent mode - use default color for hue calculation
+  if (color === 'transparent') {
+    color = '#84cc16' // Default color
+  }
+  
+  // Remove # if present
+  const hex = color.replace('#', '')
+  
+  // Convert hex to RGB
+  const r = parseInt(hex.substring(0, 2), 16) / 255
+  const g = parseInt(hex.substring(2, 4), 16) / 255
+  const b = parseInt(hex.substring(4, 6), 16) / 255
+  
+  // Find max and min values
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  let h = 0
+  
+  // Calculate hue
+  if (max === min) {
+    h = 0 // achromatic
+  } else {
+    const d = max - min
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break
+      case g: h = (b - r) / d + 2; break
+      case b: h = (r - g) / d + 4; break
+    }
+    h /= 6
+  }
+  
+  // Convert hue to degrees (0-360)
+  const hueDegrees = Math.round(h * 360)
+  
+  // Return hue rotation value (adjust based on filter chain requirements)
+  return hueDegrees
+}
+
 function App() {
   const [characters, setCharacters] = useState(data.characters)
   const [environmentSounds, setEnvironmentSounds] = useState(data.environmentSounds)
@@ -43,6 +83,7 @@ function App() {
     icon: '',
     file: '',
     color: '#84cc16',
+    brightness: 1, // 1.0 = 100% brightness, range: 0.0 to 2.0
     duration: 0,
     fadeIn: 0,
     fadeOut: 0,
@@ -126,6 +167,7 @@ function App() {
       icon: sound.icon || '',
       file: sound.file || '',
       color: sound.color || '#84cc16',
+      brightness: sound.brightness || 1,
       duration: sound.duration || 0,
       fadeIn: sound.fadeIn || 0,
       fadeOut: sound.fadeOut || 0,
@@ -179,6 +221,7 @@ function App() {
       icon: newSoundData.icon,
       file: newSoundData.file,
       color: newSoundData.color,
+      brightness: newSoundData.brightness || 1,
       duration: parseFloat(newSoundData.duration) || 0,
       fadeIn: parseFloat(newSoundData.fadeIn) || 0,
       fadeOut: parseFloat(newSoundData.fadeOut) || 0,
@@ -770,11 +813,28 @@ function App() {
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
                             className="w-12 h-12 mb-2 object-contain"
+                            style={sound.color === 'transparent' ? { 
+                              // Monochrome filtering for transparent mode
+                              filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                            } : sound.color !== '#84cc16' ? { 
+                              // Gentle tinting for custom colors
+                              filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                            } : {}}
                           />
                         ) : (
                           (() => {
                             const IconComponent = getSoundIcon(sound.type)
-                            return <IconComponent size={32} className="mb-2" />
+                            return <IconComponent 
+                              size={32} 
+                              className="mb-2" 
+                              style={sound.color === 'transparent' ? { 
+                                // Monochrome filtering for transparent mode
+                                filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                              } : sound.color !== '#84cc16' ? { 
+                                // Gentle tinting for custom colors
+                                filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                              } : {}}
+                            />
                           })()
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
@@ -824,11 +884,28 @@ function App() {
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
                             className="w-12 h-12 mb-2 object-contain"
+                            style={sound.color === 'transparent' ? { 
+                              // Monochrome filtering for transparent mode
+                              filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                            } : sound.color !== '#84cc16' ? { 
+                              // Gentle tinting for custom colors
+                              filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                            } : {}}
                           />
                         ) : (
                           (() => {
                             const IconComponent = getSoundIcon(sound.type)
-                            return <IconComponent size={32} className="mb-2" />
+                            return <IconComponent 
+                              size={32} 
+                              className="mb-2" 
+                              style={sound.color === 'transparent' ? { 
+                                // Monochrome filtering for transparent mode
+                                filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                              } : sound.color !== '#84cc16' ? { 
+                                // Gentle tinting for custom colors
+                                filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                              } : {}}
+                            />
                           })()
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
@@ -959,22 +1036,72 @@ function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-1">Icon Color</label>
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="color"
-                        name="color"
-                        value={soundFormData.color}
-                        onChange={handleSoundFormChange}
-                        className="w-10 h-10 cursor-pointer rounded-lg border border-dark-600"
-                      />
-                      <input
-                        type="text"
-                        value={soundFormData.color}
-                        onChange={handleSoundFormChange}
-                        name="color"
-                        className="flex-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                      />
+                    <label className="block text-sm font-medium mb-1">Tint (Optional)</label>
+                    <div className="space-y-3">
+                      {/* Three-button color system */}
+                      <div className="flex space-x-2">
+                        <input
+                          type="color"
+                          name="color"
+                          value={soundFormData.color}
+                          onChange={handleSoundFormChange}
+                          className="w-10 h-10 cursor-pointer rounded-lg border border-dark-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setSoundFormData(prev => ({ ...prev, color: '#84cc16' }))}
+                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
+                            soundFormData.color === '#84cc16' 
+                              ? 'bg-lime-600 border-lime-500 text-white' 
+                              : 'bg-dark-700 border-dark-600 hover:bg-dark-600'
+                          }`}
+                        >
+                          Default
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSoundFormData(prev => ({ ...prev, color: 'transparent' }))}
+                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
+                            soundFormData.color === 'transparent' 
+                              ? 'bg-blue-600 border-blue-500 text-white' 
+                              : 'bg-dark-700 border-dark-600 hover:bg-dark-600'
+                          }`}
+                        >
+                          Transparent Image
+                        </button>
+                      </div>
+                      
+                      {/* Brightness control - only show when custom color is selected */}
+                      {soundFormData.color !== '#84cc16' && soundFormData.color !== 'transparent' && (
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Brightness: {Math.round((soundFormData.brightness || 1) * 100)}%</label>
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="range"
+                              name="brightness"
+                              min="0"
+                              max="2"
+                              step="0.01"
+                              value={soundFormData.brightness || 1}
+                              onChange={handleSoundFormChange}
+                              className="flex-1 slider"
+                            />
+                            <input
+                              type="number"
+                              name="brightness"
+                              min="0"
+                              max="200"
+                              step="1"
+                              value={Math.round((soundFormData.brightness || 1) * 100)}
+                              onChange={(e) => {
+                                const value = Math.max(0, Math.min(200, parseInt(e.target.value) || 100)) / 100;
+                                setSoundFormData(prev => ({ ...prev, brightness: value }));
+                              }}
+                              className="w-20 bg-dark-700 border border-dark-600 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-lime-500"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
