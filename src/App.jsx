@@ -759,27 +759,29 @@ function App() {
                   <div key={sound.id} className="group relative">
                     <button
                       onClick={() => playSound(sound)}
-                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[120px] flex flex-col items-center justify-center ${
+                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
                         playingSounds.has(sound.id) ? 'ring-2 ring-lime-500' : ''
                       } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={editMode}
                     >
-                      <div className="flex items-center justify-center mb-2">
+                      <div className="flex flex-col items-center justify-center mb-2">
                         {sound.icon ? (
                           <img 
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
-                            className="w-6 h-6 mr-2 object-contain"
+                            className="w-12 h-12 mb-2 object-contain"
                           />
                         ) : (
                           (() => {
                             const IconComponent = getSoundIcon(sound.type)
-                            return <IconComponent size={24} className="mr-2" />
+                            return <IconComponent size={32} className="mb-2" />
                           })()
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
+                        <div className="text-xs text-slate-400 text-center">
+                          {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-400 text-center">{sound.type}</div>
                     </button>
 
                     {/* Edit Mode Actions */}
@@ -811,27 +813,29 @@ function App() {
                   <div key={sound.id} className="group relative">
                     <button
                       onClick={() => playSound(sound)}
-                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[120px] flex flex-col items-center justify-center ${
+                      className={`w-full bg-dark-700 rounded-xl p-4 hover:bg-dark-600 transition-all duration-200 min-h-[140px] flex flex-col items-center justify-center ${
                         playingSounds.has(sound.id) ? 'ring-2 ring-lime-500' : ''
                       } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={editMode}
                     >
-                      <div className="flex items-center justify-center mb-2">
+                      <div className="flex flex-col items-center justify-center mb-2">
                         {sound.icon ? (
                           <img 
                             src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`} 
                             alt={sound.name}
-                            className="w-6 h-6 mr-2 object-contain"
+                            className="w-12 h-12 mb-2 object-contain"
                           />
                         ) : (
                           (() => {
                             const IconComponent = getSoundIcon(sound.type)
-                            return <IconComponent size={24} className="mr-2" />
+                            return <IconComponent size={32} className="mb-2" />
                           })()
                         )}
                         <div className="text-lg font-medium text-center">{sound.name}</div>
+                        <div className="text-xs text-slate-400 text-center">
+                          {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-400 text-center">{sound.type}</div>
                     </button>
 
                     {/* Edit Mode Actions */}
