@@ -1,32 +1,35 @@
-# TTRPG Soundboard
+# The SpellCaster
 
-A local, offline-first TTRPG soundboard desktop application built with React, Vite, and Tailwind CSS.
+A powerful desktop soundboard application built for TTRPG (Tabletop Role-Playing Game) sessions, featuring character-specific sound sets and environmental audio management. Built with React, Tauri, and Tailwind CSS for a seamless desktop experience.
 
 ## Features
 
-- **🎵 Audio Playback**: Full audio support with Howler.js for low-latency, multi-channel playback
-- **🌲 Environmental Sounds**: Background music and ambience with looping functionality
-- **⏱️ Advanced Audio Controls**: Timer-based playback, fade in/out effects, and looping options
-- **📂 Category Management**: Add and manage environment sound categories
-- **👥 Character Management**: Add, delete, and switch between character sound sets
-- **🔊 Sound Management**: Add, edit, and delete sounds with custom audio files and icons
-- **🎚️ Volume Control**: Master volume slider with mute/unmute functionality
-- **🌙 Dark Theme**: Distraction-free interface optimized for tabletop gaming sessions
-- **📱 Responsive Grid**: Flexible layout that adapts to different screen sizes
-- **🔄 Dynamic Content**: Real-time preview and management without page reloads
-- **🔮 Future-Proof**: CSS architecture ready for circular "Wheel" layout implementation
+- **🎵 Advanced Audio Playback**: Full audio support with HTML5 Audio API for reliable, low-latency playback
+- **🌲 Environmental Sound Management**: Background music and ambience with looping, fade effects, and category organization
+- **👥 Character Sound Sets**: Create and manage multiple character profiles with custom sound configurations
+- **🔄 Split View Interface**: Simultaneous access to character sounds and environmental audio
+- **⏱️ Timer-Based Playback**: Set custom durations for timed sound effects
+- **🎚️ Advanced Audio Controls**: Fade in/out effects, looping options, and master volume control
+- **📁 File Management**: Sophisticated file handling with Tauri FS plugin and localStorage fallback
+- **🎨 Customizable Interface**: Background image support, dark theme optimized for gaming sessions
+- **🔀 Multiple Sound Files**: Support for multiple audio files per sound with random playback options
+- **🖼️ Icon Support**: SVG, PNG, JPG, and GIF icon formats for sound customization
+- **💾 Persistent Storage**: Automatic saving of configurations and file management
 
 ## Tech Stack
 
 - **Frontend**: React 19, Vite
+- **Desktop Framework**: Tauri 2.x with Rust backend
 - **Styling**: Tailwind CSS v3 with custom dark theme
 - **Icons**: Lucide React
-- **Audio**: Howler.js (fully implemented)
-- **State Management**: React Hooks with dynamic content updates
-- **File Handling**: HTML5 File API with URL.createObjectURL()
-- **Desktop**: Web-first build (Electron/Tauri ready)
+- **Audio**: HTML5 Audio API with advanced playback controls
+- **File Management**: Tauri FS plugin + localStorage fallback for web compatibility
+- **State Management**: React Hooks with real-time updates
+- **Build System**: Vite with Tauri integration
 
-## Getting Started
+## Quick Start
+
+### Web Development
 
 1. Install dependencies:
    ```bash
@@ -38,30 +41,64 @@ A local, offline-first TTRPG soundboard desktop application built with React, Vi
    npm run dev
    ```
 
-3. Open your browser to `http://localhost:5175/`
+3. Open your browser to `http://localhost:5173/`
+
+### Desktop App Development
+
+1. Install Tauri prerequisites (Rust toolchain):
+   ```bash
+   # Install Rust if not already installed
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs/ | sh
+   ```
+
+2. Start Tauri development:
+   ```bash
+   npm run tauri dev
+   ```
+
+### Building for Production
+
+**Web Build:**
+```bash
+npm run build
+```
+
+**Desktop Build:**
+```bash
+npm run tauri build
+```
 
 ## Project Structure
 
 ```
-src/
-├── data.json          # Sound configuration
-├── App.jsx            # Main application component
-├── main.jsx           # React entry point
-└── index.css          # Tailwind imports + custom styles
-
-public/
-└── assets/            # Custom SVG icons and audio files
+├── src/
+│   ├── App.jsx              # Main application component
+│   ├── main.jsx             # React entry point
+│   ├── index.css            # Tailwind imports + custom styles
+│   ├── data.json            # Default sound configuration
+│   └── assets/
+│       └── fonts/           # Custom fonts
+├── public/
+│   └── assets/              # Audio files and icons
+├── src-tauri/
+│   ├── src/                 # Rust backend source
+│   ├── tauri.conf.json      # Tauri configuration
+│   ├── Cargo.toml           # Rust dependencies
+│   └── icons/               # Application icons
+├── vite.config.js           # Vite configuration
+├── tailwind.config.js       # Tailwind CSS configuration
+└── package.json             # Node.js dependencies
 ```
 
 ## Customization
 
 ### Adding New Sounds
 
-1. Add your audio file to `public/assets/`
-2. Add your SVG icon to `public/assets/`
-3. Update `src/data.json` with your new sound configuration
+1. **Add Audio Files**: Place your audio files in `public/assets/` (supports .wav, .mp3, etc.)
+2. **Add Icons**: Add SVG, PNG, JPG, or GIF icons to `public/assets/`
+3. **Update Configuration**: Modify `src/data.json` with your new sound setup
 
-### JSON Structure
+### Sound Configuration Structure
 
 ```json
 {
@@ -74,32 +111,40 @@ public/
           "id": "s_1",
           "name": "Sound Name",
           "type": "Sound Type",
-          "icon": "icon.svg",
-          "file": "sound.mp3",
-          "color": "#hexcolor",
-          "duration": 0,        // 0 = play full file, >0 = timer in seconds
-          "loop": false,        // Default: false for character sounds
-          "fadeIn": 0,          // Fade in duration in seconds
-          "fadeOut": 0          // Fade out duration in seconds
+          "icon": "icon.svg",           // Icon filename
+          "file": "sound.wav",           // Single audio file
+          "files": [                     // Multiple audio files (optional)
+            { "name": "sound1.wav", "url": "sound1.wav" },
+            { "name": "sound2.wav", "url": "sound2.wav" }
+          ],
+          "randomPlay": true,           // Random selection from files array
+          "color": "#hexcolor",         // Theme color
+          "duration": 0,                // 0 = full file, >0 = timer in seconds
+          "loop": false,                // Loop playback
+          "fadeIn": 0,                  // Fade in duration (seconds)
+          "fadeOut": 0,                 // Fade out duration (seconds)
+          "glowEnabled": true,          // Enable glow effect
+          "glowProminence": 0.5         // Glow intensity (0-1)
         }
       ]
     }
   ],
   "environmentSounds": [
     {
-      "category": "Background Music",
+      "category": "Category Name",
       "sounds": [
         {
           "id": "env_1",
-          "name": "Forest Ambience",
-          "type": "Nature",
-          "icon": "forest.svg",
-          "file": "forest.wav",
+          "name": "Sound Name",
+          "type": "Environment Type",
+          "icon": "icon.svg",
+          "file": "sound.wav",
           "color": "#10b981",
           "duration": 0,
-          "loop": true,         // Default: true for environmental sounds
+          "loop": true,                 // Typically true for environmental sounds
           "fadeIn": 2.5,
-          "fadeOut": 3.0
+          "fadeOut": 3.0,
+          "isEnvironmental": true       // Mark as environmental sound
         }
       ]
     }
@@ -107,16 +152,42 @@ public/
 }
 ```
 
-## Future Enhancements
+### Advanced Features
 
-- **Circular "Wheel" Layout**: Alternative radial arrangement for ambient sounds
-- **Keyboard Shortcuts**: Quick access to frequently used sounds
-- **Sound Categories**: Advanced filtering and organization
-- **Preset Management**: Save and load character/sound configurations
-- **Audio Effects**: Reverb, pitch shifting, and other audio processing
-- **Desktop App**: Electron/Tauri packaging for standalone desktop application
-- **Cloud Sync**: Optional cloud backup for sound configurations
-- **Import/Export**: Share sound sets with other users
+**Multiple Sound Files**: Add multiple audio files to a single sound button for random playback:
+```json
+{
+  "files": [
+    { "name": "spell1.wav", "url": "spell1.wav" },
+    { "name": "spell2.wav", "url": "spell2.wav" },
+    { "name": "spell3.wav", "url": "spell3.wav" }
+  ],
+  "randomPlay": true
+}
+```
+
+**Custom Backgrounds**: The app supports custom background images through the settings interface.
+
+**File Management**: Files are automatically managed with Tauri's file system plugin for desktop apps and localStorage for web compatibility.
+
+## Development
+
+### Available Scripts
+
+- `npm run dev` - Start web development server
+- `npm run tauri dev` - Start Tauri desktop development
+- `npm run build` - Build web version
+- `npm run tauri build` - Build desktop application
+- `npm run lint` - Run ESLint
+- `npm run preview` - Preview production build
+
+### Git Backup Scripts
+
+- `npm run backup` - Manual backup commit
+- `npm run backup-feature` - Feature backup commit
+- `npm run status` - Check git status
+- `npm run log` - View recent git log
+- `npm run restore-last` - Restore last commit
 
 ## License
 
