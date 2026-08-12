@@ -1464,8 +1464,8 @@ function App() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
-                                <Music className="text-lime-500" size={32} />
-                                <h1 className="text-2xl font-bold">TTRPG Soundboard</h1>
+                                <img src="/assets/Icon.png" alt="App Icon" className="h-8 w-8" />
+                                <h1 className="text-2xl font-bold">The SpellCaster</h1>
                             </div>
 
                             {/* Split View Toggle - Responsive Layout */}

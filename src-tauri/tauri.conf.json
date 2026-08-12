@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TTRPG Soundboard",
+  "productName": "The SpellCaster",
   "version": "0.1.0",
   "identifier": "com.emire.ttrpgsoundboard",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ttrpg-soundboard",
+        "title": "The SpellCaster",
         "width": 800,
         "height": 600,
         "resizable": true,
