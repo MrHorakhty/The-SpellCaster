@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity } from 'lucide-react'
 import data from './data.json'
 
+// Environment detection
+const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
+
 // Function to get appropriate icon component based on sound type
 const getSoundIcon = (soundType) => {
     const iconMap = {
@@ -144,15 +147,9 @@ function App() {
         return savedBoxSize ? parseFloat(savedBoxSize) : 1.0
     })
 
-    // Predefined themes
-    const predefinedThemes = {
-        'default': { name: 'Default', primary: '#0f172a' },
-        'forest': { name: 'Forest', primary: '#0d350c' },
-        'ocean': { name: 'Ocean', primary: '#001d4c' },
-        'fire': { name: 'Fire', primary: '#991212' },
-        'magic': { name: 'Magic', primary: '#442981' },
-        'gold': { name: 'Gold', primary: '#8e5a02' }
-    }
+    // State for storing loaded image URLs
+    const [loadedIcons, setLoadedIcons] = useState({})
+    const [loadedFormIcon, setLoadedFormIcon] = useState('')
 
     // File upload states
     const [audioFile, setAudioFile] = useState(null)
@@ -163,6 +160,122 @@ function App() {
     // Multiple file upload states
     const [audioFiles, setAudioFiles] = useState([])
     const [audioPreviews, setAudioPreviews] = useState([])
+
+    // Load icons for sounds
+    useEffect(() => {
+        const loadIcons = async () => {
+            const allSounds = [...characters.flatMap(char => char.sounds), ...environmentSounds.flatMap(env => env.sounds)]
+            const newLoadedIcons = {}
+            
+            for (const sound of allSounds) {
+                if (sound.icon && !loadedIcons[sound.icon]) {
+                    try {
+                        const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
+                        newLoadedIcons[sound.icon] = iconUrl
+                    } catch (error) {
+                        console.error('Failed to load icon:', sound.icon, error)
+                        newLoadedIcons[sound.icon] = `/assets/${sound.icon}`
+                    }
+                }
+            }
+            
+            if (Object.keys(newLoadedIcons).length > 0) {
+                setLoadedIcons(prev => ({ ...prev, ...newLoadedIcons }))
+            }
+        }
+        
+        loadIcons()
+    }, [characters, environmentSounds])
+
+    // Load form icon
+    useEffect(() => {
+        const loadFormIcon = async () => {
+            if (soundFormData.icon && !iconPreview && !loadedFormIcon) {
+                try {
+                    const iconUrl = await getFileFromLocalStorage(soundFormData.icon) || `/assets/${soundFormData.icon}`
+                    setLoadedFormIcon(iconUrl)
+                } catch (error) {
+                    console.error('Failed to load form icon:', soundFormData.icon, error)
+                    setLoadedFormIcon(`/assets/${soundFormData.icon}`)
+                }
+            }
+        }
+        
+        loadFormIcon()
+    }, [soundFormData.icon, iconPreview])
+
+    // Migrate localStorage files to Tauri file system (only in Tauri environment)
+    useEffect(() => {
+        const migrateLocalStorageFiles = async () => {
+            // Only run migration in Tauri environment
+            if (!isTauri) {
+                return
+            }
+
+            // Check if migration is needed
+            const migrationKey = 'localStorageMigrationCompleted'
+            if (localStorage.getItem(migrationKey)) {
+                return // Migration already completed
+            }
+
+            try {
+                console.log('Starting localStorage file migration...')
+                let migratedCount = 0
+                
+                // Get all localStorage keys that start with 'sound_file_'
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i)
+                    if (key && key.startsWith('sound_file_')) {
+                        const fileName = key.replace('sound_file_', '')
+                        const fileDataUrl = localStorage.getItem(key)
+                        
+                        if (fileDataUrl) {
+                            try {
+                                // Convert data URL to blob
+                                const response = await fetch(fileDataUrl)
+                                const blob = await response.blob()
+                                
+                                // Convert blob to array buffer
+                                const arrayBuffer = await blob.arrayBuffer()
+                                const uint8Array = new Uint8Array(arrayBuffer)
+                                
+                                // Save to Tauri file system
+                                const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                                await writeFile(fileName, uint8Array, { baseDir: BaseDirectory.AppData })
+                                
+                                console.log(`Migrated file: ${fileName}`)
+                                migratedCount++
+                                
+                                // Remove from localStorage
+                                localStorage.removeItem(key)
+                            } catch (error) {
+                                console.error(`Failed to migrate file ${fileName}:`, error)
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`Migration completed. Migrated ${migratedCount} files.`)
+                localStorage.setItem(migrationKey, 'true')
+            } catch (error) {
+                console.error('Migration failed:', error)
+            }
+        }
+        
+        migrateLocalStorageFiles()
+    }, [])
+
+    // Predefined themes
+    const predefinedThemes = {
+        'default': { name: 'Default', primary: '#0f172a' },
+        'forest': { name: 'Forest', primary: '#0d350c' },
+        'ocean': { name: 'Ocean', primary: '#001d4c' },
+        'fire': { name: 'Fire', primary: '#991212' },
+        'magic': { name: 'Magic', primary: '#442981' },
+        'gold': { name: 'Gold', primary: '#8e5a02' }
+    }
+
+
 
     // Get correct active IDs based on view mode
     const currentActiveCharId = isSplitView ? activeCharacterId : activeTab
@@ -222,7 +335,7 @@ function App() {
         setShowSoundModal(true)
     }
 
-    const openEditSoundModal = (sound) => {
+    const openEditSoundModal = async (sound) => {
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
 
         setAudioFile(null)
@@ -230,11 +343,11 @@ function App() {
         setAudioPreview('')
 
         if (sound.files && sound.files.length > 0) {
-            const existingFiles = sound.files.map(file => ({
+            const existingFiles = await Promise.all(sound.files.map(async file => ({
                 file: null,
-                preview: getFileFromLocalStorage(file.name) || `/assets/${file.name}`,
+                preview: await getFileFromLocalStorage(file.name) || `/assets/${file.name}`,
                 name: file.name
-            }))
+            })))
             setAudioFiles(existingFiles)
             setAudioPreviews(existingFiles.map(f => f.preview))
         } else {
@@ -243,7 +356,7 @@ function App() {
         }
 
         if (sound.icon) {
-            const iconUrl = getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
+            const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
             setIconPreview(iconUrl)
         } else {
             setIconPreview('')
@@ -405,6 +518,54 @@ function App() {
         }
     }
 
+    const storeFileInLocalStorage = async (fileName, file) => {
+        try {
+            if (isTauri) {
+                // Tauri environment - use file system
+                const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const arrayBuffer = await file.arrayBuffer()
+                const uint8Array = new Uint8Array(arrayBuffer)
+                await writeFile(fileName, uint8Array, { baseDir: BaseDirectory.AppData })
+            } else {
+                // Web environment - fallback to localStorage
+                return new Promise((resolve) => {
+                    const reader = new FileReader()
+                    reader.onload = (e) => {
+                        localStorage.setItem(`sound_file_${fileName}`, e.target.result)
+                        resolve()
+                    }
+                    reader.readAsDataURL(file)
+                })
+            }
+        } catch (error) {
+            console.error('Failed to save file locally:', error)
+        }
+    }
+
+    const getFileFromLocalStorage = async (fileName) => {
+        try {
+            if (isTauri) {
+                // Tauri environment - use file system
+                const { readFile, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData })
+                if (fileExists) {
+                    const contents = await readFile(fileName, { baseDir: BaseDirectory.AppData })
+                    const blob = new Blob([contents])
+                    return URL.createObjectURL(blob)
+                }
+            } else {
+                // Web environment - fallback to localStorage
+                const fileDataUrl = localStorage.getItem(`sound_file_${fileName}`)
+                if (fileDataUrl) {
+                    return fileDataUrl
+                }
+            }
+        } catch (error) {
+            console.error('Failed to read local file:', error)
+        }
+        return null
+    }
+
     const handleMultipleAudioUpload = (e) => {
         const files = Array.from(e.target.files)
         if (files.length > 0) {
@@ -429,7 +590,7 @@ function App() {
         }
     }
 
-    const removeAudioFile = (index) => {
+    const removeAudioFile = async (index) => {
         const fileToRemove = audioFiles[index]
 
         setAudioFiles(prev => prev.filter((_, i) => i !== index))
@@ -440,31 +601,31 @@ function App() {
             files: prev.files.filter((_, i) => i !== index)
         }))
 
-        removeFileFromLocalStorage(fileToRemove.name)
+        await removeFileFromLocalStorage(fileToRemove.name)
     }
 
-    const clearMultipleAudioUpload = () => {
-        audioFiles.forEach(file => {
-            removeFileFromLocalStorage(file.name)
-        })
+    const clearMultipleAudioUpload = async () => {
+        for (const file of audioFiles) {
+            await removeFileFromLocalStorage(file.name)
+        }
 
         setAudioFiles([])
         setAudioPreviews([])
         setSoundFormData(prev => ({ ...prev, files: [] }))
     }
 
-    const clearAudioUpload = () => {
+    const clearAudioUpload = async () => {
         if (soundFormData.file) {
-            removeFileFromLocalStorage(soundFormData.file)
+            await removeFileFromLocalStorage(soundFormData.file)
         }
         setAudioFile(null)
         setAudioPreview('')
         setSoundFormData(prev => ({ ...prev, file: '' }))
     }
 
-    const clearIconUpload = () => {
+    const clearIconUpload = async () => {
         if (soundFormData.icon) {
-            removeFileFromLocalStorage(soundFormData.icon)
+            await removeFileFromLocalStorage(soundFormData.icon)
         }
         setIconFile(null)
         setIconPreview('')
@@ -843,23 +1004,25 @@ function App() {
         console.log('Edit category:', categoryName)
     }
 
-    const storeFileInLocalStorage = (fileName, file) => {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            localStorage.setItem(`sound_file_${fileName}`, e.target.result)
+    const removeFileFromLocalStorage = async (fileName) => {
+        try {
+            if (isTauri) {
+                // Tauri environment - use file system
+                const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData })
+                if (fileExists) {
+                    await remove(fileName, { baseDir: BaseDirectory.AppData })
+                }
+            } else {
+                // Web environment - fallback to localStorage
+                localStorage.removeItem(`sound_file_${fileName}`)
+            }
+        } catch (error) {
+            console.error('Failed to remove local file:', error)
         }
-        reader.readAsDataURL(file)
     }
 
-    const getFileFromLocalStorage = (fileName) => {
-        return localStorage.getItem(`sound_file_${fileName}`)
-    }
-
-    const removeFileFromLocalStorage = (fileName) => {
-        localStorage.removeItem(`sound_file_${fileName}`)
-    }
-
-    const playSound = (sound) => {
+    const playSound = async (sound) => {
         if (editMode) return
 
         if (!audioEnabled) {
@@ -882,7 +1045,7 @@ function App() {
         }
 
         let soundUrl
-        const storedFile = getFileFromLocalStorage(fileToPlay.name)
+        const storedFile = await getFileFromLocalStorage(fileToPlay.name)
         if (storedFile) {
             soundUrl = storedFile
         } else {
@@ -1047,7 +1210,7 @@ function App() {
                 style={{ width: `${140 * boxSize}px` }}
             >
                 <button
-                    onClick={() => playSound(sound)}
+                    onClick={async () => await playSound(sound)}
                     className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying ? 'ring-2 ring-lime-500' : ''
                         } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{
@@ -1067,7 +1230,7 @@ function App() {
                     >
                         {sound.icon ? (
                             <img
-                                src={getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`}
+                                src={loadedIcons[sound.icon] || `/assets/${sound.icon}`}
                                 alt={sound.name}
                                 className="mb-1 object-contain shrink-0"
                                 style={{
@@ -1162,7 +1325,7 @@ function App() {
                             <Trash2 size={12} />
                         </button>
                         <button
-                            onClick={() => openEditSoundModal(sound)}
+                            onClick={async () => await openEditSoundModal(sound)}
                             className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
                             title="Edit Sound"
                         >
@@ -1567,7 +1730,7 @@ function App() {
                                                 <label className="block text-sm font-medium mb-2">Icon Preview</label>
                                                 <div className="flex flex-col items-center justify-center space-y-2">
                                                     <img
-                                                        src={iconPreview || (getFileFromLocalStorage(soundFormData.icon) || `/assets/${soundFormData.icon}`)}
+                                                        src={iconPreview || loadedFormIcon || `/assets/${soundFormData.icon}`}
                                                         alt="Icon preview"
                                                         className="w-16 h-16 object-contain"
                                                         style={soundFormData.color !== '#84cc16' ? {
