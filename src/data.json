@@ -7,7 +7,7 @@
         { "id": "s_1", "name": "Caustic Blast", "type": "Acid", "icon": "acid.svg", "file": "acid.wav", "color": "#84cc16", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
         { "id": "s_2", "name": "Frostbite", "type": "Cold", "icon": "frost.svg", "file": "cold.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
         { "id": "s_3", "name": "Fireball", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_4", "name": "Chain Lightning", "type": "Lightning", "icon": "lightning.svg", "file": "lightning.wav", "color": "#eab308", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
+        { "id": "s_4", "name": "Lightning Bolt", "type": "Lightning", "icon": "lightning.svg", "file": "lightning.wav", "color": "#eab308", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
       ]
     },
     {
@@ -24,15 +24,7 @@
       "name": "Rogue Assassin", 
       "sounds": [
         { "id": "s_8", "name": "Sneak Attack", "type": "Stealth", "icon": "stealth.svg", "file": "stealth.wav", "color": "#a855f7", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_9", "name": "Rapier Strike", "type": "Weapon", "icon": "sword.svg", "file": "weapon.wav", "color": "#f59e0b", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_10", "name": "Test PNG Icon", "type": "Test", "icon": "test-icon.png", "file": "stealth.wav", "color": "#ef4444", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_11", "name": "Test JPG Icon", "type": "Test", "icon": "test-icon.jpg", "file": "stealth.wav", "color": "#3b82f6", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_12", "name": "Test GIF Icon", "type": "Test", "icon": "test-icon.gif", "file": "stealth.wav", "color": "#10b981", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_13", "name": "Multiple Sounds Test", "type": "Test", "icon": "test-icon.png", "files": [
-          { "name": "acid.wav", "url": "acid.wav" },
-          { "name": "cold.wav", "url": "cold.wav" },
-          { "name": "fire.wav", "url": "fire.wav" }
-        ], "randomPlay": true, "color": "#8b5cf6", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 }
+        { "id": "s_9", "name": "Rapier Strike", "type": "Weapon", "icon": "sword.svg", "file": "weapon.wav", "color": "#f59e0b", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 }
       ]
     }
   ],

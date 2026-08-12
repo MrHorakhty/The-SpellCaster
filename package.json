@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --ext js,jsx",
+    "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
     "backup": "git add . && git commit -m \"Backup: Manual backup\"",

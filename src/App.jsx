@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity, Info, Maximize } from 'lucide-react'
+import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity, Info, Maximize } from 'lucide-react'
 import data from './data.json'
 
 // Environment detection
@@ -71,6 +71,82 @@ const getGlowEffectStyle = (sound) => {
     }
 }
 
+// Fade the audio volume up to targetVolume over fadeInSeconds
+const applyFadeIn = (audio, targetVolume, fadeInSeconds) => {
+    if (!audio) {
+        return
+    }
+
+    if (audio.fadeInInterval) {
+        clearInterval(audio.fadeInInterval)
+        audio.fadeInInterval = null
+    }
+
+    if (!fadeInSeconds || fadeInSeconds <= 0) {
+        audio.volume = targetVolume
+        return
+    }
+
+    const steps = 20
+    const stepDuration = (fadeInSeconds * 1000) / steps
+    let step = 0
+    audio.volume = 0
+
+    audio.fadeInInterval = setInterval(() => {
+        step++
+        audio.volume = Math.min(targetVolume, targetVolume * step / steps)
+
+        if (step >= steps) {
+            audio.volume = targetVolume
+            clearInterval(audio.fadeInInterval)
+            audio.fadeInInterval = null
+        }
+    }, stepDuration)
+}
+
+// Fade the audio volume down to 0 over fadeOutSeconds, then call onComplete
+const fadeOutAudio = (audio, fadeOutSeconds, onComplete) => {
+    if (!audio) {
+        if (onComplete) onComplete()
+        return
+    }
+
+    if (audio.fadeInInterval) {
+        clearInterval(audio.fadeInInterval)
+        audio.fadeInInterval = null
+    }
+
+    if (audio.fadeOutInterval) {
+        clearInterval(audio.fadeOutInterval)
+        audio.fadeOutInterval = null
+    }
+
+    const startVolume = audio.volume || 0
+
+    if (!fadeOutSeconds || fadeOutSeconds <= 0) {
+        audio.volume = 0
+        if (onComplete) onComplete()
+        return
+    }
+
+    const steps = 20
+    const stepDuration = (fadeOutSeconds * 1000) / steps
+    let step = 0
+
+    audio.fadeOutInterval = setInterval(() => {
+        step++
+
+        if (step >= steps) {
+            audio.volume = 0
+            clearInterval(audio.fadeOutInterval)
+            audio.fadeOutInterval = null
+            if (onComplete) onComplete()
+        } else {
+            audio.volume = Math.max(0, startVolume - startVolume * step / steps)
+        }
+    }, stepDuration)
+}
+
 function App() {
     // Load from localStorage first, fallback to data.json if it's a first-time load
     const [characters, setCharacters] = useState(() => {
@@ -120,12 +196,14 @@ function App() {
 
     // Character management states
     const [showCharacterModal, setShowCharacterModal] = useState(false)
+    const [editingCharacter, setEditingCharacter] = useState(null)
     const [characterFormData, setCharacterFormData] = useState({
         name: ''
     })
 
     // Category management states
     const [showCategoryModal, setShowCategoryModal] = useState(false)
+    const [editingCategory, setEditingCategory] = useState(null)
     const [categoryFormData, setCategoryFormData] = useState({
         name: ''
     })
@@ -155,13 +233,10 @@ function App() {
 
     // File upload states
     const [audioFile, setAudioFile] = useState(null)
-    const [iconFile, setIconFile] = useState(null)
-    const [audioPreview, setAudioPreview] = useState('')
     const [iconPreview, setIconPreview] = useState('')
 
     // Multiple file upload states
     const [audioFiles, setAudioFiles] = useState([])
-    const [audioPreviews, setAudioPreviews] = useState([])
 
     // Load icons for sounds
     useEffect(() => {
@@ -298,8 +373,12 @@ function App() {
             setAudioEnabled(true)
         }
 
-        audioElementsRef.current.forEach((audio, soundKey) => {
+        audioElementsRef.current.forEach((audio) => {
             if (audio && typeof audio.volume !== 'undefined') {
+                if (audio.fadeInInterval) {
+                    clearInterval(audio.fadeInInterval)
+                    audio.fadeInInterval = null
+                }
                 audio.volume = audioEnabled ? volume : 0
             }
         })
@@ -349,12 +428,9 @@ function App() {
             loop: defaultLoop
         })
         setAudioFile(null)
-        setIconFile(null)
-        setAudioPreview('')
         setIconPreview('')
 
         setAudioFiles([])
-        setAudioPreviews([])
 
         setEditingSound(null)
         setShowSoundModal(true)
@@ -364,8 +440,7 @@ function App() {
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
 
         setAudioFile(null)
-        setIconFile(null)
-        setAudioPreview('')
+        setIconPreview('')
 
         if (sound.files && sound.files.length > 0) {
             const existingFiles = await Promise.all(sound.files.map(async file => ({
@@ -374,10 +449,8 @@ function App() {
                 name: file.name
             })))
             setAudioFiles(existingFiles)
-            setAudioPreviews(existingFiles.map(f => f.preview))
         } else {
             setAudioFiles([])
-            setAudioPreviews([])
         }
 
         if (sound.icon) {
@@ -502,41 +575,54 @@ function App() {
     }
 
     const deleteSound = (soundId) => {
-        if (tabType === 'characters' && activeCharacter) {
+        const isCharacterSound = characters.some(character =>
+            character.sounds.some(sound => sound.id === soundId)
+        )
+
+        if (isCharacterSound) {
             setCharacters(prev => prev.map(character =>
-                character.id === currentActiveCharId
+                character.sounds.some(sound => sound.id === soundId)
                     ? {
                         ...character,
                         sounds: character.sounds.filter(sound => sound.id !== soundId)
                     }
                     : character
             ))
-        } else if (tabType === 'environment' && activeEnvironmentCategory) {
-            setEnvironmentSounds(prev => prev.map(category =>
-                category.category === currentActiveEnvId
-                    ? {
-                        ...category,
-                        sounds: category.sounds.filter(sound => sound.id !== soundId)
-                    }
-                    : category
-            ))
+        } else {
+            setEnvironmentSounds(prev => prev.map(category => ({
+                ...category,
+                sounds: category.sounds.filter(sound => sound.id !== soundId)
+            })))
         }
     }
 
-    const handleAudioUpload = (e) => {
-        const file = e.target.files[0]
-        if (file) {
-            setAudioFile(file)
-            setAudioPreview(URL.createObjectURL(file))
-            setSoundFormData(prev => ({ ...prev, file: file.name }))
-            storeFileInLocalStorage(file.name, file)
+    const handleDeleteSound = (soundId) => {
+        setItemToDelete(soundId)
+        setDeleteType('sound')
+        setShowDeleteConfirm(true)
+    }
+
+    const confirmDelete = () => {
+        if (!itemToDelete) {
+            return
         }
+
+        if (deleteType === 'sound') {
+            deleteSound(itemToDelete)
+        } else if (deleteType === 'character') {
+            deleteCharacter(itemToDelete)
+        } else if (deleteType === 'category') {
+            deleteCategory(itemToDelete)
+        }
+
+        setShowDeleteConfirm(false)
+        setItemToDelete(null)
+        setDeleteType('')
     }
 
     const handleIconUpload = (e) => {
         const file = e.target.files[0]
         if (file) {
-            setIconFile(file)
             setIconPreview(URL.createObjectURL(file))
             setSoundFormData(prev => ({ ...prev, icon: file.name }))
             storeFileInLocalStorage(file.name, file)
@@ -601,7 +687,6 @@ function App() {
             }))
 
             setAudioFiles(prev => [...prev, ...newFiles])
-            setAudioPreviews(prev => [...prev, ...newFiles.map(f => f.preview)])
 
             const fileNames = newFiles.map(f => f.name)
             setSoundFormData(prev => ({
@@ -619,7 +704,6 @@ function App() {
         const fileToRemove = audioFiles[index]
 
         setAudioFiles(prev => prev.filter((_, i) => i !== index))
-        setAudioPreviews(prev => prev.filter((_, i) => i !== index))
 
         setSoundFormData(prev => ({
             ...prev,
@@ -635,30 +719,20 @@ function App() {
         }
 
         setAudioFiles([])
-        setAudioPreviews([])
         setSoundFormData(prev => ({ ...prev, files: [] }))
-    }
-
-    const clearAudioUpload = async () => {
-        if (soundFormData.file) {
-            await removeFileFromLocalStorage(soundFormData.file)
-        }
-        setAudioFile(null)
-        setAudioPreview('')
-        setSoundFormData(prev => ({ ...prev, file: '' }))
     }
 
     const clearIconUpload = async () => {
         if (soundFormData.icon) {
             await removeFileFromLocalStorage(soundFormData.icon)
         }
-        setIconFile(null)
         setIconPreview('')
         setSoundFormData(prev => ({ ...prev, icon: '' }))
     }
 
     const openAddCharacterModal = () => {
         setCharacterFormData({ name: '' })
+        setEditingCharacter(null)
         setShowCharacterModal(true)
     }
 
@@ -677,8 +751,22 @@ function App() {
             return
         }
 
-        addCharacter(characterFormData)
+        if (editingCharacter) {
+            updateCharacter(editingCharacter.id, characterFormData)
+        } else {
+            addCharacter(characterFormData)
+        }
+
         setShowCharacterModal(false)
+        setEditingCharacter(null)
+    }
+
+    const updateCharacter = (characterId, characterData) => {
+        setCharacters(prev => prev.map(character =>
+            character.id === characterId
+                ? { ...character, name: characterData.name.trim() }
+                : character
+        ))
     }
 
     const addCharacter = (characterData) => {
@@ -714,6 +802,7 @@ function App() {
 
     const openAddCategoryModal = () => {
         setCategoryFormData({ name: '' })
+        setEditingCategory(null)
         setShowCategoryModal(true)
     }
 
@@ -763,7 +852,6 @@ function App() {
         const compB = 255 - b
         const complementary = `#${compR.toString(16).padStart(2, '0')}${compG.toString(16).padStart(2, '0')}${compB.toString(16).padStart(2, '0')}`
 
-        const hue = getHueFromRGB(r, g, b)
         const triadic1 = adjustHue(baseColor, 120)
         const triadic2 = adjustHue(baseColor, 240)
 
@@ -780,26 +868,6 @@ function App() {
             text: getTextColor(baseColor),
             border: getBorderColor(baseColor)
         }
-    }
-
-    const getHueFromRGB = (r, g, b) => {
-        r /= 255; g /= 255; b /= 255
-        const max = Math.max(r, g, b)
-        const min = Math.min(r, g, b)
-        let h = 0
-
-        if (max === min) {
-            h = 0
-        } else {
-            const d = max - min
-            switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                case g: h = (b - r) / d + 2; break
-                case b: h = (r - g) / d + 4; break
-            }
-            h /= 6
-        }
-        return h * 360
     }
 
     const adjustHue = (color, degrees) => {
@@ -974,20 +1042,6 @@ function App() {
         }
     }
 
-    const resetToDefault = () => {
-        const defaultSettings = {
-            type: 'color',
-            theme: 'default',
-            color: '#84cc16',
-            imageFile: null,
-            imagePreview: '',
-            isLoading: false
-        }
-        setBackgroundSettings(defaultSettings)
-        applyBackgroundSettings(defaultSettings)
-        localStorage.setItem('backgroundSettings', JSON.stringify(defaultSettings))
-    }
-
     const handleCategoryFormSubmit = (e) => {
         e.preventDefault()
 
@@ -995,8 +1049,25 @@ function App() {
             return
         }
 
-        addCategory(categoryFormData)
+        if (editingCategory) {
+            updateCategory(editingCategory.category, categoryFormData.name.trim())
+        } else {
+            addCategory(categoryFormData)
+        }
+
         setShowCategoryModal(false)
+        setEditingCategory(null)
+    }
+
+    const updateCategory = (oldName, newName) => {
+        setEnvironmentSounds(prev => prev.map(category =>
+            category.category === oldName
+                ? { ...category, category: newName }
+                : category
+        ))
+
+        if (activeTab === oldName) setActiveTab(newName)
+        if (activeEnvironmentId === oldName) setActiveEnvironmentId(newName)
     }
 
     const addCategory = (categoryData) => {
@@ -1022,11 +1093,25 @@ function App() {
     }
 
     const handleEditCharacter = (characterId) => {
-        console.log('Edit character:', characterId)
+        const character = characters.find(c => c.id === characterId)
+        if (!character) {
+            return
+        }
+
+        setCharacterFormData({ name: character.name })
+        setEditingCharacter(character)
+        setShowCharacterModal(true)
     }
 
     const handleEditCategory = (categoryName) => {
-        console.log('Edit category:', categoryName)
+        const category = environmentSounds.find(e => e.category === categoryName)
+        if (!category) {
+            return
+        }
+
+        setCategoryFormData({ name: categoryName })
+        setEditingCategory(category)
+        setShowCategoryModal(true)
     }
 
     const removeFileFromLocalStorage = async (fileName) => {
@@ -1089,71 +1174,15 @@ function App() {
             [audioInstanceKey]: true
         }))
 
-        if (!sound.loop && sound.duration > 0) {
-            const timerDuration = sound.duration * 1000
-
-            const timer = setTimeout(() => {
-                audio.pause()
-                audio.currentTime = 0
-
-                audioElementsRef.current.delete(audioInstanceKey)
-
-                setSoundInstances(prev => {
-                    const newState = { ...prev }
-                    delete newState[audioInstanceKey]
-                    return newState
-                })
-            }, timerDuration)
-
-            audio.timer = timer
-        }
-
-        audio.addEventListener('ended', () => {
-            if (audio.timer) {
-                clearTimeout(audio.timer)
+        const cleanupAudio = (instanceKey, audioEl) => {
+            if (audioEl.fadeInInterval) {
+                clearInterval(audioEl.fadeInInterval)
             }
-
-            audioElementsRef.current.delete(audioInstanceKey)
-
-            setSoundInstances(prev => {
-                const newState = { ...prev }
-                delete newState[audioInstanceKey]
-                return newState
-            })
-        })
-
-        audio.play().catch(error => {
-            console.error('Error playing sound:', error)
-            audioElementsRef.current.delete(audioInstanceKey)
-
-            setSoundInstances(prev => {
-                const newState = { ...prev }
-                delete newState[audioInstanceKey]
-                return newState
-            })
-        })
-    }
-
-    const isSoundPlaying = (soundId) => {
-        return Object.keys(soundInstances).some(key => key.startsWith(`${soundId}_`))
-    }
-
-    const stopSound = (sound) => {
-        if (editMode) return
-
-        const soundKey = sound.id
-
-        const audioInstances = Array.from(audioElementsRef.current.entries())
-            .filter(([key, _]) => key.startsWith(`${soundKey}_`))
-
-        audioInstances.forEach(([instanceKey, audio]) => {
-            if (audio) {
-                audio.pause()
-                audio.currentTime = 0
-
-                if (audio.timer) {
-                    clearTimeout(audio.timer)
-                }
+            if (audioEl.fadeOutInterval) {
+                clearInterval(audioEl.fadeOutInterval)
+            }
+            if (audioEl.timer) {
+                clearTimeout(audioEl.timer)
             }
 
             audioElementsRef.current.delete(instanceKey)
@@ -1163,6 +1192,101 @@ function App() {
                 delete newState[instanceKey]
                 return newState
             })
+        }
+
+        if (sound.fadeIn > 0) {
+            applyFadeIn(audio, audioEnabled ? masterVolume : 0, sound.fadeIn)
+        }
+
+        if (!sound.loop && sound.duration > 0) {
+            if (sound.fadeOut > 0) {
+                const fadeStartDelay = Math.max(0, sound.duration - sound.fadeOut) * 1000
+
+                audio.timer = setTimeout(() => {
+                    fadeOutAudio(audio, sound.fadeOut, () => {
+                        audio.pause()
+                        cleanupAudio(audioInstanceKey, audio)
+                    })
+                }, fadeStartDelay)
+            } else {
+                audio.timer = setTimeout(() => {
+                    audio.pause()
+                    audio.currentTime = 0
+                    cleanupAudio(audioInstanceKey, audio)
+                }, sound.duration * 1000)
+            }
+        }
+
+        audio.addEventListener('ended', () => {
+            cleanupAudio(audioInstanceKey, audio)
+        })
+
+        audio.play()
+            .then(() => {
+                if (audio.stopped) {
+                    audio.pause()
+                    audio.currentTime = 0
+                    cleanupAudio(audioInstanceKey, audio)
+                }
+            })
+            .catch(error => {
+                if (audio.stopped) {
+                    cleanupAudio(audioInstanceKey, audio)
+                    return
+                }
+                console.error('Error playing sound:', error)
+                cleanupAudio(audioInstanceKey, audio)
+            })
+    }
+
+    const isSoundPlaying = (soundId) => {
+        return Object.keys(soundInstances).some(key => key.startsWith(`${soundId}_`))
+    }
+
+    // Instantly stop an audio instance and remove it from tracking
+    const stopAudioInstance = (instanceKey, audio) => {
+        if (!audio) {
+            return
+        }
+
+        audio.stopped = true
+
+        if (audio.fadeInInterval) {
+            clearInterval(audio.fadeInInterval)
+            audio.fadeInInterval = null
+        }
+        if (audio.fadeOutInterval) {
+            clearInterval(audio.fadeOutInterval)
+            audio.fadeOutInterval = null
+        }
+        if (audio.timer) {
+            clearTimeout(audio.timer)
+            audio.timer = null
+        }
+
+        audio.volume = 0
+        audio.pause()
+        audio.currentTime = 0
+
+        audioElementsRef.current.delete(instanceKey)
+
+        setSoundInstances(prev => {
+            const newState = { ...prev }
+            delete newState[instanceKey]
+            return newState
+        })
+    }
+
+    const stopSound = (sound) => {
+        if (editMode) return
+
+        const soundKey = sound.id
+
+        const audioInstances = Array.from(audioElementsRef.current.entries())
+            .filter(([key]) => key.startsWith(`${soundKey}_`))
+
+        audioInstances.forEach(([instanceKey, audio]) => {
+            stopAudioInstance(instanceKey, audio)
         })
     }
 
@@ -1172,19 +1296,8 @@ function App() {
         const audioInstances = Array.from(audioElementsRef.current.entries())
 
         audioInstances.forEach(([instanceKey, audio]) => {
-            if (audio) {
-                audio.pause()
-                audio.currentTime = 0
-
-                if (audio.timer) {
-                    clearTimeout(audio.timer)
-                }
-            }
-
-            audioElementsRef.current.delete(instanceKey)
+            stopAudioInstance(instanceKey, audio)
         })
-
-        setSoundInstances({})
     }
 
     useEffect(() => {
@@ -1444,26 +1557,64 @@ function App() {
                     <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                         {isCharSection
                             ? characters.map(c => (
-                                <button
-                                    key={c.id}
-                                    onClick={() => setActive(c.id)}
-                                    className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                        }`}
-                                >
-                                    <User className="shrink-0" size={16} />
-                                    <span className="truncate">{c.name}</span>
-                                </button>
+                                <div key={c.id} className="relative">
+                                    <button
+                                        onClick={() => setActive(c.id)}
+                                        className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                            } ${editMode ? 'pr-16' : ''}`}
+                                    >
+                                        <User className="shrink-0" size={16} />
+                                        <span className="truncate">{c.name}</span>
+                                    </button>
+                                    {editMode && (
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                                            <button
+                                                onClick={() => handleEditCharacter(c.id)}
+                                                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                                title="Edit Character"
+                                            >
+                                                <Edit size={12} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteCharacter(c.id)}
+                                                className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                title="Delete Character"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ))
                             : environmentSounds.map(e => (
-                                <button
-                                    key={e.category}
-                                    onClick={() => setActive(e.category)}
-                                    className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                        }`}
-                                >
-                                    <Music className="shrink-0" size={16} />
-                                    <span className="truncate">{e.category}</span>
-                                </button>
+                                <div key={e.category} className="relative">
+                                    <button
+                                        onClick={() => setActive(e.category)}
+                                        className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                            } ${editMode ? 'pr-16' : ''}`}
+                                    >
+                                        <Music className="shrink-0" size={16} />
+                                        <span className="truncate">{e.category}</span>
+                                    </button>
+                                    {editMode && (
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                                            <button
+                                                onClick={() => handleEditCategory(e.category)}
+                                                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                                title="Edit Category"
+                                            >
+                                                <Edit size={12} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteCategory(e.category)}
+                                                className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                title="Delete Category"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                     </div>
                 </div>
@@ -1670,27 +1821,65 @@ function App() {
 
                             <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                                 {tabType === 'characters' && characters.map(char => (
-                                    <button
-                                        key={char.id}
-                                        onClick={() => setActiveTab(char.id)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            }`}
-                                    >
-                                        <User className="shrink-0" size={16} />
-                                        <span className="truncate">{char.name}</span>
-                                    </button>
+                                    <div key={char.id} className="relative">
+                                        <button
+                                            onClick={() => setActiveTab(char.id)}
+                                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                } ${editMode ? 'pr-16' : ''}`}
+                                        >
+                                            <User className="shrink-0" size={16} />
+                                            <span className="truncate">{char.name}</span>
+                                        </button>
+                                        {editMode && (
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                                                <button
+                                                    onClick={() => handleEditCharacter(char.id)}
+                                                    className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                                    title="Edit Character"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCharacter(char.id)}
+                                                    className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                    title="Delete Character"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 ))}
 
                                 {tabType === 'environment' && environmentSounds.map(cat => (
-                                    <button
-                                        key={cat.category}
-                                        onClick={() => setActiveTab(cat.category)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            }`}
-                                    >
-                                        <Music className="shrink-0" size={16} />
-                                        <span className="truncate">{cat.category}</span>
-                                    </button>
+                                    <div key={cat.category} className="relative">
+                                        <button
+                                            onClick={() => setActiveTab(cat.category)}
+                                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                } ${editMode ? 'pr-16' : ''}`}
+                                        >
+                                            <Music className="shrink-0" size={16} />
+                                            <span className="truncate">{cat.category}</span>
+                                        </button>
+                                        {editMode && (
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
+                                                <button
+                                                    onClick={() => handleEditCategory(cat.category)}
+                                                    className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                                    title="Edit Category"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCategory(cat.category)}
+                                                    className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                    title="Delete Category"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -2039,7 +2228,7 @@ function App() {
                     <div className="bg-dark-800 rounded-xl max-w-md w-full">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold">Add New Character</h2>
+                                <h2 className="text-xl font-bold">{editingCharacter ? 'Edit Character' : 'Add New Character'}</h2>
                                 <button
                                     onClick={() => setShowCharacterModal(false)}
                                     className="p-1 hover:bg-dark-700 rounded-lg"
@@ -2077,7 +2266,7 @@ function App() {
                                                 disabled={!characterFormData.name.trim()}
                                                 className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                                             >
-                                                Add Character
+                                                {editingCharacter ? 'Save Changes' : 'Add Character'}
                                             </button>
                                         </div>
                                     </div>
@@ -2094,7 +2283,7 @@ function App() {
                     <div className="bg-dark-800 rounded-xl max-w-md w-full">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold">Add New Category</h2>
+                                <h2 className="text-xl font-bold">{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
                                 <button
                                     onClick={() => setShowCategoryModal(false)}
                                     className="p-1 hover:bg-dark-700 rounded-lg"
@@ -2132,7 +2321,7 @@ function App() {
                                                 disabled={!categoryFormData.name.trim()}
                                                 className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                                             >
-                                                Add Category
+                                                {editingCategory ? 'Save Changes' : 'Add Category'}
                                             </button>
                                         </div>
                                     </div>

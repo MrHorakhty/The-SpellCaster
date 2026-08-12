@@ -282,4 +282,3 @@ pip-delete-this-directory.txt
 # Tauri platform-specific generated icons
 src-tauri/icons/android/
 src-tauri/icons/ios/
-test-background-none.html
