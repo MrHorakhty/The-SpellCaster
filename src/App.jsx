@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity } from 'lucide-react'
+import { User, Music, Volume2, VolumeX, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Wind, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity, Info, Maximize } from 'lucide-react'
 import data from './data.json'
 
 // Environment detection
@@ -132,6 +132,8 @@ function App() {
 
     // Settings modal state
     const [showSettingsModal, setShowSettingsModal] = useState(false)
+    const [showAboutModal, setShowAboutModal] = useState(false)
+    const [isFullscreen, setIsFullscreen] = useState(false)
     const [backgroundSettings, setBackgroundSettings] = useState({
         type: 'color',
         theme: 'default',
@@ -301,6 +303,29 @@ function App() {
                 audio.volume = audioEnabled ? volume : 0
             }
         })
+    }
+
+    const toggleFullscreen = async () => {
+        if (isTauri) {
+            try {
+                const { getCurrentWindow } = await import('@tauri-apps/api/window')
+                const appWindow = getCurrentWindow()
+                const currentlyFullscreen = await appWindow.isFullscreen()
+                await appWindow.setFullscreen(!currentlyFullscreen)
+                setIsFullscreen(!currentlyFullscreen)
+            } catch (error) {
+                console.error('Failed to toggle fullscreen:', error)
+            }
+        } else {
+            // Fallback for web browser development
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.error(err))
+                setIsFullscreen(true)
+            } else {
+                document.exitFullscreen()
+                setIsFullscreen(false)
+            }
+        }
     }
 
     const openAddSoundModal = (overrideType) => {
@@ -1463,9 +1488,9 @@ function App() {
                 <div className="w-full px-6 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 shrink-0">
                                 <img src="/assets/Icon.png" alt="App Icon" className="h-8 w-8" />
-                                <h1 className="text-2xl font-bold">The SpellCaster</h1>
+                                <h1 className="text-2xl font-fantaisie tracking-wider whitespace-nowrap">The SpellCaster</h1>
                             </div>
 
                             {/* Split View Toggle - Responsive Layout */}
@@ -1528,6 +1553,19 @@ function App() {
                                 title="Stop All Sounds"
                             >
                                 <Square size={20} />
+                            </button>
+
+                            {/* Fullscreen Button */}
+                            <button
+                                onClick={toggleFullscreen}
+                                className={`px-4 py-2 rounded-lg transition-colors ${
+                                    isFullscreen 
+                                    ? 'bg-lime-600 text-white hover:bg-lime-700' 
+                                    : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                }`}
+                                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                            >
+                                <Maximize size={20} />
                             </button>
 
                             {/* Settings Button */}
@@ -2265,6 +2303,17 @@ function App() {
                                                 className="w-full h-32 bg-cover bg-center rounded-lg border border-dark-600"
                                                 style={{ backgroundImage: `url(${backgroundSettings.imagePreview})` }}
                                             />
+                                            <button
+                                                onClick={() => {
+                                                    handleBackgroundSettingsChange('imagePreview', '')
+                                                    handleBackgroundSettingsChange('imageFile', null)
+                                                    handleBackgroundSettingsChange('type', 'color')
+                                                    handleBackgroundSettingsChange('theme', 'default')
+                                                }}
+                                                className="mt-2 w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+                                            >
+                                                Remove Image
+                                            </button>
                                         </div>
                                     ) : (
                                         !backgroundSettings.isLoading && backgroundSettings.type === 'image' && (
@@ -2275,6 +2324,20 @@ function App() {
                                     )}
                                 </div>
 
+                                {/* Legal Section */}
+                                <div className="pt-4 border-t border-dark-700">
+                                    <button
+                                        onClick={() => {
+                                            setShowSettingsModal(false)
+                                            setShowAboutModal(true)
+                                        }}
+                                        className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
+                                    >
+                                        <Info size={16} />
+                                        <span>Legal & Credits</span>
+                                    </button>
+                                </div>
+
                                 {/* Close Button */}
                                 <div className="pt-4 border-t border-dark-700">
                                     <button
@@ -2282,6 +2345,63 @@ function App() {
                                         className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors w-full"
                                     >
                                         Close Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* About & Credits Modal */}
+            {showAboutModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-dark-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold">About The SpellCaster</h2>
+                                <button
+                                    onClick={() => setShowAboutModal(false)}
+                                    className="p-1 hover:bg-dark-700 rounded-lg transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-6 text-sm text-slate-300">
+                                {/* App Info */}
+                                <div className="flex flex-col items-center justify-center p-4 bg-dark-900 rounded-lg border border-dark-700">
+                                    <img src="/assets/Icon.png" alt="App Icon" className="h-12 w-12 mb-2" />
+                                    <h3 className="text-lg font-bold text-white font-magic tracking-wider">The SpellCaster</h3>
+                                    <p className="text-slate-400 mt-1">Version 0.1.0</p>
+                                </div>
+
+                                {/* Typography Credit */}
+                                <div>
+                                    <h3 className="text-base font-medium text-white mb-2">Typography</h3>
+                                    <p className="bg-dark-700 p-3 rounded-lg border border-dark-600">
+                                        Custom fonts provided under the 1001Fonts Free For Commercial Use License.
+                                    </p>
+                                </div>
+
+                                {/* Lucide Icons License (Mandatory) */}
+                                <div>
+                                    <h3 className="text-base font-medium text-white mb-2">Iconography (Lucide)</h3>
+                                    <div className="bg-dark-700 p-3 rounded-lg border border-dark-600 text-xs text-slate-400 space-y-2 font-mono h-40 overflow-y-auto no-scrollbar">
+                                        <p>ISC License</p>
+                                        <p>Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.</p>
+                                        <p>Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.</p>
+                                        <p>THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</p>
+                                    </div>
+                                </div>
+
+                                {/* Close Button */}
+                                <div className="pt-4 border-t border-dark-700">
+                                    <button
+                                        onClick={() => setShowAboutModal(false)}
+                                        className="w-full px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors font-medium"
+                                    >
+                                        Close
                                     </button>
                                 </div>
                             </div>

@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+    font-family: 'fantaisie';
+    src: url('./assets/fonts/fantaisieartistique.medium.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
 /* Theme CSS Custom Properties */
 :root {
   --theme-bg-primary: #090d16;

@@ -17,6 +17,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        fantaisie: ['Fantaisie', 'sans-serif'],
       }
     },
   },
