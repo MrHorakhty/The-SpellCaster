@@ -1347,10 +1347,22 @@ function App() {
                 className="group relative shrink-0"
                 style={{ width: `${140 * boxSize}px` }}
             >
-                <button
-                    onClick={async () => await playSound(sound)}
+                <div
+                    role="button"
+                    tabIndex={editMode ? -1 : 0}
+                    aria-disabled={editMode}
+                    onClick={() => {
+                        if (!editMode) playSound(sound)
+                    }}
+                    onKeyDown={(e) => {
+                        if (editMode) return
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            playSound(sound)
+                        }
+                    }}
                     className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying ? 'ring-2 ring-lime-500' : ''
-                        } ${editMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        } ${editMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     style={{
                         backgroundColor: 'var(--theme-bg-secondary)',
                         borderColor: sound.color,
@@ -1358,7 +1370,6 @@ function App() {
                         borderRadius: `${12 * boxSize}px`,
                         ...getGlowEffectStyle(sound)
                     }}
-                    disabled={editMode}
                 >
                     <div
                         className="flex flex-col items-center justify-center w-full"
@@ -1450,7 +1461,7 @@ function App() {
                             </button>
                         )}
                     </div>
-                </button>
+                </div>
 
                 {/* Edit Mode Actions */}
                 {editMode && (

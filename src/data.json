@@ -4,27 +4,217 @@
       "id": "char_1",
       "name": "Elf Sorcerer",
       "sounds": [
-        { "id": "s_1", "name": "Caustic Blast", "type": "Acid", "icon": "acid.svg", "file": "acid.wav", "color": "#84cc16", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_2", "name": "Frostbite", "type": "Cold", "icon": "frost.svg", "file": "cold.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_3", "name": "Fireball", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_4", "name": "Lightning Bolt", "type": "Lightning", "icon": "lightning.svg", "file": "lightning.wav", "color": "#eab308", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
+        {
+          "id": "s_1",
+          "name": "Caustic Blast - Acid",
+          "type": "Acid",
+          "icon": "fire.svg",
+          "files": [
+            { "name": "Caustic_Blast_Acid_1.mp3" },
+            { "name": "Caustic_Blast_Acid_2.mp3" },
+            { "name": "Caustic_Blast_Acid_3.mp3" },
+            { "name": "Caustic_Blast_Acid_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#84cc16",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_2",
+          "name": "Frostbite",
+          "type": "Cold",
+          "icon": "frost.svg",
+          "files": [
+            { "name": "Frostbite_1.mp3" },
+            { "name": "Frostbite_2.mp3" },
+            { "name": "Frostbite_3.mp3" },
+            { "name": "Frostbite_4.mp3" },
+            { "name": "Frostbite_5.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#0ea5e9",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_3",
+          "name": "Fireball",
+          "type": "Fire",
+          "icon": "fire.svg",
+          "files": [
+            { "name": "Fireball_1.mp3" },
+            { "name": "Fireball_2.mp3" },
+            { "name": "Fireball_3.mp3" },
+            { "name": "Fireball_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#f97316",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_4",
+          "name": "Lightning Bolt",
+          "type": "Lightning",
+          "icon": "lightning.svg",
+          "files": [
+            { "name": "Lightnin_Bolt_1.mp3" },
+            { "name": "Lightnin_Bolt_2.mp3" },
+            { "name": "Lightnin_Bolt_3.mp3" },
+            { "name": "Lightnin_Bolt_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#eab308",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        }
       ]
     },
     {
       "id": "char_2", 
       "name": "Human Paladin",
       "sounds": [
-        { "id": "s_5", "name": "Lay on Hands", "type": "Healing", "icon": "heal.svg", "file": "healing.wav", "color": "#10b981", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_6", "name": "Divine Smite", "type": "Divine", "icon": "divine.svg", "file": "divine.wav", "color": "#fbbf24", "duration": 0, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_7", "name": "Shield of Faith", "type": "Protection", "icon": "shield.svg", "file": "protection.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 0, "fadeOut": 0 }
+        {
+          "id": "s_5",
+          "name": "Lay on Hands",
+          "type": "Healing",
+          "icon": "heal.svg",
+          "files": [
+            { "name": "Lay_on_Hands_1.mp3" },
+            { "name": "Lay_on_Hands_2.mp3" },
+            { "name": "Lay_on_Hands_3.mp3" },
+            { "name": "Lay_on_Hands_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#10b981",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_6",
+          "name": "Divine Smite",
+          "type": "Radiant",
+          "icon": "divine.svg",
+          "files": [
+            { "name": "Divine_Smite_1.mp3" },
+            { "name": "Divine_Smite_2.mp3" },
+            { "name": "Divine_Smite_3.mp3" },
+            { "name": "Divine_Smite_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#fbbf24",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_7",
+          "name": "Shield of Faith",
+          "type": "Protection",
+          "icon": "shield.svg",
+          "files": [
+            { "name": "Shield_of_Faith_1.mp3" },
+            { "name": "Shield_of_Faith_2.mp3" },
+            { "name": "Shield_of_Faith_3.mp3" },
+            { "name": "Shield_of_Faith_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#protection",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        }
       ]
     },
     {
       "id": "char_3",
-      "name": "Rogue Assassin", 
+      "name": "Wood Elf Ranger", 
       "sounds": [
-        { "id": "s_8", "name": "Sneak Attack", "type": "Stealth", "icon": "stealth.svg", "file": "stealth.wav", "color": "#a855f7", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 },
-        { "id": "s_9", "name": "Rapier Strike", "type": "Weapon", "icon": "sword.svg", "file": "weapon.wav", "color": "#f59e0b", "duration": 0, "loop": false, "fadeIn": 0, "fadeOut": 0 }
+        {
+          "id": "s_8",
+          "name": "Longbow Shot",
+          "type": "Ranged",
+          "icon": "stealth.svg",
+          "files": [
+            { "name": "Longbow_1.mp3" },
+            { "name": "Longbow_2.mp3" },
+            { "name": "Longbow_3.mp3" },
+            { "name": "Longbow_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#7c7c7c",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_9",
+          "name": "Pass Without Trace",
+          "type": "Stealth",
+          "icon": "stealth.svg",
+          "files": [
+            { "name": "Pass_Without_Trace_1.mp3" },
+            { "name": "Pass_Without_Trace_2.mp3" },
+            { "name": "Pass_Without_Trace_3.mp3" },
+            { "name": "Pass_Without_Trace_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#a855f7",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_10",
+          "name": "Hail of Thorns",
+          "type": "Conjuration",
+          "icon": "stealth.svg",
+          "files": [
+            { "name": "Hail_of_Thorns_1.mp3" },
+            { "name": "Hail_of_Thorns_2.mp3" },
+            { "name": "Hail_of_Thorns_3.mp3" },
+            { "name": "Hail_of_Thorns_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#4e7a0b",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "id": "s_11",
+          "name": "Spike Growth",
+          "type": "Nature",
+          "icon": "stealth.svg",
+          "files": [
+            { "name": "Spike_Growth_1.mp3" },
+            { "name": "Spike_Growth_2.mp3" },
+            { "name": "Spike_Growth_3.mp3" },
+            { "name": "Spike_Growth_4.mp3" }
+          ],
+          "randomPlay": true,
+          "color": "#3a871c",
+          "duration": 0,
+          "loop": false,
+          "fadeIn": 0,
+          "fadeOut": 0
+        }
       ]
     }
   ],
