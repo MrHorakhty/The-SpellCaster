@@ -50,12 +50,27 @@ body {
   background-color: transparent !important;
 }
 
+.text-lime-400,
 .text-lime-500 {
   color: var(--theme-accent);
 }
 
 .bg-lime-600 {
   background-color: var(--theme-accent);
+}
+
+.hover\:bg-lime-700:hover {
+  background-color: color-mix(in srgb, var(--theme-accent), black 20%);
+}
+
+.border-lime-400,
+.border-lime-500 {
+  border-color: var(--theme-accent);
+}
+
+.ring-lime-500,
+.focus\:ring-lime-500:focus {
+  --tw-ring-color: color-mix(in srgb, var(--theme-accent), transparent 50%);
 }
 
 /* Custom styled scrollbars for a clean dark TTRPG look */

@@ -3,7 +3,44 @@ import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud
 import data from './data.json'
 
 // Environment detection
-const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
+const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
+
+// Safe JSON parse that returns a fallback instead of crashing on corrupt data
+const safeParse = (value, fallback) => {
+    try {
+        const parsed = JSON.parse(value)
+        return parsed === null || parsed === undefined ? fallback : parsed
+    } catch {
+        return fallback
+    }
+}
+
+// Version for persisted app data. Bump to force a reset to the bundled defaults.
+const DATA_VERSION = '3'
+
+// Read an array from localStorage only if it matches the current data version.
+// Stale or corrupt data is backed up and dropped in favour of the bundled defaults.
+const readStoredData = (key, fallback) => {
+    try {
+        if (localStorage.getItem('ttrpg_data_version') !== DATA_VERSION) {
+            const stale = localStorage.getItem(key)
+            if (stale) {
+                localStorage.setItem(`${key}_old`, stale)
+            }
+            localStorage.removeItem(key)
+            localStorage.setItem('ttrpg_data_version', DATA_VERSION)
+            return fallback
+        }
+        const raw = localStorage.getItem(key)
+        if (raw === null) {
+            return fallback
+        }
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : fallback
+    } catch {
+        return fallback
+    }
+}
 
 // Function to get appropriate icon component based on sound type
 const getSoundIcon = (soundType) => {
@@ -118,12 +155,18 @@ const recolorImageToColor = (imageUrl, color, brightness) => {
 
         img.onload = () => {
             try {
+                // SVGs sometimes report a 0x0 intrinsic size; fall back to a
+                // default canvas size so they can still be recolored.
+                const defaultSize = 128
+                const drawWidth = img.naturalWidth || defaultSize
+                const drawHeight = img.naturalHeight || defaultSize
+
                 const canvas = document.createElement('canvas')
-                canvas.width = img.naturalWidth
-                canvas.height = img.naturalHeight
+                canvas.width = drawWidth
+                canvas.height = drawHeight
                 const ctx = canvas.getContext('2d')
 
-                ctx.drawImage(img, 0, 0)
+                ctx.drawImage(img, 0, 0, drawWidth, drawHeight)
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
                 const data = imageData.data
 
@@ -254,13 +297,11 @@ const fadeOutAudio = (audio, fadeOutSeconds, onComplete) => {
 function App() {
     // Load from localStorage first, fallback to data.json if it's a first-time load
     const [characters, setCharacters] = useState(() => {
-        const savedCharacters = localStorage.getItem('ttrpg_characters')
-        return savedCharacters ? JSON.parse(savedCharacters) : data.characters
+        return readStoredData('ttrpg_characters', data.characters)
     })
 
     const [environmentSounds, setEnvironmentSounds] = useState(() => {
-        const savedEnvironment = localStorage.getItem('ttrpg_environment')
-        return savedEnvironment ? JSON.parse(savedEnvironment) : data.environmentSounds
+        return readStoredData('ttrpg_environment', data.environmentSounds)
     })
     const [tabType, setTabType] = useState('characters')
     const [activeTab, setActiveTab] = useState('')
@@ -271,6 +312,39 @@ function App() {
     const [masterVolume, setMasterVolume] = useState(1.0)
     const [soundInstances, setSoundInstances] = useState({})
     const audioElementsRef = useRef(new Map())
+    const objectUrlCache = useRef(new Map())
+
+    // Stop all audio and clear resources when the app unmounts (prevents
+    // ghost sounds / leaked timers on hot reload in dev).
+    useEffect(() => {
+        return () => {
+            audioElementsRef.current.forEach((audio) => {
+                if (!audio) {
+                    return
+                }
+                audio.stopped = true
+                if (audio.fadeInInterval) {
+                    clearInterval(audio.fadeInInterval)
+                }
+                if (audio.fadeOutInterval) {
+                    clearInterval(audio.fadeOutInterval)
+                }
+                if (audio.timer) {
+                    clearTimeout(audio.timer)
+                }
+                audio.volume = 0
+                audio.pause()
+                audio.currentTime = 0
+                try {
+                    audio.removeAttribute('src')
+                    audio.load()
+                } catch {
+                    // Ignore cleanup errors
+                }
+            })
+            audioElementsRef.current.clear()
+        }
+    }, [])
 
     // Split View & Active Tab States
     const [isSplitView, setIsSplitView] = useState(false)
@@ -326,12 +400,23 @@ function App() {
         imagePreview: '',
         isLoading: false
     })
+    const backgroundSettingsRef = useRef(backgroundSettings)
 
     // Box size state with localStorage persistence
     const [boxSize, setBoxSize] = useState(() => {
         const savedBoxSize = localStorage.getItem('boxSize')
         return savedBoxSize ? parseFloat(savedBoxSize) : 1.0
     })
+
+    // Draft text for the box-size number input so multi-digit values can be typed freely
+    const [boxSizeInput, setBoxSizeInput] = useState(() => Math.round(boxSize * 100).toString())
+    const [boxSizeFocused, setBoxSizeFocused] = useState(false)
+
+    useEffect(() => {
+        if (!boxSizeFocused) {
+            setBoxSizeInput(Math.round(boxSize * 100).toString())
+        }
+    }, [boxSize, boxSizeFocused])
 
     // State for storing loaded image URLs
     const [loadedIcons, setLoadedIcons] = useState({})
@@ -340,7 +425,6 @@ function App() {
     const [tintedPreview, setTintedPreview] = useState('')
 
     // File upload states
-    const [audioFile, setAudioFile] = useState(null)
     const [iconPreview, setIconPreview] = useState('')
 
     // Multiple file upload states
@@ -525,6 +609,8 @@ function App() {
     }
 
     const updateMasterVolume = (volume) => {
+        const nowEnabled = audioEnabled || volume > 0
+
         setMasterVolume(volume)
 
         if (volume > 0 && !audioEnabled) {
@@ -537,7 +623,7 @@ function App() {
                     clearInterval(audio.fadeInInterval)
                     audio.fadeInInterval = null
                 }
-                audio.volume = audioEnabled ? volume : 0
+                audio.volume = nowEnabled ? volume : 0
             }
         })
     }
@@ -585,7 +671,6 @@ function App() {
             fadeOut: 0,
             loop: defaultLoop
         })
-        setAudioFile(null)
         setIconPreview('')
 
         setAudioFiles([])
@@ -597,7 +682,6 @@ function App() {
     const openEditSoundModal = async (sound) => {
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
 
-        setAudioFile(null)
         setIconPreview('')
 
         if (sound.files && sound.files.length > 0) {
@@ -765,6 +849,8 @@ function App() {
     }
 
     const deleteSound = (soundId) => {
+        stopSoundInstances(soundId)
+
         const isCharacterSound = characters.some(character =>
             character.sounds.some(sound => sound.id === soundId)
         )
@@ -813,9 +899,28 @@ function App() {
     const handleIconUpload = (e) => {
         const file = e.target.files[0]
         if (file) {
-            setIconPreview(URL.createObjectURL(file))
+            setIconPreview(getObjectUrlForBlob(file.name, file))
             setSoundFormData(prev => ({ ...prev, icon: file.name }))
             storeFileInLocalStorage(file.name, file)
+        }
+    }
+
+    // Reuse a single object URL per file name so blob: URLs don't accumulate
+    const getObjectUrlForBlob = (key, blob) => {
+        const existing = objectUrlCache.current.get(key)
+        if (existing) {
+            return existing
+        }
+        const url = URL.createObjectURL(blob)
+        objectUrlCache.current.set(key, url)
+        return url
+    }
+
+    const revokeObjectUrl = (key) => {
+        const url = objectUrlCache.current.get(key)
+        if (url) {
+            URL.revokeObjectURL(url)
+            objectUrlCache.current.delete(key)
         }
     }
 
@@ -852,7 +957,7 @@ function App() {
                 if (fileExists) {
                     const contents = await readFile(fileName, { baseDir: BaseDirectory.AppData })
                     const blob = new Blob([contents])
-                    return URL.createObjectURL(blob)
+                    return getObjectUrlForBlob(fileName, blob)
                 }
             } else {
                 // Web environment - fallback to localStorage
@@ -872,7 +977,7 @@ function App() {
         if (files.length > 0) {
             const newFiles = files.map(file => ({
                 file: file,
-                preview: URL.createObjectURL(file),
+                preview: getObjectUrlForBlob(file.name, file),
                 name: file.name
             }))
 
@@ -937,7 +1042,18 @@ function App() {
     const handleCharacterFormSubmit = (e) => {
         e.preventDefault()
 
-        if (!characterFormData.name.trim()) {
+        const trimmedName = characterFormData.name.trim()
+
+        if (!trimmedName) {
+            return
+        }
+
+        const nameTaken = characters.some(character =>
+            character.name === trimmedName && (!editingCharacter || character.id !== editingCharacter.id)
+        )
+
+        if (nameTaken) {
+            alert(`A character named "${trimmedName}" already exists.`)
             return
         }
 
@@ -980,6 +1096,11 @@ function App() {
     }
 
     const deleteCharacter = (characterId) => {
+        const character = characters.find(c => c.id === characterId)
+        if (character) {
+            character.sounds.forEach(sound => stopSoundInstances(sound.id))
+        }
+
         setCharacters(prev => prev.filter(character => character.id !== characterId))
 
         if (activeTab === characterId) {
@@ -1007,23 +1128,22 @@ function App() {
     const openSettingsModal = () => {
         const savedSettings = localStorage.getItem('backgroundSettings')
         if (savedSettings) {
-            setBackgroundSettings(JSON.parse(savedSettings))
+            const settings = safeParse(savedSettings, {})
+            backgroundSettingsRef.current = settings
+            setBackgroundSettings(settings)
         }
         setShowSettingsModal(true)
     }
 
     const handleBackgroundSettingsChange = (key, value) => {
-        setBackgroundSettings(prevSettings => {
-            const newSettings = {
-                ...prevSettings,
-                [key]: value
-            }
-
-            applyBackgroundSettings(newSettings)
-            localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
-
-            return newSettings
-        })
+        const newSettings = {
+            ...backgroundSettingsRef.current,
+            [key]: value
+        }
+        backgroundSettingsRef.current = newSettings
+        setBackgroundSettings(newSettings)
+        applyBackgroundSettings(newSettings)
+        localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
     }
 
     const handleBoxSizeChange = (newSize) => {
@@ -1210,11 +1330,12 @@ function App() {
             const reader = new FileReader()
             reader.onload = (event) => {
                 const updatedSettings = {
-                    ...backgroundSettings,
+                    ...backgroundSettingsRef.current,
                     imagePreview: event.target.result,
                     imageFile: file,
                     isLoading: false
                 }
+                backgroundSettingsRef.current = updatedSettings
                 setBackgroundSettings(updatedSettings)
                 applyBackgroundSettings(updatedSettings)
                 localStorage.setItem('backgroundSettings', JSON.stringify(updatedSettings))
@@ -1222,9 +1343,10 @@ function App() {
             reader.onerror = () => {
                 alert('Error loading image file')
                 const errorSettings = {
-                    ...backgroundSettings,
+                    ...backgroundSettingsRef.current,
                     isLoading: false
                 }
+                backgroundSettingsRef.current = errorSettings
                 setBackgroundSettings(errorSettings)
                 localStorage.setItem('backgroundSettings', JSON.stringify(errorSettings))
             }
@@ -1235,12 +1357,23 @@ function App() {
     const handleCategoryFormSubmit = (e) => {
         e.preventDefault()
 
-        if (!categoryFormData.name.trim()) {
+        const trimmedName = categoryFormData.name.trim()
+
+        if (!trimmedName) {
+            return
+        }
+
+        const nameTaken = environmentSounds.some(category =>
+            category.category === trimmedName && (!editingCategory || category.category !== editingCategory.category)
+        )
+
+        if (nameTaken) {
+            alert(`A category named "${trimmedName}" already exists.`)
             return
         }
 
         if (editingCategory) {
-            updateCategory(editingCategory.category, categoryFormData.name.trim())
+            updateCategory(editingCategory.category, trimmedName)
         } else {
             addCategory(categoryFormData)
         }
@@ -1277,6 +1410,11 @@ function App() {
     }
 
     const deleteCategory = (categoryName) => {
+        const category = environmentSounds.find(e => e.category === categoryName)
+        if (category) {
+            category.sounds.forEach(sound => stopSoundInstances(sound.id))
+        }
+
         setEnvironmentSounds(prev => prev.filter(category => category.category !== categoryName))
         if (activeTab === categoryName) setActiveTab('')
         if (activeEnvironmentId === categoryName) setActiveEnvironmentId('')
@@ -1317,6 +1455,7 @@ function App() {
                 // Web environment - fallback to localStorage
                 localStorage.removeItem(`sound_file_${fileName}`)
             }
+            revokeObjectUrl(fileName)
         } catch (error) {
             console.error('Failed to remove local file:', error)
         }
@@ -1409,12 +1548,21 @@ function App() {
         if (sound.loop) {
             // Manual loop: rewind slightly before the end to avoid the pause
             // native looping causes (decoder flush + re-seek at the boundary).
+            // For very short clips the 0.25s lead-in would cut them down to a
+            // tiny loop, so never rewind before 98% of the full length.
             audio.addEventListener('timeupdate', () => {
                 if (audio.stopped) {
                     return
                 }
-                if (Number.isFinite(audio.duration) && audio.currentTime >= audio.duration - 0.25) {
+                if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+                    return
+                }
+                const rewindThreshold = Math.max(audio.duration - 0.25, audio.duration * 0.98)
+                if (audio.currentTime >= rewindThreshold) {
                     audio.currentTime = 0
+                    if (sound.fadeIn > 0) {
+                        applyFadeIn(audio, masterVolume, sound.fadeIn)
+                    }
                 }
             })
 
@@ -1424,6 +1572,9 @@ function App() {
                     return
                 }
                 audio.currentTime = 0
+                if (sound.fadeIn > 0) {
+                    applyFadeIn(audio, masterVolume, sound.fadeIn)
+                }
                 audio.play().catch(() => {})
             })
         } else {
@@ -1445,7 +1596,7 @@ function App() {
                     cleanupAudio(audioInstanceKey, audio)
                     return
                 }
-                console.error('Error playing sound:', error)
+                console.error('Error playing sound:', error, soundUrl)
                 cleanupAudio(audioInstanceKey, audio)
             })
     }
@@ -1488,17 +1639,19 @@ function App() {
         })
     }
 
+    // Stop every playing instance of a sound, regardless of edit mode
+    const stopSoundInstances = (soundId) => {
+        Array.from(audioElementsRef.current.entries())
+            .filter(([key]) => key.startsWith(`${soundId}_`))
+            .forEach(([instanceKey, audio]) => {
+                stopAudioInstance(instanceKey, audio)
+            })
+    }
+
     const stopSound = (sound) => {
         if (editMode) return
 
-        const soundKey = sound.id
-
-        const audioInstances = Array.from(audioElementsRef.current.entries())
-            .filter(([key]) => key.startsWith(`${soundKey}_`))
-
-        audioInstances.forEach(([instanceKey, audio]) => {
-            stopAudioInstance(instanceKey, audio)
-        })
+        stopSoundInstances(sound.id)
     }
 
     const stopAllSounds = () => {
@@ -1541,7 +1694,8 @@ function App() {
     useEffect(() => {
         const savedSettings = localStorage.getItem('backgroundSettings')
         if (savedSettings) {
-            const settings = JSON.parse(savedSettings)
+            const settings = safeParse(savedSettings, {})
+            backgroundSettingsRef.current = settings
             setBackgroundSettings(settings)
             applyBackgroundSettings(settings)
         }
@@ -1882,10 +2036,10 @@ function App() {
     return (
         <div className="app-container min-h-screen bg-dark-900 text-slate-200">
             {/* Header */}
-            <header className="bg-dark-800 border-b border-dark-700">
+            <header className="app-header bg-dark-800 border-b border-dark-700">
                 <div className="w-full px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                             <div className="flex items-center space-x-2 shrink-0">
                                 <img src="/assets/Icon.png" alt="App Icon" className="h-8 w-8" />
                                 <h1 className="text-2xl font-fantaisie tracking-wider whitespace-nowrap">The SpellCaster</h1>
@@ -1910,7 +2064,7 @@ function App() {
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-4">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                             {/* Volume Slider */}
                             <div className="flex items-center space-x-2">
                                 <Volume2 size={20} className="text-slate-300" />
@@ -1959,10 +2113,29 @@ function App() {
                                         type="number"
                                         min="50"
                                         max="200"
-                                        value={Math.round(boxSize * 100)}
+                                        value={boxSizeFocused ? boxSizeInput : Math.round(boxSize * 100)}
+                                        onFocus={() => {
+                                            setBoxSizeInput(Math.round(boxSize * 100).toString())
+                                            setBoxSizeFocused(true)
+                                        }}
                                         onChange={(e) => {
-                                            const value = Math.max(50, Math.min(200, parseInt(e.target.value) || 50)) / 100
-                                            handleBoxSizeChange(value)
+                                            const raw = e.target.value
+                                            setBoxSizeInput(raw)
+                                            const parsed = parseInt(raw, 10)
+                                            if (!Number.isNaN(parsed) && parsed >= 50 && parsed <= 200) {
+                                                handleBoxSizeChange(parsed / 100)
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            setBoxSizeFocused(false)
+                                            const parsed = parseInt(boxSizeInput, 10)
+                                            const clamped = Number.isNaN(parsed) ? 50 : Math.max(50, Math.min(200, parsed))
+                                            handleBoxSizeChange(clamped / 100)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.currentTarget.blur()
+                                            }
                                         }}
                                         className="w-14 bg-dark-700 border border-dark-600 rounded-lg px-2 py-1 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-lime-500"
                                         title="Box Size (%)"
@@ -2072,6 +2245,7 @@ function App() {
                                     onClick={() => setEditMode(!editMode)}
                                     className={`px-3 py-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
+                                    title="Toggle Edit Mode"
                                 >
                                     <Edit size={16} />
                                 </button>
@@ -2484,7 +2658,7 @@ function App() {
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    disabled={!soundFormData.name.trim() || (!audioFile && !soundFormData.file && audioFiles.length === 0 && !soundFormData.files?.length)}
+                                                    disabled={!soundFormData.name.trim() || (!soundFormData.file && audioFiles.length === 0 && !soundFormData.files?.length)}
                                                     className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                                                 >
                                                     {editingSound ? 'Save Changes' : 'Add Sound'}

@@ -16,7 +16,6 @@
     "restore-last": "git reset --hard HEAD~1"
   },
   "dependencies": {
-    "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "lucide-react": "^0.428.0",
     "react": "^19.2.8",
