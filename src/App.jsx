@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize } from 'lucide-react'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import data from './data.json'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
+const TAURI_STORAGE_DIR = 'uploads'
 
 // Safe JSON parse that returns a fallback instead of crashing on corrupt data
 const safeParse = (value, fallback) => {
@@ -559,8 +561,10 @@ function App() {
                                 const uint8Array = new Uint8Array(arrayBuffer)
                                 
                                 // Save to Tauri file system
-                                const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs')
-                                await writeFile(fileName, uint8Array, { baseDir: BaseDirectory.AppData })
+                                const { writeFile, createDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                                const storagePath = `${TAURI_STORAGE_DIR}/${fileName}`
+                                await createDir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData })
+                                await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
                                 
                                 console.log(`Migrated file: ${fileName}`)
                                 migratedCount++
@@ -664,6 +668,7 @@ function App() {
             name: '',
             type: '',
             icon: '',
+            iconDisplayName: '',
             file: '',
             color: '#84cc16',
             duration: 0,
@@ -681,14 +686,18 @@ function App() {
 
     const openEditSoundModal = async (sound) => {
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
+        const normalizedFiles = normalizeStoredFileList(sound.files || [])
 
         setIconPreview('')
 
-        if (sound.files && sound.files.length > 0) {
-            const existingFiles = await Promise.all(sound.files.map(async file => ({
+        if (normalizedFiles.length > 0) {
+            const existingFiles = await Promise.all(normalizedFiles.map(async file => ({
                 file: null,
-                preview: await getFileFromLocalStorage(file.name) || `/assets/${file.name}`,
-                name: file.name
+                preview: await getFileFromLocalStorage(file.storedName || file.name) || `/assets/${file.displayName || file.name || file.url}`,
+                name: file.storedName || file.name,
+                storedName: file.storedName || file.name,
+                displayName: file.displayName || file.name,
+                url: file.url || file.storedName || file.name
             })))
             setAudioFiles(existingFiles)
         } else {
@@ -696,7 +705,7 @@ function App() {
         }
 
         if (sound.icon) {
-            const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
+            const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.iconDisplayName || sound.icon}`
             setIconPreview(iconUrl)
         } else {
             setIconPreview('')
@@ -706,8 +715,9 @@ function App() {
             name: sound.name,
             type: sound.type,
             icon: sound.icon || '',
+            iconDisplayName: sound.iconDisplayName || sound.icon || '',
             file: sound.file || '',
-            files: sound.files || [],
+            files: normalizedFiles,
             randomPlay: sound.randomPlay || false,
             color: sound.color || '#84cc16',
             brightness: sound.brightness || 1,
@@ -749,14 +759,16 @@ function App() {
 
     const addSound = (newSoundData) => {
         const newId = `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const normalizedFiles = normalizeStoredFileList(newSoundData.files || [])
 
         const newSound = {
             id: newId,
             name: newSoundData.name,
             type: newSoundData.type || 'Sound',
             icon: newSoundData.icon,
+            iconDisplayName: newSoundData.iconDisplayName || '',
             file: newSoundData.file,
-            files: newSoundData.files || [],
+            files: normalizedFiles,
             randomPlay: newSoundData.randomPlay || false,
             color: newSoundData.color,
             brightness: newSoundData.brightness || 1,
@@ -782,8 +794,11 @@ function App() {
     }
 
     const updateSound = (soundId, newSoundData) => {
+        const normalizedFiles = normalizeStoredFileList(newSoundData.files || [])
         const updatedSound = {
             ...newSoundData,
+            iconDisplayName: newSoundData.iconDisplayName || '',
+            files: normalizedFiles,
             duration: parseFloat(newSoundData.duration) || 0,
             fadeIn: parseFloat(newSoundData.fadeIn) || 0,
             fadeOut: parseFloat(newSoundData.fadeOut) || 0,
@@ -896,12 +911,45 @@ function App() {
         setDeleteType('')
     }
 
+    const toStoredFileName = (prefix, fileName) => {
+        const safeName = (fileName || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_')
+        const randomSuffix = Math.random().toString(36).slice(2, 10)
+        return `${prefix}_${randomSuffix}_${safeName}`
+    }
+
+    const normalizeStoredFileEntry = (fileEntry) => {
+        if (!fileEntry || typeof fileEntry !== 'object') {
+            return { name: '', displayName: '', url: '' }
+        }
+
+        const storedName = fileEntry.storedName || fileEntry.name || ''
+        const displayName = fileEntry.displayName || fileEntry.originalName || fileEntry.name || ''
+        const url = fileEntry.url || storedName || ''
+
+        return {
+            ...fileEntry,
+            name: storedName,
+            storedName,
+            displayName,
+            url
+        }
+    }
+
+    const normalizeStoredFileList = (files = []) => {
+        if (!Array.isArray(files)) return []
+        return files.map(normalizeStoredFileEntry)
+    }
+
     const handleIconUpload = (e) => {
         const file = e.target.files[0]
         if (file) {
-            setIconPreview(getObjectUrlForBlob(file.name, file))
-            setSoundFormData(prev => ({ ...prev, icon: file.name }))
-            storeFileInLocalStorage(file.name, file)
+            const storedName = toStoredFileName('icon', file.name)
+            if (soundFormData.icon) {
+                revokeObjectUrl(soundFormData.icon)
+            }
+            setIconPreview(getObjectUrlForBlob(storedName, file))
+            setSoundFormData(prev => ({ ...prev, icon: storedName, iconDisplayName: file.name }))
+            storeFileInLocalStorage(storedName, file)
         }
     }
 
@@ -924,14 +972,33 @@ function App() {
         }
     }
 
+    const getTauriStoragePath = (fileName) => `${TAURI_STORAGE_DIR}/${fileName}`
+
     const storeFileInLocalStorage = async (fileName, file) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
-                const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const { writeFile, exists, mkdir, createDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
                 const arrayBuffer = await file.arrayBuffer()
                 const uint8Array = new Uint8Array(arrayBuffer)
-                await writeFile(fileName, uint8Array, { baseDir: BaseDirectory.AppData })
+                const storagePath = getTauriStoragePath(fileName)
+
+                // Safely check if directory exists before trying to create it
+                const dirExists = await exists(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData })
+                if (!dirExists) {
+                    try {
+                        // Some versions of the plugin use mkdir, older ones use createDir
+                        if (mkdir) {
+                            await mkdir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData, recursive: true })
+                        } else if (createDir) {
+                            await createDir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData, recursive: true })
+                        }
+                    } catch (dirErr) {
+                        console.warn('Directory creation note:', dirErr)
+                    }
+                }
+
+                await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
             } else {
                 // Web environment - fallback to localStorage
                 return new Promise((resolve) => {
@@ -952,12 +1019,19 @@ function App() {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
-                const { readFile, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
-                const fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData })
+                const { exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const storagePath = getTauriStoragePath(fileName)
+                const fileExists = await exists(storagePath, { baseDir: BaseDirectory.AppData })
+
                 if (fileExists) {
-                    const contents = await readFile(fileName, { baseDir: BaseDirectory.AppData })
-                    const blob = new Blob([contents])
-                    return getObjectUrlForBlob(fileName, blob)
+                    // Instead of reading heavy files into memory, stream them via absolute path
+                    const { appDataDir, join } = await import('@tauri-apps/api/path')
+                    const { convertFileSrc } = await import('@tauri-apps/api/core')
+
+                    const baseDir = await appDataDir()
+                    const absolutePath = await join(baseDir, storagePath)
+
+                    return convertFileSrc(absolutePath)
                 }
             } else {
                 // Web environment - fallback to localStorage
@@ -975,22 +1049,32 @@ function App() {
     const handleMultipleAudioUpload = (e) => {
         const files = Array.from(e.target.files)
         if (files.length > 0) {
-            const newFiles = files.map(file => ({
-                file: file,
-                preview: getObjectUrlForBlob(file.name, file),
-                name: file.name
-            }))
+            const newFiles = files.map(file => {
+                const storedName = toStoredFileName('sound', file.name)
+                return {
+                    file,
+                    preview: getObjectUrlForBlob(storedName, file),
+                    name: storedName,
+                    storedName,
+                    displayName: file.name,
+                    url: storedName
+                }
+            })
 
             setAudioFiles(prev => [...prev, ...newFiles])
 
-            const fileNames = newFiles.map(f => f.name)
             setSoundFormData(prev => ({
                 ...prev,
-                files: [...(prev.files || []), ...fileNames.map(name => ({ name, url: name }))]
+                files: [...normalizeStoredFileList(prev.files || []), ...newFiles.map(file => ({
+                    name: file.storedName,
+                    storedName: file.storedName,
+                    url: file.url,
+                    displayName: file.displayName
+                }))]
             }))
 
-            files.forEach(file => {
-                storeFileInLocalStorage(file.name, file)
+            files.forEach((file, index) => {
+                storeFileInLocalStorage(newFiles[index].storedName, file)
             })
         }
     }
@@ -1022,7 +1106,7 @@ function App() {
             await removeFileFromLocalStorage(soundFormData.icon)
         }
         setIconPreview('')
-        setSoundFormData(prev => ({ ...prev, icon: '' }))
+        setSoundFormData(prev => ({ ...prev, icon: '', iconDisplayName: '' }))
     }
 
     const openAddCharacterModal = () => {
@@ -1447,9 +1531,10 @@ function App() {
             if (isTauri) {
                 // Tauri environment - use file system
                 const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
-                const fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData })
+                const storagePath = getTauriStoragePath(fileName)
+                const fileExists = await exists(storagePath, { baseDir: BaseDirectory.AppData })
                 if (fileExists) {
-                    await remove(fileName, { baseDir: BaseDirectory.AppData })
+                    await remove(storagePath, { baseDir: BaseDirectory.AppData })
                 }
             } else {
                 // Web environment - fallback to localStorage
@@ -1469,25 +1554,35 @@ function App() {
         }
 
         const soundKey = sound.id
+        const normalizedFiles = normalizeStoredFileList(sound.files || [])
         let fileToPlay
 
-        if (sound.files && sound.files.length > 0) {
-            if (sound.randomPlay && sound.files.length > 1) {
-                const randomIndex = Math.floor(Math.random() * sound.files.length)
-                fileToPlay = sound.files[randomIndex]
+        if (normalizedFiles.length > 0) {
+            if (sound.randomPlay && normalizedFiles.length > 1) {
+                const randomIndex = Math.floor(Math.random() * normalizedFiles.length)
+                fileToPlay = normalizedFiles[randomIndex]
             } else {
-                fileToPlay = sound.files[0]
+                fileToPlay = normalizedFiles[0]
             }
         } else {
-            fileToPlay = { name: sound.file }
+            fileToPlay = { name: sound.file, displayName: sound.file, url: sound.file }
         }
 
+        const fileNameKey = fileToPlay.storedName || fileToPlay.name || fileToPlay.url || ''
+        const displayName = fileToPlay.displayName || fileToPlay.name || fileToPlay.url || ''
+
         let soundUrl
-        const storedFile = await getFileFromLocalStorage(fileToPlay.name)
+        const storedFile = fileNameKey ? await getFileFromLocalStorage(fileNameKey) : null
         if (storedFile) {
             soundUrl = storedFile
+        } else if (fileToPlay.file && typeof fileToPlay.file === 'object' && fileToPlay.file instanceof Blob) {
+            soundUrl = URL.createObjectURL(fileToPlay.file)
+        } else if (displayName) {
+            const fallbackKey = fileToPlay.url || fileToPlay.storedName || fileToPlay.name
+            const fallbackFile = fallbackKey ? await getFileFromLocalStorage(fallbackKey) : null
+            soundUrl = fallbackFile || `/assets/${displayName}`
         } else {
-            soundUrl = `/assets/${fileToPlay.name}`
+            soundUrl = `/assets/${fileNameKey}`
         }
 
         const audio = new Audio(soundUrl)
@@ -2415,7 +2510,7 @@ function App() {
                                                         className="w-16 h-16 object-contain"
                                                     />
                                                     <div className="text-center">
-                                                        <div className="text-sm text-slate-300">{soundFormData.icon}</div>
+                                                        <div className="text-sm text-slate-300">{soundFormData.iconDisplayName || soundFormData.icon}</div>
                                                         {iconPreview && (
                                                             <button
                                                                 type="button"
@@ -2515,7 +2610,7 @@ function App() {
                                                         <div key={index} className="flex items-center justify-between bg-dark-800 rounded-lg p-2">
                                                             <div className="flex items-center space-x-2">
                                                                 <audio controls src={fileObj.preview} className="w-32" />
-                                                                <span className="text-xs text-slate-400 truncate max-w-[120px]">{fileObj.name}</span>
+                                                                <span className="text-xs text-slate-400 truncate max-w-[120px]">{fileObj.displayName || fileObj.name}</span>
                                                             </div>
                                                             <button
                                                                 type="button"

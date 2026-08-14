@@ -8,6 +8,13 @@
     "core:window:allow-set-fullscreen",
     "fs:default",
     "fs:allow-appdata-write",
-    "fs:allow-appdata-read"
+    "fs:allow-appdata-write-recursive",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-exists",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "fs:allow-remove"
   ]
 }
