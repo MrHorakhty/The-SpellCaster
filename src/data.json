@@ -8,7 +8,7 @@
           "id": "s_1",
           "name": "Caustic Blast - Acid",
           "type": "Acid",
-          "icon": "fire.svg",
+          "icon": "Caustic_Blast_Acid.png",
           "files": [
             { "name": "Caustic_Blast_Acid_1.mp3" },
             { "name": "Caustic_Blast_Acid_2.mp3" },
@@ -26,7 +26,7 @@
           "id": "s_2",
           "name": "Frostbite",
           "type": "Cold",
-          "icon": "frost.svg",
+          "icon": "Frostbite.png",
           "files": [
             { "name": "Frostbite_1.mp3" },
             { "name": "Frostbite_2.mp3" },
@@ -45,7 +45,7 @@
           "id": "s_3",
           "name": "Fireball",
           "type": "Fire",
-          "icon": "fire.svg",
+          "icon": "Fireball.png",
           "files": [
             { "name": "Fireball_1.mp3" },
             { "name": "Fireball_2.mp3" },
@@ -57,13 +57,15 @@
           "duration": 0,
           "loop": false,
           "fadeIn": 0,
-          "fadeOut": 0
+          "fadeOut": 0,
+          "glowEnabled": true,
+          "glowProminence": 0.7
         },
         {
           "id": "s_4",
           "name": "Lightning Bolt",
           "type": "Lightning",
-          "icon": "lightning.svg",
+          "icon": "Lightning_Bolt.png",
           "files": [
             { "name": "Lightnin_Bolt_1.mp3" },
             { "name": "Lightnin_Bolt_2.mp3" },
@@ -71,7 +73,7 @@
             { "name": "Lightnin_Bolt_4.mp3" }
           ],
           "randomPlay": true,
-          "color": "#eab308",
+          "color": "#f1f4a4",
           "duration": 0,
           "loop": false,
           "fadeIn": 0,
@@ -87,7 +89,7 @@
           "id": "s_5",
           "name": "Lay on Hands",
           "type": "Healing",
-          "icon": "heal.svg",
+          "icon": "Lay_on_Hands.png",
           "files": [
             { "name": "Lay_on_Hands_1.mp3" },
             { "name": "Lay_on_Hands_2.mp3" },
@@ -105,7 +107,7 @@
           "id": "s_6",
           "name": "Divine Smite",
           "type": "Radiant",
-          "icon": "divine.svg",
+          "icon": "Divine_Smite.png",
           "files": [
             { "name": "Divine_Smite_1.mp3" },
             { "name": "Divine_Smite_2.mp3" },
@@ -117,13 +119,15 @@
           "duration": 0,
           "loop": false,
           "fadeIn": 0,
-          "fadeOut": 0
+          "fadeOut": 0,
+          "glowEnabled": true,
+          "glowProminence": 1.0
         },
         {
           "id": "s_7",
           "name": "Shield of Faith",
           "type": "Protection",
-          "icon": "shield.svg",
+          "icon": "Shield_of_Faith.png",
           "files": [
             { "name": "Shield_of_Faith_1.mp3" },
             { "name": "Shield_of_Faith_2.mp3" },
@@ -131,7 +135,7 @@
             { "name": "Shield_of_Faith_4.mp3" }
           ],
           "randomPlay": true,
-          "color": "#protection",
+          "color": "#ffffff",
           "duration": 0,
           "loop": false,
           "fadeIn": 0,
@@ -147,7 +151,7 @@
           "id": "s_8",
           "name": "Longbow Shot",
           "type": "Ranged",
-          "icon": "stealth.svg",
+          "icon": "Longbow.png",
           "files": [
             { "name": "Longbow_1.mp3" },
             { "name": "Longbow_2.mp3" },
@@ -165,7 +169,7 @@
           "id": "s_9",
           "name": "Pass Without Trace",
           "type": "Stealth",
-          "icon": "stealth.svg",
+          "icon": "Pass_Without_Trace.png",
           "files": [
             { "name": "Pass_Without_Trace_1.mp3" },
             { "name": "Pass_Without_Trace_2.mp3" },
@@ -173,17 +177,19 @@
             { "name": "Pass_Without_Trace_4.mp3" }
           ],
           "randomPlay": true,
-          "color": "#a855f7",
+          "color": "#3b0f64",
           "duration": 0,
           "loop": false,
           "fadeIn": 0,
-          "fadeOut": 0
+          "fadeOut": 0,
+          "glowEnabled": true,
+          "glowProminence": 1.5
         },
         {
           "id": "s_10",
           "name": "Hail of Thorns",
           "type": "Conjuration",
-          "icon": "stealth.svg",
+          "icon": "Hail_of_Thorns.png",
           "files": [
             { "name": "Hail_of_Thorns_1.mp3" },
             { "name": "Hail_of_Thorns_2.mp3" },
@@ -201,7 +207,7 @@
           "id": "s_11",
           "name": "Spike Growth",
           "type": "Nature",
-          "icon": "stealth.svg",
+          "icon": "Spike_Growth.png",
           "files": [
             { "name": "Spike_Growth_1.mp3" },
             { "name": "Spike_Growth_2.mp3" },
@@ -222,18 +228,18 @@
     {
       "category": "Background Music",
       "sounds": [
-        { "id": "env_1", "name": "Forest Ambience", "type": "Nature", "icon": "forest.svg", "file": "forest.wav", "color": "#10b981", "duration": 0, "fadeIn": 2.5, "fadeOut": 3.0, "loop": true, "isEnvironmental": true },
-        { "id": "env_2", "name": "Tavern Music", "type": "Music", "icon": "tavern.svg", "file": "tavern.wav", "color": "#f59e0b", "duration": 0, "fadeIn": 1.5, "fadeOut": 2.0, "loop": true, "isEnvironmental": true },
-        { "id": "env_3", "name": "Dungeon Echoes", "type": "Ambience", "icon": "dungeon.svg", "file": "dungeon.wav", "color": "#8b5cf6", "duration": 0, "fadeIn": 3.0, "fadeOut": 4.0, "loop": true, "isEnvironmental": true }
+        { "id": "env_1", "name": "Forest Ambience", "type": "Nature", "icon": "Forest.png", "file": "Forest_Ambience.mp3", "color": "#499c12", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_2", "name": "Tavern Music", "type": "Music", "icon": "Tavern.png", "file": "Tavern_Music.mp3", "color": "#886d00", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_3", "name": "Dungeon Ambience", "type": "Ambience", "icon": "Dungeon.png", "file": "Dungeon_Ambience.mp3", "color": "#2a233c", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true }
       ]
     },
     {
       "category": "Environmental Effects",
       "sounds": [
-        { "id": "env_4", "name": "Rain", "type": "Weather", "icon": "rain.svg", "file": "rain.wav", "color": "#0ea5e9", "duration": 0, "fadeIn": 2.0, "fadeOut": 2.5, "loop": true, "isEnvironmental": true },
-        { "id": "env_5", "name": "Thunder", "type": "Weather", "icon": "thunder.svg", "file": "thunder.wav", "color": "#f97316", "duration": 5.0, "fadeIn": 0.5, "fadeOut": 1.0, "loop": false, "isEnvironmental": true },
-        { "id": "env_6", "name": "Wind", "type": "Weather", "icon": "wind.svg", "file": "wind.wav", "color": "#84cc16", "duration": 0, "fadeIn": 3.0, "fadeOut": 3.5, "loop": true, "isEnvironmental": true },
-        { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "fire.svg", "file": "fire.wav", "color": "#f97316", "duration": 0, "fadeIn": 1.0, "fadeOut": 1.5, "loop": true, "isEnvironmental": true }
+        { "id": "env_4", "name": "Rain", "type": "Weather", "icon": "Rain_Cloud.png", "file": "Rain.mp3", "color": "#0ea5e9", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_5", "name": "Thunder", "type": "Weather", "icon": "Thunder_Cloud.png", "file": "Thunder.mp3", "color": "#e9d712", "duration": 0.0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_6", "name": "Wind", "type": "Weather", "icon": "Wind.png", "file": "Wind.mp3", "color": "#b5e8dd", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true },
+        { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "Fire_Crackling.png", "file": "Fire_Crackle.mp3", "color": "#f93b16", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true }
       ]
     }
   ]

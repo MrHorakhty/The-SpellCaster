@@ -1163,7 +1163,7 @@ function App() {
         }
 
         const audio = new Audio(soundUrl)
-        audio.loop = sound.loop || false
+        audio.loop = false
         audio.volume = audioEnabled ? masterVolume : 0
 
         const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -1217,9 +1217,31 @@ function App() {
             }
         }
 
-        audio.addEventListener('ended', () => {
-            cleanupAudio(audioInstanceKey, audio)
-        })
+        if (sound.loop) {
+            // Manual loop: rewind slightly before the end to avoid the pause
+            // native looping causes (decoder flush + re-seek at the boundary).
+            audio.addEventListener('timeupdate', () => {
+                if (audio.stopped) {
+                    return
+                }
+                if (Number.isFinite(audio.duration) && audio.currentTime >= audio.duration - 0.25) {
+                    audio.currentTime = 0
+                }
+            })
+
+            audio.addEventListener('ended', () => {
+                if (audio.stopped) {
+                    cleanupAudio(audioInstanceKey, audio)
+                    return
+                }
+                audio.currentTime = 0
+                audio.play().catch(() => {})
+            })
+        } else {
+            audio.addEventListener('ended', () => {
+                cleanupAudio(audioInstanceKey, audio)
+            })
+        }
 
         audio.play()
             .then(() => {
