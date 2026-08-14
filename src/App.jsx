@@ -161,6 +161,8 @@ function App() {
     const [tabType, setTabType] = useState('characters')
     const [activeTab, setActiveTab] = useState('')
     const [editMode, setEditMode] = useState(false)
+    const [draggedSoundId, setDraggedSoundId] = useState(null)
+    const [dragOverSoundId, setDragOverSoundId] = useState(null)
     const [audioEnabled, setAudioEnabled] = useState(false)
     const [masterVolume, setMasterVolume] = useState(1.0)
     const [soundInstances, setSoundInstances] = useState({})
@@ -569,6 +571,38 @@ function App() {
                             sound.id === soundId ? { ...sound, ...updatedSound } : sound
                         )
                     }
+                    : category
+            ))
+        }
+    }
+
+    const moveSound = (draggedId, targetId, containerType, containerId) => {
+        if (!draggedId || !targetId || draggedId === targetId) {
+            return
+        }
+
+        const reorder = (list) => {
+            const fromIndex = list.findIndex(sound => sound.id === draggedId)
+            const toIndex = list.findIndex(sound => sound.id === targetId)
+            if (fromIndex === -1 || toIndex === -1) {
+                return list
+            }
+            const newList = [...list]
+            const [moved] = newList.splice(fromIndex, 1)
+            newList.splice(toIndex, 0, moved)
+            return newList
+        }
+
+        if (containerType === 'character') {
+            setCharacters(prev => prev.map(character =>
+                character.id === containerId
+                    ? { ...character, sounds: reorder(character.sounds) }
+                    : character
+            ))
+        } else {
+            setEnvironmentSounds(prev => prev.map(category =>
+                category.category === containerId
+                    ? { ...category, sounds: reorder(category.sounds) }
                     : category
             ))
         }
@@ -1359,9 +1393,11 @@ function App() {
     }, [])
 
     // Render individual sound card
-    const renderSoundCard = (sound) => {
+    const renderSoundCard = (sound, containerType, containerId) => {
         const isPlaying = isSoundPlaying(sound.id)
         const IconComponent = getSoundIcon(sound.type)
+        const isDragging = draggedSoundId === sound.id
+        const isDragTarget = dragOverSoundId === sound.id && !isDragging
 
         return (
             <div
@@ -1373,6 +1409,31 @@ function App() {
                     role="button"
                     tabIndex={editMode ? -1 : 0}
                     aria-disabled={editMode}
+                    draggable={editMode}
+                    onDragStart={(e) => {
+                        if (!editMode) return
+                        e.dataTransfer.setData('text/plain', sound.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                        setDraggedSoundId(sound.id)
+                    }}
+                    onDragOver={(e) => {
+                        if (!editMode) return
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setDragOverSoundId(sound.id)
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const draggedId = e.dataTransfer.getData('text/plain') || draggedSoundId
+                        moveSound(draggedId, sound.id, containerType, containerId)
+                        setDraggedSoundId(null)
+                        setDragOverSoundId(null)
+                    }}
+                    onDragEnd={() => {
+                        setDraggedSoundId(null)
+                        setDragOverSoundId(null)
+                    }}
                     onClick={() => {
                         if (!editMode) playSound(sound)
                     }}
@@ -1383,8 +1444,9 @@ function App() {
                             playSound(sound)
                         }
                     }}
-                    className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying ? 'ring-2 ring-lime-500' : ''
-                        } ${editMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying && !editMode ? 'ring-2 ring-lime-500' : ''
+                        } ${isDragTarget ? 'ring-2 ring-lime-500 border-lime-400' : ''
+                        } ${isDragging ? 'opacity-40' : ''} ${editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                     style={{
                         backgroundColor: 'var(--theme-bg-secondary)',
                         borderColor: sound.color,
@@ -1590,62 +1652,62 @@ function App() {
                     <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                         {isCharSection
                             ? characters.map(c => (
-                                <div key={c.id} className="relative">
+                                <div key={c.id} className="relative group">
                                     <button
                                         onClick={() => setActive(c.id)}
                                         className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            } ${editMode ? 'pr-16' : ''}`}
+                                            } ${editMode ? 'pt-8' : ''}`}
                                     >
                                         <User className="shrink-0" size={16} />
                                         <span className="truncate">{c.name}</span>
                                     </button>
                                     {editMode && (
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-                                            <button
-                                                onClick={() => handleEditCharacter(c.id)}
-                                                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                                title="Edit Character"
-                                            >
-                                                <Edit size={12} />
-                                            </button>
+                                        <>
                                             <button
                                                 onClick={() => handleDeleteCharacter(c.id)}
-                                                className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
                                                 title="Delete Character"
                                             >
                                                 <Trash2 size={12} />
                                             </button>
-                                        </div>
+                                            <button
+                                                onClick={() => handleEditCharacter(c.id)}
+                                                className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Edit Character"
+                                            >
+                                                <Edit size={12} />
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             ))
                             : environmentSounds.map(e => (
-                                <div key={e.category} className="relative">
+                                <div key={e.category} className="relative group">
                                     <button
                                         onClick={() => setActive(e.category)}
                                         className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            } ${editMode ? 'pr-16' : ''}`}
+                                            } ${editMode ? 'pt-8' : ''}`}
                                     >
                                         <Music className="shrink-0" size={16} />
                                         <span className="truncate">{e.category}</span>
                                     </button>
                                     {editMode && (
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-                                            <button
-                                                onClick={() => handleEditCategory(e.category)}
-                                                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                                title="Edit Category"
-                                            >
-                                                <Edit size={12} />
-                                            </button>
+                                        <>
                                             <button
                                                 onClick={() => handleDeleteCategory(e.category)}
-                                                className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
                                                 title="Delete Category"
                                             >
                                                 <Trash2 size={12} />
                                             </button>
-                                        </div>
+                                            <button
+                                                onClick={() => handleEditCategory(e.category)}
+                                                className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Edit Category"
+                                            >
+                                                <Edit size={12} />
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             ))}
@@ -1658,7 +1720,7 @@ function App() {
                         {activeItem ? (isCharSection ? activeItem.name : activeItem.category) : 'Select Category'}
                     </h2>
                     <div className="flex flex-wrap gap-4">
-                        {activeItem?.sounds?.map(sound => renderSoundCard(sound))}
+                        {activeItem?.sounds?.map(sound => renderSoundCard(sound, isCharSection ? 'character' : 'environment', currentActiveId))}
                     </div>
                 </div>
             </div>
@@ -1854,63 +1916,63 @@ function App() {
 
                             <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                                 {tabType === 'characters' && characters.map(char => (
-                                    <div key={char.id} className="relative">
+                                    <div key={char.id} className="relative group">
                                         <button
                                             onClick={() => setActiveTab(char.id)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                } ${editMode ? 'pr-16' : ''}`}
+                                                } ${editMode ? 'pt-8' : ''}`}
                                         >
                                             <User className="shrink-0" size={16} />
                                             <span className="truncate">{char.name}</span>
                                         </button>
                                         {editMode && (
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-                                                <button
-                                                    onClick={() => handleEditCharacter(char.id)}
-                                                    className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                                    title="Edit Character"
-                                                >
-                                                    <Edit size={12} />
-                                                </button>
+                                            <>
                                                 <button
                                                     onClick={() => handleDeleteCharacter(char.id)}
-                                                    className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                    className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
                                                     title="Delete Character"
                                                 >
                                                     <Trash2 size={12} />
                                                 </button>
-                                            </div>
+                                                <button
+                                                    onClick={() => handleEditCharacter(char.id)}
+                                                    className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Edit Character"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 ))}
 
                                 {tabType === 'environment' && environmentSounds.map(cat => (
-                                    <div key={cat.category} className="relative">
+                                    <div key={cat.category} className="relative group">
                                         <button
                                             onClick={() => setActiveTab(cat.category)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                } ${editMode ? 'pr-16' : ''}`}
+                                                } ${editMode ? 'pt-8' : ''}`}
                                         >
                                             <Music className="shrink-0" size={16} />
                                             <span className="truncate">{cat.category}</span>
                                         </button>
                                         {editMode && (
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex space-x-1">
-                                                <button
-                                                    onClick={() => handleEditCategory(cat.category)}
-                                                    className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                                    title="Edit Category"
-                                                >
-                                                    <Edit size={12} />
-                                                </button>
+                                            <>
                                                 <button
                                                     onClick={() => handleDeleteCategory(cat.category)}
-                                                    className="p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                                    className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
                                                     title="Delete Category"
                                                 >
                                                     <Trash2 size={12} />
                                                 </button>
-                                            </div>
+                                                <button
+                                                    onClick={() => handleEditCategory(cat.category)}
+                                                    className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Edit Category"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 ))}
@@ -1923,7 +1985,11 @@ function App() {
                                 {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
                             </h2>
                             <div className="flex flex-wrap gap-4">
-                                {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || []).map(sound => renderSoundCard(sound))}
+                                {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || []).map(sound => renderSoundCard(
+                                    sound,
+                                    activeCharacter ? 'character' : 'environment',
+                                    activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category
+                                ))}
                             </div>
                         </div>
                     </div>
