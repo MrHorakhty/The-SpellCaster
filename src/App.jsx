@@ -2034,9 +2034,9 @@ function App() {
     }
 
     return (
-        <div className="app-container min-h-screen bg-dark-900 text-slate-200">
+        <div className="app-container h-screen flex flex-col bg-dark-900 text-slate-200">
             {/* Header */}
-            <header className="app-header bg-dark-800 border-b border-dark-700">
+            <header className="app-header shrink-0 bg-dark-800 border-b border-dark-700">
                 <div className="w-full px-6 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -2181,7 +2181,7 @@ function App() {
             </header>
 
             {/* Main Content */}
-            <div className="w-full px-6 py-6">
+            <div className="flex-1 overflow-y-auto w-full px-6 py-6">
                 {/* Edit Mode Controls (Hidden in Split View) */}
                 {editMode && !isSplitView && (
                     <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg w-full mx-auto">
