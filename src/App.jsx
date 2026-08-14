@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity, Info, Maximize } from 'lucide-react'
+import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize } from 'lucide-react'
 import data from './data.json'
 
 // Environment detection
@@ -56,6 +56,110 @@ const getHueRotateFromColor = (color) => {
 
     const hueDegrees = Math.round(h * 360)
     return hueDegrees
+}
+
+// Convert an RGB color to HSL. Returns [h, s, l] where h in [0, 1), s and l in [0, 1]
+const rgbToHsl = (r, g, b) => {
+    r /= 255
+    g /= 255
+    b /= 255
+
+    const max = Math.max(r, g, b)
+    const min = Math.min(r, g, b)
+    let h = 0
+    let s = 0
+    const l = (max + min) / 2
+
+    if (max !== min) {
+        const d = max - min
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break
+            case g: h = (b - r) / d + 2; break
+            case b: h = (r - g) / d + 4; break
+        }
+        h /= 6
+    }
+
+    return [h, s, l]
+}
+
+// Convert HSL back to RGB. Returns [r, g, b] each in [0, 255]
+const hslToRgb = (h, s, l) => {
+    let r, g, b
+
+    if (s === 0) {
+        r = g = b = l
+    } else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1
+            if (t > 1) t -= 1
+            if (t < 1 / 6) return p + (q - p) * 6 * t
+            if (t < 1 / 2) return q
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+            return p
+        }
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        const p = 2 * l - q
+        r = hue2rgb(p, q, h + 1 / 3)
+        g = hue2rgb(p, q, h)
+        b = hue2rgb(p, q, h - 1 / 3)
+    }
+
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]
+}
+
+// Recolor an image to a target color using canvas: preserve each pixel's
+// lightness (shading) but replace its hue/saturation with the target color.
+const recolorImageToColor = (imageUrl, color, brightness) => {
+    return new Promise((resolve) => {
+        const img = new Image()
+
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas')
+                canvas.width = img.naturalWidth
+                canvas.height = img.naturalHeight
+                const ctx = canvas.getContext('2d')
+
+                ctx.drawImage(img, 0, 0)
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+                const data = imageData.data
+
+                const targetHex = color === 'transparent' ? '#84cc16' : color
+                const rTarget = parseInt(targetHex.substring(1, 3), 16)
+                const gTarget = parseInt(targetHex.substring(3, 5), 16)
+                const bTarget = parseInt(targetHex.substring(5, 7), 16)
+                const [targetH, targetS] = rgbToHsl(rTarget, gTarget, bTarget)
+                const brightnessFactor = brightness || 1
+
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] === 0) continue
+
+                    const [, , l] = rgbToHsl(data[i], data[i + 1], data[i + 2])
+                    const scaledL = Math.min(1, Math.max(0, l * brightnessFactor))
+                    const [r2, g2, b2] = hslToRgb(targetH, targetS, scaledL)
+
+                    data[i] = r2
+                    data[i + 1] = g2
+                    data[i + 2] = b2
+                }
+
+                ctx.putImageData(imageData, 0, 0)
+                resolve(canvas.toDataURL('image/png'))
+            } catch (error) {
+                console.error('Failed to recolor image:', error)
+                resolve(null)
+            }
+        }
+
+        img.onerror = () => {
+            resolve(null)
+        }
+
+        img.src = imageUrl
+    })
 }
 
 const getGlowEffectStyle = (sound) => {
@@ -232,6 +336,8 @@ function App() {
     // State for storing loaded image URLs
     const [loadedIcons, setLoadedIcons] = useState({})
     const [loadedFormIcon, setLoadedFormIcon] = useState('')
+    const [tintedIcons, setTintedIcons] = useState({})
+    const [tintedPreview, setTintedPreview] = useState('')
 
     // File upload states
     const [audioFile, setAudioFile] = useState(null)
@@ -282,6 +388,56 @@ function App() {
         
         loadFormIcon()
     }, [soundFormData.icon, iconPreview])
+
+    // Process recolored versions of icons whenever sounds, colors, or icons change
+    useEffect(() => {
+        const processTints = async () => {
+            const allSounds = [...characters.flatMap(char => char.sounds), ...environmentSounds.flatMap(env => env.sounds)]
+            const tasks = allSounds.map(async (sound) => {
+                if (!sound.icon || sound.color === '#84cc16') {
+                    return
+                }
+
+                const key = `${sound.icon}|${sound.color || 'default'}|${sound.brightness || 1}`
+                if (tintedIcons[key]) {
+                    return
+                }
+
+                const sourceUrl = loadedIcons[sound.icon] || `/assets/${sound.icon}`
+                const tintedUrl = await recolorImageToColor(sourceUrl, sound.color, sound.brightness)
+                if (tintedUrl) {
+                    setTintedIcons(prev => ({ ...prev, [key]: tintedUrl }))
+                }
+            })
+
+            await Promise.all(tasks)
+        }
+
+        processTints()
+    }, [characters, environmentSounds, loadedIcons])
+
+    // Recolor the icon preview in the sound modal when the tint changes
+    useEffect(() => {
+        let cancelled = false
+
+        const timer = setTimeout(async () => {
+            const sourceUrl = iconPreview || loadedFormIcon || (soundFormData.icon ? `/assets/${soundFormData.icon}` : '')
+            if (!sourceUrl || soundFormData.color === '#84cc16') {
+                setTintedPreview('')
+                return
+            }
+
+            const tintedUrl = await recolorImageToColor(sourceUrl, soundFormData.color, soundFormData.brightness)
+            if (!cancelled && tintedUrl) {
+                setTintedPreview(tintedUrl)
+            }
+        }, 120)
+
+        return () => {
+            cancelled = true
+            clearTimeout(timer)
+        }
+    }, [iconPreview, loadedFormIcon, soundFormData.icon, soundFormData.color, soundFormData.brightness])
 
     // Migrate localStorage files to Tauri file system (only in Tauri environment)
     useEffect(() => {
@@ -1171,7 +1327,6 @@ function App() {
 
         if (!audioEnabled) {
             enableAudio()
-            return
         }
 
         const soundKey = sound.id
@@ -1198,7 +1353,7 @@ function App() {
 
         const audio = new Audio(soundUrl)
         audio.loop = false
-        audio.volume = audioEnabled ? masterVolume : 0
+        audio.volume = masterVolume
 
         const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         audioElementsRef.current.set(audioInstanceKey, audio)
@@ -1229,7 +1384,7 @@ function App() {
         }
 
         if (sound.fadeIn > 0) {
-            applyFadeIn(audio, audioEnabled ? masterVolume : 0, sound.fadeIn)
+            applyFadeIn(audio, masterVolume, sound.fadeIn)
         }
 
         if (!sound.loop && sound.duration > 0) {
@@ -1463,15 +1618,12 @@ function App() {
                     >
                         {sound.icon ? (
                             <img
-                                src={loadedIcons[sound.icon] || `/assets/${sound.icon}`}
+                                src={tintedIcons[`${sound.icon}|${sound.color || 'default'}|${sound.brightness || 1}`] || loadedIcons[sound.icon] || `/assets/${sound.icon}`}
                                 alt={sound.name}
                                 className="mb-1 object-contain shrink-0"
                                 style={{
                                     width: `${48 * boxSize}px`,
-                                    height: `${48 * boxSize}px`,
-                                    ...(sound.color !== '#84cc16' ? {
-                                        filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
-                                    } : {})
+                                    height: `${48 * boxSize}px`
                                 }}
                             />
                         ) : (
@@ -1507,7 +1659,7 @@ function App() {
 
                         {/* Loop Indicator */}
                         {!editMode && sound.loop && (
-                            <Infinity
+                            <InfinityIcon
                                 className="absolute text-blue-500"
                                 size={12 * boxSize}
                                 style={{
@@ -1772,7 +1924,21 @@ function App() {
                                     className="slider w-24"
                                     title={`Volume: ${Math.round(masterVolume * 100)}%`}
                                 />
-                                <span className="text-sm text-slate-400 w-8">{Math.round(masterVolume * 100)}%</span>
+                                <div className="flex items-center">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={Math.round(masterVolume * 100)}
+                                        onChange={(e) => {
+                                            const value = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100
+                                            updateMasterVolume(value)
+                                        }}
+                                        className="w-14 bg-dark-700 border border-dark-600 rounded-lg px-2 py-1 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                                        title="Volume (%)"
+                                    />
+                                    <span className="text-sm text-slate-400 ml-1">%</span>
+                                </div>
                             </div>
 
                             {/* Box Size Slider */}
@@ -1788,14 +1954,28 @@ function App() {
                                     className="slider w-20"
                                     title={`Box Size: ${Math.round(boxSize * 100)}%`}
                                 />
-                                <span className="text-sm text-slate-400 w-8">{Math.round(boxSize * 100)}%</span>
+                                <div className="flex items-center">
+                                    <input
+                                        type="number"
+                                        min="50"
+                                        max="200"
+                                        value={Math.round(boxSize * 100)}
+                                        onChange={(e) => {
+                                            const value = Math.max(50, Math.min(200, parseInt(e.target.value) || 50)) / 100
+                                            handleBoxSizeChange(value)
+                                        }}
+                                        className="w-14 bg-dark-700 border border-dark-600 rounded-lg px-2 py-1 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                                        title="Box Size (%)"
+                                    />
+                                    <span className="text-sm text-slate-400 ml-1">%</span>
+                                </div>
                             </div>
 
                             {/* Stop All Sounds Button */}
                             <button
                                 onClick={stopAllSounds}
                                 disabled={Object.keys(soundInstances).length === 0 || editMode}
-                                className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                                 title="Stop All Sounds"
                             >
                                 <Square size={20} />
@@ -2056,12 +2236,9 @@ function App() {
                                                 <label className="block text-sm font-medium mb-2">Icon Preview</label>
                                                 <div className="flex flex-col items-center justify-center space-y-2">
                                                     <img
-                                                        src={iconPreview || loadedFormIcon || `/assets/${soundFormData.icon}`}
+                                                        src={tintedPreview || iconPreview || loadedFormIcon || `/assets/${soundFormData.icon}`}
                                                         alt="Icon preview"
                                                         className="w-16 h-16 object-contain"
-                                                        style={soundFormData.color !== '#84cc16' ? {
-                                                            filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(soundFormData.color)}deg) brightness(${soundFormData.brightness || 1})`
-                                                        } : {}}
                                                     />
                                                     <div className="text-center">
                                                         <div className="text-sm text-slate-300">{soundFormData.icon}</div>
@@ -2079,6 +2256,7 @@ function App() {
                                             </div>
                                         )}
 
+                                        <p className="text-xs text-slate-500 mb-1">Gray images are easier to color</p>
                                         <label className="block text-sm font-medium mb-1">Tint (Optional)</label>
                                         <div className="space-y-3">
                                             <div className="flex space-x-2">
