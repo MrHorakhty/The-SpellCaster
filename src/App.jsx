@@ -151,14 +151,24 @@ const hslToRgb = (h, s, l) => {
 
 // Recolor an image to a target color using canvas: preserve each pixel's
 // lightness (shading) but replace its hue/saturation with the target color.
-const recolorImageToColor = (imageUrl, color, brightness) => {
-    return new Promise((resolve) => {
-        const img = new Image()
+const recolorImageToColor = async (imageUrl, color, brightness) => {
+    try {
+        // Fetch the image as a blob first to produce a same-origin URL.
+        // Tauri's asset:// protocol URLs are cross-origin and taint the
+        // canvas, making getImageData() throw a SecurityError.
+        let safeUrl = imageUrl
+        try {
+            const resp = await fetch(imageUrl)
+            if (resp.ok) {
+                const blob = await resp.blob()
+                safeUrl = URL.createObjectURL(blob)
+            }
+        } catch (_) {
+            // If fetch fails, fall back to the original URL
+        }
 
-        img.onload = () => {
+        const recolor = (img) => {
             try {
-                // SVGs sometimes report a 0x0 intrinsic size; fall back to a
-                // default canvas size so they can still be recolored.
                 const defaultSize = 128
                 const drawWidth = img.naturalWidth || defaultSize
                 const drawHeight = img.naturalHeight || defaultSize
@@ -192,19 +202,30 @@ const recolorImageToColor = (imageUrl, color, brightness) => {
                 }
 
                 ctx.putImageData(imageData, 0, 0)
-                resolve(canvas.toDataURL('image/png'))
+                return canvas.toDataURL('image/png')
             } catch (error) {
                 console.error('Failed to recolor image:', error)
-                resolve(null)
+                return null
+            } finally {
+                if (safeUrl !== imageUrl) {
+                    URL.revokeObjectURL(safeUrl)
+                }
             }
         }
 
-        img.onerror = () => {
-            resolve(null)
-        }
-
-        img.src = imageUrl
-    })
+        return await new Promise((resolve) => {
+            const img = new Image()
+            img.onload = () => resolve(recolor(img))
+            img.onerror = () => {
+                if (safeUrl !== imageUrl) URL.revokeObjectURL(safeUrl)
+                resolve(null)
+            }
+            img.src = safeUrl
+        })
+    } catch (error) {
+        console.error('Failed to recolor image:', error)
+        return null
+    }
 }
 
 const getGlowEffectStyle = (sound) => {
