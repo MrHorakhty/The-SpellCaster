@@ -1,27 +1,55 @@
-# The SpellCaster
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/ac37422e-70b0-49d4-af8b-f3c7b879ef2c" alt="The SpellCaster Logo" width="200"/>
+  <h1>The SpellCaster</h1>
+</div>
 
 A powerful desktop soundboard application built for TTRPG (Tabletop Role-Playing Game) sessions, featuring character-specific sound sets and environmental audio management. Built with React, Tauri, and Tailwind CSS for a seamless desktop experience.
 
 This project was first intended to be for personal use. I looked at a lot of soundboards and they either didn’t have the features I wanted or were subscription based, so I decided to create The SpellCaster. After it was finished, I though I’d share it in case other players find it usefull for their campaigns.
 
-Please note that because it was made for personal use and I prefer to splice and create my own audio, it does not feature a built in sound library or a sound search feature. This tool is best if you are planning on sourcing or generating your own custom spell effects and ambient tracks.
+Please note that because it was made for personal use and I prefer to splice and create my own audio, it does not feature a built in sound library or a sound search feature. This tool is best if you are planning on sourcing or generating your own custom spell effects and ambient tracks. *(Note: The custom "Vaelor" spells and icons shown in the screenshots are for demonstration purposes and are not included in the download, except for the default placeholder assets.)*
 
 NOTICE: This project is done via vibe coding and features AI made content (both code and assets) alongside stock images and audio.
 
+---
 
+## 📸 Interface Preview
+
+<img width="1920" height="1080" alt="Main Split View" src="https://github.com/user-attachments/assets/cece12e7-501b-45b0-bff5-9baa74889267" />
+*The SpellCaster features a Split View mode to manage both character abilities and environmental ambiance simultaneously.*
+
+### Complete Theming & Backgrounds
+![Background Settings](https://github.com/user-attachments/assets/854c071d-53e5-4ec4-8d03-b69c114bd676)
+*Tailor the look and feel of your soundboard with custom color themes or your own background images.*
+
+### Custom Character Boards
+![Custom Character Board](https://github.com/user-attachments/assets/af23a964-a2b9-4249-b303-5a61cb8e2b34)
+*Build dedicated boards for specific characters and classes, bringing in your own custom artwork and sound effects. (The Vaelor Trueflame board shown here is just an example of what you can build!)*
+
+<details>
+<summary><b>View More Screenshots (Click to expand)</b></summary>
+<br>
+
+![Wood Elf Ranger](https://github.com/user-attachments/assets/b651e4cd-b60e-40ec-aa6d-1d347bf451e1)
+
+![Human Paladin](https://github.com/user-attachments/assets/e7182786-f31f-4a98-aa8f-63eefea5544c)
+
+</details>
+
+---
 ## Features
 
-- **🎵 Advanced Audio Playback**: Full audio support with HTML5 Audio API for reliable, low-latency playback
-- **🌲 Environmental Sound Management**: Background music and ambience with looping, fade effects, and category organization
-- **👥 Character Sound Sets**: Create and manage multiple character profiles with custom sound configurations
-- **🔄 Split View Interface**: Simultaneous access to character sounds and environmental audio
-- **⏱️ Timer-Based Playback**: Set custom durations for timed sound effects
-- **🎚️ Advanced Audio Controls**: Fade in/out effects, looping options, and master volume control
-- **📁 File Management**: Sophisticated file handling with Tauri FS plugin and localStorage fallback
-- **🎨 Customizable Interface**: Background image support, dark theme optimized for gaming sessions
-- **🔀 Multiple Sound Files**: Support for multiple audio files per sound with random playback options
-- **🖼️ Icon Support**: SVG, PNG, JPG, and GIF icon formats for sound customization
-- **💾 Persistent Storage**: Automatic saving of configurations and file management
+- **Advanced Audio Playback**: Full audio support with HTML5 Audio API for reliable, low-latency playback
+- **Environmental Sound Management**: Background music and ambience with looping, fade effects, and category organization
+- **Character Sound Sets**: Create and manage multiple character profiles with custom sound configurations
+- **Split View Interface**: Simultaneous access to character sounds and environmental audio
+- **Timer-Based Playback**: Set custom durations for timed sound effects
+- **Advanced Audio Controls**: Fade in/out effects, looping options, and master volume control
+- **File Management**: Sophisticated file handling with Tauri FS plugin and localStorage fallback
+- **Customizable Interface**: Background image support, dark theme optimized for gaming sessions
+- **Multiple Sound Files**: Support for multiple audio files per sound with random playback options
+- **Icon Support**: PNG, JPG, and GIF icon formats for sound customization
+- **Persistent Storage**: Automatic saving of configurations and file management
 
 ## Tech Stack
 
