@@ -331,6 +331,7 @@ function App() {
     const [editMode, setEditMode] = useState(false)
     const [draggedSoundId, setDraggedSoundId] = useState(null)
     const [dragOverSoundId, setDragOverSoundId] = useState(null)
+    const dragRef = useRef(null)
     const [audioEnabled, setAudioEnabled] = useState(false)
     const [masterVolume, setMasterVolume] = useState(1.0)
     const [soundInstances, setSoundInstances] = useState({})
@@ -1831,33 +1832,67 @@ function App() {
                 style={{ width: `${140 * boxSize}px` }}
             >
                 <div
+                    data-sound-card
+                    data-sound-id={sound.id}
                     role="button"
                     tabIndex={editMode ? -1 : 0}
                     aria-disabled={editMode}
-                    draggable={editMode}
-                    onDragStart={(e) => {
-                        if (!editMode) return
-                        e.dataTransfer.setData('text/plain', sound.id)
-                        e.dataTransfer.effectAllowed = 'move'
+                    draggable={false}
+                    onPointerDown={(e) => {
+                        if (!editMode || e.button !== 0) return
+                        e.preventDefault()
+                        e.target.setPointerCapture(e.pointerId)
+                        dragRef.current = {
+                            draggedId: sound.id,
+                            containerType,
+                            containerId,
+                            startX: e.clientX,
+                            startY: e.clientY,
+                            element: e.currentTarget,
+                        }
                         setDraggedSoundId(sound.id)
                     }}
-                    onDragOver={(e) => {
-                        if (!editMode) return
-                        e.preventDefault()
-                        e.dataTransfer.dropEffect = 'move'
-                        setDragOverSoundId(sound.id)
-                    }}
-                    onDrop={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        const draggedId = e.dataTransfer.getData('text/plain') || draggedSoundId
-                        moveSound(draggedId, sound.id, containerType, containerId)
-                        setDraggedSoundId(null)
-                        setDragOverSoundId(null)
-                    }}
-                    onDragEnd={() => {
-                        setDraggedSoundId(null)
-                        setDragOverSoundId(null)
+                    onPointerMove={(e) => {
+                        if (!dragRef.current) return
+                        const dx = e.clientX - dragRef.current.startX
+                        const dy = e.clientY - dragRef.current.startY
+                        if (Math.abs(dx) + Math.abs(dy) < 4) return
+                        e.target.releasePointerCapture(e.pointerId)
+                        const moveHandler = (ev) => {
+                            const allCards = document.querySelectorAll('[data-sound-card]')
+                            let foundTarget = null
+                            allCards.forEach(card => {
+                                const rect = card.getBoundingClientRect()
+                                if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
+                                    ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+                                    const cardId = card.dataset.soundId
+                                    if (cardId !== dragRef.current.draggedId) {
+                                        foundTarget = cardId
+                                    }
+                                }
+                            })
+                            if (foundTarget !== dragRef.current.currentTargetId) {
+                                dragRef.current.currentTargetId = foundTarget
+                                setDragOverSoundId(foundTarget)
+                            }
+                        }
+                        const upHandler = (ev) => {
+                            document.removeEventListener('pointermove', moveHandler)
+                            document.removeEventListener('pointerup', upHandler)
+                            if (dragRef.current.currentTargetId) {
+                                moveSound(
+                                    dragRef.current.draggedId,
+                                    dragRef.current.currentTargetId,
+                                    dragRef.current.containerType,
+                                    dragRef.current.containerId
+                                )
+                            }
+                            setDraggedSoundId(null)
+                            setDragOverSoundId(null)
+                            dragRef.current = null
+                        }
+                        document.addEventListener('pointermove', moveHandler)
+                        document.addEventListener('pointerup', upHandler)
                     }}
                     onClick={() => {
                         if (!editMode) playSound(sound)
