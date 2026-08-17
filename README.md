@@ -3,6 +3,7 @@
 A powerful desktop soundboard application built for TTRPG (Tabletop Role-Playing Game) sessions, featuring character-specific sound sets and environmental audio management. Built with React, Tauri, and Tailwind CSS for a seamless desktop experience.
 
 This project was first intended to be for personal use. I looked at a lot of soundboards and they either didn’t have the features I wanted or were subscription based, so I decided to create The SpellCaster. After it was finished, I though I’d share it in case other players find it usefull for their campaigns.
+
 Please note that because it was made for personal use and I prefer to splice and create my own audio, it does not feature a built in sound library or a sound search feature. This tool is best if you are planning on sourcing or generating your own custom spell effects and ambient tracks.
 
 NOTICE: This project is done via vibe coding and features AI made content (both code and assets) alongside stock images and audio.
