@@ -16,6 +16,7 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 ## 📸 Interface Preview
 
 <img width="1920" height="1080" alt="Main Split View" src="https://github.com/user-attachments/assets/cece12e7-501b-45b0-bff5-9baa74889267" />
+
 *The SpellCaster features a Split View mode to manage both character abilities and environmental ambiance simultaneously.*
 
 ### Complete Theming & Backgrounds
