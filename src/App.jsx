@@ -1869,7 +1869,11 @@ function App() {
                     onPointerDown={(e) => {
                         if (!editMode || e.button !== 0) return
                         e.preventDefault()
-                        e.target.setPointerCapture(e.pointerId)
+                        try {
+                            e.target.setPointerCapture(e.pointerId)
+                        } catch {
+                            // ignore capture errors
+                        }
                         dragRef.current = {
                             draggedId: sound.id,
                             containerType,
@@ -1879,6 +1883,11 @@ function App() {
                             element: e.currentTarget,
                         }
                         setDraggedSoundId(sound.id)
+                    }}
+                    onPointerCancel={() => {
+                        dragRef.current = null
+                        setDraggedSoundId(null)
+                        setDragOverSoundId(null)
                     }}
                     onPointerMove={(e) => {
                         if (!dragRef.current) return
@@ -1940,6 +1949,7 @@ function App() {
                         borderColor: sound.color,
                         padding: `${8 * boxSize}px`,
                         borderRadius: '12px',
+                        touchAction: editMode ? 'none' : undefined,
                         ...getGlowEffectStyle(sound)
                     }}
                 >
