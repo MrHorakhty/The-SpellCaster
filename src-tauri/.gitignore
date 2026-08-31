@@ -2,9 +2,6 @@
 # will have compiled files and executables
 /target/
 
-# Tauri generated schemas
-/gen/
-
 # Cargo build artifacts
 **/*.rs.bk
 

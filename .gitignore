@@ -282,3 +282,18 @@ pip-delete-this-directory.txt
 # Tauri platform-specific generated icons
 src-tauri/icons/android/
 src-tauri/icons/ios/
+
+
+# Tauri generated schemas
+src-tauri/gen/schemas
+
+# Android local properties & signing keys
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/**/*.keystore
+src-tauri/gen/android/**/*.jks
+
+# Android build outputs
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/app/.cxx/
