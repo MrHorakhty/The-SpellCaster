@@ -282,6 +282,7 @@ pip-delete-this-directory.txt
 # Tauri platform-specific generated icons
 src-tauri/icons/android/
 src-tauri/icons/ios/
+src-tauri/gen/android/Run App.bat
 
 
 # Android local properties & signing keys

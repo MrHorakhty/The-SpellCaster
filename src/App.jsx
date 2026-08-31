@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize } from 'lucide-react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { platform } from '@tauri-apps/plugin-os'
 import data from './data.json'
 
 // Environment detection
@@ -326,6 +327,21 @@ function App() {
     const [environmentSounds, setEnvironmentSounds] = useState(() => {
         return readStoredData('ttrpg_environment', data.environmentSounds)
     })
+    const [platformType, setPlatformType] = useState('web')
+    const [isMobile, setIsMobile] = useState(false)
+
+    useEffect(() => {
+        if (isTauri) {
+            try {
+                const currentPlatform = platform()
+                setPlatformType(currentPlatform)
+                setIsMobile(currentPlatform === 'android' || currentPlatform === 'ios')
+            } catch (error) {
+                console.error('Failed to detect platform:', error)
+            }
+        }
+    }, [])
+
     const [tabType, setTabType] = useState('characters')
     const [activeTab, setActiveTab] = useState('')
     const [editMode, setEditMode] = useState(false)
