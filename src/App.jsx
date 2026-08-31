@@ -459,6 +459,15 @@ function App() {
         }
     }, [boxSize, boxSizeFocused])
 
+    const [volumeInput, setVolumeInput] = useState(() => Math.round(masterVolume * 100).toString())
+    const [volumeFocused, setVolumeFocused] = useState(false)
+
+    useEffect(() => {
+        if (!volumeFocused) {
+            setVolumeInput(Math.round(masterVolume * 100).toString())
+        }
+    }, [masterVolume, volumeFocused])
+
     // State for storing loaded image URLs
     const [loadedIcons, setLoadedIcons] = useState({})
     const [loadedFormIcon, setLoadedFormIcon] = useState('')
@@ -2028,17 +2037,17 @@ function App() {
                     <>
                         <button
                             onClick={() => handleDeleteSound(sound.id)}
-                            className={`absolute -top-2 -left-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[36px] min-w-[36px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            className={`absolute top-1 left-1 p-0.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             title="Delete Sound"
                         >
-                            <Trash2 size={12} />
+                            <Trash2 size={10} />
                         </button>
                         <button
                             onClick={async () => await openEditSoundModal(sound)}
-                            className={`absolute -top-2 -right-2 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[36px] min-w-[36px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             title="Edit Sound"
                         >
-                            <Edit size={12} />
+                            <Edit size={10} />
                         </button>
                     </>
                 )}
@@ -2234,8 +2243,40 @@ function App() {
                             </div>
                         </div>
                         <div className="flex items-center justify-center gap-2 mt-2">
-                            <Volume2 size={16} className="text-slate-300 shrink-0" />
-                            <span className="text-xs text-slate-400 shrink-0 w-7 text-right">{Math.round(masterVolume * 100)}%</span>
+                            <Volume2 size={16} className="text-slate-300 shrink-0 -mr-1" />
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                inputMode="numeric"
+                                value={volumeFocused ? volumeInput : Math.round(masterVolume * 100)}
+                                onFocus={() => {
+                                    setVolumeInput(Math.round(masterVolume * 100).toString())
+                                    setVolumeFocused(true)
+                                }}
+                                onChange={(e) => {
+                                    const raw = e.target.value
+                                    setVolumeInput(raw)
+                                    const parsed = parseInt(raw, 10)
+                                    if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+                                        updateMasterVolume(parsed / 100)
+                                    }
+                                }}
+                                onBlur={() => {
+                                    setVolumeFocused(false)
+                                    const parsed = parseInt(volumeInput, 10)
+                                    const clamped = Number.isNaN(parsed) ? 100 : Math.max(0, Math.min(100, parsed))
+                                    updateMasterVolume(clamped / 100)
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.currentTarget.blur()
+                                    }
+                                }}
+                                className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                title={`Volume: ${Math.round(masterVolume * 100)}%`}
+                            />
+                            <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
                             <input
                                 type="range"
                                 min="0"
@@ -2247,8 +2288,40 @@ function App() {
                                 title={`Volume: ${Math.round(masterVolume * 100)}%`}
                             />
                             <div className="w-px h-6 bg-dark-600 shrink-0"></div>
-                            <ZoomIn size={16} className="text-slate-300 shrink-0" />
-                            <span className="text-xs text-slate-400 shrink-0 w-7 text-right">{Math.round(boxSize * 100)}%</span>
+                            <ZoomIn size={16} className="text-slate-300 shrink-0 -mr-1" />
+                            <input
+                                type="number"
+                                min="50"
+                                max="200"
+                                inputMode="numeric"
+                                value={boxSizeFocused ? boxSizeInput : Math.round(boxSize * 100)}
+                                onFocus={() => {
+                                    setBoxSizeInput(Math.round(boxSize * 100).toString())
+                                    setBoxSizeFocused(true)
+                                }}
+                                onChange={(e) => {
+                                    const raw = e.target.value
+                                    setBoxSizeInput(raw)
+                                    const parsed = parseInt(raw, 10)
+                                    if (!Number.isNaN(parsed) && parsed >= 50 && parsed <= 200) {
+                                        handleBoxSizeChange(parsed / 100)
+                                    }
+                                }}
+                                onBlur={() => {
+                                    setBoxSizeFocused(false)
+                                    const parsed = parseInt(boxSizeInput, 10)
+                                    const clamped = Number.isNaN(parsed) ? 50 : Math.max(50, Math.min(200, parsed))
+                                    handleBoxSizeChange(clamped / 100)
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.currentTarget.blur()
+                                    }
+                                }}
+                                className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                title={`Box Size: ${Math.round(boxSize * 100)}%`}
+                            />
+                            <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
                             <input
                                 type="range"
                                 min="0.5"
@@ -2500,9 +2573,24 @@ function App() {
                                 {/* Sound grid takes the rest */}
                                 <div className="flex-1 min-w-0 flex flex-col">
                                     <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-3">
-                                        <h2 className="text-sm font-semibold mb-3 truncate">
-                                            {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
-                                        </h2>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h2
+                                                onClick={() => {
+                                                    if (!editMode) return
+                                                    activeCharacter ? handleEditCharacter(activeCharacter.id) : handleEditCategory(activeEnvironmentCategory?.category)
+                                                }}
+                                                className={`text-sm font-semibold truncate ${editMode ? 'cursor-pointer text-lime-400' : ''}`}
+                                            >
+                                                {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
+                                            </h2>
+                                            <button
+                                                onClick={() => setEditMode(!editMode)}
+                                                className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors z-[60] ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                                title={editMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                        </div>
                                         <div className={`grid gap-3 ${boxSize >= 1.5 ? 'grid-cols-1' : boxSize >= 0.7 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                                             {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || []).map(sound => renderSoundCard(
                                                 sound,
@@ -2552,21 +2640,21 @@ function App() {
                                                 </div>
 
                                                 {editMode && (
-                                                    <div className="flex gap-2 mb-3">
+                                                    <div className="space-y-2 mb-3">
                                                         {tabType === 'characters' ? (
                                                             <>
                                                                 <button
                                                                     onClick={openAddCharacterModal}
-                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-slate-200 min-h-[44px]"
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
                                                                 >
-                                                                    <User size={14} />
-                                                                    <span>Add Char</span>
+                                                                    <User size={16} className="shrink-0" />
+                                                                    <span>Add Character</span>
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('characters')}
-                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-lime-400 min-h-[44px]"
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
                                                                 >
-                                                                    <Plus size={14} />
+                                                                    <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
                                                                 </button>
                                                             </>
@@ -2574,16 +2662,16 @@ function App() {
                                                             <>
                                                                 <button
                                                                     onClick={openAddCategoryModal}
-                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-slate-200 min-h-[44px]"
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
                                                                 >
-                                                                    <Folder size={14} />
-                                                                    <span>Add Cat</span>
+                                                                    <Folder size={16} className="shrink-0" />
+                                                                    <span>Add Category</span>
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('environment')}
-                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-lime-400 min-h-[44px]"
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
                                                                 >
-                                                                    <Plus size={14} />
+                                                                    <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
                                                                 </button>
                                                             </>
