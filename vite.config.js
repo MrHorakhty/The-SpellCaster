@@ -6,6 +6,7 @@ export default defineConfig({
     plugins: [react()],
     // Prevent vite from freezing on rust build files
     server: {
+        host: true,
         watch: {
             ignored: ["**/src-tauri/**"],
         },
