@@ -14,6 +14,7 @@
 :root {
   --theme-bg-primary: #090d16;
   --theme-bg-secondary: #0f172a;
+  --theme-bg-drawer: #060a12;
   --theme-accent: #84cc16;
   --theme-text: #f8fafc;
   --theme-border: #334155;
@@ -35,6 +36,10 @@ body {
 
 .bg-dark-900 {
   background-color: var(--theme-bg-primary);
+}
+
+.bg-dark-950 {
+  background-color: var(--theme-bg-drawer);
 }
 
 .border-dark-600 {
@@ -147,4 +152,18 @@ body {
   background: var(--theme-border);
   height: 4px;
   border-radius: 2px;
+}
+
+/* Drawer slide-in animation */
+@keyframes drawerSlideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-slide {
+  animation: drawerSlideIn 0.2s ease-out;
 }

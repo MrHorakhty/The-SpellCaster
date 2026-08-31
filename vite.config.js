@@ -10,7 +10,7 @@ export default defineConfig({
     server: {
         port: 5173,
         strictPort: true,
-        host: host || true, //[cite: 3]
+        host: '0.0.0.0', // Bind all interfaces so the Android emulator can reach the dev server
         hmr: host
             ? {
                 protocol: "ws",

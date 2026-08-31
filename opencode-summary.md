@@ -1,79 +1,64 @@
-# opencode Session Summary — Tauri Android Port
+# opencode Session Summary — Tauri Android Port + Mobile UI
 
 Read this at the start of the next session to recover context.
 
 ## Goal
-Turn the "SpellCaster" TTRPG soundboard (currently a **Tauri 2.x desktop app** wrapping a **React 19 + Vite + Tailwind** frontend) into an installable **Android phone app via Tauri mobile**. iOS is a lower priority (needs Mac + paid Apple account).
+Turn the "SpellCaster" TTRPG soundboard (a **Tauri 2.x cross-platform app** wrapping a **React 19 + Vite + Tailwind** frontend) into an installable **Android phone app**, with the UI scaled to a comfortable mobile/phone layout. All mobile changes are **gated behind `isMobile`** (`platform()` from `@tauri-apps/plugin-os`) so desktop/web stay untouched. See `MOBILE_ONLY_INSTRUCTIONS.md`.
 
 ## Project facts
-- Frontend: React 19 + Vite, entry `src/main.jsx`, main logic in `src/App.jsx` (~3200 lines).
+- Frontend: React 19 + Vite, entry `src/main.jsx`, main logic in `src/App.jsx` (~3400 lines, single monolithic component).
 - Backend: Rust/Tauri 2.x (`src-tauri/`). Uses `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
-- Critical design: the app already has a **full web fallback** — it detects `isTauri` via `window.__TAURI_INTERNALS__` (App.jsx:7) and uses `localStorage` + browser HTML5 `new Audio()` when not in Tauri. So config/storage already works cross-platform.
-- Storage abstraction (App.jsx):
-  - `isTauri` path → `@tauri-apps/plugin-fs` writing to `BaseDirectory.AppData`, read back via `convertFileSrc`.
-  - web path → `localStorage` keys `sound_file_*` as data-URLs (App.jsx:1001, 1042, 1551).
-- Audio: HTML5 `new Audio(soundUrl)` with fade in/out helpers (App.jsx:278, 1610). Requires user gesture (`enableAudio` gate at App.jsx:633).
-- `src-tauri/tauri.conf.json`: `assetProtocol.scope` is `["$APPDATA/**/*"]`. Bundle has `android.debugApplicationIdSuffix = ".debug"`.
+- Storage abstraction:
+  - `isTauri` path → `@tauri-apps/plugin-fs` writing to `BaseDirectory.AppData` (read back via `convertFileSrc`).
+  - web path → `localStorage` keys `sound_file_*` as data-URLs.
+- App package `com.mrhorakhty.thespellcaster.debug`; main activity `com.mrhorakhty.thespellcaster.MainActivity`; adb at `C:\Users\emire\AppData\Local\Android\Sdk\platform-tools\adb.exe`.
+- `src-tauri/tauri.conf.json`: `devUrl: http://localhost:5173`, identifier `com.mrhorakhty.thespellcaster`.
 
-## ⚠️ IMPORTANT ARCHITECTURE GOTCHA (found this session)
+## ⚠️ IMPORTANT ARCHITECTURE GOTCHA
 There are **two Rust entry points**:
-- `src-tauri/src/main.rs` — used by the **desktop** binary only; registers `tauri_plugin_fs::init()`.
-- `src-tauri/src/lib.rs` — used by **Android/iOS** (`#[cfg_attr(mobile, tauri::mobile_entry_point)]`).
+- `src-tauri/src/main.rs` — desktop binary only; registers `tauri_plugin_fs::init()`.
+- `src-tauri/src/lib.rs` — Android/iOS (`#[cfg_attr(mobile, tauri::mobile_entry_point)]`).
 
-Any plugin/command registered ONLY in `main.rs` will silently be missing on mobile (symptom: `plugin fs not found`). **lib.rs now also registers `tauri_plugin_fs::init()`** (added 2026-08-31). Keep the two in sync when adding plugins.
+Plugins registered ONLY in `main.rs` are silently missing on mobile (symptom: `plugin fs not found`). **lib.rs now also registers `tauri_plugin_fs::init()`**. Keep the two in sync when adding plugins.
 
-## Status of the Android setup (DONE, build verified 2026-08-31)
-- Toolchain ✅ (env vars now persist at User level, see below).
-- `src-tauri/gen/android` generated ✅ (`npm run tauri android init`).
-- Icons generated for android/ios ✅.
-- AssetProtocol scope reviewed ✅ — left as `["$APPDATA/**/*"]`; the app only reads/writes `BaseDirectory.AppData`, so `$CACHE`/`$TMP` are NOT needed.
-- **First emulator build ✅** — app installs and launches on `Pixel_7` AVD (`com.mrhorakhty.thespellcaster.debug`); audio works (AAudio streams open `AAUDIO_OK`); the `plugin fs not found` errors are GONE.
+## ⚠️ CRITICAL code bug found (platform())
+`platform()` from `@tauri-apps/plugin-os` is **synchronous** (returns a string), NOT async. `.then()`-ing it caused `TypeError` → React unmount → blank/black screen. Use it synchronously (App.jsx ~line 333, `isMobile = platform() === 'android'` style pattern). Reverted once already; don't re-introduce.
 
-### Fixes applied this session (2 files)
-1. `vite.config.js` — added `server.host: true`. REQUIRED for mobile dev: Vite defaults to `localhost` only, but the emulator's WebView reaches the host at `http://10.2.0.2:5173/`. Without `host: true`, `tauri android dev` fails with `Could not connect to http://10.2.0.2:5173/ after 180s`.
-2. `src-tauri/src/lib.rs` — added `.plugin(tauri_plugin_fs::init())` (see gotcha above). Fixed `Failed to read local file: plugin fs not found` on Android.
+## Vite binding (dev-server access)
+`vite.config.js` sets `host: '0.0.0.0'` so the Android emulator (via `10.0.2.2` → host loopback `127.0.0.1`) reaches the dev server. (ProtonVPN's `10.2.0.2` interface previously collided and baked the wrong host.) Dev-only; release builds unaffected. **The app loads the frontend from the Vite dev server in debug builds, so `npm run tauri android dev` must stay running** — the installed debug APK alone shows a blank screen without it. An HMR-websocket connection warning ("failed to connect to websocket") is cosmetic and doesn't block rendering.
 
-### Known cosmetic issue (not fixed — user will handle)
-`Failed to toggle fullscreen: [object Object]` (App.jsx ~657, `toggleFullscreen`) — `setFullscreen` is not supported on Android. Already wrapped in try/catch so it's harmless; recommended fix: guard to desktop-only (no easy `isMobile` check exists yet — there is only `isTauri`).
-
-## Environment (verified this session)
-- Rust 1.97.1; all 4 Android Rust targets installed (`aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`).
-- Android SDK at `C:\Users\emire\AppData\Local\Android\Sdk` — platforms android-35/36/37.x, build-tools 34-36, NDK `30.0.16138531`.
-- JDK = Android Studio JBR (`C:\Program Files\Android\Android Studio\jbr`, JDK 21). System `java` is 1.8 (wrong) → JAVA_HOME/PATH point to JBR.
-- AVDs available: `Pixel_7`, `Pixel_Tablet`, `Small_Phone` (boot via `emulator.exe -avd <name>`).
-- `npm run tauri info` works; shows desktop info (the Android panel isn't printed, but the build succeeding proves SDK/NDK/JDK are fine).
-
-### Env vars (Persistent, User level) — only re-run if a fresh shell shows empty
-- `ANDROID_HOME` / `ANDROID_SDK_ROOT` = `C:\Users\emire\AppData\Local\Android\Sdk`
-- `JAVA_HOME` = `C:\Program Files\Android\Android Studio\jbr`
-- `PATH` (User) += `C:\Program Files\Android\Android Studio\jbr\bin`
-
-```powershell
-[Environment]::SetEnvironmentVariable("ANDROID_HOME", "C:\Users\emire\AppData\Local\Android\Sdk", "User")
-[Environment]::SetEnvironmentVariable("ANDROID_SDK_ROOT", "C:\Users\emire\AppData\Local\Android\Sdk", "User")
-[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
-```
+## Environment (verified)
+- Rust 1.97.1; Android Rust targets installed. Android SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio JBR (JDK 21); JAVA_HOME points there.
+- AVDs: `Pixel_7`, `Pixel_Tablet`, `Small_Phone` (boot via `emulator.exe -avd <name>`).
+- Persistent User env vars: `ANDROID_HOME`/`ANDROID_SDK_ROOT` = SDK path, `JAVA_HOME` = JBR, PATH += `jbr\bin`.
 
 ## ⚠️ OPERATIONAL WARNING for agents
-`npm run tauri android dev` **never exits** — it stays attached (watching for rebuilds + streaming logcat). In an agent loop this hangs the tool call and ends in a user/agent abort. Prefer:
-- **Read-only verification:** check the app via `adb shell logcat` / `adb devices` instead of re-running dev.
-- If you DO run it, launch detached with `Start-Process` and collect output from a log file, then verify via adb.
-- A Rust change requires a rebuild; a full fresh `tauri android dev` takes a long time (cargo cross-compile + gradle). Incremental rebuilds after a first successful build are fast.
+`npm run tauri android dev` **never exits** (watches for rebuilds + streams logcat). It hangs the tool call. Prefer `adb shell logcat` / `adb devices` for read-only verification, or launch detached via `Start-Process` and tail a log file. Rust changes need a rebuild (slow on fresh build, fast incremental).
 
-## Next session (user is doing app-specific UI work via Android Studio AI meanwhile)
-1. **Verify end-to-end sound playback** — tap a sound on the emulator and confirm audio; this exercises `convertFileSrc` + the `$APPDATA` asset scope for the FIRST time. If asset URLs 404, the `assetProtocol.scope` may need `$APPDATA/**/*` hardened (e.g. also `$CACHE`/`$TMP`). No errors seen so far, but a real play hasn't been confirmed.
-2. **Release APK** — `npm run tauri android build` (needs a signing keystore; see Android Studio docs / tauri.conf).
-3. App-specific changes user will make (via Android Studio AI): **responsive/mobile layout**, **Wake Lock** (`navigator.wakeLock`), **fullscreen guard on mobile**. iOS still lower-priority (needs macOS + Apple account).
+## Mobile UI work (gated behind `isMobile`) — all in `src/App.jsx`
+- **Header**: two rows (row 1: app icon `h-10 w-10` + title `text-2xl` + stop + settings; row 2: sliders). Split view/fullscreen/number inputs hidden on mobile. Safe-area: `paddingTop: max(env(safe-area-inset-top), 12px)`.
+- **Slider row**: centered, both sliders exactly `w-[90px]` (kept small/centered away from screen edges to avoid Android gesture-nav back-swipe triggering), `%` labels to the LEFT, volume icon + divider + zoom icon between. Range `0.5–2.0` step `0.1`.
+- **Sound cards**: mobile `w-full` in a grid; desktop fixed `140px * boxSize` width.
+- **Left navigation (mobile)**: a persistent collapsed icon rail (`w-14`, hamburger + User/Music icon buttons) that opens a **left slide-in drawer** (`w-[80%] max-w-[320px]`, `drawer-slide` CSS animation 200ms) containing the Characters/Environment tabs, edit-mode tools, and vertical category list. Selecting a category **keeps the panel open** (per user choice). Drawer uses `bg-dark-950` = `--theme-bg-drawer` (a shade darker than the selected theme background; see theme note below). **No dimmer backdrop** (a transparent full-screen `z-40` click-catcher closes it). Drawer `opacity: 0.9`.
+- **Edit mode**: mobile action buttons always visible (no hover) with 44px targets.
+- **Modals** (6 total: Sound, Character, Category, Delete Confirm, Settings, About): mobile = bottom slide-up `rounded-t-xl min-h-[80vh] p-0 sm:p-4`; desktop unchanged.
+- **Box-size scaling (mobile)**: the size slider changes the whole box by switching grid columns: `boxSize >= 1.5 → 1 col`, `>= 0.7 → 2 cols`, else `3 cols`. Inner card keeps `aspect-square` so height follows width. Card `borderRadius` is **static `12px`** (doesn't scale with boxSize — user wants the rounded-corner ratio constant regardless of size). Padding/icons/fonts still scale with `boxSize`.
+- **Container stretch**: mobile branch uses `flex-1 min-h-full` (and the standard-view wrapper `min-h-full`) so the rail + sound panel stretch to the bottom of the screen. Sound panel inner wrapper `flex-1 min-w-0 rounded-xl p-3`; grid `grid-cols-*` from boxSize.
 
-## Backups made this session (Desktop)
-- `C:\Users\emire\Desktop\ttrpg-soundboard-backup-20260831-030626` (pre-vite fix)
-- `C:\Users\emire\Desktop\ttrpg-soundboard-backup-20260831-033256` (pre-fs-plugin fix)
+## Theme system (mobile drawer)
+- `--theme-bg-primary` = app background (default `#090d16`, or `palette.darker` in `applyTheme`).
+- `--theme-bg-secondary` = panels (`bg-dark-800`, default `#0f172a`).
+- `--theme-bg-drawer` = **new** drawer background (`bg-dark-950`), default `#060a12`; for custom themes = `darkenColor(palette.darker, 0.4)` — i.e. a **secondary shade derived from the selected theme, darker than the primary background**. Set in both `:root` (index.css) and `applyTheme` (App.jsx). So the drawer is darker than the selected background in every theme.
 
-## ⚠️ MANDATORY (per AGENTS.md)
-Before making ANY code changes to the project, create a backup copy of the project folder on the Windows Desktop (excluding `node_modules`, `dist`, `.git`, `src-tauri/target`, `src-tauri/gen`):
-- Format: `C:\Users\emire\Desktop\ttrpg-soundboard-backup-<YYYYMMDD-HHMMSS>`
-- Snippet:
-  ```powershell
-  $dst = "C:\Users\emire\Desktop\ttrpg-soundboard-backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-  robocopy "C:\Users\emire\Projects\ttrpg-soundboard" $dst /E /XD node_modules dist .git src-tauri\target src-tauri\gen
-  ```
+## Build verification
+`npx eslint src/App.jsx` → 0 errors (pre-existing non-blocking warnings: unused `convertFileSrc`, `_`, `platformType`, `ev`). `npx vite build` succeeds.
+
+## Backups (Desktop / OneDrive Masaüstü)
+Backup root is **`C:\Users\emire\OneDrive\Masaüstü\`** (not `Desktop`). Per AGENTS.md, always back up before changes; exclusions: `node_modules`, `dist`, `.git`, `src-tauri/target`, `src-tauri/gen` (use bare dir names for `/XD` because PowerShell mangles full paths).
+- `ttrpg-soundboard-backup-20260831-202455` (38.2 MB, current, newest)
+- Older backups from this work were deleted by the user after each new backup was made.
+
+## Next likely work
+- Continue mobile UI refinements (all behind `isMobile`).
+- Release APK (`npm run tauri android build`, needs signing keystore).
+- Wake Lock, fullscreen guard on mobile, iOS (needs macOS + Apple account).

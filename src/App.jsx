@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize } from 'lucide-react'
+import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu } from 'lucide-react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { platform } from '@tauri-apps/plugin-os'
 import data from './data.json'
@@ -329,6 +329,7 @@ function App() {
     })
     const [platformType, setPlatformType] = useState('web')
     const [isMobile, setIsMobile] = useState(false)
+    const [isPanelOpen, setIsPanelOpen] = useState(false)
 
     useEffect(() => {
         if (isTauri) {
@@ -1361,6 +1362,7 @@ function App() {
 
         root.style.setProperty('--theme-bg-primary', '#090d16')
         root.style.setProperty('--theme-bg-secondary', '#0f172a')
+        root.style.setProperty('--theme-bg-drawer', '#060a12')
         root.style.setProperty('--theme-accent', '#84cc16')
         root.style.setProperty('--theme-text', '#f8fafc')
         root.style.setProperty('--theme-border', '#334155')
@@ -1370,6 +1372,7 @@ function App() {
 
             root.style.setProperty('--theme-bg-primary', palette.darker)
             root.style.setProperty('--theme-bg-secondary', palette.primary)
+            root.style.setProperty('--theme-bg-drawer', darkenColor(palette.darker, 0.4))
             root.style.setProperty('--theme-accent', palette.complementary)
             root.style.setProperty('--theme-text', palette.text)
             root.style.setProperty('--theme-border', palette.border)
@@ -1844,8 +1847,8 @@ function App() {
         return (
             <div
                 key={sound.id}
-                className="group relative shrink-0"
-                style={{ width: `${140 * boxSize}px` }}
+                className={`group relative shrink-0 ${isMobile ? 'w-full' : ''}`}
+                style={isMobile ? {} : { width: `${140 * boxSize}px` }}
             >
                 <div
                     data-sound-card
@@ -1927,7 +1930,7 @@ function App() {
                         backgroundColor: 'var(--theme-bg-secondary)',
                         borderColor: sound.color,
                         padding: `${8 * boxSize}px`,
-                        borderRadius: `${12 * boxSize}px`,
+                        borderRadius: '12px',
                         ...getGlowEffectStyle(sound)
                     }}
                 >
@@ -2025,14 +2028,14 @@ function App() {
                     <>
                         <button
                             onClick={() => handleDeleteSound(sound.id)}
-                            className="absolute -top-2 -left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                            className={`absolute -top-2 -left-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[36px] min-w-[36px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             title="Delete Sound"
                         >
                             <Trash2 size={12} />
                         </button>
                         <button
                             onClick={async () => await openEditSoundModal(sound)}
-                            className="absolute -top-2 -right-2 p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100 z-10"
+                            className={`absolute -top-2 -right-2 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[36px] min-w-[36px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             title="Edit Sound"
                         >
                             <Edit size={12} />
@@ -2138,14 +2141,14 @@ function App() {
                                         <>
                                             <button
                                                 onClick={() => handleDeleteCharacter(c.id)}
-                                                className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                                 title="Delete Character"
                                             >
                                                 <Trash2 size={12} />
                                             </button>
                                             <button
                                                 onClick={() => handleEditCharacter(c.id)}
-                                                className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                                 title="Edit Character"
                                             >
                                                 <Edit size={12} />
@@ -2168,14 +2171,14 @@ function App() {
                                         <>
                                             <button
                                                 onClick={() => handleDeleteCategory(e.category)}
-                                                className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                                 title="Delete Category"
                                             >
                                                 <Trash2 size={12} />
                                             </button>
                                             <button
                                                 onClick={() => handleEditCategory(e.category)}
-                                                className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                                                 title="Edit Category"
                                             >
                                                 <Edit size={12} />
@@ -2192,7 +2195,7 @@ function App() {
                     <h2 className="text-lg font-semibold mb-4 text-slate-200 truncate">
                         {activeItem ? (isCharSection ? activeItem.name : activeItem.category) : 'Select Category'}
                     </h2>
-                    <div className="flex flex-wrap gap-4">
+                    <div className={isMobile ? 'grid grid-cols-2 gap-3' : 'flex flex-wrap gap-4'}>
                         {activeItem?.sounds?.map(sound => renderSoundCard(sound, isCharSection ? 'character' : 'environment', currentActiveId))}
                     </div>
                 </div>
@@ -2204,6 +2207,62 @@ function App() {
         <div className="app-container h-screen flex flex-col bg-dark-900 text-slate-200">
             {/* Header */}
             <header className="app-header shrink-0 bg-dark-800 border-b border-dark-700">
+                {/* Mobile Header */}
+                {isMobile ? (
+                    <div className="w-full px-4 pb-2 pt-3" style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center space-x-2 shrink-0">
+                                <img src="/assets/Icon.png" alt="App Icon" className="h-10 w-10" />
+                                <h1 className="text-2xl font-fantaisie tracking-wider whitespace-nowrap">The SpellCaster</h1>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={stopAllSounds}
+                                    disabled={Object.keys(soundInstances).length === 0 || editMode}
+                                    className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                                    title="Stop All Sounds"
+                                >
+                                    <Square size={18} />
+                                </button>
+                                <button
+                                    onClick={openSettingsModal}
+                                    className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-dark-700 text-slate-300 hover:bg-dark-600 transition-colors"
+                                    title="Settings"
+                                >
+                                    <Settings size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                            <Volume2 size={16} className="text-slate-300 shrink-0" />
+                            <span className="text-xs text-slate-400 shrink-0 w-7 text-right">{Math.round(masterVolume * 100)}%</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={masterVolume}
+                                onChange={(e) => updateMasterVolume(parseFloat(e.target.value))}
+                                className="slider min-h-[44px] w-[90px]"
+                                title={`Volume: ${Math.round(masterVolume * 100)}%`}
+                            />
+                            <div className="w-px h-6 bg-dark-600 shrink-0"></div>
+                            <ZoomIn size={16} className="text-slate-300 shrink-0" />
+                            <span className="text-xs text-slate-400 shrink-0 w-7 text-right">{Math.round(boxSize * 100)}%</span>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="2.0"
+                                step="0.1"
+                                value={boxSize}
+                                onChange={(e) => handleBoxSizeChange(parseFloat(e.target.value))}
+                                className="slider min-h-[44px] w-[90px]"
+                                title={`Box Size: ${Math.round(boxSize * 100)}%`}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                /* Desktop Header */
                 <div className="w-full px-6 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -2345,12 +2404,13 @@ function App() {
                         </div>
                     </div>
                 </div>
+                )}
             </header>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto w-full px-6 py-6">
-                {/* Edit Mode Controls (Hidden in Split View) */}
-                {editMode && !isSplitView && (
+            <div className={`flex-1 overflow-y-auto w-full ${isMobile ? 'px-3 py-3' : 'px-6 py-6'}`}>
+                {/* Edit Mode Controls (Hidden in Split View, hidden on mobile - handled by chip bar) */}
+                {editMode && !isSplitView && !isMobile && (
                     <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg w-full mx-auto">
                         <div className="flex items-center justify-between flex-wrap gap-4">
                             <div className="flex items-center space-x-2">
@@ -2403,8 +2463,167 @@ function App() {
                     </div>
                 ) : (
                     /* STANDARD SINGLE TAB VIEW LAYOUT */
-                    <div className="flex flex-col lg:flex-row gap-6">
-                        {/* Standard Sidebar */}
+                    <div className={isMobile ? 'flex flex-col gap-4 min-h-full' : 'flex flex-col lg:flex-row gap-6'}>
+                        {/* Mobile: Collapsible left navigation panel + grid */}
+                        {isMobile && (
+                            <div className="flex gap-3 items-stretch flex-1 min-h-full">
+                                {/* Collapsed icon rail */}
+                                <div className="bg-dark-800 rounded-xl p-2 flex flex-col items-center gap-2 shrink-0 w-14">
+                                    <button
+                                        onClick={() => setIsPanelOpen(true)}
+                                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-dark-700 text-slate-300 hover:bg-dark-600 transition-colors"
+                                        title="Open navigation"
+                                    >
+                                        <Menu size={20} />
+                                    </button>
+                                    <div className="w-px h-2 bg-dark-600"></div>
+                                    <div className="flex flex-col items-center gap-1.5">
+                                        <button
+                                            onClick={() => { setTabType('characters'); setActiveTab(characters[0]?.id || '') }}
+                                            className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
+                                                }`}
+                                            title="Characters"
+                                        >
+                                            <User size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => { setTabType('environment'); setActiveTab(environmentSounds[0]?.category || '') }}
+                                            className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
+                                                }`}
+                                            title="Environment"
+                                        >
+                                            <Music size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Sound grid takes the rest */}
+                                <div className="flex-1 min-w-0 flex flex-col">
+                                    <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-3">
+                                        <h2 className="text-sm font-semibold mb-3 truncate">
+                                            {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
+                                        </h2>
+                                        <div className={`grid gap-3 ${boxSize >= 1.5 ? 'grid-cols-1' : boxSize >= 0.7 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                            {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || []).map(sound => renderSoundCard(
+                                                sound,
+                                                activeCharacter ? 'character' : 'environment',
+                                                activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Drawer panel overlay */}
+                                {isPanelOpen && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setIsPanelOpen(false)}
+                                        ></div>
+                                        <div className="fixed top-0 left-0 bottom-0 w-[80%] max-w-[320px] bg-dark-950 z-50 shadow-2xl flex flex-col drawer-slide"
+                                            style={{ paddingTop: 'max(env(safe-area-inset-top), 8px)', opacity: 0.9 }}>
+                                            <div className="flex items-center justify-between p-3 border-b border-dark-700">
+                                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Navigate</h3>
+                                                <button
+                                                    onClick={() => setIsPanelOpen(false)}
+                                                    className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-300 hover:bg-dark-700 transition-colors"
+                                                    title="Close"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                            </div>
+
+                                            <div className="p-3">
+                                                <div className="flex gap-2 mb-3">
+                                                    <button
+                                                        onClick={() => setTabType('characters')}
+                                                        className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                            }`}
+                                                    >
+                                                        Characters
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setTabType('environment')}
+                                                        className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                            }`}
+                                                    >
+                                                        Environment
+                                                    </button>
+                                                </div>
+
+                                                {editMode && (
+                                                    <div className="flex gap-2 mb-3">
+                                                        {tabType === 'characters' ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={openAddCharacterModal}
+                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-slate-200 min-h-[44px]"
+                                                                >
+                                                                    <User size={14} />
+                                                                    <span>Add Char</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => openAddSoundModal('characters')}
+                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-lime-400 min-h-[44px]"
+                                                                >
+                                                                    <Plus size={14} />
+                                                                    <span>Add Sound</span>
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    onClick={openAddCategoryModal}
+                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-slate-200 min-h-[44px]"
+                                                                >
+                                                                    <Folder size={14} />
+                                                                    <span>Add Cat</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => openAddSoundModal('environment')}
+                                                                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-xs text-lime-400 min-h-[44px]"
+                                                                >
+                                                                    <Plus size={14} />
+                                                                    <span>Add Sound</span>
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-4 space-y-1.5">
+                                                {tabType === 'characters' && characters.map(char => (
+                                                    <button
+                                                        key={char.id}
+                                                        onClick={() => setActiveTab(char.id)}
+                                                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                            }`}
+                                                    >
+                                                        <User size={16} className="shrink-0" />
+                                                        <span className="truncate">{char.name}</span>
+                                                    </button>
+                                                ))}
+                                                {tabType === 'environment' && environmentSounds.map(cat => (
+                                                    <button
+                                                        key={cat.category}
+                                                        onClick={() => setActiveTab(cat.category)}
+                                                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                            }`}
+                                                    >
+                                                        <Music size={16} className="shrink-0" />
+                                                        <span className="truncate">{cat.category}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Desktop Sidebar (hidden on mobile) */}
+                        {!isMobile && (
                         <div className="w-full lg:w-64 shrink-0 bg-dark-800 rounded-xl p-4 flex flex-col">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-lg font-semibold">Categories</h2>
@@ -2499,8 +2718,10 @@ function App() {
                                 ))}
                             </div>
                         </div>
+                        )}
 
-                        {/* Standard Sound Grid */}
+                        {/* Standard Sound Grid (desktop only; mobile uses the grid in the left-panel layout) */}
+                        {!isMobile && (
                         <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-6">
                             <h2 className="text-xl font-semibold mb-4 truncate">
                                 {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
@@ -2513,14 +2734,15 @@ function App() {
                                 ))}
                             </div>
                         </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {/* Sound Modal */}
             {showSoundModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">
@@ -2842,8 +3064,8 @@ function App() {
 
             {/* Character Modal */}
             {showCharacterModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">{editingCharacter ? 'Edit Character' : 'Add New Character'}</h2>
@@ -2897,8 +3119,8 @@ function App() {
 
             {/* Category Modal */}
             {showCategoryModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
@@ -2952,8 +3174,8 @@ function App() {
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <h2 className="text-xl font-bold mb-4">Confirm Delete</h2>
                             <p className="text-slate-300 mb-6">
@@ -2980,8 +3202,8 @@ function App() {
 
             {/* Settings Modal */}
             {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">Background Settings</h2>
@@ -3162,8 +3384,8 @@ function App() {
 
             {/* About & Credits Modal */}
             {showAboutModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-dark-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">About The SpellCaster</h2>
