@@ -460,6 +460,37 @@ function App() {
     const [activeCharacterId, setActiveCharacterId] = useState('')
     const [activeEnvironmentId, setActiveEnvironmentId] = useState('')
 
+    // Switch the top-level tab (Characters/Environment) while preserving each
+    // tab's own last selection. The per-tab selections live in
+    // activeCharacterId / activeEnvironmentId regardless of view mode, so
+    // toggling between tabs no longer clobbers the user's chosen item.
+    const switchTab = (type) => {
+        const fromType = tabType === 'characters' ? 'characters' : 'environment'
+        const fromTarget = fromType === 'characters' ? characters : environmentSounds
+        if (fromTarget.some(item => item.id === activeTab || item.category === activeTab)) {
+            if (fromType === 'characters') setActiveCharacterId(activeTab)
+            else setActiveEnvironmentId(activeTab)
+        }
+
+        setTabType(type)
+
+        if (type === 'characters') {
+            const isStillValid = characters.some(c => c.id === activeCharacterId)
+            setActiveTab(isStillValid ? activeCharacterId : (characters[0]?.id || ''))
+        } else {
+            const isStillValid = environmentSounds.some(e => e.category === activeEnvironmentId)
+            setActiveTab(isStillValid ? activeEnvironmentId : (environmentSounds[0]?.category || ''))
+        }
+    }
+
+    // Select an item from the current list, remembering it in the per-tab state
+    // so the selection survives switching tabs (and later switching back).
+    const selectItem = (type, id) => {
+        setActiveTab(id)
+        if (type === 'characters') setActiveCharacterId(id)
+        else setActiveEnvironmentId(id)
+    }
+
     // Modal and form states
     const [showSoundModal, setShowSoundModal] = useState(false)
     const [editingSound, setEditingSound] = useState(null)
@@ -2787,7 +2818,7 @@ function App() {
                                     <div className="w-px h-2 bg-dark-600"></div>
                                     <div className="flex flex-col items-center gap-1.5">
                                         <button
-                                            onClick={() => { setTabType('characters'); setActiveTab(characters[0]?.id || '') }}
+                                            onClick={() => switchTab('characters')}
                                             className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
                                                 }`}
                                             title="Characters"
@@ -2795,7 +2826,7 @@ function App() {
                                             <User size={18} />
                                         </button>
                                         <button
-                                            onClick={() => { setTabType('environment'); setActiveTab(environmentSounds[0]?.category || '') }}
+                                            onClick={() => switchTab('environment')}
                                             className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
                                                 }`}
                                             title="Environment"
@@ -2871,14 +2902,14 @@ function App() {
                                             <div className="p-3">
                                                 <div className="flex gap-2 mb-3">
                                                     <button
-                                                        onClick={() => setTabType('characters')}
+                                                        onClick={() => switchTab('characters')}
                                                         className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
                                                         Characters
                                                     </button>
                                                     <button
-                                                        onClick={() => setTabType('environment')}
+                                                        onClick={() => switchTab('environment')}
                                                         className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
@@ -2937,7 +2968,7 @@ function App() {
                                                 {tabType === 'characters' && characters.map(char => (
                                                     <button
                                                         key={char.id}
-                                                        onClick={() => setActiveTab(char.id)}
+                                                        onClick={() => selectItem('characters', char.id)}
                                                         className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
@@ -2948,7 +2979,7 @@ function App() {
                                                 {tabType === 'environment' && environmentSounds.map(cat => (
                                                     <button
                                                         key={cat.category}
-                                                        onClick={() => setActiveTab(cat.category)}
+                                                        onClick={() => selectItem('environment', cat.category)}
                                                         className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
@@ -2980,14 +3011,14 @@ function App() {
 
                             <div className="flex space-x-2 mb-4">
                                 <button
-                                    onClick={() => { setTabType('characters'); setActiveTab(characters[0]?.id || '') }}
+                                    onClick={() => switchTab('characters')}
                                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
                                     Characters
                                 </button>
                                 <button
-                                    onClick={() => { setTabType('environment'); setActiveTab(environmentSounds[0]?.category || '') }}
+                                    onClick={() => switchTab('environment')}
                                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
@@ -3005,7 +3036,7 @@ function App() {
                                 {tabType === 'characters' && characters.map(char => (
                                     <div key={char.id} className="relative group">
                                         <button
-                                            onClick={() => setActiveTab(char.id)}
+                                            onClick={() => selectItem('characters', char.id)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
@@ -3036,7 +3067,7 @@ function App() {
                                 {tabType === 'environment' && environmentSounds.map(cat => (
                                     <div key={cat.category} className="relative group">
                                         <button
-                                            onClick={() => setActiveTab(cat.category)}
+                                            onClick={() => selectItem('environment', cat.category)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
@@ -3755,7 +3786,7 @@ function App() {
                                 <div className="flex flex-col items-center justify-center p-4 bg-dark-900 rounded-lg border border-dark-700">
                                     <img src="/assets/Icon.png" alt="App Icon" className="h-12 w-12 mb-2" />
                                     <h3 className="text-lg font-bold text-white font-magic tracking-wider">The SpellCaster</h3>
-                                    <p className="text-slate-400 mt-1">Version {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0'}</p>
+                                    <p className="text-slate-400 mt-1">Version {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.3'}</p>
                                 </div>
 
                                 {/* Typography Credit */}
