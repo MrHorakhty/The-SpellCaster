@@ -69,11 +69,21 @@ Backup root is **`C:\Users\emire\OneDrive\Masaüstü\`** (not `Desktop`). Per AG
 - Older backups from this work were deleted by the user after each new backup was made.
 
 ## Next likely work
-- Continue mobile UI refinements (all behind `isMobile`).
+- Live device test of the Debug APK on the emulator / phone (build + boot `Pixel_7`, verify the new focus trap, safe-area padding, empty states, and Edit-mode stop button).
 - Release APK (`npm run tauri android build`, needs signing keystore).
 - Wake Lock, fullscreen guard on mobile, iOS (needs macOS + Apple account).
 
+## 2026-09-01 session — all 28 original + 9 follow-up issues fixed
+The edge-to-edge audit (see `TESTING_REPORT.md` + `TESTING_REPORT_FOLLOWUP.md`) is now fully resolved:
+- Audio/storage: blob URL revoke on stop + cleanup, fade-in reads `audio._fadeTargetVolume` so master-volume changes scale smoothly mid-fade, canonical `audio._soundId` replaces `startsWith` instance matching, smoke-guarded delete/dupe paths.
+- Data robustness: `readStoredData` (via `normalizeStoredData`) guarantees `sounds: []`; `boxSize`, theme + sound colors (`normalizeHex` / `getHueRotateFromColor` / glow) NaN-safe.
+- Mobile UI: no layout flash (`isMobile` is now a sync const), drawer got `role="dialog"` + `aria-modal` + `aria-label` + Escape + Tab focus trap + `safe-area-inset-bottom`, bottom-sheet modals get safe-area padding, empty-state hints in all sidebars.
+- Version: `vite.config.js` now `define`s `__APP_VERSION__` from `package.json` → About modal shows `0.1.3` (do not hardcode the version).
+- Edit mode: Stop-All + per-card stop work while editing (N4).
+- Verification: `npx vite build` ✓, `npx eslint src/App.jsx` → 0 errors / 3 warnings (pre-existing: `convertFileSrc`, `_`, `ev`).
+
 ## Session etiquette notes
-- Backup before changes (see Backups) — created `ttrpg-soundboard-backup-20260831-205925` at the start of this session's work.
+- Backup before changes (see Backups) — newest backups: `ttrpg-soundboard-backup-20260901-141214`, `ttrpg-soundboard-backup-20260901-141858`.
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
+- `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).

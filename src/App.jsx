@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+/* global __APP_VERSION__ */
 import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu } from 'lucide-react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { platform } from '@tauri-apps/plugin-os'
@@ -23,6 +24,24 @@ const DATA_VERSION = '3'
 
 // Read an array from localStorage only if it matches the current data version.
 // Stale or corrupt data is backed up and dropped in favour of the bundled defaults.
+// Normalizes each container to guarantee a valid `sounds` array (and sound `files`
+// arrays) so downstream `.flatMap`/`.map` calls never hit a null/undefined crash.
+const normalizeStoredData = (key, list) => {
+    if (!Array.isArray(list)) {
+        return list
+    }
+    const isCharData = key === 'ttrpg_characters'
+    return list.map(entry => {
+        if (!entry || typeof entry !== 'object') {
+            return isCharData ? { id: '', name: '', sounds: [] } : { category: '', sounds: [] }
+        }
+        const sounds = Array.isArray(entry.sounds)
+            ? entry.sounds.filter(s => s && typeof s === 'object')
+            : []
+        return { ...entry, sounds }
+    })
+}
+
 const readStoredData = (key, fallback) => {
     try {
         if (localStorage.getItem('ttrpg_data_version') !== DATA_VERSION) {
@@ -32,16 +51,19 @@ const readStoredData = (key, fallback) => {
             }
             localStorage.removeItem(key)
             localStorage.setItem('ttrpg_data_version', DATA_VERSION)
-            return fallback
+            return normalizeStoredData(key, fallback)
         }
         const raw = localStorage.getItem(key)
         if (raw === null) {
-            return fallback
+            return normalizeStoredData(key, fallback)
         }
         const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : fallback
+        if (!Array.isArray(parsed)) {
+            return normalizeStoredData(key, fallback)
+        }
+        return normalizeStoredData(key, parsed)
     } catch {
-        return fallback
+        return normalizeStoredData(key, fallback)
     }
 }
 
@@ -73,7 +95,17 @@ const getHueRotateFromColor = (color) => {
         color = '#84cc16'
     }
 
-    const hex = color.replace('#', '')
+    if (typeof color !== 'string') {
+        return 0
+    }
+    let hex = color.replace('#', '').trim()
+    if (hex.length === 3) {
+        hex = hex.split('').map(ch => ch + ch).join('')
+    }
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+        return 0
+    }
+
     const r = parseInt(hex.substring(0, 2), 16) / 255
     const g = parseInt(hex.substring(2, 4), 16) / 255
     const b = parseInt(hex.substring(4, 6), 16) / 255
@@ -236,9 +268,10 @@ const getGlowEffectStyle = (sound) => {
 
     const intensity = (sound.glowProminence || 0.5) * 0.5 + 0.1
     const spread = (sound.glowProminence || 0.5) * 10 + 5
+    const glowColor = /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(sound.color || '') ? sound.color : '#84cc16'
 
     return {
-        boxShadow: `0 0 ${spread}px ${intensity}px ${sound.color}, 0 4px 6px -1px rgba(0, 0, 0, 0.3)`
+        boxShadow: `0 0 ${spread}px ${intensity}px ${glowColor}, 0 4px 6px -1px rgba(0, 0, 0, 0.3)`
     }
 }
 
@@ -261,14 +294,17 @@ const applyFadeIn = (audio, targetVolume, fadeInSeconds) => {
     const steps = 20
     const stepDuration = (fadeInSeconds * 1000) / steps
     let step = 0
+    audio._fadeTargetVolume = targetVolume
     audio.volume = 0
 
     audio.fadeInInterval = setInterval(() => {
         step++
-        audio.volume = Math.min(targetVolume, targetVolume * step / steps)
+        const target = audio._fadeTargetVolume ?? targetVolume
+        audio.volume = Math.min(target, target * step / steps)
 
         if (step >= steps) {
-            audio.volume = targetVolume
+            audio.volume = target
+            audio._fadeTargetVolume = undefined
             clearInterval(audio.fadeInInterval)
             audio.fadeInInterval = null
         }
@@ -327,21 +363,53 @@ function App() {
     const [environmentSounds, setEnvironmentSounds] = useState(() => {
         return readStoredData('ttrpg_environment', data.environmentSounds)
     })
-    const [platformType, setPlatformType] = useState('web')
-    const [isMobile, setIsMobile] = useState(false)
-    const [isPanelOpen, setIsPanelOpen] = useState(false)
-
-    useEffect(() => {
+    const isMobile = (() => {
         if (isTauri) {
-            try {
-                const currentPlatform = platform()
-                setPlatformType(currentPlatform)
-                setIsMobile(currentPlatform === 'android' || currentPlatform === 'ios')
-            } catch (error) {
-                console.error('Failed to detect platform:', error)
+            try { return platform() === 'android' || platform() === 'ios' } catch { return false }
+        }
+        return false
+    })()
+    const [isPanelOpen, setIsPanelOpen] = useState(false)
+    const drawerRef = useRef(null)
+    const drawerCloseButtonRef = useRef(null)
+
+    // Manage focus + focus trap while the mobile drawer is open
+    useEffect(() => {
+        if (!isPanelOpen) {
+            return
+        }
+        const focusable = drawerRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+        const first = focusable && focusable[0]
+        const last = focusable && focusable[focusable.length - 1]
+        if (drawerCloseButtonRef.current) {
+            drawerCloseButtonRef.current.focus()
+        } else if (first) {
+            first.focus()
+        }
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                setIsPanelOpen(false)
+                return
+            }
+            if (e.key !== 'Tab' || !focusable || focusable.length === 0) {
+                return
+            }
+            const focused = document.activeElement
+            if (e.shiftKey) {
+                if (focused === first || !drawerRef.current?.contains(focused)) {
+                    e.preventDefault()
+                    last.focus()
+                }
+            } else if (focused === last || !drawerRef.current?.contains(focused)) {
+                e.preventDefault()
+                first.focus()
             }
         }
-    }, [])
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+            document.removeEventListener('keydown', onKeyDown)
+        }
+    }, [isPanelOpen])
 
     const [tabType, setTabType] = useState('characters')
     const [activeTab, setActiveTab] = useState('')
@@ -446,7 +514,8 @@ function App() {
     // Box size state with localStorage persistence
     const [boxSize, setBoxSize] = useState(() => {
         const savedBoxSize = localStorage.getItem('boxSize')
-        return savedBoxSize ? parseFloat(savedBoxSize) : 1.0
+        const parsed = savedBoxSize ? parseFloat(savedBoxSize) : NaN
+        return Number.isFinite(parsed) ? Math.min(2, Math.max(0.5, parsed)) : 1.0
     })
 
     // Draft text for the box-size number input so multi-digit values can be typed freely
@@ -482,11 +551,13 @@ function App() {
 
     // Load icons for sounds
     useEffect(() => {
+        let cancelled = false
         const loadIcons = async () => {
-            const allSounds = [...characters.flatMap(char => char.sounds), ...environmentSounds.flatMap(env => env.sounds)]
+            const allSounds = [...characters.flatMap(char => char.sounds || []), ...environmentSounds.flatMap(env => env.sounds || [])]
             const newLoadedIcons = {}
-            
+
             for (const sound of allSounds) {
+                if (cancelled) return
                 if (sound.icon && !loadedIcons[sound.icon]) {
                     try {
                         const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
@@ -497,13 +568,14 @@ function App() {
                     }
                 }
             }
-            
-            if (Object.keys(newLoadedIcons).length > 0) {
+
+            if (!cancelled && Object.keys(newLoadedIcons).length > 0) {
                 setLoadedIcons(prev => ({ ...prev, ...newLoadedIcons }))
             }
         }
-        
+
         loadIcons()
+        return () => { cancelled = true }
     }, [characters, environmentSounds])
 
     // Load form icon
@@ -525,9 +597,11 @@ function App() {
 
     // Process recolored versions of icons whenever sounds, colors, or icons change
     useEffect(() => {
+        let cancelled = false
         const processTints = async () => {
-            const allSounds = [...characters.flatMap(char => char.sounds), ...environmentSounds.flatMap(env => env.sounds)]
+            const allSounds = [...characters.flatMap(char => char.sounds || []), ...environmentSounds.flatMap(env => env.sounds || [])]
             const tasks = allSounds.map(async (sound) => {
+                if (cancelled) return
                 if (!sound.icon || sound.color === '#84cc16') {
                     return
                 }
@@ -539,7 +613,7 @@ function App() {
 
                 const sourceUrl = loadedIcons[sound.icon] || `/assets/${sound.icon}`
                 const tintedUrl = await recolorImageToColor(sourceUrl, sound.color, sound.brightness)
-                if (tintedUrl) {
+                if (!cancelled && tintedUrl) {
                     setTintedIcons(prev => ({ ...prev, [key]: tintedUrl }))
                 }
             })
@@ -548,6 +622,7 @@ function App() {
         }
 
         processTints()
+        return () => { cancelled = true }
     }, [characters, environmentSounds, loadedIcons])
 
     // Recolor the icon preview in the sound modal when the tint changes
@@ -672,10 +747,16 @@ function App() {
         audioElementsRef.current.forEach((audio) => {
             if (audio && typeof audio.volume !== 'undefined') {
                 if (audio.fadeInInterval) {
-                    clearInterval(audio.fadeInInterval)
-                    audio.fadeInInterval = null
+                    // Mid-fade: scale the current level proportionally to the new
+                    // target and let the running ramp continue toward it, so a
+                    // master-volume change stays smooth instead of snapping flat.
+                    const oldTarget = audio._fadeTargetVolume ?? 1
+                    const fraction = oldTarget > 0 ? Math.min(1, Math.max(0, (audio.volume || 0) / oldTarget)) : 0
+                    audio._fadeTargetVolume = nowEnabled ? volume : 0
+                    audio.volume = Math.min(audio._fadeTargetVolume, fraction * audio._fadeTargetVolume)
+                } else {
+                    audio.volume = nowEnabled ? volume : 0
                 }
-                audio.volume = nowEnabled ? volume : 0
             }
         })
     }
@@ -718,11 +799,16 @@ function App() {
             icon: '',
             iconDisplayName: '',
             file: '',
+            files: [],
             color: '#84cc16',
+            brightness: 1,
             duration: 0,
             fadeIn: 0,
             fadeOut: 0,
-            loop: defaultLoop
+            loop: defaultLoop,
+            randomPlay: false,
+            glowEnabled: false,
+            glowProminence: 0.5
         })
         setIconPreview('')
 
@@ -796,10 +882,23 @@ function App() {
             return
         }
 
+        // Build the persisted file list from audioFiles as the single source of truth
+        // so added/removed files during the modal session are never lost.
+        const submitFiles = audioFiles.length > 0
+            ? normalizeStoredFileList(audioFiles.map(f => ({
+                name: f.storedName || f.name || f.url,
+                storedName: f.storedName || f.name || f.url,
+                url: f.url || f.storedName || f.name,
+                displayName: f.displayName || f.name
+            })))
+            : (soundFormData.files || [])
+
+        const payload = { ...soundFormData, files: submitFiles }
+
         if (editingSound) {
-            updateSound(editingSound.id, soundFormData)
+            updateSound(editingSound.id, payload)
         } else {
-            addSound(soundFormData)
+            addSound(payload)
         }
 
         setShowSoundModal(false)
@@ -829,15 +928,17 @@ function App() {
         if (tabType === 'characters' && activeCharacter) {
             setCharacters(prev => prev.map(character =>
                 character.id === currentActiveCharId
-                    ? { ...character, sounds: [...character.sounds, newSound] }
+                    ? { ...character, sounds: [...(character.sounds || []), newSound] }
                     : character
             ))
         } else if (tabType === 'environment' && activeEnvironmentCategory) {
             setEnvironmentSounds(prev => prev.map(category =>
                 category.category === currentActiveEnvId
-                    ? { ...category, sounds: [...category.sounds, newSound] }
+                    ? { ...category, sounds: [...(category.sounds || []), newSound] }
                     : category
             ))
+        } else {
+            console.error('addSound: no target container for sound', newSound.name)
         }
     }
 
@@ -859,7 +960,7 @@ function App() {
                 character.id === currentActiveCharId
                     ? {
                         ...character,
-                        sounds: character.sounds.map(sound =>
+                        sounds: (character.sounds || []).map(sound =>
                             sound.id === soundId ? { ...sound, ...updatedSound } : sound
                         )
                     }
@@ -870,12 +971,14 @@ function App() {
                 category.category === currentActiveEnvId
                     ? {
                         ...category,
-                        sounds: category.sounds.map(sound =>
+                        sounds: (category.sounds || []).map(sound =>
                             sound.id === soundId ? { ...sound, ...updatedSound } : sound
                         )
                     }
                     : category
             ))
+        } else {
+            console.error('updateSound: no target container for sound', soundId)
         }
     }
 
@@ -899,13 +1002,13 @@ function App() {
         if (containerType === 'character') {
             setCharacters(prev => prev.map(character =>
                 character.id === containerId
-                    ? { ...character, sounds: reorder(character.sounds) }
+                    ? { ...character, sounds: reorder(character.sounds || []) }
                     : character
             ))
         } else {
             setEnvironmentSounds(prev => prev.map(category =>
                 category.category === containerId
-                    ? { ...category, sounds: reorder(category.sounds) }
+                    ? { ...category, sounds: reorder(category.sounds || []) }
                     : category
             ))
         }
@@ -915,22 +1018,22 @@ function App() {
         stopSoundInstances(soundId)
 
         const isCharacterSound = characters.some(character =>
-            character.sounds.some(sound => sound.id === soundId)
+            (character.sounds || []).some(sound => sound.id === soundId)
         )
 
         if (isCharacterSound) {
             setCharacters(prev => prev.map(character =>
-                character.sounds.some(sound => sound.id === soundId)
+                (character.sounds || []).some(sound => sound.id === soundId)
                     ? {
                         ...character,
-                        sounds: character.sounds.filter(sound => sound.id !== soundId)
+                        sounds: (character.sounds || []).filter(sound => sound.id !== soundId)
                     }
                     : character
             ))
         } else {
             setEnvironmentSounds(prev => prev.map(category => ({
                 ...category,
-                sounds: category.sounds.filter(sound => sound.id !== soundId)
+                sounds: (category.sounds || []).filter(sound => sound.id !== soundId)
             })))
         }
     }
@@ -1049,11 +1152,20 @@ function App() {
                 await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
             } else {
                 // Web environment - fallback to localStorage
-                return new Promise((resolve) => {
+                return new Promise((resolve, reject) => {
                     const reader = new FileReader()
                     reader.onload = (e) => {
-                        localStorage.setItem(`sound_file_${fileName}`, e.target.result)
-                        resolve()
+                        try {
+                            localStorage.setItem(`sound_file_${fileName}`, e.target.result)
+                            resolve()
+                        } catch (err) {
+                            console.error('Failed to store file (quota exceeded?):', fileName, err)
+                            reject(err)
+                        }
+                    }
+                    reader.onerror = () => {
+                        console.error('Failed to read file:', fileName)
+                        reject(new Error('File read failed'))
                     }
                     reader.readAsDataURL(file)
                 })
@@ -1230,7 +1342,11 @@ function App() {
     const deleteCharacter = (characterId) => {
         const character = characters.find(c => c.id === characterId)
         if (character) {
-            character.sounds.forEach(sound => stopSoundInstances(sound.id))
+            (character.sounds || []).forEach(sound => {
+                stopSoundInstances(sound.id)
+                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
+                if (sound.icon) removeFileFromLocalStorage(sound.icon)
+            })
         }
 
         setCharacters(prev => prev.filter(character => character.id !== characterId))
@@ -1275,16 +1391,42 @@ function App() {
         backgroundSettingsRef.current = newSettings
         setBackgroundSettings(newSettings)
         applyBackgroundSettings(newSettings)
-        localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
+        try {
+            localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
+        } catch (err) {
+            console.error('Failed to save background settings:', err)
+        }
     }
 
     const handleBoxSizeChange = (newSize) => {
         setBoxSize(newSize)
-        localStorage.setItem('boxSize', newSize.toString())
+        try {
+            localStorage.setItem('boxSize', newSize.toString())
+        } catch (err) {
+            console.error('Failed to save box size:', err)
+        }
+    }
+
+    // Normalize a color to a safe 6-digit hex string, supporting 3-digit (#abc) input.
+    // Returns a fallback (#090d16) for any invalid value so theme utilities never
+    // produce NaN colors or crash on an object/empty input.
+    const normalizeHex = (color) => {
+        if (typeof color !== 'string') {
+            return '#090d16'
+        }
+        let hex = color.replace('#', '').trim()
+        if (hex.length === 3) {
+            hex = hex.split('').map(ch => ch + ch).join('')
+        }
+        if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+            return '#090d16'
+        }
+        return `#${hex.toLowerCase()}`
     }
 
     const generateThemePalette = (baseColor) => {
-        const hex = baseColor.replace('#', '')
+        const primary = normalizeHex(baseColor)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
@@ -1294,26 +1436,27 @@ function App() {
         const compB = 255 - b
         const complementary = `#${compR.toString(16).padStart(2, '0')}${compG.toString(16).padStart(2, '0')}${compB.toString(16).padStart(2, '0')}`
 
-        const triadic1 = adjustHue(baseColor, 120)
-        const triadic2 = adjustHue(baseColor, 240)
+        const triadic1 = adjustHue(primary, 120)
+        const triadic2 = adjustHue(primary, 240)
 
-        const darker = darkenColor(baseColor, 0.3)
-        const lighter = lightenColor(baseColor, 0.2)
+        const darker = darkenColor(primary, 0.3)
+        const lighter = lightenColor(primary, 0.2)
 
         return {
-            primary: baseColor,
+            primary,
             complementary,
             triadic1,
             triadic2,
             darker,
             lighter,
-            text: getTextColor(baseColor),
-            border: getBorderColor(baseColor)
+            text: getTextColor(primary),
+            border: getBorderColor(primary)
         }
     }
 
     const adjustHue = (color, degrees) => {
-        const hex = color.replace('#', '')
+        const primary = normalizeHex(color)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
@@ -1326,7 +1469,8 @@ function App() {
     }
 
     const darkenColor = (color, amount) => {
-        const hex = color.replace('#', '')
+        const primary = normalizeHex(color)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
@@ -1335,7 +1479,8 @@ function App() {
     }
 
     const lightenColor = (color, amount) => {
-        const hex = color.replace('#', '')
+        const primary = normalizeHex(color)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
@@ -1344,7 +1489,8 @@ function App() {
     }
 
     const getTextColor = (color) => {
-        const hex = color.replace('#', '')
+        const primary = normalizeHex(color)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
@@ -1353,16 +1499,17 @@ function App() {
     }
 
     const getBorderColor = (color) => {
-        const hex = color.replace('#', '')
+        const primary = normalizeHex(color)
+        const hex = primary.replace('#', '')
         const r = parseInt(hex.substring(0, 2), 16)
         const g = parseInt(hex.substring(2, 4), 16)
         const b = parseInt(hex.substring(4, 6), 16)
         const brightness = (r * 299 + g * 587 + b * 114) / 1000
 
         if (brightness > 128) {
-            return darkenColor(color, 0.2)
+            return darkenColor(primary, 0.2)
         } else {
-            return lightenColor(color, 0.2)
+            return lightenColor(primary, 0.2)
         }
     }
 
@@ -1377,7 +1524,8 @@ function App() {
         root.style.setProperty('--theme-border', '#334155')
 
         if (theme && theme !== 'default') {
-            const palette = generateThemePalette(theme.primary || theme)
+            const primaryColor = (typeof theme === 'string') ? theme : (theme.primary ?? '#090d16')
+            const palette = generateThemePalette(primaryColor)
 
             root.style.setProperty('--theme-bg-primary', palette.darker)
             root.style.setProperty('--theme-bg-secondary', palette.primary)
@@ -1466,13 +1614,17 @@ function App() {
                 const updatedSettings = {
                     ...backgroundSettingsRef.current,
                     imagePreview: event.target.result,
-                    imageFile: file,
+                    imageFile: null,
                     isLoading: false
                 }
                 backgroundSettingsRef.current = updatedSettings
                 setBackgroundSettings(updatedSettings)
                 applyBackgroundSettings(updatedSettings)
-                localStorage.setItem('backgroundSettings', JSON.stringify(updatedSettings))
+                try {
+                    localStorage.setItem('backgroundSettings', JSON.stringify(updatedSettings))
+                } catch (err) {
+                    console.error('Failed to save background settings:', err)
+                }
             }
             reader.onerror = () => {
                 alert('Error loading image file')
@@ -1482,7 +1634,11 @@ function App() {
                 }
                 backgroundSettingsRef.current = errorSettings
                 setBackgroundSettings(errorSettings)
-                localStorage.setItem('backgroundSettings', JSON.stringify(errorSettings))
+                try {
+                    localStorage.setItem('backgroundSettings', JSON.stringify(errorSettings))
+                } catch (err) {
+                    console.error('Failed to save background settings:', err)
+                }
             }
             reader.readAsDataURL(file)
         }
@@ -1546,7 +1702,11 @@ function App() {
     const deleteCategory = (categoryName) => {
         const category = environmentSounds.find(e => e.category === categoryName)
         if (category) {
-            category.sounds.forEach(sound => stopSoundInstances(sound.id))
+            (category.sounds || []).forEach(sound => {
+                stopSoundInstances(sound.id)
+                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
+                if (sound.icon) removeFileFromLocalStorage(sound.icon)
+            })
         }
 
         setEnvironmentSounds(prev => prev.filter(category => category.category !== categoryName))
@@ -1622,11 +1782,13 @@ function App() {
         const displayName = fileToPlay.displayName || fileToPlay.name || fileToPlay.url || ''
 
         let soundUrl
+        let createdBlobUrl = null
         const storedFile = fileNameKey ? await getFileFromLocalStorage(fileNameKey) : null
         if (storedFile) {
             soundUrl = storedFile
         } else if (fileToPlay.file && typeof fileToPlay.file === 'object' && fileToPlay.file instanceof Blob) {
             soundUrl = URL.createObjectURL(fileToPlay.file)
+            createdBlobUrl = soundUrl
         } else if (displayName) {
             const fallbackKey = fileToPlay.url || fileToPlay.storedName || fileToPlay.name
             const fallbackFile = fallbackKey ? await getFileFromLocalStorage(fallbackKey) : null
@@ -1638,6 +1800,8 @@ function App() {
         const audio = new Audio(soundUrl)
         audio.loop = false
         audio.volume = masterVolume
+        audio._blobUrl = createdBlobUrl
+        audio._soundId = soundKey
 
         const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         audioElementsRef.current.set(audioInstanceKey, audio)
@@ -1656,6 +1820,11 @@ function App() {
             }
             if (audioEl.timer) {
                 clearTimeout(audioEl.timer)
+            }
+
+            if (audioEl._blobUrl) {
+                URL.revokeObjectURL(audioEl._blobUrl)
+                audioEl._blobUrl = null
             }
 
             audioElementsRef.current.delete(instanceKey)
@@ -1695,6 +1864,9 @@ function App() {
             // native looping causes (decoder flush + re-seek at the boundary).
             // For very short clips the 0.25s lead-in would cut them down to a
             // tiny loop, so never rewind before 98% of the full length.
+            // Fade-in is applied only on the initial play to avoid a volume dip
+            // at every loop boundary.
+            let firstLoopPlay = true
             audio.addEventListener('timeupdate', () => {
                 if (audio.stopped) {
                     return
@@ -1705,7 +1877,8 @@ function App() {
                 const rewindThreshold = Math.max(audio.duration - 0.25, audio.duration * 0.98)
                 if (audio.currentTime >= rewindThreshold) {
                     audio.currentTime = 0
-                    if (sound.fadeIn > 0) {
+                    if (firstLoopPlay && sound.fadeIn > 0) {
+                        firstLoopPlay = false
                         applyFadeIn(audio, masterVolume, sound.fadeIn)
                     }
                 }
@@ -1717,7 +1890,8 @@ function App() {
                     return
                 }
                 audio.currentTime = 0
-                if (sound.fadeIn > 0) {
+                if (firstLoopPlay && sound.fadeIn > 0) {
+                    firstLoopPlay = false
                     applyFadeIn(audio, masterVolume, sound.fadeIn)
                 }
                 audio.play().catch(() => {})
@@ -1747,7 +1921,7 @@ function App() {
     }
 
     const isSoundPlaying = (soundId) => {
-        return Object.keys(soundInstances).some(key => key.startsWith(`${soundId}_`))
+        return Array.from(audioElementsRef.current.values()).some(audio => audio._soundId === soundId)
     }
 
     // Instantly stop an audio instance and remove it from tracking
@@ -1775,6 +1949,11 @@ function App() {
         audio.pause()
         audio.currentTime = 0
 
+        if (audio._blobUrl) {
+            URL.revokeObjectURL(audio._blobUrl)
+            audio._blobUrl = null
+        }
+
         audioElementsRef.current.delete(instanceKey)
 
         setSoundInstances(prev => {
@@ -1787,21 +1966,17 @@ function App() {
     // Stop every playing instance of a sound, regardless of edit mode
     const stopSoundInstances = (soundId) => {
         Array.from(audioElementsRef.current.entries())
-            .filter(([key]) => key.startsWith(`${soundId}_`))
+            .filter(([, audio]) => audio._soundId === soundId)
             .forEach(([instanceKey, audio]) => {
                 stopAudioInstance(instanceKey, audio)
             })
     }
 
     const stopSound = (sound) => {
-        if (editMode) return
-
         stopSoundInstances(sound.id)
     }
 
     const stopAllSounds = () => {
-        if (editMode) return
-
         const audioInstances = Array.from(audioElementsRef.current.entries())
 
         audioInstances.forEach(([instanceKey, audio]) => {
@@ -1819,12 +1994,20 @@ function App() {
 
     // Auto-save Characters to localStorage whenever they change
     useEffect(() => {
-        localStorage.setItem('ttrpg_characters', JSON.stringify(characters))
+        try {
+            localStorage.setItem('ttrpg_characters', JSON.stringify(characters))
+        } catch (err) {
+            console.error('Failed to save characters:', err)
+        }
     }, [characters])
 
     // Auto-save Environment Sounds to localStorage whenever they change
     useEffect(() => {
-        localStorage.setItem('ttrpg_environment', JSON.stringify(environmentSounds))
+        try {
+            localStorage.setItem('ttrpg_environment', JSON.stringify(environmentSounds))
+        } catch (err) {
+            console.error('Failed to save environment:', err)
+        }
     }, [environmentSounds])
 
     useEffect(() => {
@@ -1894,7 +2077,11 @@ function App() {
                         const dx = e.clientX - dragRef.current.startX
                         const dy = e.clientY - dragRef.current.startY
                         if (Math.abs(dx) + Math.abs(dy) < 4) return
-                        e.target.releasePointerCapture(e.pointerId)
+                        try {
+                            e.target.releasePointerCapture(e.pointerId)
+                        } catch {
+                            // ignore if capture was already released
+                        }
                         const moveHandler = (ev) => {
                             const allCards = document.querySelectorAll('[data-sound-card]')
                             let foundTarget = null
@@ -1913,10 +2100,12 @@ function App() {
                                 setDragOverSoundId(foundTarget)
                             }
                         }
-                        const upHandler = (ev) => {
+                        const endDrag = (committed) => {
                             document.removeEventListener('pointermove', moveHandler)
                             document.removeEventListener('pointerup', upHandler)
-                            if (dragRef.current.currentTargetId) {
+                            document.removeEventListener('pointercancel', onDocCancel)
+                            window.removeEventListener('blur', onDocBlur)
+                            if (committed && dragRef.current.currentTargetId) {
                                 moveSound(
                                     dragRef.current.draggedId,
                                     dragRef.current.currentTargetId,
@@ -1928,8 +2117,19 @@ function App() {
                             setDragOverSoundId(null)
                             dragRef.current = null
                         }
+                        const upHandler = (ev) => {
+                            endDrag(true)
+                        }
+                        const onDocCancel = () => {
+                            endDrag(false)
+                        }
+                        const onDocBlur = () => {
+                            endDrag(false)
+                        }
                         document.addEventListener('pointermove', moveHandler)
                         document.addEventListener('pointerup', upHandler)
+                        document.addEventListener('pointercancel', onDocCancel)
+                        window.addEventListener('blur', onDocBlur)
                     }}
                     onClick={() => {
                         if (!editMode) playSound(sound)
@@ -2027,7 +2227,7 @@ function App() {
                         )}
 
                         {/* Stop Button */}
-                        {!editMode && isPlaying && (
+                        {isPlaying && (
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation()
@@ -2145,6 +2345,12 @@ function App() {
                     )}
 
                     <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
+                        {isCharSection && characters.length === 0 && (
+                            <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                        )}
+                        {!isCharSection && environmentSounds.length === 0 && (
+                            <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
+                        )}
                         {isCharSection
                             ? characters.map(c => (
                                 <div key={c.id} className="relative group">
@@ -2237,7 +2443,7 @@ function App() {
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={stopAllSounds}
-                                    disabled={Object.keys(soundInstances).length === 0 || editMode}
+                                    disabled={Object.keys(soundInstances).length === 0}
                                     className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                                     title="Stop All Sounds"
                                 >
@@ -2392,10 +2598,29 @@ function App() {
                                         type="number"
                                         min="0"
                                         max="100"
-                                        value={Math.round(masterVolume * 100)}
+                                        value={volumeFocused ? volumeInput : Math.round(masterVolume * 100)}
+                                        onFocus={() => {
+                                            setVolumeInput(Math.round(masterVolume * 100).toString())
+                                            setVolumeFocused(true)
+                                        }}
                                         onChange={(e) => {
-                                            const value = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) / 100
-                                            updateMasterVolume(value)
+                                            const raw = e.target.value
+                                            setVolumeInput(raw)
+                                            const parsed = parseInt(raw, 10)
+                                            if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+                                                updateMasterVolume(parsed / 100)
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            setVolumeFocused(false)
+                                            const parsed = parseInt(volumeInput, 10)
+                                            const clamped = Number.isNaN(parsed) ? 100 : Math.max(0, Math.min(100, parsed))
+                                            updateMasterVolume(clamped / 100)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.currentTarget.blur()
+                                            }
                                         }}
                                         className="w-14 bg-dark-700 border border-dark-600 rounded-lg px-2 py-1 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-lime-500"
                                         title="Volume (%)"
@@ -2456,7 +2681,7 @@ function App() {
                             {/* Stop All Sounds Button */}
                             <button
                                 onClick={stopAllSounds}
-                                disabled={Object.keys(soundInstances).length === 0 || editMode}
+                                disabled={Object.keys(soundInstances).length === 0}
                                 className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-dark-700 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                                 title="Stop All Sounds"
                             >
@@ -2586,16 +2811,20 @@ function App() {
                                         <div className="flex items-center justify-between mb-3">
                                             <h2
                                                 onClick={() => {
-                                                    if (!editMode) return
-                                                    activeCharacter ? handleEditCharacter(activeCharacter.id) : handleEditCategory(activeEnvironmentCategory?.category)
+                                                    if (!editMode || isPanelOpen) return
+                                                    if (activeCharacter) {
+                                                        handleEditCharacter(activeCharacter.id)
+                                                    } else if (activeEnvironmentCategory?.category) {
+                                                        handleEditCategory(activeEnvironmentCategory.category)
+                                                    }
                                                 }}
                                                 className={`text-sm font-semibold truncate ${editMode ? 'cursor-pointer text-lime-400' : ''}`}
                                             >
                                                 {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category}
                                             </h2>
                                             <button
-                                                onClick={() => setEditMode(!editMode)}
-                                                className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors z-[60] ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                                onClick={() => { if (!isPanelOpen) setEditMode(!editMode) }}
+                                                className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors z-30 ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'} ${isPanelOpen ? 'pointer-events-none opacity-40' : ''}`}
                                                 title={editMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
                                             >
                                                 <Edit size={16} />
@@ -2617,15 +2846,23 @@ function App() {
                                         <div
                                             className="fixed inset-0 z-40"
                                             onClick={() => setIsPanelOpen(false)}
+                                            aria-hidden="true"
                                         ></div>
-                                        <div className="fixed top-0 left-0 bottom-0 w-[80%] max-w-[320px] bg-dark-950 z-50 shadow-2xl flex flex-col drawer-slide"
+                                        <div
+                                            ref={drawerRef}
+                                            role="dialog"
+                                            aria-modal="true"
+                                            aria-label="Navigation"
+                                            className="fixed top-0 left-0 bottom-0 w-[80%] max-w-[320px] bg-dark-950 z-50 shadow-2xl flex flex-col drawer-slide"
                                             style={{ paddingTop: 'max(env(safe-area-inset-top), 8px)', opacity: 0.9 }}>
                                             <div className="flex items-center justify-between p-3 border-b border-dark-700">
                                                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Navigate</h3>
                                                 <button
+                                                    ref={drawerCloseButtonRef}
                                                     onClick={() => setIsPanelOpen(false)}
                                                     className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-300 hover:bg-dark-700 transition-colors"
                                                     title="Close"
+                                                    aria-label="Close navigation"
                                                 >
                                                     <X size={20} />
                                                 </button>
@@ -2690,7 +2927,13 @@ function App() {
                                                 )}
                                             </div>
 
-                                            <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-4 space-y-1.5">
+                                            <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-4 space-y-1.5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
+                                                {tabType === 'characters' && characters.length === 0 && (
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — open Edit Mode to add one.</p>
+                                                )}
+                                                {tabType === 'environment' && environmentSounds.length === 0 && (
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
+                                                )}
                                                 {tabType === 'characters' && characters.map(char => (
                                                     <button
                                                         key={char.id}
@@ -2753,6 +2996,12 @@ function App() {
                             </div>
 
                             <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
+                                {tabType === 'characters' && characters.length === 0 && (
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                                )}
+                                {tabType === 'environment' && environmentSounds.length === 0 && (
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
+                                )}
                                 {tabType === 'characters' && characters.map(char => (
                                     <div key={char.id} className="relative group">
                                         <button
@@ -2839,7 +3088,7 @@ function App() {
 
             {/* Sound Modal */}
             {showSoundModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
@@ -2999,7 +3248,7 @@ function App() {
                                                     </div>
 
                                                     {audioFiles.map((fileObj, index) => (
-                                                        <div key={index} className="flex items-center justify-between bg-dark-800 rounded-lg p-2">
+                                                        <div key={fileObj.storedName || fileObj.name || index} className="flex items-center justify-between bg-dark-800 rounded-lg p-2">
                                                             <div className="flex items-center space-x-2">
                                                                 <audio controls src={fileObj.preview} className="w-32" />
                                                                 <span className="text-xs text-slate-400 truncate max-w-[120px]">{fileObj.displayName || fileObj.name}</span>
@@ -3162,7 +3411,7 @@ function App() {
 
             {/* Character Modal */}
             {showCharacterModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
@@ -3217,7 +3466,7 @@ function App() {
 
             {/* Category Modal */}
             {showCategoryModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
@@ -3272,12 +3521,18 @@ function App() {
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
                         <div className="p-6">
                             <h2 className="text-xl font-bold mb-4">Confirm Delete</h2>
                             <p className="text-slate-300 mb-6">
-                                Are you sure you want to delete this {deleteType}? This action cannot be undone.
+                                Are you sure you want to delete <span className="text-white font-semibold">
+                                    {(deleteType === 'character'
+                                        ? (characters.find(c => c.id === itemToDelete)?.name || itemToDelete)
+                                        : deleteType === 'category'
+                                            ? (environmentSounds.find(e => e.category === itemToDelete)?.category || itemToDelete)
+                                            : ([...characters.flatMap(c => c.sounds || []), ...environmentSounds.flatMap(e => e.sounds || [])].find(s => s.id === itemToDelete)?.name || itemToDelete))}
+                                </span>? This action cannot be undone.
                             </p>
                             <div className="flex justify-end space-x-3">
                                 <button
@@ -3300,7 +3555,7 @@ function App() {
 
             {/* Settings Modal */}
             {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
@@ -3482,7 +3737,7 @@ function App() {
 
             {/* About & Credits Modal */}
             {showAboutModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
@@ -3500,7 +3755,7 @@ function App() {
                                 <div className="flex flex-col items-center justify-center p-4 bg-dark-900 rounded-lg border border-dark-700">
                                     <img src="/assets/Icon.png" alt="App Icon" className="h-12 w-12 mb-2" />
                                     <h3 className="text-lg font-bold text-white font-magic tracking-wider">The SpellCaster</h3>
-                                    <p className="text-slate-400 mt-1">Version 0.1.0</p>
+                                    <p className="text-slate-400 mt-1">Version {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.0'}</p>
                                 </div>
 
                                 {/* Typography Credit */}
