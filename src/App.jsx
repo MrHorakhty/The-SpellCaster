@@ -50,12 +50,24 @@ const normalizeStoredData = (key, list) => {
                             : []
                     }))
                 : []
+            const characters = Array.isArray(entry.characters)
+                ? entry.characters
+                    .filter(c => c && typeof c === 'object')
+                    .map(c => ({
+                        ...c,
+                        sounds: Array.isArray(c.sounds)
+                            ? c.sounds.filter(s => s && typeof s === 'object')
+                            : []
+                    }))
+                : []
             return {
                 ...entry,
+                mode: entry.mode === 'characters' ? 'characters' : 'environment',
                 sounds: [],
                 categories: categories.length || !sounds.length
                     ? categories
-                    : [{ category: 'Default', sounds }]
+                    : [{ category: 'Default', sounds }],
+                characters
             }
         }
         return { ...entry, sounds }
@@ -485,6 +497,7 @@ function App() {
     const [activeEnvironmentId, setActiveEnvironmentId] = useState('')
     const [activeGroupId, setActiveGroupId] = useState('')
     const [activeGroupCategory, setActiveGroupCategory] = useState('')
+    const [activeGroupCharacterId, setActiveGroupCharacterId] = useState('')
 
     // Switch the top-level tab (Characters/Environment/Groups) while preserving
     // each tab's own last selection. The per-tab selections live in
@@ -817,11 +830,17 @@ function App() {
     const activeEnvironmentCategory = environmentSounds.find(cat => cat.category === currentActiveEnvId)
     const activeGroup = groups.find(group => group.id === currentActiveGroupId)
     const activeGroupCategoryObj = (activeGroup?.categories || []).find(cat => cat.category === activeGroupCategory) || null
+    const activeGroupCharacter = (activeGroup?.characters || []).find(c => c.id === activeGroupCharacterId) || null
 
     // Select a category inside the currently-open custom group (mirrors the
     // Environment tab's per-category selection).
     const selectGroupCategory = (categoryName) => {
         setActiveGroupCategory(categoryName)
+    }
+
+    // Select a character inside the currently-open custom group.
+    const selectGroupCharacter = (characterId) => {
+        setActiveGroupCharacterId(characterId)
     }
 
     const enableAudio = () => {
@@ -1030,19 +1049,34 @@ function App() {
                     ? { ...category, sounds: [...(category.sounds || []), newSound] }
                     : category
             ))
-        } else if (tabType === 'groups' && activeGroup && activeGroupCategoryObj) {
-            setGroups(prev => prev.map(group =>
-                group.id === activeGroup.id
-                    ? {
-                        ...group,
-                        categories: (group.categories || []).map(cat =>
-                            cat.category === activeGroupCategory
-                                ? { ...cat, sounds: [...(cat.sounds || []), newSound] }
-                                : cat
-                        )
-                    }
-                    : group
-            ))
+        } else if (tabType === 'groups' && activeGroup) {
+            if (activeGroup.mode === 'characters' && activeGroupCharacter) {
+                setGroups(prev => prev.map(group =>
+                    group.id === activeGroup.id
+                        ? {
+                            ...group,
+                            characters: (group.characters || []).map(ch =>
+                                ch.id === activeGroupCharacterId
+                                    ? { ...ch, sounds: [...(ch.sounds || []), newSound] }
+                                    : ch
+                            )
+                        }
+                        : group
+                ))
+            } else if (activeGroupCategoryObj) {
+                setGroups(prev => prev.map(group =>
+                    group.id === activeGroup.id
+                        ? {
+                            ...group,
+                            categories: (group.categories || []).map(cat =>
+                                cat.category === activeGroupCategory
+                                    ? { ...cat, sounds: [...(cat.sounds || []), newSound] }
+                                    : cat
+                            )
+                        }
+                        : group
+                ))
+            }
         } else {
             console.error('addSound: no target container for sound', newSound.name)
         }
@@ -1083,24 +1117,44 @@ function App() {
                     }
                     : category
             ))
-        } else if (tabType === 'groups' && activeGroup && activeGroupCategoryObj) {
-            setGroups(prev => prev.map(group =>
-                group.id === activeGroup.id
-                    ? {
-                        ...group,
-                        categories: (group.categories || []).map(cat =>
-                            cat.category === activeGroupCategory
-                                ? {
-                                    ...cat,
-                                    sounds: (cat.sounds || []).map(sound =>
-                                        sound.id === soundId ? { ...sound, ...updatedSound } : sound
-                                    )
-                                }
-                                : cat
-                        )
-                    }
-                    : group
-            ))
+        } else if (tabType === 'groups' && activeGroup) {
+            if (activeGroup.mode === 'characters' && activeGroupCharacter) {
+                setGroups(prev => prev.map(group =>
+                    group.id === activeGroup.id
+                        ? {
+                            ...group,
+                            characters: (group.characters || []).map(ch =>
+                                ch.id === activeGroupCharacterId
+                                    ? {
+                                        ...ch,
+                                        sounds: (ch.sounds || []).map(sound =>
+                                            sound.id === soundId ? { ...sound, ...updatedSound } : sound
+                                        )
+                                    }
+                                    : ch
+                            )
+                        }
+                        : group
+                ))
+            } else if (activeGroupCategoryObj) {
+                setGroups(prev => prev.map(group =>
+                    group.id === activeGroup.id
+                        ? {
+                            ...group,
+                            categories: (group.categories || []).map(cat =>
+                                cat.category === activeGroupCategory
+                                    ? {
+                                        ...cat,
+                                        sounds: (cat.sounds || []).map(sound =>
+                                            sound.id === soundId ? { ...sound, ...updatedSound } : sound
+                                        )
+                                    }
+                                    : cat
+                            )
+                        }
+                        : group
+                ))
+            }
         } else {
             console.error('updateSound: no target container for sound', soundId)
         }
@@ -1142,6 +1196,19 @@ function App() {
                     }
                     : group
             ))
+        } else if (containerType === 'groupCharacter') {
+            setGroups(prev => prev.map(group =>
+                group.id === activeGroup?.id
+                    ? {
+                        ...group,
+                        characters: (group.characters || []).map(ch =>
+                            ch.id === containerId
+                                ? { ...ch, sounds: reorder(ch.sounds || []) }
+                                : ch
+                        )
+                    }
+                    : group
+            ))
         } else {
             setEnvironmentSounds(prev => prev.map(category =>
                 category.category === containerId
@@ -1171,6 +1238,8 @@ function App() {
             const isGroupSound = groups.some(group =>
                 (group.categories || []).some(cat =>
                     (cat.sounds || []).some(sound => sound.id === soundId)
+                ) || (group.characters || []).some(ch =>
+                    (ch.sounds || []).some(sound => sound.id === soundId)
                 )
             )
             if (isGroupSound) {
@@ -1179,6 +1248,10 @@ function App() {
                     categories: (group.categories || []).map(cat => ({
                         ...cat,
                         sounds: (cat.sounds || []).filter(sound => sound.id !== soundId)
+                    })),
+                    characters: (group.characters || []).map(ch => ({
+                        ...ch,
+                        sounds: (ch.sounds || []).filter(sound => sound.id !== soundId)
                     }))
                 })))
             } else {
@@ -1211,6 +1284,8 @@ function App() {
             deleteGroup(itemToDelete)
         } else if (deleteType === 'groupCategory') {
             deleteGroupCategory(itemToDelete)
+        } else if (deleteType === 'groupCharacter') {
+            deleteGroupCharacter(itemToDelete)
         }
 
         setShowDeleteConfirm(false)
@@ -1448,19 +1523,37 @@ function App() {
             return
         }
 
-        const nameTaken = characters.some(character =>
-            character.name === trimmedName && (!editingCharacter || character.id !== editingCharacter.id)
-        )
-
-        if (nameTaken) {
-            alert(`A character named "${trimmedName}" already exists.`)
-            return
+        if (tabType === 'groups' && activeGroup) {
+            const scopeChars = activeGroup.characters || []
+            const nameTaken = scopeChars.some(ch =>
+                ch.name === trimmedName && (!editingCharacter || ch.id !== editingCharacter.id)
+            )
+            if (nameTaken) {
+                alert(`A character named "${trimmedName}" already exists in this group.`)
+                return
+            }
+        } else {
+            const nameTaken = characters.some(character =>
+                character.name === trimmedName && (!editingCharacter || character.id !== editingCharacter.id)
+            )
+            if (nameTaken) {
+                alert(`A character named "${trimmedName}" already exists.`)
+                return
+            }
         }
 
         if (editingCharacter) {
-            updateCharacter(editingCharacter.id, characterFormData)
+            if (tabType === 'groups' && activeGroup) {
+                updateGroupCharacter(editingCharacter.id, trimmedName)
+            } else {
+                updateCharacter(editingCharacter.id, characterFormData)
+            }
         } else {
-            addCharacter(characterFormData)
+            if (tabType === 'groups' && activeGroup) {
+                addGroupCharacter(characterFormData)
+            } else {
+                addCharacter(characterFormData)
+            }
         }
 
         setShowCharacterModal(false)
@@ -1489,10 +1582,48 @@ function App() {
         if (isSplitView) setActiveCharacterId(newId)
     }
 
+    const addGroupCharacter = (characterData) => {
+        if (!activeGroup) return
+        const newId = `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+        const newCharacter = {
+            id: newId,
+            name: characterData.name.trim(),
+            sounds: []
+        }
+
+        setGroups(prev => prev.map(group =>
+            group.id === activeGroup.id
+                ? { ...group, characters: [...(group.characters || []), newCharacter] }
+                : group
+        ))
+        setActiveGroupCharacterId(newId)
+    }
+
+    const updateGroupCharacter = (characterId, newName) => {
+        if (!activeGroup) return
+        setGroups(prev => prev.map(group =>
+            group.id === activeGroup.id
+                ? {
+                    ...group,
+                    characters: (group.characters || []).map(ch =>
+                        ch.id === characterId ? { ...ch, name: newName } : ch
+                    )
+                }
+                : group
+        ))
+    }
+
     const handleDeleteCharacter = (characterId) => {
-        setItemToDelete(characterId)
-        setDeleteType('character')
-        setShowDeleteConfirm(true)
+        if (tabType === 'groups' && activeGroup) {
+            setItemToDelete(characterId)
+            setDeleteType('groupCharacter')
+            setShowDeleteConfirm(true)
+        } else {
+            setItemToDelete(characterId)
+            setDeleteType('character')
+            setShowDeleteConfirm(true)
+        }
     }
 
     const deleteCharacter = (characterId) => {
@@ -1512,6 +1643,27 @@ function App() {
         }
         if (activeCharacterId === characterId) {
             setActiveCharacterId('')
+        }
+    }
+
+    const deleteGroupCharacter = (characterId) => {
+        if (!activeGroup) return
+        const character = (activeGroup.characters || []).find(c => c.id === characterId)
+        if (character) {
+            (character.sounds || []).forEach(sound => {
+                stopSoundInstances(sound.id)
+                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
+                if (sound.icon) removeFileFromLocalStorage(sound.icon)
+            })
+        }
+
+        setGroups(prev => prev.map(group =>
+            group.id === activeGroup.id
+                ? { ...group, characters: (group.characters || []).filter(ch => ch.id !== characterId) }
+                : group
+        ))
+        if (activeGroupCharacterId === characterId) {
+            setActiveGroupCharacterId('')
         }
     }
 
@@ -1897,14 +2049,19 @@ function App() {
     }
 
     const handleEditCharacter = (characterId) => {
-        const character = characters.find(c => c.id === characterId)
-        if (!character) {
-            return
+        if (tabType === 'groups' && activeGroup) {
+            const character = (activeGroup.characters || []).find(c => c.id === characterId)
+            if (!character) return
+            setCharacterFormData({ name: character.name })
+            setEditingCharacter(character)
+            setShowCharacterModal(true)
+        } else {
+            const character = characters.find(c => c.id === characterId)
+            if (!character) return
+            setCharacterFormData({ name: character.name })
+            setEditingCharacter(character)
+            setShowCharacterModal(true)
         }
-
-        setCharacterFormData({ name: character.name })
-        setEditingCharacter(character)
-        setShowCharacterModal(true)
     }
 
     const handleEditCategory = (categoryName) => {
@@ -1977,8 +2134,10 @@ function App() {
         const newGroup = {
             id: newId,
             name: groupData.name.trim(),
+            mode: 'environment',
             sounds: [],
-            categories: []
+            categories: [],
+            characters: []
         }
         setGroups(prev => [...prev, newGroup])
     }
@@ -1992,7 +2151,7 @@ function App() {
     const deleteGroup = (groupId) => {
         const group = groups.find(g => g.id === groupId)
         if (group) {
-            ;[...(group.sounds || []), ...(group.categories || []).flatMap(cat => cat.sounds || [])].forEach(sound => {
+            ;[...(group.sounds || []), ...(group.categories || []).flatMap(cat => cat.sounds || []), ...(group.characters || []).flatMap(ch => ch.sounds || [])].forEach(sound => {
                 stopSoundInstances(sound.id)
                 ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
                 if (sound.icon) removeFileFromLocalStorage(sound.icon)
@@ -2302,14 +2461,62 @@ function App() {
     // default to the first category whenever the stored selection is missing.
     useEffect(() => {
         if (tabType === 'groups' && activeGroup) {
-            const cats = activeGroup.categories || []
-            if (cats.length && !cats.some(c => c.category === activeGroupCategory)) {
-                setActiveGroupCategory(cats[0].category)
-            } else if (!cats.length && activeGroupCategory) {
-                setActiveGroupCategory('')
+            const mode = activeGroup.mode || 'environment'
+            if (mode === 'environment') {
+                const cats = activeGroup.categories || []
+                if (cats.length && !cats.some(c => c.category === activeGroupCategory)) {
+                    setActiveGroupCategory(cats[0].category)
+                } else if (!cats.length && activeGroupCategory) {
+                    setActiveGroupCategory('')
+                }
+            } else {
+                const chars = activeGroup.characters || []
+                if (chars.length && !chars.some(c => c.id === activeGroupCharacterId)) {
+                    setActiveGroupCharacterId(chars[0].id)
+                } else if (!chars.length && activeGroupCharacterId) {
+                    setActiveGroupCharacterId('')
+                }
             }
         }
-    }, [tabType, activeGroup, activeGroupCategory])
+    }, [tabType, activeGroup, activeGroupCategory, activeGroupCharacterId])
+
+    // Toggle a group's mode between 'environment' and 'characters', CONVERTING
+    // the existing entries to the target representation:
+    //   environment -> characters: each category becomes a character (name + sounds kept)
+    //   characters  -> environment: each character becomes a category (name + sounds kept)
+    // The source array is cleared, so a group holds one representation at a time;
+    // names and sounds survive the round-trip (only container ids are regenerated).
+    const toggleGroupMode = (groupId) => {
+        setGroups(prev => prev.map(group => {
+            if (group.id !== groupId) return group
+            const convertingToCharacters = group.mode !== 'characters'
+            if (convertingToCharacters) {
+                const converted = (group.categories || []).map(cat => ({
+                    id: `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    name: cat.category,
+                    sounds: cat.sounds || []
+                }))
+                return {
+                    ...group,
+                    mode: 'characters',
+                    categories: [],
+                    characters: [...(group.characters || []), ...converted]
+                }
+            } else {
+                const converted = (group.characters || []).map(ch => ({
+                    id: `gcat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    category: ch.name,
+                    sounds: ch.sounds || []
+                }))
+                return {
+                    ...group,
+                    mode: 'environment',
+                    characters: [],
+                    categories: [...(group.categories || []), ...converted]
+                }
+            }
+        }))
+    }
 
     // Auto-save Characters to localStorage whenever they change
     useEffect(() => {
@@ -3066,7 +3273,16 @@ function App() {
                                         <span>Add Character</span>
                                     </button>
                                 )}
-                                {(tabType === 'environment' || tabType === 'groups') && (
+                                {tabType === 'groups' && activeGroup?.mode === 'characters' && (
+                                    <button
+                                        onClick={openAddCharacterModal}
+                                        className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                                    >
+                                        <User size={16} />
+                                        <span>Add Character</span>
+                                    </button>
+                                )}
+                                {(tabType === 'environment' || (tabType === 'groups' && activeGroup?.mode !== 'characters')) && (
                                     <button
                                         onClick={openAddCategoryModal}
                                         className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
@@ -3186,6 +3402,8 @@ function App() {
                                                         handleEditCharacter(activeCharacter.id)
                                                     } else if (activeEnvironmentCategory?.category) {
                                                         handleEditCategory(activeEnvironmentCategory.category)
+                                                    } else if (activeGroup?.mode === 'characters' && activeGroupCharacter) {
+                                                        handleEditCharacter(activeGroupCharacter.id)
                                                     } else if (activeGroupCategoryObj) {
                                                         handleEditCategory(activeGroupCategoryObj.category)
                                                     } else if (activeGroup) {
@@ -3194,7 +3412,7 @@ function App() {
                                                 }}
                                                 className={`text-sm font-semibold truncate ${editMode ? 'cursor-pointer text-lime-400' : ''}`}
                                             >
-                                                {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category || activeGroupCategoryObj?.category || activeGroup?.name}
+                                                {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category) || activeGroup?.name}
                                             </h2>
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
@@ -3207,10 +3425,10 @@ function App() {
                                             </div>
                                         </div>
                                         <div className={`grid gap-3 ${boxSize >= 1.5 ? 'grid-cols-1' : boxSize >= 0.7 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                                            {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || activeGroupCategoryObj?.sounds || []).map(sound => renderSoundCard(
+                                            {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.sounds : activeGroupCategoryObj?.sounds) || []).map(sound => renderSoundCard(
                                                 sound,
-                                                activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : 'group',
-                                                activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category || activeGroupCategory
+                                                activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : (activeGroup?.mode === 'characters' ? 'groupCharacter' : 'group'),
+                                                activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.id : activeGroupCategory)
                                             ))}
                                         </div>
                                     </div>
@@ -3283,6 +3501,24 @@ function App() {
                                                         ))}
                                                 </div>
 
+                                                {editMode && tabType === 'groups' && activeGroup && (
+                                                    <div className="flex mb-3 rounded-lg overflow-hidden border border-dark-600">
+                                                        <button
+                                                            onClick={() => { toggleGroupMode(activeGroup.id) }}
+                                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium min-h-[44px] transition-colors ${activeGroup.mode === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                                        >
+                                                            <User size={14} />
+                                                            <span>Characters</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { toggleGroupMode(activeGroup.id) }}
+                                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium min-h-[44px] transition-colors ${activeGroup.mode !== 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                                        >
+                                                            <Music size={14} />
+                                                            <span>Environment</span>
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 {editMode && (
                                                     <div className="space-y-2 mb-3">
                                                         {tabType === 'characters' ? (
@@ -3296,6 +3532,23 @@ function App() {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('characters')}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                >
+                                                                    <Plus size={16} className="shrink-0" />
+                                                                    <span>Add Sound</span>
+                                                                </button>
+                                                            </>
+                                                        ) : tabType === 'groups' && activeGroup?.mode === 'characters' ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={openAddCharacterModal}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                >
+                                                                    <User size={16} className="shrink-0" />
+                                                                    <span>Add Character</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => openAddSoundModal('groups')}
                                                                     className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
                                                                 >
                                                                     <Plus size={16} className="shrink-0" />
@@ -3348,7 +3601,10 @@ function App() {
                                                 {tabType === 'environment' && environmentSounds.length === 0 && (
                                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
                                                 )}
-                                                {tabType === 'groups' && (activeGroup?.categories || []).length === 0 && (
+                                                {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).length === 0 && (
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — open Edit Mode to add one.</p>
+                                                )}
+                                                {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).length === 0 && (
                                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'characters' && characters.map(char => (
@@ -3373,7 +3629,29 @@ function App() {
                                                         <span className="truncate">{cat.category}</span>
                                                     </button>
                                                 ))}
-                                                {tabType === 'groups' && (activeGroup?.categories || []).map(cat => (
+                                                {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).map(ch => (
+                                                    <div key={ch.id} className="relative">
+                                                        <button
+                                                            onClick={() => selectGroupCharacter(ch.id)}
+                                                            className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                                }`}
+                                                        >
+                                                            <User size={16} className="shrink-0" />
+                                                            <span className="truncate">{ch.name}</span>
+                                                        </button>
+                                                        {editMode && (
+                                                            <button
+                                                                onClick={() => handleDeleteCharacter(ch.id)}
+                                                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 min-h-[24px] min-w-[24px] flex items-center justify-center"
+                                                                title={`Delete Character: ${ch.name}`}
+                                                                aria-label={`Delete character ${ch.name}`}
+                                                            >
+                                                                <Trash2 size={10} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).map(cat => (
                                                     <div key={cat.category} className="relative">
                                                         <button
                                                             onClick={() => selectGroupCategory(cat.category)}
@@ -3455,6 +3733,25 @@ function App() {
                                 ))}
                             </div>
 
+                            {editMode && tabType === 'groups' && activeGroup && (
+                                <div className="flex mb-3 rounded-lg overflow-hidden border border-dark-600">
+                                    <button
+                                        onClick={() => toggleGroupMode(activeGroup.id)}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium min-h-[36px] transition-colors ${activeGroup.mode === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                    >
+                                        <User size={12} />
+                                        <span>Characters</span>
+                                    </button>
+                                    <button
+                                        onClick={() => toggleGroupMode(activeGroup.id)}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium min-h-[36px] transition-colors ${activeGroup.mode !== 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                                    >
+                                        <Music size={12} />
+                                        <span>Environment</span>
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                                 {tabType === 'characters' && characters.length === 0 && (
                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
@@ -3462,7 +3759,10 @@ function App() {
                                 {tabType === 'environment' && environmentSounds.length === 0 && (
                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
                                 )}
-                                {tabType === 'groups' && (activeGroup?.categories || []).length === 0 && (
+                                {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).length === 0 && (
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                                )}
+                                {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).length === 0 && (
                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
                                 )}
                                 {tabType === 'characters' && characters.map(char => (
@@ -3527,7 +3827,37 @@ function App() {
                                     </div>
                                 ))}
 
-                                {tabType === 'groups' && (activeGroup?.categories || []).map(cat => (
+                                {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).map(ch => (
+                                    <div key={ch.id} className="relative group">
+                                        <button
+                                            onClick={() => selectGroupCharacter(ch.id)}
+                                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                } ${editMode ? 'pt-8' : ''}`}
+                                        >
+                                            <User className="shrink-0" size={16} />
+                                            <span className="truncate">{ch.name}</span>
+                                        </button>
+                                        {editMode && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleDeleteCharacter(ch.id)}
+                                                    className="absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Delete Character"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEditCharacter(ch.id)}
+                                                    className="absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Edit Character"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                                {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).map(cat => (
                                     <div key={cat.category} className="relative group">
                                         <button
                                             onClick={() => selectGroupCategory(cat.category)}
@@ -3566,7 +3896,7 @@ function App() {
                         <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-6">
                             <div className="flex items-center justify-between gap-3 mb-4">
                                 <h2 className="text-xl font-semibold truncate">
-                                    {activeCharacter ? activeCharacter.name : (activeEnvironmentCategory?.category || activeGroupCategoryObj?.category || activeGroup?.name)}
+                                    {activeCharacter ? activeCharacter.name : (activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category) || activeGroup?.name)}
                                 </h2>
                                 {editMode && tabType === 'groups' && activeGroup && (
                                     <div className="flex items-center gap-2 shrink-0">
@@ -3588,10 +3918,10 @@ function App() {
                                 )}
                             </div>
                             <div className="flex flex-wrap gap-4">
-                                {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || activeGroupCategoryObj?.sounds || []).map(sound => renderSoundCard(
+                                {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.sounds : activeGroupCategoryObj?.sounds) || []).map(sound => renderSoundCard(
                                     sound,
-                                    activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : 'group',
-                                    activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category || activeGroupCategory
+                                    activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : (activeGroup?.mode === 'characters' ? 'groupCharacter' : 'group'),
+                                    activeCharacter ? activeCharacter.id : activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.id : activeGroupCategory)
                                 ))}
                             </div>
                         </div>
@@ -4104,7 +4434,9 @@ function App() {
                                                 ? (groups.find(g => g.id === itemToDelete)?.name || itemToDelete)
                                                 : deleteType === 'groupCategory'
                                                     ? (activeGroup?.categories?.find(c => c.category === itemToDelete)?.category || itemToDelete)
-                                                    : ([...characters.flatMap(c => c.sounds || []), ...environmentSounds.flatMap(e => e.sounds || []), ...groups.flatMap(g => [...(g.sounds || []), ...(g.categories || []).flatMap(cat => cat.sounds || [])])].find(s => s.id === itemToDelete)?.name || itemToDelete))}
+                                                    : deleteType === 'groupCharacter'
+                                                        ? (activeGroup?.characters?.find(c => c.id === itemToDelete)?.name || itemToDelete)
+                                                        : ([...characters.flatMap(c => c.sounds || []), ...environmentSounds.flatMap(e => e.sounds || []), ...groups.flatMap(g => [...(g.sounds || []), ...(g.categories || []).flatMap(cat => cat.sounds || []), ...(g.characters || []).flatMap(ch => ch.sounds || [])])].find(s => s.id === itemToDelete)?.name || itemToDelete))}
                                 </span>? This action cannot be undone.
                             </p>
                             <div className="flex justify-end space-x-3">

@@ -73,12 +73,12 @@ Added `switchTab(type)` + `selectItem(type, id)` helpers in `src/App.jsx`:
 
 ## Backups (Desktop / OneDrive Masaüstü)
 Backup root is **`C:\Users\emire\OneDrive\Masaüstü\`** (not `Desktop`). Per AGENTS.md, always back up before changes; exclusions: `node_modules`, `dist`, `.git`, `src-tauri/target`, `src-tauri/gen` (use bare dir names for `/XD` because PowerShell mangles full paths).
-- `ttrpg-soundboard-backup-20260903-141939` (newest — pre-groups-final-fixes; groups feature uncommitted).
+- `ttrpg-soundboard-backup-20260903-143404` (newest — pre group character/group mode toggle; groups feature + fixes uncommitted).
+- `ttrpg-soundboard-backup-20260903-141939` (pre rail-delete-badge fix).
 - Previous: `ttrpg-soundboard-backup-20260901-154654` (pre-#16 fix, groups not yet started).
 - Older backups from this work were deleted by the user after each new backup was made.
 
 ## Next likely work
-- Group feature fixes are now complete; remaining todo: lint + build + test on emulator and desktop for the full groups feature (if not already done this session).
 - Release APK (`npm run tauri android build`, needs signing keystore).
 - Wake Lock, fullscreen guard on mobile, iOS (needs macOS + Apple account).
 
@@ -95,35 +95,43 @@ The edge-to-edge audit (originally tracked in `TESTING_REPORT.md` + `TESTING_REP
 A third top-level entity type alongside Characters and Environment. Groups contain **categories** which contain sounds, allowing users to create custom thematic groupings (e.g. "Forests" group with "Ambience" and "Monsters" categories).
 
 ### Data model
-- `ttrpg_groups` localStorage key: array of `{ id, name, categories: [{ id, category, sounds: [...] }] }`.
-- `normalizeStoredData` handles `isGroupData`: migrates legacy flat `sounds` into a `'Default'` category; guarantees `categories` array exists.
+- `ttrpg_groups` localStorage key: array of `{ id, name, mode, categories: [{ id, category, sounds: [...] }], characters: [{ id, name, sounds: [...] }] }`.
+- `mode` is `'characters'` | `'environment'` (default `'environment'`); each group independently remembers its mode.
+- `normalizeStoredData` handles `isGroupData`: migrates legacy flat `sounds` into a `'Default'` category; guarantees `categories` and `characters` arrays exist; defaults `mode` to `'environment'` for legacy data (no data reset needed).
 - `DATA_VERSION = '3'` (bumped to trigger migration from v2 data).
 
 ### State (all in App.jsx)
-- `groups` state (line ~487): the groups array.
+- `groups` state: the groups array.
 - `activeGroup` (derived): the currently selected group object.
-- `activeGroupCategory` (state, line ~487): the selected category name within the group.
-- `activeGroupCategoryObj` (derived, line ~819): the category object matching `activeGroupCategory`.
-- `selectGroupCategory(name)` (line ~823): sets `activeGroupCategory`.
-- `switchTab(type)` + `selectItem(type, id)` helpers (line ~680 area): handle tab switching with per-tab memory, used by rail/drawer/sidebar.
-- Repair effect (lines ~2302-2311): resets `activeGroupCategory` if it becomes stale.
+- `activeGroupCategory` (state): the selected category name within the group.
+- `activeGroupCategoryObj` (derived): the category object matching `activeGroupCategory`.
+- `activeGroupCharacterId` (state): the selected character id within the group.
+- `activeGroupCharacter` (derived): the character object matching `activeGroupCharacterId`.
+- `selectGroupCategory(name)`: sets `activeGroupCategory`.
+- `selectGroupCharacter(id)`: sets `activeGroupCharacterId`.
+- `toggleGroupMode(groupId)`: **converts** the group between `'characters'` and `'environment'` representation (NOT a view-hide toggle):
+  - environment → characters: each category is **converted into a character** (`name` ← `category`, sounds carried over), then `categories` is cleared.
+  - characters → environment: each character is **converted into a category** (`category` ← `name`, sounds carried over), then `characters` is cleared.
+  - So a group holds one representation at a time; names/sounds survive the round-trip (only container ids regenerate, e.g. `Ambience` category becomes an `Ambience` character with a Person icon).
+- `switchTab(type)` + `selectItem(type, id)` helpers: handle tab switching with per-tab memory, used by rail/drawer/sidebar.
+- Repair effect: keeps selection valid — for environment mode defaults to first category; for characters mode defaults to first character.
 
 ### Handlers
-- `addGroup` (line ~1974): creates new group. **⚠️ BUG: does not init `categories: []` — relies on `normalizeStoredData` at next reload.**
-- `handleAddGroupCategory` / `addCategory` (line ~1864): adds category to active group.
-- `updateCategory` (line ~1835): renames group category.
-- `deleteGroupCategory` (line ~2006): deletes a category from a group (with confirm modal).
-- `handleDeleteGroup` (line ~1974 area): deletes an entire group (with confirm modal).
-- Sound ops (`handleSoundFormSubmit/addSound`, `updateSound`, `moveSound`, `deleteSound`): all branch on `containerType === 'group'` to route into the active group's active category.
+- `addGroup`: creates new group with `mode: 'environment'`, `categories: []`, `characters: []`.
+- `addCategory` / `updateCategory` / `deleteGroupCategory`: route into group categories (environment mode).
+- `addGroupCharacter` / `updateGroupCharacter` / `deleteGroupCharacter`: route into group characters (characters mode).
+- `handleCharacterFormSubmit`: branches — group character mode validates/adds/edits within the group's `characters`; otherwise top-level characters.
+- `handleDeleteCharacter` / `handleEditCharacter`: branch on `tabType === 'groups'` to target group characters.
+- Sound ops (`addSound`, `updateSound`, `moveSound`, `deleteSound`, `deleteGroup`, confirm modal): branch on group `mode` — characters mode routes into `group.characters[n].sounds` (containerType `'groupCharacter'`), environment mode into `group.categories[n].sounds` (containerType `'group'`).
 
 ### UI locations
-- **Mobile rail** (lines ~3142-3173): group tabs as initial-letter buttons + delete badges (editMode) + "Add New Group" button.
-- **Mobile drawer** (lines ~3227-3398): group tabs in tab bar with delete badges; Add Category + Add Sound chips when group tab active; category rows with select/delete; empty state text.
-- **Desktop sidebar** (lines ~3402-3558): group tabs in top strip with delete badges; category rows with select/delete/edit.
-- **Desktop edit-mode bar** (lines ~3050-3095): Add Category shown for `environment || groups`; Add Group always shown.
-- **Mobile heading** (line ~3196): shows group category name (fallback to group name). Has Delete Group trash in editMode — **⚠️ user wants this removed when drawer is closed; only show delete in drawer context**.
-- **Sound grids** (mobile ~3218, desktop ~3588): read `activeGroupCategoryObj?.sounds`.
-- **Confirm delete modal**: used for both group deletion and group-category deletion, naming the target correctly.
+- **Mobile rail**: group tabs as initial-letter buttons + delete badges (editMode + drawer open) + "Add New Group" button.
+- **Mobile drawer**: group tabs with delete badges; **segmented Characters/Environment toggle** (editMode, group tab active) with User/Music icons (44px); Add Character/Add Category + Add Sound chips branch on group mode; character rows (User icon) vs category rows (Music icon) with delete badges; mode-specific empty states.
+- **Desktop sidebar**: group tabs with delete badges; **segmented Characters/Environment toggle** (editMode, group tab active); character rows vs category rows with select/delete/edit.
+- **Desktop edit-mode bar**: Add Character shown for group-character mode or top-level characters; Add Category shown for environment or group-environment mode; Add Group always shown.
+- **Mobile + desktop headings**: show group character name (characters mode) or group category name (environment mode), fallback to group name.
+- **Sound grids**: read `activeGroupCharacter?.sounds` (characters mode) or `activeGroupCategoryObj?.sounds` (environment mode).
+- **Confirm delete modal**: names group deletion, group-category deletion, and group-character deletion targets correctly.
 
 ### CDP test verification (previous session — both desktop + Pixel_7 emulator)
 - Group creation (Forests) ✓
@@ -135,21 +143,31 @@ A third top-level entity type alongside Characters and Environment. Groups conta
 - Mobile drawer: Add Category chip for group tab ✓
 - Mobile heading shows group-category name + delete trash ✓
 - Add Group button present in rail ✓
+- **Character/Group mode toggle**: added this session, code-verified (lint + build) but NOT yet run on emulator/desktop.
 
 ### Remaining known issues
 1. ~~`addGroup` doesn't init `categories: []`~~ — FIXED (now inits `categories: []`).
 2. ~~Mobile heading trash should be hidden when drawer is closed; group/category deletion should only happen via drawer delete badges and category row delete buttons~~ — FIXED (heading trash removed; drawer shows group-tab + category-row delete badges).
 3. ~~`EDGE_TO_EDGE_REPORT.md`~~ — DELETED (all actionable items fixed).
+4. ~~Character/Group mode toggle button highlighting was inverted (both lime in environment mode, neither green in characters mode)~~ — FIXED: Characters is green when `mode==='characters'`, Environment green when `mode!=='characters'` (exactly one always green), in both drawer + desktop sidebar.
+5. ~~Toggle was view-hide only (categories vanished instead of converting)~~ — FIXED: toggle now **converts** entries between category ↔ character representations.
+6. ~~Character/Group mode toggle needs on-device verification~~ — **VERIFIED on Pixel_7 emulator via WebView CDP (2026-09-03)**:
+   - Button highlighting: exactly one green at a time — Environment lime in env mode, Characters lime in char mode (checked via computed background of the `flex-1` segmented buttons).
+   - Conversion environment→characters: seed group Forest [Ambience(Wind), Monsters] → after toggle `mode:'characters'`, `categories:[]`, `characters:[{name:Ambience,sounds:[Wind]},{name:Monsters,sounds:[]}]` — sounds carried over.
+   - Conversion characters→environment: round-trips back to categories keeping the Wind sound.
+   - Test scripts cleaned up; adb forward removed.
 
-### Fixes applied this session (2026-09-03)
-- `addGroup` (App.jsx:1980) now initializes `categories: []` so new groups have a valid category array immediately (no longer relies on `normalizeStoredData` on reload).
-- **Mobile heading trash removed** (App.jsx:~3200) — no Delete Group button visible when the drawer is closed.
-- **Drawer group-category rows** now have delete badges (App.jsx:~3376, `handleDeleteCategory`, branches to `groupCategory` with confirm modal).
-- **Mobile rail group-tab delete badges** gated to `editMode && isPanelOpen` (App.jsx:~3153) — hidden while the bar is closed, shown when the drawer is open.
-- Drawer group-tab delete badges (App.jsx:~3272, already exist) only render inside the open drawer.
+### Fixes/features applied this session (2026-09-03)
+- `addGroup` (App.jsx:~1980) now initializes `categories: []` so new groups have a valid category array immediately.
+- **Mobile heading trash removed** — no Delete Group button visible when the drawer is closed.
+- **Drawer group-category rows** now have delete badges (`handleDeleteCategory`, branches to `groupCategory` with confirm modal).
+- **Mobile rail group-tab delete badges** gated to `editMode && isPanelOpen` — hidden while the bar is closed, shown when the drawer is open.
+- Drawer group-tab delete badges only render inside the open drawer.
 - Desktop sidebar group delete badges are **unchanged** (always visible — desktop has no drawer; user scope was mobile-only).
-- Verification: `npx eslint src/App.jsx` → 0 errors / 3 pre-existing warnings; `npx vite build` succeeds.
-- Backup: `ttrpg-soundboard-backup-20260903-141939`.
+- **NEW: Character/Group mode toggle for groups** — per-group `mode`, segmented toggle in drawer + sidebar, branching Add buttons, character/category rows, grid/heading routing, and full group-character CRUD. Backup: `ttrpg-soundboard-backup-20260903-143404`.
+- **Group mode toggle fixes (same day)**:
+  - **Button highlighting fixed** — the Characters toggle button had inverted logic (both pills lime in environment mode / neither green in characters mode). Now exactly one is green: Characters green when `mode==='characters'`, Environment green when `mode!=='characters'` (drawer App.jsx:~3479 + desktop sidebar App.jsx:~3712).
+  - **Toggle now CONVERTS data** instead of hiding — per user clarification, switching a group to Characters mode converts each category into a character (name+sounds kept, e.g. `Ambience` category → `Ambience` character); switching back converts characters into categories. `toggleGroupMode` (App.jsx:~2483) clears the source array and regenerates container ids; names/sounds survive round-trip.
 
 ## Emulator test (2026-09-01) — Pixel_7 / Android 17, all PASS
 Driven headlessly via WebView CDP (debug WebView exposes `tcp:9223`). App rebuilt+installed (`app-universal-debug.apk`), data restored to seed afterwards.
@@ -165,9 +183,19 @@ Driven headlessly via WebView CDP (debug WebView exposes `tcp:9223`). App rebuil
 - Logcat: no JS exceptions/`Error playing sound`/crashes for the app PID. Only benign WebView `BLUETOOTH_CONNECT permission missing` warnings (no BLUETOOTH perm declared; speaker playback unaffected).
 - Testing notes: `adb exec-out screencap` pipe to file corrupts binary in PowerShell — use `adb shell screencap -p /sdcard/x.png` + `adb pull`. Sound cards are `<div role="button">`, NOT `<button>`.
 
+## Emulator test (2026-09-03) — group mode toggle CONVERSION + HIGHLIGHT
+Driven headlessly via WebView CDP. The running debug app serves the frontend from the Vite dev server (port 5173) — the served `/src/App.jsx` was confirmed to contain the reworked `toggleGroupMode` (conversion) before testing, so the running app reflected the latest code (no reinstall needed).
+- CDP plumbing on this machine: emulator console `5554` ≠ app pid. The abstract socket is **`webview_devtools_remote_<app-pid>`** (the app pid from `adb shell ps -A | grep spellcaster`), NOT `_5554`. Command: `adb forward tcp:9223 localabstract:webview_devtools_remote_<pid>` → `curl http://127.0.0.1:9223/json`. Navigation via `Runtime.evaluate` clicking real `<button>` elements by aria-label / innerText.
+- Seed: `localStorage.ttrpg_groups` = `[{id:'gt1', name:'Forest', mode:'environment', categories:[{category:'Ambience', sounds:[Wind]},{category:'Monsters', sounds:[]}], characters:[]}]`, then `Page.reload`.
+- Drive sequence: rail "Enter Edit Mode" → drawer "Open navigation" → drawer group tab "Forest" → segmented toggle clicks.
+- **Highlight ✓**: exactly one segmented button lime at a time — Env lime in env mode, Characters lime in char mode (via `bg-lime-600` class + computed background of the `flex-1` buttons).
+- **Conversion ✓ (env→characters)**: after clicking "Characters", storage = `mode:'characters'`, `categories:[]`, `characters:[{name:'Ambience',sounds:[Wind]},{name:'Monsters',sounds:[]}]` — categories became characters, `Wind` sound carried over.
+- **Conversion ✓ (characters→env)**: after clicking "Environment", storage = `mode:'environment'`, `categories:[{category:'Ambience',sounds:[Wind]},{category:'Monsters',sounds:[]}]`, `characters:[]` — round-trips cleanly preserving names + sounds (container ids regenerate each toggle).
+- Test scripts cleaned up from `%TEMP%\opencode`; `adb forward` removed afterwards.
+
 ## Session etiquette notes
-- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260903-141939`.
+- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260903-143404`.
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
 - `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).
-- Changes are UNCOMMITED — `git status` shows 4 modified files: `index.html`, `AndroidManifest.xml`, `src/App.jsx`, `src/data.json`. Plus the now-deleted `EDGE_TO_EDGE_REPORT.md`.
+- Changes are UNCOMMITED — `git status` shows modified: `index.html`, `AndroidManifest.xml`, `src/App.jsx`, `src/data.json`.
