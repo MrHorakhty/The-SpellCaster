@@ -9,11 +9,12 @@ Read this at the start of the next session to recover context.
 Turn the "SpellCaster" TTRPG soundboard (a **Tauri 2.x cross-platform app** wrapping a **React 19 + Vite + Tailwind** frontend) into an installable **Android phone app**, with the UI scaled to a comfortable mobile/phone layout. All mobile changes are **gated behind `isMobile`** (`platform()` from `@tauri-apps/plugin-os`) so desktop/web stay untouched. See `MOBILE_ONLY_INSTRUCTIONS.md`.
 
 ## Project facts
-- Frontend: React 19 + Vite, entry `src/main.jsx`, main logic in `src/App.jsx` (~3400 lines, single monolithic component).
+- Frontend: React 19 + Vite, entry `src/main.jsx`, main logic in `src/App.jsx` (~4370 lines, single monolithic component).
 - Backend: Rust/Tauri 2.x (`src-tauri/`). Uses `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage abstraction:
   - `isTauri` path → `@tauri-apps/plugin-fs` writing to `BaseDirectory.AppData` (read back via `convertFileSrc`).
   - web path → `localStorage` keys `sound_file_*` as data-URLs.
+- Data localStorage keys: `ttrpg_characters`, `ttrpg_environments`, `ttrpg_groups`, `ttrpg_themes`, `ttrpg_data_version`.
 - App package `com.mrhorakhty.thespellcaster.debug`; main activity `com.mrhorakhty.thespellcaster.MainActivity`; adb at `C:\Users\emire\AppData\Local\Android\Sdk\platform-tools\adb.exe`.
 - `src-tauri/tauri.conf.json`: `devUrl: http://localhost:5173`, identifier `com.mrhorakhty.thespellcaster`.
 
@@ -72,12 +73,12 @@ Added `switchTab(type)` + `selectItem(type, id)` helpers in `src/App.jsx`:
 
 ## Backups (Desktop / OneDrive Masaüstü)
 Backup root is **`C:\Users\emire\OneDrive\Masaüstü\`** (not `Desktop`). Per AGENTS.md, always back up before changes; exclusions: `node_modules`, `dist`, `.git`, `src-tauri/target`, `src-tauri/gen` (use bare dir names for `/XD` because PowerShell mangles full paths).
-- `ttrpg-soundboard-backup-20260901-154654` (newest — pre-#16 fix)
-- `ttrpg-soundboard-backup-20260901-143516` (pre-emulator-test)
+- `ttrpg-soundboard-backup-20260903-141939` (newest — pre-groups-final-fixes; groups feature uncommitted).
+- Previous: `ttrpg-soundboard-backup-20260901-154654` (pre-#16 fix, groups not yet started).
 - Older backups from this work were deleted by the user after each new backup was made.
 
 ## Next likely work
-- Live device test of the Debug APK on the emulator / phone (build + boot `Pixel_7`, verify the new focus trap, safe-area padding, empty states, and Edit-mode stop button).
+- Group feature fixes are now complete; remaining todo: lint + build + test on emulator and desktop for the full groups feature (if not already done this session).
 - Release APK (`npm run tauri android build`, needs signing keystore).
 - Wake Lock, fullscreen guard on mobile, iOS (needs macOS + Apple account).
 
@@ -90,8 +91,69 @@ The edge-to-edge audit (originally tracked in `TESTING_REPORT.md` + `TESTING_REP
 - Edit mode: Stop-All + per-card stop work while editing (N4).
 - Verification: `npx vite build` ✓, `npx eslint src/App.jsx` → 0 errors / 3 warnings (pre-existing: `convertFileSrc`, `_`, `ev`).
 
+## Groups feature (started 2026-09-01, continued later — UNCOMMITTED)
+A third top-level entity type alongside Characters and Environment. Groups contain **categories** which contain sounds, allowing users to create custom thematic groupings (e.g. "Forests" group with "Ambience" and "Monsters" categories).
+
+### Data model
+- `ttrpg_groups` localStorage key: array of `{ id, name, categories: [{ id, category, sounds: [...] }] }`.
+- `normalizeStoredData` handles `isGroupData`: migrates legacy flat `sounds` into a `'Default'` category; guarantees `categories` array exists.
+- `DATA_VERSION = '3'` (bumped to trigger migration from v2 data).
+
+### State (all in App.jsx)
+- `groups` state (line ~487): the groups array.
+- `activeGroup` (derived): the currently selected group object.
+- `activeGroupCategory` (state, line ~487): the selected category name within the group.
+- `activeGroupCategoryObj` (derived, line ~819): the category object matching `activeGroupCategory`.
+- `selectGroupCategory(name)` (line ~823): sets `activeGroupCategory`.
+- `switchTab(type)` + `selectItem(type, id)` helpers (line ~680 area): handle tab switching with per-tab memory, used by rail/drawer/sidebar.
+- Repair effect (lines ~2302-2311): resets `activeGroupCategory` if it becomes stale.
+
+### Handlers
+- `addGroup` (line ~1974): creates new group. **⚠️ BUG: does not init `categories: []` — relies on `normalizeStoredData` at next reload.**
+- `handleAddGroupCategory` / `addCategory` (line ~1864): adds category to active group.
+- `updateCategory` (line ~1835): renames group category.
+- `deleteGroupCategory` (line ~2006): deletes a category from a group (with confirm modal).
+- `handleDeleteGroup` (line ~1974 area): deletes an entire group (with confirm modal).
+- Sound ops (`handleSoundFormSubmit/addSound`, `updateSound`, `moveSound`, `deleteSound`): all branch on `containerType === 'group'` to route into the active group's active category.
+
+### UI locations
+- **Mobile rail** (lines ~3142-3173): group tabs as initial-letter buttons + delete badges (editMode) + "Add New Group" button.
+- **Mobile drawer** (lines ~3227-3398): group tabs in tab bar with delete badges; Add Category + Add Sound chips when group tab active; category rows with select/delete; empty state text.
+- **Desktop sidebar** (lines ~3402-3558): group tabs in top strip with delete badges; category rows with select/delete/edit.
+- **Desktop edit-mode bar** (lines ~3050-3095): Add Category shown for `environment || groups`; Add Group always shown.
+- **Mobile heading** (line ~3196): shows group category name (fallback to group name). Has Delete Group trash in editMode — **⚠️ user wants this removed when drawer is closed; only show delete in drawer context**.
+- **Sound grids** (mobile ~3218, desktop ~3588): read `activeGroupCategoryObj?.sounds`.
+- **Confirm delete modal**: used for both group deletion and group-category deletion, naming the target correctly.
+
+### CDP test verification (previous session — both desktop + Pixel_7 emulator)
+- Group creation (Forests) ✓
+- Category creation (Ambience, Monsters) ✓
+- Sound routing (sounds in group-category display in grid) ✓
+- Tab persistence (Characters ↔ Groups switching preserves selection) ✓
+- Delete badges on group tabs → confirm modal ✓
+- Category delete in drawer → confirm modal ✓
+- Mobile drawer: Add Category chip for group tab ✓
+- Mobile heading shows group-category name + delete trash ✓
+- Add Group button present in rail ✓
+
+### Remaining known issues
+1. ~~`addGroup` doesn't init `categories: []`~~ — FIXED (now inits `categories: []`).
+2. ~~Mobile heading trash should be hidden when drawer is closed; group/category deletion should only happen via drawer delete badges and category row delete buttons~~ — FIXED (heading trash removed; drawer shows group-tab + category-row delete badges).
+3. ~~`EDGE_TO_EDGE_REPORT.md`~~ — DELETED (all actionable items fixed).
+
+### Fixes applied this session (2026-09-03)
+- `addGroup` (App.jsx:1980) now initializes `categories: []` so new groups have a valid category array immediately (no longer relies on `normalizeStoredData` on reload).
+- **Mobile heading trash removed** (App.jsx:~3200) — no Delete Group button visible when the drawer is closed.
+- **Drawer group-category rows** now have delete badges (App.jsx:~3376, `handleDeleteCategory`, branches to `groupCategory` with confirm modal).
+- **Mobile rail group-tab delete badges** gated to `editMode && isPanelOpen` (App.jsx:~3153) — hidden while the bar is closed, shown when the drawer is open.
+- Drawer group-tab delete badges (App.jsx:~3272, already exist) only render inside the open drawer.
+- Desktop sidebar group delete badges are **unchanged** (always visible — desktop has no drawer; user scope was mobile-only).
+- Verification: `npx eslint src/App.jsx` → 0 errors / 3 pre-existing warnings; `npx vite build` succeeds.
+- Backup: `ttrpg-soundboard-backup-20260903-141939`.
+
 ## Emulator test (2026-09-01) — Pixel_7 / Android 17, all PASS
 Driven headlessly via WebView CDP (debug WebView exposes `tcp:9223`). App rebuilt+installed (`app-universal-debug.apk`), data restored to seed afterwards.
+- Groups feature also tested on emulator: group creation, category CRUD, sound routing, delete confirm modals, drawer/rail UI all verified.
 - About modal shows `Version 0.1.3`; Settings → Legal & Credits modal has `env(safe-area-inset-bottom)` padding.
 - Drawer: `role="dialog"`/`aria-modal="true"`/`aria-label="Navigation"`, close button receives focus, Escape closes, `calc(env(safe-area-inset-bottom) + 16px)` on scroll container.
 - Edit toggle intentionally inert while drawer open (#17); works after closing.
@@ -104,7 +166,8 @@ Driven headlessly via WebView CDP (debug WebView exposes `tcp:9223`). App rebuil
 - Testing notes: `adb exec-out screencap` pipe to file corrupts binary in PowerShell — use `adb shell screencap -p /sdcard/x.png` + `adb pull`. Sound cards are `<div role="button">`, NOT `<button>`.
 
 ## Session etiquette notes
-- Backup before changes (see Backups) — newest backup: `ttrpg-soundboard-backup-20260901-154654`.
+- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260903-141939`.
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
 - `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).
+- Changes are UNCOMMITED — `git status` shows 4 modified files: `index.html`, `AndroidManifest.xml`, `src/App.jsx`, `src/data.json`. Plus the now-deleted `EDGE_TO_EDGE_REPORT.md`.

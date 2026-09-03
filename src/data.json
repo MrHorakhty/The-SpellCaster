@@ -242,5 +242,6 @@
         { "id": "env_7", "name": "Fire Crackle", "type": "Fire", "icon": "Fire_Crackling.png", "file": "Fire_Crackle.mp3", "color": "#f93b16", "duration": 0, "fadeIn": 0.0, "fadeOut": 0.0, "loop": true, "isEnvironmental": true }
       ]
     }
-  ]
+  ],
+  "groups": []
 }
