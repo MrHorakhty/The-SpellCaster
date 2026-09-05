@@ -409,6 +409,16 @@ function App() {
     const drawerRef = useRef(null)
     const drawerCloseButtonRef = useRef(null)
 
+    const desktopTabBarRef = useRef(null)
+    const [desktopTabBarScrollable, setDesktopTabBarScrollable] = useState(false)
+
+    // Split-panel source pill rows get the same conditional themed scrollbar as
+    // the single-view desktop tab bar (scrollbar only when the row overflows).
+    const splitCharTabBarRef = useRef(null)
+    const splitEnvTabBarRef = useRef(null)
+    const [splitCharTabBarScrollable, setSplitCharTabBarScrollable] = useState(false)
+    const [splitEnvTabBarScrollable, setSplitEnvTabBarScrollable] = useState(false)
+
     // Manage focus + focus trap while the mobile drawer is open
     useEffect(() => {
         if (!isPanelOpen) {
@@ -499,6 +509,109 @@ function App() {
     const [activeGroupCategory, setActiveGroupCategory] = useState('')
     const [activeGroupCharacterId, setActiveGroupCharacterId] = useState('')
 
+    // Split-view per-panel selection. Each panel (Characters/Environment) keeps
+    // its own independent selection so the two panels never clobber each other,
+    // and so they don't interfere with the single-tab character/env/group state.
+    // A selection is either a top-level item {kind:'top', id} or a group item
+    // {kind:'group', groupId, itemId}.
+    const [splitCharSelection, setSplitCharSelection] = useState(null)
+    const [splitEnvSelection, setSplitEnvSelection] = useState(null)
+
+    // Which "source" each split panel is showing: 'top' (top-level members) or a
+    // group id (that group's members). Mirrors the single-view sidebar tabs.
+    const [splitCharSource, setSplitCharSource] = useState('top')
+    const [splitEnvSource, setSplitEnvSource] = useState('top')
+
+    // When a modal (sound/category/character add or edit) is opened from split
+    // view targeting a group item, this holds that group so the shared form
+    // submit/delete handlers route into the right group instead of the
+    // single-tab activeGroup. Cleared after the modal closes.
+    const [groupModalTargetId, setGroupModalTargetId] = useState(null)
+
+    // When opening the sound modal from a split-view group item, this captures
+    // the exact group + container so add/update sounds route into it.
+    const [splitSoundTarget, setSplitSoundTarget] = useState(null)
+
+    // When renaming a group character/category from split view, this holds the
+    // owning group so the shared character/category form submit routes correctly.
+    const [groupEditTargetId, setGroupEditTargetId] = useState(null)
+
+    // When deleting a group character/category from split view, this holds the
+    // owning group so the delete-confirm modal routes correctly.
+    const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState(null)
+
+    // Desktop group bar: show a themed scrollbar only when the horizontal tab
+    // bar overflows (otherwise there's no hint that it's scrollable).
+    // Re-measures whenever groups change or the split view toggles (which
+    // unmounts/remounts the bar).
+    useEffect(() => {
+        const bar = desktopTabBarRef.current
+        if (!bar) {
+            return
+        }
+        const update = () => {
+            setDesktopTabBarScrollable(bar.scrollWidth > bar.clientWidth)
+        }
+        update()
+        const observer = new ResizeObserver(update)
+        observer.observe(bar)
+        window.addEventListener('resize', update)
+        return () => {
+            observer.disconnect()
+            window.removeEventListener('resize', update)
+        }
+    }, [groups, isSplitView])
+
+    // Same conditional-scrollbar behavior for the split-panel source pill rows.
+    useEffect(() => {
+        const bars = [splitCharTabBarRef.current, splitEnvTabBarRef.current]
+        const sets = [setSplitCharTabBarScrollable, setSplitEnvTabBarScrollable]
+        const update = () => {
+            if (bars[0]) sets[0](bars[0].scrollWidth > bars[0].clientWidth)
+            if (bars[1]) sets[1](bars[1].scrollWidth > bars[1].clientWidth)
+        }
+        update()
+        const observer = new ResizeObserver(update)
+        bars.forEach(bar => { if (bar) observer.observe(bar) })
+        window.addEventListener('resize', update)
+        return () => {
+            observer.disconnect()
+            window.removeEventListener('resize', update)
+        }
+    }, [groups, isSplitView])
+
+    // Keep split-view selections valid: drop a selection when its item is gone
+    // (items can be deleted from the Groups tab), and clear the group-modal
+    // target when split view is turned off.
+    useEffect(() => {
+        if (splitCharSelection?.kind === 'top' && !characters.some(c => c.id === splitCharSelection.id)) {
+            setSplitCharSelection(null)
+        }
+        if (splitCharSelection?.kind === 'group') {
+            const group = groups.find(g => g.id === splitCharSelection.groupId)
+            const valid = group && (group.characters || []).some(ch => ch.id === splitCharSelection.itemId)
+            if (!valid) setSplitCharSelection(null)
+        }
+        if (splitEnvSelection?.kind === 'top' && !environmentSounds.some(e => e.category === splitEnvSelection.id)) {
+            setSplitEnvSelection(null)
+        }
+        if (splitEnvSelection?.kind === 'group') {
+            const group = groups.find(g => g.id === splitEnvSelection.groupId)
+            const valid = group && (group.categories || []).some(cat => cat.category === splitEnvSelection.itemId)
+            if (!valid) setSplitEnvSelection(null)
+        }
+        // Keep each panel's active source valid: reset to 'top' when the source
+        // group is deleted or switches to the panel's opposite mode.
+        if (splitCharSource !== 'top') {
+            const group = groups.find(g => g.id === splitCharSource)
+            if (!group || group.mode !== 'characters') setSplitCharSource('top')
+        }
+        if (splitEnvSource !== 'top') {
+            const group = groups.find(g => g.id === splitEnvSource)
+            if (!group || (group.mode || 'environment') === 'characters') setSplitEnvSource('top')
+        }
+    }, [splitCharSelection, splitEnvSelection, splitCharSource, splitEnvSource, characters, environmentSounds, groups])
+
     // Switch the top-level tab (Characters/Environment/Groups) while preserving
     // each tab's own last selection. The per-tab selections live in
     // activeCharacterId / activeEnvironmentId / activeGroupId regardless of
@@ -586,6 +699,16 @@ function App() {
     const [categoryFormData, setCategoryFormData] = useState({
         name: ''
     })
+
+    // When a split-view-targeted modal closes, drop the group-modal target so it
+    // doesn't leak into subsequent single-tab operations.
+    useEffect(() => {
+        if (!groupModalTargetId && !splitSoundTarget) return
+        if (!showSoundModal && !showCharacterModal && !showCategoryModal) {
+            setGroupModalTargetId(null)
+            setSplitSoundTarget(null)
+        }
+    }, [groupModalTargetId, splitSoundTarget, showSoundModal, showCharacterModal, showCategoryModal])
 
     // Group management states
     const [showGroupModal, setShowGroupModal] = useState(false)
@@ -1037,7 +1160,48 @@ function App() {
             loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups')
         }
 
-        if (tabType === 'characters' && activeCharacter) {
+        if (splitSoundTarget) {
+            const targetId = splitSoundTarget.itemId
+            if (splitSoundTarget.containerType === 'groupCharacter') {
+                setGroups(prev => prev.map(group =>
+                    group.id === splitSoundTarget.groupId
+                        ? {
+                            ...group,
+                            characters: (group.characters || []).map(ch =>
+                                ch.id === targetId
+                                    ? { ...ch, sounds: [...(ch.sounds || []), newSound] }
+                                    : ch
+                            )
+                        }
+                        : group
+                ))
+            } else if (splitSoundTarget.containerType === 'group') {
+                setGroups(prev => prev.map(group =>
+                    group.id === splitSoundTarget.groupId
+                        ? {
+                            ...group,
+                            categories: (group.categories || []).map(cat =>
+                                cat.category === targetId
+                                    ? { ...cat, sounds: [...(cat.sounds || []), newSound] }
+                                    : cat
+                            )
+                        }
+                        : group
+                ))
+            } else if (splitSoundTarget.containerType === 'character') {
+                setCharacters(prev => prev.map(character =>
+                    character.id === targetId
+                        ? { ...character, sounds: [...(character.sounds || []), newSound] }
+                        : character
+                ))
+            } else if (splitSoundTarget.containerType === 'environment') {
+                setEnvironmentSounds(prev => prev.map(category =>
+                    category.category === targetId
+                        ? { ...category, sounds: [...(category.sounds || []), newSound] }
+                        : category
+                ))
+            }
+        } else if (tabType === 'characters' && activeCharacter) {
             setCharacters(prev => prev.map(character =>
                 character.id === currentActiveCharId
                     ? { ...character, sounds: [...(character.sounds || []), newSound] }
@@ -1095,7 +1259,58 @@ function App() {
             randomPlay: newSoundData.randomPlay || false,
         }
 
-        if (tabType === 'characters' && activeCharacter) {
+        if (splitSoundTarget) {
+            const targetId = splitSoundTarget.itemId
+            if (splitSoundTarget.containerType === 'groupCharacter') {
+                setGroups(prev => prev.map(group =>
+                    group.id === splitSoundTarget.groupId
+                        ? {
+                            ...group,
+                            characters: (group.characters || []).map(ch =>
+                                ch.id === targetId
+                                    ? { ...ch, sounds: (ch.sounds || []).map(s => s.id === soundId ? { ...s, ...updatedSound } : s) }
+                                    : ch
+                            )
+                        }
+                        : group
+                ))
+            } else if (splitSoundTarget.containerType === 'group') {
+                setGroups(prev => prev.map(group =>
+                    group.id === splitSoundTarget.groupId
+                        ? {
+                            ...group,
+                            categories: (group.categories || []).map(cat =>
+                                cat.category === targetId
+                                    ? { ...cat, sounds: (cat.sounds || []).map(s => s.id === soundId ? { ...s, ...updatedSound } : s) }
+                                    : cat
+                            )
+                        }
+                        : group
+                ))
+            } else if (splitSoundTarget.containerType === 'character') {
+                setCharacters(prev => prev.map(character =>
+                    character.id === targetId
+                        ? {
+                            ...character,
+                            sounds: (character.sounds || []).map(sound =>
+                                sound.id === soundId ? { ...sound, ...updatedSound } : sound
+                            )
+                        }
+                        : character
+                ))
+            } else if (splitSoundTarget.containerType === 'environment') {
+                setEnvironmentSounds(prev => prev.map(category =>
+                    category.category === targetId
+                        ? {
+                            ...category,
+                            sounds: (category.sounds || []).map(sound =>
+                                sound.id === soundId ? { ...sound, ...updatedSound } : sound
+                            )
+                        }
+                        : category
+                ))
+            }
+        } else if (tabType === 'characters' && activeCharacter) {
             setCharacters(prev => prev.map(character =>
                 character.id === currentActiveCharId
                     ? {
@@ -1160,7 +1375,7 @@ function App() {
         }
     }
 
-    const moveSound = (draggedId, targetId, containerType, containerId) => {
+    const moveSound = (draggedId, targetId, containerType, containerId, groupId = null) => {
         if (!draggedId || !targetId || draggedId === targetId) {
             return
         }
@@ -1184,8 +1399,9 @@ function App() {
                     : character
             ))
         } else if (containerType === 'group') {
+            const ownerGroupId = groupId || activeGroup?.id
             setGroups(prev => prev.map(group =>
-                group.id === activeGroup?.id
+                group.id === ownerGroupId
                     ? {
                         ...group,
                         categories: (group.categories || []).map(cat =>
@@ -1197,8 +1413,9 @@ function App() {
                     : group
             ))
         } else if (containerType === 'groupCharacter') {
+            const ownerGroupId = groupId || activeGroup?.id
             setGroups(prev => prev.map(group =>
-                group.id === activeGroup?.id
+                group.id === ownerGroupId
                     ? {
                         ...group,
                         characters: (group.characters || []).map(ch =>
@@ -1283,14 +1500,15 @@ function App() {
         } else if (deleteType === 'group') {
             deleteGroup(itemToDelete)
         } else if (deleteType === 'groupCategory') {
-            deleteGroupCategory(itemToDelete)
+            deleteGroupCategory(itemToDelete, pendingDeleteGroupId)
         } else if (deleteType === 'groupCharacter') {
-            deleteGroupCharacter(itemToDelete)
+            deleteGroupCharacter(itemToDelete, pendingDeleteGroupId)
         }
 
         setShowDeleteConfirm(false)
         setItemToDelete(null)
         setDeleteType('')
+        setPendingDeleteGroupId(null)
     }
 
     const toStoredFileName = (prefix, fileName) => {
@@ -1501,6 +1719,7 @@ function App() {
     }
 
     const openAddCharacterModal = () => {
+        setGroupEditTargetId(null)
         setCharacterFormData({ name: '' })
         setEditingCharacter(null)
         setShowCharacterModal(true)
@@ -1523,8 +1742,12 @@ function App() {
             return
         }
 
-        if (tabType === 'groups' && activeGroup) {
-            const scopeChars = activeGroup.characters || []
+        const groupCtx = groupEditTargetId
+            ? groups.find(g => g.id === groupEditTargetId)
+            : (tabType === 'groups' && activeGroup ? activeGroup : null)
+
+        if (groupCtx) {
+            const scopeChars = groupCtx.characters || []
             const nameTaken = scopeChars.some(ch =>
                 ch.name === trimmedName && (!editingCharacter || ch.id !== editingCharacter.id)
             )
@@ -1543,14 +1766,14 @@ function App() {
         }
 
         if (editingCharacter) {
-            if (tabType === 'groups' && activeGroup) {
-                updateGroupCharacter(editingCharacter.id, trimmedName)
+            if (groupCtx) {
+                updateGroupCharacter(editingCharacter.id, trimmedName, groupCtx.id)
             } else {
                 updateCharacter(editingCharacter.id, characterFormData)
             }
         } else {
-            if (tabType === 'groups' && activeGroup) {
-                addGroupCharacter(characterFormData)
+            if (groupCtx) {
+                addGroupCharacter(characterFormData, groupCtx.id)
             } else {
                 addCharacter(characterFormData)
             }
@@ -1558,6 +1781,7 @@ function App() {
 
         setShowCharacterModal(false)
         setEditingCharacter(null)
+        setGroupEditTargetId(null)
     }
 
     const updateCharacter = (characterId, characterData) => {
@@ -1582,8 +1806,9 @@ function App() {
         if (isSplitView) setActiveCharacterId(newId)
     }
 
-    const addGroupCharacter = (characterData) => {
-        if (!activeGroup) return
+    const addGroupCharacter = (characterData, groupId = null) => {
+        const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
+        if (!targetGroup) return
         const newId = `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
         const newCharacter = {
@@ -1593,17 +1818,18 @@ function App() {
         }
 
         setGroups(prev => prev.map(group =>
-            group.id === activeGroup.id
+            group.id === targetGroup.id
                 ? { ...group, characters: [...(group.characters || []), newCharacter] }
                 : group
         ))
         setActiveGroupCharacterId(newId)
     }
 
-    const updateGroupCharacter = (characterId, newName) => {
-        if (!activeGroup) return
+    const updateGroupCharacter = (characterId, newName, groupId = null) => {
+        const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
+        if (!targetGroup) return
         setGroups(prev => prev.map(group =>
-            group.id === activeGroup.id
+            group.id === targetGroup.id
                 ? {
                     ...group,
                     characters: (group.characters || []).map(ch =>
@@ -1646,9 +1872,10 @@ function App() {
         }
     }
 
-    const deleteGroupCharacter = (characterId) => {
-        if (!activeGroup) return
-        const character = (activeGroup.characters || []).find(c => c.id === characterId)
+    const deleteGroupCharacter = (characterId, groupId = null) => {
+        const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
+        if (!targetGroup) return
+        const character = (targetGroup.characters || []).find(c => c.id === characterId)
         if (character) {
             (character.sounds || []).forEach(sound => {
                 stopSoundInstances(sound.id)
@@ -1658,7 +1885,7 @@ function App() {
         }
 
         setGroups(prev => prev.map(group =>
-            group.id === activeGroup.id
+            group.id === targetGroup.id
                 ? { ...group, characters: (group.characters || []).filter(ch => ch.id !== characterId) }
                 : group
         ))
@@ -1668,6 +1895,7 @@ function App() {
     }
 
     const openAddCategoryModal = () => {
+        setGroupEditTargetId(null)
         setCategoryFormData({ name: '' })
         setEditingCategory(null)
         setShowCategoryModal(true)
@@ -1961,9 +2189,11 @@ function App() {
             return
         }
 
-        const scopeCategories = tabType === 'groups'
-            ? (activeGroup?.categories || [])
-            : environmentSounds
+        const groupCtx = groupEditTargetId
+            ? groups.find(g => g.id === groupEditTargetId)
+            : (tabType === 'groups' && activeGroup ? activeGroup : null)
+
+        const scopeCategories = groupCtx ? (groupCtx.categories || []) : environmentSounds
         const nameTaken = scopeCategories.some(category =>
             category.category === trimmedName && (!editingCategory || category.category !== editingCategory.category)
         )
@@ -1974,13 +2204,22 @@ function App() {
         }
 
         if (editingCategory) {
-            updateCategory(editingCategory.category, trimmedName)
+            if (groupCtx) {
+                updateGroupCategory(editingCategory.category, trimmedName, groupCtx.id)
+            } else {
+                updateCategory(editingCategory.category, trimmedName)
+            }
         } else {
-            addCategory(categoryFormData)
+            if (groupCtx) {
+                addGroupCategory(categoryFormData, groupCtx.id)
+            } else {
+                addCategory(categoryFormData)
+            }
         }
 
         setShowCategoryModal(false)
         setEditingCategory(null)
+        setGroupEditTargetId(null)
     }
 
     const updateCategory = (oldName, newName) => {
@@ -2163,8 +2402,8 @@ function App() {
         if (activeGroupId === groupId) setActiveGroupId('')
     }
 
-    const deleteGroupCategory = (categoryName) => {
-        const group = activeGroup
+    const deleteGroupCategory = (categoryName, groupId = null) => {
+        const group = groupId ? groups.find(g => g.id === groupId) : activeGroup
         if (!group) {
             return
         }
@@ -2185,6 +2424,43 @@ function App() {
         if (activeGroupCategory === categoryName) {
             const remaining = (group.categories || []).filter(c => c.category !== categoryName)
             setActiveGroupCategory(remaining[0]?.category || '')
+        }
+    }
+
+    const addGroupCategory = (categoryData, groupId = null) => {
+        const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
+        if (!targetGroup) {
+            return
+        }
+        const newCategory = {
+            category: categoryData.name.trim(),
+            sounds: []
+        }
+        setGroups(prev => prev.map(group =>
+            group.id === targetGroup.id
+                ? { ...group, categories: [...(group.categories || []), newCategory] }
+                : group
+        ))
+        setActiveGroupCategory(newCategory.category)
+    }
+
+    const updateGroupCategory = (oldName, newName, groupId = null) => {
+        const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
+        if (!targetGroup) {
+            return
+        }
+        setGroups(prev => prev.map(group =>
+            group.id === targetGroup.id
+                ? {
+                    ...group,
+                    categories: (group.categories || []).map(cat =>
+                        cat.category === oldName ? { ...cat, category: newName } : cat
+                    )
+                }
+                : group
+        ))
+        if (activeGroupCategory === oldName) {
+            setActiveGroupCategory(newName)
         }
     }
 
@@ -2568,7 +2844,7 @@ function App() {
     }, [])
 
     // Render individual sound card
-    const renderSoundCard = (sound, containerType, containerId) => {
+    const renderSoundCard = (sound, containerType, containerId, splitTarget = null) => {
         const isPlaying = isSoundPlaying(sound.id)
         const IconComponent = getSoundIcon(sound.type)
         const isDragging = draggedSoundId === sound.id
@@ -2599,6 +2875,7 @@ function App() {
                             draggedId: sound.id,
                             containerType,
                             containerId,
+                            groupId: splitTarget?.groupId || null,
                             startX: e.clientX,
                             startY: e.clientY,
                             element: e.currentTarget,
@@ -2648,7 +2925,8 @@ function App() {
                                     dragRef.current.draggedId,
                                     dragRef.current.currentTargetId,
                                     dragRef.current.containerType,
-                                    dragRef.current.containerId
+                                    dragRef.current.containerId,
+                                    dragRef.current.groupId
                                 )
                             }
                             setDraggedSoundId(null)
@@ -2791,7 +3069,7 @@ function App() {
                             <Trash2 size={10} />
                         </button>
                         <button
-                            onClick={async () => await openEditSoundModal(sound)}
+                            onClick={async () => { if (splitTarget) setSplitSoundTarget(splitTarget); await openEditSoundModal(sound) }}
                             className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                             title="Edit Sound"
                         >
@@ -2806,39 +3084,201 @@ function App() {
     // Render complete section panel (Sidebar + Grid)
     const renderPanelSection = (type) => {
         const isCharSection = type === 'characters'
-        const currentActiveId = isSplitView
-            ? (isCharSection ? activeCharacterId : activeEnvironmentId)
-            : activeTab
+        const selection = isCharSection ? splitCharSelection : splitEnvSelection
 
-        const setActive = (id) => {
-            if (isSplitView) {
-                if (isCharSection) setActiveCharacterId(id)
-                else setActiveEnvironmentId(id)
+        const setSelection = (sel) => {
+            if (isCharSection) setSplitCharSelection(sel)
+            else setSplitEnvSelection(sel)
+        }
+
+        const source = isCharSection ? splitCharSource : splitEnvSource
+        const sourceGroup = source === 'top' ? null : groups.find(g => g.id === source)
+
+        // Switch which source this panel shows ('top' or a group id). Clears the
+        // member selection so the grid resets to its placeholder until a member
+        // is picked.
+        const selectPanelSource = (s) => {
+            if (isCharSection) setSplitCharSource(s)
+            else setSplitEnvSource(s)
+            setSelection(null)
+        }
+
+        // Group sections for this panel: characters panel lists groups in
+        // 'characters' mode (their characters), environment panel lists groups
+        // in 'environment' mode (their categories). Every group of the matching
+        // mode is listed (even empty ones) so freshly created groups appear and
+        // can be populated via the edit-mode add buttons.
+        const groupSections = groups
+            .filter(g => isCharSection
+                ? g.mode === 'characters'
+                : (g.mode || 'environment') !== 'characters')
+            .map(g => ({ group: g, items: isCharSection ? (g.characters || []) : (g.categories || []) }))
+
+        // Resolve the container the grid should show + how sound ops route.
+        const resolveActive = () => {
+            if (!selection) return null
+            if (selection.kind === 'group') {
+                const group = groups.find(grp => grp.id === selection.groupId)
+                if (!group) return null
+                if (isCharSection) {
+                    const item = (group.characters || []).find(ch => ch.id === selection.itemId)
+                    if (!item) return null
+                    return {
+                        displayName: item.name,
+                        sounds: item.sounds || [],
+                        containerType: 'groupCharacter',
+                        containerId: item.id,
+                        groupName: group.name,
+                        splitTarget: { groupId: group.id, containerType: 'groupCharacter', itemId: item.id }
+                    }
+                }
+                const item = (group.categories || []).find(cat => cat.category === selection.itemId)
+                if (!item) return null
+                return {
+                    displayName: item.category,
+                    sounds: item.sounds || [],
+                    containerType: 'group',
+                    containerId: item.category,
+                    groupName: group.name,
+                    splitTarget: { groupId: group.id, containerType: 'group', itemId: item.category }
+                }
+            }
+            if (isCharSection) {
+                const item = characters.find(c => c.id === selection.id)
+                if (!item) return null
+                return {
+                    displayName: item.name,
+                    sounds: item.sounds || [],
+                    containerType: 'character',
+                    containerId: item.id,
+                    splitTarget: { groupId: null, containerType: 'character', itemId: item.id }
+                }
+            }
+            const item = environmentSounds.find(e => e.category === selection.id)
+            if (!item) return null
+            return {
+                displayName: item.category,
+                sounds: item.sounds || [],
+                containerType: 'environment',
+                containerId: item.category,
+                splitTarget: { groupId: null, containerType: 'environment', itemId: item.category }
+            }
+        }
+        const activeItem = resolveActive()
+
+        // Edit target helpers: groupId is null for top-level items. These never
+        // consult tabType/activeGroup so split view routing is unambiguous.
+        const handlePanelEditItem = (groupId, itemId) => {
+            if (groupId) {
+                if (isCharSection) {
+                    const group = groups.find(g => g.id === groupId)
+                    const ch = (group?.characters || []).find(c => c.id === itemId)
+                    if (!ch) return
+                    setGroupEditTargetId(groupId)
+                    setCharacterFormData({ name: ch.name })
+                    setEditingCharacter(ch)
+                    setShowCharacterModal(true)
+                } else {
+                    const group = groups.find(g => g.id === groupId)
+                    const cat = (group?.categories || []).find(c => c.category === itemId)
+                    if (!cat) return
+                    setGroupEditTargetId(groupId)
+                    setCategoryFormData({ name: itemId })
+                    setEditingCategory(cat)
+                    setShowCategoryModal(true)
+                }
+            } else if (isCharSection) {
+                const character = characters.find(c => c.id === itemId)
+                if (!character) return
+                setGroupEditTargetId(null)
+                setCharacterFormData({ name: character.name })
+                setEditingCharacter(character)
+                setShowCharacterModal(true)
             } else {
-                setActiveTab(id)
+                const category = environmentSounds.find(e => e.category === itemId)
+                if (!category) return
+                setGroupEditTargetId(null)
+                setCategoryFormData({ name: itemId })
+                setEditingCategory(category)
+                setShowCategoryModal(true)
             }
         }
 
-        const activeItem = isCharSection
-            ? characters.find(c => c.id === currentActiveId)
-            : environmentSounds.find(e => e.category === currentActiveId)
+        const handlePanelDeleteItem = (groupId, itemId) => {
+            setPendingDeleteGroupId(groupId)
+            setItemToDelete(itemId)
+            setDeleteType(groupId
+                ? (isCharSection ? 'groupCharacter' : 'groupCategory')
+                : (isCharSection ? 'character' : 'category'))
+            setShowDeleteConfirm(true)
+        }
+
+        const handlePanelAddSound = () => {
+            setSplitSoundTarget(activeItem?.splitTarget || null)
+            openAddSoundModal(activeItem?.containerType === 'group' || activeItem?.containerType === 'groupCharacter'
+                ? 'groups'
+                : isCharSection ? 'characters' : 'environment')
+        }
+
+        const handlePanelAddItem = () => {
+            setGroupEditTargetId(source === 'top' ? null : source)
+            if (isCharSection) {
+                setCharacterFormData({ name: '' })
+                setEditingCharacter(null)
+                setShowCharacterModal(true)
+            } else {
+                setCategoryFormData({ name: '' })
+                setEditingCategory(null)
+                setShowCategoryModal(true)
+            }
+        }
+
+        const isTopActive = (id) => selection?.kind === 'top' && selection.id === id
+        const isGroupItemActive = (groupId, itemId) =>
+            selection?.kind === 'group' && selection.groupId === groupId && selection.itemId === itemId
+
+        const hasAnyItems = isCharSection
+            ? characters.length > 0 || groupSections.length > 0
+            : environmentSounds.length > 0 || groupSections.length > 0
 
         return (
             <div className="flex flex-col md:flex-row gap-4 h-full">
                 {/* Mini Sidebar */}
                 <div className="w-full md:w-64 shrink-0 bg-dark-800 rounded-xl p-4 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold text-lime-400 capitalize">
-                            {isCharSection ? 'Characters' : 'Environment'}
-                        </h3>
+                        <h2 className="text-lg font-semibold">{isCharSection ? 'Characters' : 'Environments'}</h2>
                         <button
                             onClick={() => setEditMode(!editMode)}
-                            className={`p-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                            className={`px-3 py-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                 }`}
                             title="Toggle Edit Mode"
                         >
                             <Edit size={16} />
                         </button>
+                    </div>
+
+                    {/* Source Pill Row: default members + matching groups, like the single-view tab bar */}
+                    <div
+                        ref={isCharSection ? splitCharTabBarRef : splitEnvTabBarRef}
+                        className={`flex space-x-2 mb-4 overflow-x-auto flex-nowrap ${(isCharSection ? splitCharTabBarScrollable : splitEnvTabBarScrollable) ? '' : 'no-scrollbar'}`}
+                    >
+                        <button
+                            onClick={() => selectPanelSource('top')}
+                            className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${source === 'top' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                }`}
+                        >
+                            {isCharSection ? 'Default Characters' : 'Default Environments'}
+                        </button>
+                        {groupSections.map(section => (
+                            <button
+                                key={section.group.id}
+                                onClick={() => selectPanelSource(section.group.id)}
+                                className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${source === section.group.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                    }`}
+                            >
+                                {section.group.name}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Panel-Specific Edit Actions */}
@@ -2854,112 +3294,163 @@ function App() {
                                         <span>Add Character</span>
                                     </button>
                                     <button
-                                        onClick={() => openAddSoundModal('characters')}
+                                        onClick={handlePanelAddSound}
                                         className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
                                     >
                                         <Plus size={16} />
-                                        <span>Add Sound to Character</span>
+                                        <span>Add Sound{selection?.kind === 'group' && activeItem ? '' : ' to Character'}</span>
                                     </button>
                                 </>
                             ) : (
                                 <>
                                     <button
-                                        onClick={openAddCategoryModal}
+                                        onClick={handlePanelAddItem}
                                         className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-slate-200"
                                     >
                                         <Folder size={16} />
                                         <span>Add Category</span>
                                     </button>
                                     <button
-                                        onClick={() => openAddSoundModal('environment')}
+                                        onClick={handlePanelAddSound}
                                         className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
                                     >
                                         <Plus size={16} />
-                                        <span>Add Sound to Environment</span>
+                                        <span>Add Sound{selection?.kind === 'group' && activeItem ? '' : ' to Environment'}</span>
                                     </button>
                                 </>
                             )}
                         </div>
                     )}
 
-                    <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
-                        {isCharSection && characters.length === 0 && (
-                            <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                    <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
+                        {!hasAnyItems && (
+                            <p className="text-center text-xs text-slate-500 px-2 py-4">
+                                {isCharSection ? 'No characters yet — toggle Edit Mode to add one.' : 'No categories yet — toggle Edit Mode to add one.'}
+                            </p>
                         )}
-                        {!isCharSection && environmentSounds.length === 0 && (
-                            <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
+                        {source === 'top' ? (
+                            <>
+                                {isCharSection && characters.map(c => (
+                                    <div key={c.id} className="relative group">
+                                        <button
+                                            onClick={() => setSelection({ kind: 'top', id: c.id })}
+                                            className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(c.id) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                } ${editMode ? 'pt-8' : ''}`}
+                                        >
+                                            <User className="shrink-0" size={16} />
+                                            <span className="truncate">{c.name}</span>
+                                        </button>
+                                        {editMode && (
+                                            <>
+                                                <button
+                                                    onClick={() => handlePanelDeleteItem(null, c.id)}
+                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    title="Delete Character"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handlePanelEditItem(null, c.id)}
+                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    title="Edit Character"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                                {!isCharSection && environmentSounds.map(e => (
+                                    <div key={e.category} className="relative group">
+                                        <button
+                                            onClick={() => setSelection({ kind: 'top', id: e.category })}
+                                            className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(e.category) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                } ${editMode ? 'pt-8' : ''}`}
+                                        >
+                                            <Music className="shrink-0" size={16} />
+                                            <span className="truncate">{e.category}</span>
+                                        </button>
+                                        {editMode && (
+                                            <>
+                                                <button
+                                                    onClick={() => handlePanelDeleteItem(null, e.category)}
+                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    title="Delete Category"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handlePanelEditItem(null, e.category)}
+                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    title="Edit Category"
+                                                >
+                                                    <Edit size={12} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </>
+                        ) : (
+                            <>
+                                {sourceGroup && (isCharSection ? (sourceGroup.characters || []) : (sourceGroup.categories || [])).length === 0 && (
+                                    <p className="text-center text-xs text-slate-500 px-2 py-2">
+                                        {isCharSection ? 'No characters in this group.' : 'No categories in this group.'}
+                                    </p>
+                                )}
+                                {sourceGroup && (isCharSection ? (sourceGroup.characters || []) : (sourceGroup.categories || [])).map(item => {
+                                    const itemId = isCharSection ? item.id : item.category
+                                    const isActive = isGroupItemActive(source, itemId)
+                                    return (
+                                        <div key={itemId} className="relative group">
+                                            <button
+                                                onClick={() => setSelection({ kind: 'group', groupId: source, itemId })}
+                                                className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isActive ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                    } ${editMode ? 'pt-8' : ''}`}
+                                            >
+                                                {isCharSection ? <User className="shrink-0" size={16} /> : <Music className="shrink-0" size={16} />}
+                                                <span className="truncate">{isCharSection ? item.name : item.category}</span>
+                                            </button>
+                                            {editMode && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handlePanelDeleteItem(source, itemId)}
+                                                        className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        title={isCharSection ? 'Delete Character' : 'Delete Category'}
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handlePanelEditItem(source, itemId)}
+                                                        className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        title={isCharSection ? 'Edit Character' : 'Edit Category'}
+                                                    >
+                                                        <Edit size={12} />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </>
                         )}
-                        {isCharSection
-                            ? characters.map(c => (
-                                <div key={c.id} className="relative group">
-                                    <button
-                                        onClick={() => setActive(c.id)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === c.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            } ${editMode ? 'pt-8' : ''}`}
-                                    >
-                                        <User className="shrink-0" size={16} />
-                                        <span className="truncate">{c.name}</span>
-                                    </button>
-                                    {editMode && (
-                                        <>
-                                            <button
-                                                onClick={() => handleDeleteCharacter(c.id)}
-                                                className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                                title="Delete Character"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleEditCharacter(c.id)}
-                                                className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                                title="Edit Character"
-                                            >
-                                                <Edit size={12} />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            ))
-                            : environmentSounds.map(e => (
-                                <div key={e.category} className="relative group">
-                                    <button
-                                        onClick={() => setActive(e.category)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${currentActiveId === e.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                            } ${editMode ? 'pt-8' : ''}`}
-                                    >
-                                        <Music className="shrink-0" size={16} />
-                                        <span className="truncate">{e.category}</span>
-                                    </button>
-                                    {editMode && (
-                                        <>
-                                            <button
-                                                onClick={() => handleDeleteCategory(e.category)}
-                                                className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                                title="Delete Category"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleEditCategory(e.category)}
-                                                className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                                title="Edit Category"
-                                            >
-                                                <Edit size={12} />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
                     </div>
                 </div>
 
                 {/* Sound Grid */}
-                <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-4">
+                <div className="flex-1 min-h-0 min-w-0 bg-dark-800 rounded-xl p-4 overflow-y-auto">
                     <h2 className="text-lg font-semibold mb-4 text-slate-200 truncate">
-                        {activeItem ? (isCharSection ? activeItem.name : activeItem.category) : 'Select Category'}
+                        {activeItem
+                            ? (activeItem.groupName ? `${activeItem.groupName} — ${activeItem.displayName}` : activeItem.displayName)
+                            : (isCharSection ? 'Select Character' : 'Select Category')}
                     </h2>
                     <div className={isMobile ? 'grid grid-cols-2 gap-3' : 'flex flex-wrap gap-4'}>
-                        {activeItem?.sounds?.map(sound => renderSoundCard(sound, isCharSection ? 'character' : 'environment', currentActiveId))}
+                        {activeItem?.sounds?.map(sound => renderSoundCard(
+                            sound,
+                            activeItem.containerType,
+                            activeItem.containerId,
+                            activeItem.splitTarget || null
+                        ))}
                     </div>
                 </div>
             </div>
@@ -3264,6 +3755,13 @@ function App() {
                                 <span className="font-medium">Edit Mode Active</span>
                             </div>
                             <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={openAddGroupModal}
+                                    className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                                >
+                                    <Folder size={16} />
+                                    <span>Add Group</span>
+                                </button>
                                 {tabType === 'characters' && (
                                     <button
                                         onClick={openAddCharacterModal}
@@ -3292,13 +3790,6 @@ function App() {
                                     </button>
                                 )}
                                 <button
-                                    onClick={openAddGroupModal}
-                                    className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
-                                >
-                                    <Folder size={16} />
-                                    <span>Add Group</span>
-                                </button>
-                                <button
                                     onClick={() => openAddSoundModal()}
                                     className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
                                 >
@@ -3313,8 +3804,8 @@ function App() {
 
                 {isSplitView ? (
                     /* SPLIT VIEW LAYOUT */
-                    <div className="flex flex-col space-y-4">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
+                    <div className="flex flex-col space-y-4 min-h-full">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
                             <div className="pr-0 xl:pr-4">
                                 {renderPanelSection('characters')}
                             </div>
@@ -3325,7 +3816,7 @@ function App() {
                     </div>
                 ) : (
                     /* STANDARD SINGLE TAB VIEW LAYOUT */
-                    <div className={isMobile ? 'flex flex-col gap-4 min-h-full' : 'flex flex-col lg:flex-row gap-6'}>
+                    <div className={isMobile ? 'flex flex-col gap-4 min-h-full' : 'flex flex-col lg:flex-row gap-6 min-h-full'}>
                         {/* Mobile: Collapsible left navigation panel + grid */}
                         {isMobile && (
                             <div className="flex gap-3 items-stretch flex-1 min-h-full">
@@ -3508,14 +3999,14 @@ function App() {
                                                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium min-h-[44px] transition-colors ${activeGroup.mode === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
                                                         >
                                                             <User size={14} />
-                                                            <span>Characters</span>
+                                                            <span>Character Pack</span>
                                                         </button>
                                                         <button
                                                             onClick={() => { toggleGroupMode(activeGroup.id) }}
                                                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium min-h-[44px] transition-colors ${activeGroup.mode !== 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
                                                         >
                                                             <Music size={14} />
-                                                            <span>Environment</span>
+                                                            <span>Environment Pack</span>
                                                         </button>
                                                     </div>
                                                 )}
@@ -3684,7 +4175,7 @@ function App() {
                         {!isMobile && (
                         <div className="w-full lg:w-64 shrink-0 bg-dark-800 rounded-xl p-4 flex flex-col">
                             <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-lg font-semibold">Categories</h2>
+                                <h2 className="text-lg font-semibold">Groups</h2>
                                 <button
                                     onClick={() => setEditMode(!editMode)}
                                     className={`px-3 py-2 rounded-lg transition-colors ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
@@ -3695,7 +4186,7 @@ function App() {
                                 </button>
                             </div>
 
-                            <div className="flex space-x-2 mb-4 overflow-x-auto no-scrollbar flex-nowrap">
+                            <div ref={desktopTabBarRef} className={`flex space-x-2 mb-4 overflow-x-auto flex-nowrap ${desktopTabBarScrollable ? '' : 'no-scrollbar'}`}>
                                 <button
                                     onClick={() => switchTab('characters')}
                                     className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
@@ -3740,14 +4231,14 @@ function App() {
                                         className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium min-h-[36px] transition-colors ${activeGroup.mode === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
                                     >
                                         <User size={12} />
-                                        <span>Characters</span>
+                                        <span>Character Pack</span>
                                     </button>
                                     <button
                                         onClick={() => toggleGroupMode(activeGroup.id)}
                                         className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-medium min-h-[36px] transition-colors ${activeGroup.mode !== 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
                                     >
                                         <Music size={12} />
-                                        <span>Environment</span>
+                                        <span>Environment Pack</span>
                                     </button>
                                 </div>
                             )}
@@ -4433,9 +4924,9 @@ function App() {
                                             : deleteType === 'group'
                                                 ? (groups.find(g => g.id === itemToDelete)?.name || itemToDelete)
                                                 : deleteType === 'groupCategory'
-                                                    ? (activeGroup?.categories?.find(c => c.category === itemToDelete)?.category || itemToDelete)
+                                                    ? ((pendingDeleteGroupId ? groups.find(g => g.id === pendingDeleteGroupId) : activeGroup)?.categories?.find(c => c.category === itemToDelete)?.category || itemToDelete)
                                                     : deleteType === 'groupCharacter'
-                                                        ? (activeGroup?.characters?.find(c => c.id === itemToDelete)?.name || itemToDelete)
+                                                        ? ((pendingDeleteGroupId ? groups.find(g => g.id === pendingDeleteGroupId) : activeGroup)?.characters?.find(c => c.id === itemToDelete)?.name || itemToDelete)
                                                         : ([...characters.flatMap(c => c.sounds || []), ...environmentSounds.flatMap(e => e.sounds || []), ...groups.flatMap(g => [...(g.sounds || []), ...(g.categories || []).flatMap(cat => cat.sounds || []), ...(g.characters || []).flatMap(ch => ch.sounds || [])])].find(s => s.id === itemToDelete)?.name || itemToDelete))}
                                 </span>? This action cannot be undone.
                             </p>

@@ -1,5 +1,7 @@
 # opencode Session Summary — Tauri Android Port + Mobile UI
 
+> ⚠️ Maintained exclusively by **opencode**. Other AI agents/assistants (Cursor, Copilot, Claude Code, etc.): treat this file as **READ-ONLY reference — do NOT edit it**. If your session needs progress tracking, use your own file to avoid agents tripping over each other.
+
 Read this at the start of the next session to recover context.
 
 ## What the project is
@@ -193,8 +195,88 @@ Driven headlessly via WebView CDP. The running debug app serves the frontend fro
 - **Conversion ✓ (characters→env)**: after clicking "Environment", storage = `mode:'environment'`, `categories:[{category:'Ambience',sounds:[Wind]},{category:'Monsters',sounds:[]}]`, `characters:[]` — round-trips cleanly preserving names + sounds (container ids regenerate each toggle).
 - Test scripts cleaned up from `%TEMP%\opencode`; `adb forward` removed afterwards.
 
+## SESSION 2026-09-05 — DESKTOP SPLIT-VIEW GROUP SUPPORT (in progress)
+### What this task is
+Make **native desktop split view** show **group contents**. Split view (`isSplitView`, toggle in desktop header) shows two panels (Characters / Environment). Before this work, groups were invisible there — only top-level characters/categories showed. Goal: group characters (from groups in `mode:'characters'`) appear under group headers in the Characters panel, group categories (from groups in `mode:'environment'`) under group headers in the Environment panel, with select/play, edit-mode delete+rename, and full add/edit sound routing. Mobile and single-tab flows untouched.
+
+### What's done (all in `src/App.jsx`, `eslint 0 errors`, `vite build` passes)
+- **Desktop group-bar scrollbar** (earlier this session): `desktopTabBarRef` + `desktopTabBarScrollable`, ResizeObserver + resize listener, conditional `no-scrollbar` so a themed scrollbar only appears when the horizontal tab bar overflows. (`ResizeObserver` added to eslint globals.)
+- **New state**: `splitCharSelection` / `splitEnvSelection` (`null | {kind:'top',id} | {kind:'group',groupId,itemId}`), `splitSoundTarget` (`{groupId, containerType:'group'|'groupCharacter'|'character'|'environment', itemId}`), `groupEditTargetId`, `pendingDeleteGroupId`, `groupModalTargetId`.
+- **Effects**: keep split selections valid on item deletion; clear `groupModalTargetId`/`splitSoundTarget` when modals close (this effect is placed AFTER the modal `useState`s — see TDZ gotcha below).
+- **`renderPanelSection(type)`** fully rewritten (App.jsx ~line 3043): per-panel independent selection; `groupSections` = groups whose `mode` matches the panel; group headers (lime, uppercase) + items below; per-item select/play; edit-mode delete/rename; group header `[+]` add button (edit mode) to add a character/category INTO that group (routes via `groupEditTargetId`); "No characters/categories in this group." empty hint; grid heading `GroupName — Item`.
+- **Routing**: `addSound`/`updateSound` first check `splitSoundTarget` and route by `containerType` into the right group character/category OR top-level character/category; `moveSound` got an optional `groupId` param (drag-reorder in split view previously wrote to the single-tab `activeGroup`); delete-confirm modal names resolve via `pendingDeleteGroupId`; `handleCharacterFormSubmit`/`handleCategoryFormSubmit` resolve the target group via `groupEditTargetId`.
+- **Group CRUD generalized** with optional `groupId` param: `addGroupCharacter`, `updateGroupCharacter`, `deleteGroupCharacter`, `addGroupCategory`, `updateGroupCategory`, `deleteGroupCategory`.
+- `openAddCharacterModal` / `openAddCategoryModal` now `setGroupEditTargetId(null)` (top-level add always top-level).
+
+### Bugs fixed this session
+1. **BLANK SCREEN (critical, found via headless Edge)**: a cleanup `useEffect` referenced `showSoundModal`/`showCharacterModal`/`showCategoryModal` in its deps array BEFORE those `useState`s were declared → TDZ `Cannot access before initialization` on every render → whole tree unmounted. **Fix: moved that effect below the modal state declarations.** Lint/build do NOT catch TDZ (identifiers are defined, just later) — `no-use-before-define` is off.
+2. **Newly added groups invisible in split view (just fixed, verifying now)**: `groupSections` filtered to groups WITH items, but new groups start empty (`mode:'environment'`, `categories:[]` from `addGroup`) → never shown. **Fix: show every group of the matching `mode`, empty or not**, plus the group header `[+]` add-member button + empty hint.
+
+### Where I am right now / next steps
+- ✅ **Empty-group split-view fix VERIFIED (2026-09-05, headless Edge CDP)**: seeded empty env group "Tavern Team" + empty char-mode group "Heroes", reloaded, toggled split view → both group headers present (`groupHeaders:["Heroes","Tavern Team"]`), both panel select-placeholders present. `eslint 0 errors` (3 pre-existing warnings) + `vite build` passes. Headless Edge test instances cleaned up.
+- Remaining: user manual click-through in the real Tauri window (create empty group → toggle split view → group header appears → edit-mode `[+]` on the header adds a character/category → add/edit sounds on group items). Note vite dev server on 5199 still running.
+- **Standing rule added at user request**: a new "Permanent instruction: keep `opencode-summary.md` up to date" was added to `AGENTS.md` (so every future session loads it), and the "Session etiquette notes" section here now mandates updating this file after every meaningful step. Both explicitly scope the rule to **opencode only**: AGENTS.md now carries an explicit warning to all other agents (Cursor/Copilot/Claude Code/etc.) that `opencode-summary.md` is **opencode-owned and READ-ONLY for them** (edits forbidden, to avoid agents tripping over each other), and this file's header now repeats that warning.
+- User confirmed empty groups visible in split view; ordered 4 standardization changes (plan confirmed, no open questions). Executing now.
+
+## SESSION 2026-09-05 (cont.) — SPLIT/SINGLE-VIEW CONSISTENCY (confirmed, implementing)
+### Approved changes (from Q&A, all answers picked the recommended option)
+1. **Single-view sidebar title**: `App.jsx:4116` static `<h2>Categories</h2>` → `<h2>Groups</h2>` (all tabs).
+2. **Split-view panel titles**: `App.jsx:3199` `{isCharSection ? 'Characters' : 'Environment'}` → plural `'Environments'` (Characters stays).
+3. **Group mode-toggle labels** → `Character Pack` / `Environment Pack` in BOTH desktop sidebar (`App.jsx:4172`/`4179`) and mobile drawer (`App.jsx:3940`/`3947`). These spans are duplicated pairs — edits need extra surrounding context (py-2.5/text-sm drawer vs py-2/text-xs sidebar).
+4. **Split panels scroll per-panel like single view**: `App.jsx:3252` list `space-y-2 flex-1 overflow-y-auto no-scrollbar` → `space-y-2 flex-1 min-h-0 overflow-y-auto` (min-h-0 enables flex shrink so scroll engages; `overflow:auto` shows themed scrollbar only on overflow, no JS detection needed). Same treatment for the sound-grid panel `App.jsx:3379` (`min-h-0 overflow-y-auto`).
+- User chose NOT to change the single-view tab-bar buttons (`Characters`/`Environment`), the group name headers in split view, or the toggle logic itself — labels only, plus title changes.
+- Mode: live implementation now. Backup made: `ttrpg-soundboard-backup-20260905-193501`. Old backups to be deleted (keep newest).
+- 💡 ALL 4 CHANGES IMPLEMENTED & VERIFIED (2026-09-05, headless Edge CDP, vite on 5199, script `%TEMP%\opencode\sb-naming-test.ps1`):
+  - Sidebar h2 now `Groups` ✓ (STATE SPLIT OFF: `h2s:["Groups","Elf Sorcerer"]`)
+  - Split h3 titles now `["Characters","Environments"]` ✓ (plural; both Select-placeholders present)
+  - Pack toggle buttons `["Character Pack","Environment Pack"]` ✓ (seen after Groups tab + Edit Mode)
+  - Split lists: `min-h-0 overflow-y-auto` (themed scrollbar only on overflow); grid panel same. (`innerText` group-name check flaked only due to CSS `uppercase` transform — header presence was already proven by the earlier `sb-groups-test2` run; code untouched in that area.)
+  - eslint 0 errors (3 pre-existing) + `vite build` ✓. Headless Edge instances cleaned; vite 5199 still running.
+- Old backups 20260905-{170818,172625,174349,181935,182744,193501} deleted at user request; **newest backup: `ttrpg-soundboard-backup-20260905-195151`** (made before this split-view restructure; old ones pruned to newest).
+- NEXT: user manual click-through in the real Tauri window, then optionally delete temporary scripts.
+
+## SESSION 2026-09-05 (cont.) — SPLIT VIEW RESTRUCTURED INTO TWO "MINI SINGLE-VIEWS" ✅ DONE + VERIFIED
+- **User decision**: keep the "one-below-another" look as an ALTERNATE view later, NOT now. Current split view must mirror the single-view sidebar.
+- **Q&A confirmed**: (1) mirror single view structure, (2) keep top-level members reachable in split, (3) panel titles match single-view style (plain, not lime).
+- **What changed in `src/App.jsx`**:
+  - `renderPanelSection` header: lime/green `h3` (styling like a group name) → plain `h2 text-lg font-semibold` (`Characters` / `Environments`), Edit pencil `px-3 py-2` at same height.
+  - NEW **source pill row** below the title (mirrors single-view tab bar): `[Top-level]` + matching-mode groups (`mode==='characters'` in char panel, `mode!=='characters'` in env panel), horizontal `overflow-x-auto flex-nowrap`, active pill `bg-lime-600`. Per-panel refs `splitCharTabBarRef`/`splitEnvTabBarRef` + flags `splitCharTabBarScrollable`/`splitEnvTabBarScrollable` with its own ResizeObserver effect (same conditional `no-scrollbar` as the desktop tab bar).
+  - NEW per-panel source state `splitCharSource`/`splitEnvSource` = `'top' | groupId` (default `'top'`). `selectPanelSource(s)` switches source + clears the member `setSelection(null)`.
+  - Member list now shows ONLY the active source, flat: `'top'` → top-level characters/environment; group → that group's members (`No characters/categories in this group.` hint when empty). Old stacked group-section headers + per-group `[+]` add buttons + `handlePanelAddItemToGroup` all REMOVED.
+  - `handlePanelAddItem` replaces it: `setGroupEditTargetId(source === 'top' ? null : source)` → Add Character/Add Category in edit mode routes into the ACTIVE source group (or top-level).
+  - Selection validity effect extended: resets a panel source to `'top'` if its group is deleted OR switches opposite mode (e.g., mode toggled in single view while split state persisted).
+  - Selection shape unchanged (`{kind:'top', id}` / `{kind:'group', groupId, itemId}`) → all sound routing, drag reorder, delete/rename unchanged.
+- **Verified** (headless Edge CDP, port 5199, script `%TEMP%\opencode\sb-split-tabs-test.ps1`): titles `Characters`/`Environments` plain (no lime class), pills `[Top-level, Heroes]` / `[Top-level, Tavern Team]`, leftover group-header spans = 0, top-level Elf Sorcerer + Rain visible at split-on, clicking `Heroes` pill shows Sir Robin only, member click → grid heading `Heroes — Sir Robin`; same for `Tavern Team` → `Fireplace` → `Tavern Team — Fireplace`. eslint 0 errors (3 pre-existing) + `vite build` ✓.
+- **Test gotchas re-learned**: env data key is `ttrpg_environment` (SINGULAR — `ttrpg_environments` seed is ignored and defaults win); PowerShell console mangles the em dash (U+2014) in output — app text itself is correct; the grid heading filter should match group/item names, not the dash.
+- **Follow-up (user, 2026-09-05)**: the "Top-level" source pill renamed → `Default Characters` (characters panel) / `Default Environments` (environment panel), `App.jsx:~3270`. Verified headless (pills `[Default Characters, Heroes]` / `[Default Environments, Tavern Team]`, all other split checks still pass). eslint 0 errors + build ✓. Backup: `ttrpg-soundboard-backup-20260905-200501` (old 195151 pruned — newest only). NEXT: user manual click-through of split view in Tauri window.
+
+## SESSION 2026-09-05 (cont.) — EDIT-BAR BUTTON ORDER + DESKTOP PANEL STRETCH ✅ DONE + VERIFIED
+- **Ask 1**: reorder single-view Edit Mode Controls bar → `Add Group` first, then context `Add Character`/`Add Category`, then `Add Sound` last. Moved the `Add Group` button block (Folder icon, `openAddGroupModal`) above the Add Character/Category conditionals in `App.jsx` (edit bar ~3758). Verified headless: `["Add Group","Add Character","Add Sound"]`.
+- **Ask 2**: desktop single-view sidebar ("Groups" panel) + Standard Sound Grid panels should **extend to fill the screen height** instead of only wrapping content (see mobile reference). Fix: added `min-h-full` to the single-view layout row (line 3819, desktop branch of the `isMobile ? ... : ...` ternary) — matching the mobile branch. The two `bg-dark-800` panels then stretch via flex row `align-items: stretch`; the sidebar's inner list already has `flex-1 overflow-y-auto` so it scrolls internally.
+- **Verified headless** at `--window-size=1440,900` (≥1024px so the `lg:flex-row` branch actually applies): viewport 808 − header 73 = 735 available; scroll container content height 735 − py-6(48) = 687; sidebarH == gridH == 687 → both fill. eslint 0 errors (3 pre-existing) + `vite build` ✓.
+- **Gotcha**: at 800px the `lg:` breakpoint isn't hit → row falls back to the stacked `flex-col` branch, so always test panel-stretch at width ≥1024. `min-h-full` resolves against the scroll container's *content* height (padding `py-6` subtracts 48px).
+- **Backup**: `ttrpg-soundboard-backup-20260905-201352` (old 200501 pruned, newest only).
+- NEXT: user manual check of the new edit-bar order + stretched panels in the real Tauri window.
+
+## SESSION 2026-09-05 (cont.) — SPLIT VIEW PANELS ALSO STRETCH ✅ DONE + VERIFIED
+- Follow-up: single-view stretch applied to split view too. Changes in `src/App.jsx` (SPLIT VIEW LAYOUT ~3806): outer container `flex flex-col space-y-4` → added `min-h-full`; the `grid grid-cols-1 xl:grid-cols-2 ...` → added `flex-1 min-h-0` (fills the extra height; grid auto row track stretches via default `align-content: normal→stretch`, grid items stretch by default, and each `renderPanelSection`'s existing `h-full` then resolves against the now-definite column height). No changes inside `renderPanelSection`.
+- **Verified headless** at 1440×900: after split toggle, both panels — mini sidebar (`h2 "Characters"/"Environments"` inside `.p-4`) and sound grid (`overflow-y-auto p-4`) — measure 687px each (available 735 − py-6(48)), row 687. eslint 0 errors + `vite build` ✓.
+- **Test gotcha**: split toggle button = the header switch `button.relative.inline-flex.h-5.w-9` (no aria-label; locate by class).
+- **Backup**: `ttrpg-soundboard-backup-20260905-202030` (old 201352 pruned, newest only).
+- NEXT: user manual check of split + single views stretched, edit-bar order, in the real Tauri window.
+- Verification plan after edits: `npx eslint src/App.jsx` (0 err/3 pre-existing warnings) + `npx vite build`, then headless Edge CDP text-check for `Groups`, `Environments`, `Character Pack`, `Environment Pack`; then update this summary.
+  - CDP plumbing gotchas (this machine): Edge headless must launch DIRECTLY at the app URL with `--no-proxy-server --remote-debugging-port`, enum pages via `/json`, pick the page whose `url` is the app (skip `edge://*`); `about:blank` and `edge://` pages throw `SecurityError` on `localStorage`; `Get-PageWs` parameter is `-Port` NOT `-DebugPort`; Edge dies between separate shell invocations → run launch + test in one command.
+- After verification: final `npx eslint src/App.jsx` + `npx vite build`, then update todos; user does final manual click-through (run `npm run tauri dev`).
+- Backups this session: `ttrpg-soundboard-backup-20260905-174349`, `-181935` (post TDZ fix), `-182744` (before empty-group fix).
+
+### ⚠️ GOTCHAS learned (don't repeat)
+- **TDZ**: any new `useEffect`/expression reading a state must come AFTER that state's `useState` in the component body. Lint/build won't catch it — must runtime-test.
+- `splitSoundTarget` must carry ALL four container types (group/groupCharacter/character/environment) — earlier version only handled groups, so top-level split add/edit silently routed nowhere.
+- Test harness notes above about Edge headless/CDP.
+
 ## Session etiquette notes
-- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260903-143404`.
+- **FOR OPencode ONLY** (standing rule): the doc-updating rules apply only to opencode (the AI assistant), not the human user. After every meaningful step — each edit/verification/decision — update this file at the bottom ("SESSION 2026-09-05" section, or a new one for a new day): what the current task is, what's done (fixed/verified), what's in progress right now, what's next, and gotchas. If the session gets cut off (quota/tokens), this file must be enough to resume exactly. Record backups, test results, ports/processes, file:line refs.
+- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260905-182744`.
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
 - `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).

@@ -30,6 +30,7 @@ export default [
         fetch: 'readonly',
         alert: 'readonly',
         navigator: 'readonly',
+        ResizeObserver: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',
