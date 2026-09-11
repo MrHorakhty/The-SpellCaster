@@ -1,5 +1,8 @@
 # Deep-feature E2E runner: Phase A (webview) + Phase B (Tauri Windows app).
 # Uses e2e-features.mjs (real file upload -> save -> play -> volume/fade/loop -> theme/CRUD/persistence).
+#
+# E2E TEST POLICY: When asked to run E2E, only execute and report results.
+# Do NOT modify app code or harness code — wait for user instructions.
 param([string]$Phase = 'all')
 $ErrorActionPreference = 'Continue'
 $tmp = Join-Path $env:TEMP 'opencode'
