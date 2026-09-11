@@ -75,10 +75,7 @@ Added `switchTab(type)` + `selectItem(type, id)` helpers in `src/App.jsx`:
 
 ## Backups (Desktop / OneDrive Masaüstü)
 Backup root is **`C:\Users\emire\OneDrive\Masaüstü\`** (not `Desktop`). Per AGENTS.md, always back up before changes; exclusions: `node_modules`, `dist`, `.git`, `src-tauri/target`, `src-tauri/gen` (use bare dir names for `/XD` because PowerShell mangles full paths).
-- `ttrpg-soundboard-backup-20260903-143404` (newest — pre group character/group mode toggle; groups feature + fixes uncommitted).
-- `ttrpg-soundboard-backup-20260903-141939` (pre rail-delete-badge fix).
-- Previous: `ttrpg-soundboard-backup-20260901-154654` (pre-#16 fix, groups not yet started).
-- Older backups from this work were deleted by the user after each new backup was made.
+- `ttrpg-soundboard-backup-20260907-155920` (newest — pre E2E; old 20260907-152054 pruned).
 
 ## Next likely work
 - Release APK (`npm run tauri android build`, needs signing keystore).
@@ -274,9 +271,108 @@ Make **native desktop split view** show **group contents**. Split view (`isSplit
 - `splitSoundTarget` must carry ALL four container types (group/groupCharacter/character/environment) — earlier version only handled groups, so top-level split add/edit silently routed nowhere.
 - Test harness notes above about Edge headless/CDP.
 
+## SESSION 2026-09-07 — DESKTOP SINGLE-VIEW SOUND GRID NOW SCROLLS INDEPENDENTLY ✅
+- **Ask**: "If there are a lot of sounds in a single panel, will it unlock scrolling on its own? If not it should" — desktop version only.
+- **Was**: desktop single-view "Standard Sound Grid" (`App.jsx:4387`) had `flex-1 min-w-0` **but no `overflow-y-auto`/`min-h-0`** → it grew with content and the WHOLE page scrolled (sidebar + grid together). Split-view panels already scrolled internally; single-view did not.
+- **Fix (3 one-line class changes, desktop single-view only) — `src/App.jsx`**:
+  1. Main-content wrapper `App.jsx:3748`: `flex-1 overflow-y-auto w-full …` → added `flex flex-col` (so its child can be a height-bounded flex item). Behavior-neutral for mobile + split (verified reasoning: their wrappers use `min-h-full`, unchanged; they still whole-page scroll).
+  2. Single-view layout row `App.jsx:3819` desktop branch: `… gap-6 min-h-full` → `… gap-6 flex-1 min-h-0` (row now bounded to the content area instead of growing). Mobile branch untouched.
+  3. Sound-grid panel `App.jsx:4387`: `flex-1 min-w-0 bg-dark-800 rounded-xl p-6` → `flex-1 min-w-0 min-h-0 bg-dark-800 rounded-xl p-6 overflow-y-auto` (scrolls internally).
+  - Sidebar (already `flex-col` + inner `flex-1 overflow-y-auto no-scrollbar` list at 4246) stays fixed; grid scrolls; on <1024px (flex-col fallback) old whole-page scroll still takes over — acceptable.
+- **Verified**: `npx eslint src/App.jsx` 0 errors (3 pre-existing warnings) ✓ · `npx vite build` ✓ · **headless Edge CDP** (vite preview :5233, remote-debug :9333, seed 60 sounds via localStorage):
+  - Grid panel `clientH 687 / scrollH 1636` (hasFlexWrapGrid); `scrollTo(bottom)` → `scrollTop 949`, clippedAtBottom true.
+  - Page didn't move: `windowScrollY 0`, `docScrollH 808 == viewport 808`; sidebar `top 97` before and after scrolling.
+  - **Harness gotcha**: naive finder matched the outer main-content wrapper first (its `scrollH == clientH`, so scrollTop never moved and looked "stuck") — must filter finder to `scrollHeight > clientHeight`. Initial misleading runs were a TEST bug, the app was correct all along.
+- **Backup**: `ttrpg-soundboard-backup-20260907-142054` (newest; old 20260905-202030 pruned to newest). Now only `src/App.jsx` modified vs git.
+- **NEXT**: user manual check in the real Tauri window (desktop single view, many sounds → grid scrolls, sidebar fixed). Test scripts in `%TEMP%\opencode\` (sb-scroll-test.ps1, sb-scroll-cdp.mjs); processes cleaned up.
+
+## SESSION 2026-09-07 (cont.) — PRE-COMMIT END-TO-END TESTING ✅
+- **User asked for E2E testing before committing the scroll changes. Done — PASS=45, FAIL=0, WARN=3.**
+- Build/test gates: `npx eslint src/App.jsx` 0 errors (3 pre-existing warnings) ✓ · `npx vite build` ✓.
+- **Test harness**: headless Edge CDP (vite preview :5233, remote-debug :9333), seed 60 char sounds / 60 env sounds / 2 groups, script `%TEMP%\opencode\sb-e2e-full.mjs` + `sb-e2e-run.ps1` (all in `%TEMP%\opencode\`, NOT in repo).
+- **Suite A (single-view scroll) — 10/10 PASS**: grid panel (`bg-dark-800 … overflow-y-auto`) scrollH=1636/clientH=687, scrollTo(bottom)→scrollTop=949, window.scrollY=0, docScrollH==innerH (808), sidebar pinned at top=97 before/after, no horizontal overflow.
+- **Suite B (split-view scroll) — PASS except expected WARN**: 2 panels found; clicked Human Paladin in the split Characters panel (note: split view has NO `lg:w-64` sidebar — the earlier click selector was wrong and was the cause of one "Suite B" failure) → panel 0 scrollH=4740/clientH=687, scrollTo(bottom)→4053, page pinned. Panel 1 WARN (environment panel, nothing selected → empty, nothing to scroll — correct).
+- **Suite C (regression) — 30 checks, 0 FAIL, 3 WARN**: structure/sidebar/nav/tab-persistence/edit-mode/sliders/settings/themes/data all PASS. WARNs: C18/C19 (playback ring test — seed data has no real .mp3 so audio can't start; known test limitation, not app bug). C20/C21 etc fine.
+- **Test-script gotchas this session**: (1) find-the-grid by vague `.flex.flex-wrap` descendant matched the outer main-content wrapper FIRST (scrollH==clientH → looked "not scrolling") — must target the `bg-dark-800 … overflow-y-auto` grid panel explicitly. (2) `\'` inside a backtick template literal sent to CDP turns into a bare apostrophe → `SyntaxError: missing ) after argument list` in the injected page JS; use double-quoted inner strings ("B4: page didn't scroll") instead.
+- **Backup**: newest now `ttrpg-soundboard-backup-20260907-155920` (old 20260905-202030, 20260907-142054, 20260907-152054 deleted at user request — newest kept only).
+- **NEXT**: user commit of `src/App.jsx` (+ opencode-summary.md) on `mobile-support` branch.
+
+## SESSION 2026-09-07 (cont.) — SPLIT VIEW PANELS NOW SCROLL INTERNALLY TOO ✅
+- **Ask**: "does split view also scroll like this?" — answer was NO at first: split panels already had `overflow-y-auto min-h-0` on their grid (`App.jsx:3441`), but the two-panel CSS grid's **auto rows expand to content**, so panels grew and the whole page scrolled again (same class of bug single view just had).
+- **Fix — `src/App.jsx`** (2 spots this step):
+  1. Split wrapper `App.jsx:3807`: `flex flex-col space-y-4 min-h-full` → `flex-1 min-h-0` (wrapper bounded to content area; main-content is now `flex flex-col` from the single-view fix).
+  2. Split panel row `App.jsx:3808`: `grid grid-cols-1 xl:grid-cols-2 …` → **`flex flex-col xl:flex-row gap-6 flex-1 min-h-0 divide-y xl:divide-y-0 xl:divide-x divide-dark-700`**; the two panel columns (`3809/3812`) got `flex-1 min-w-0 min-h-0` (kept `pr-0 xl:pr-4` / `pt-6 xl:pt-0 xl:pl-4`). CSS-grid auto rows were the root cause — row height chased content, so `h-full` panels followed it; flex + `min-h-0` bounds them. Tailwind `divide-*` still works on flex children.
+- **Verified**: eslint 0 errors (3 pre-existing) ✓ · `vite build` ✓ · headless Edge CDP (same preview:5233 / remote-debug:9333, seed 60-sound char, toggle split switch, click "Seed Wizard"):
+  - Sound-grid panel `clientH 687 / scrollH 4740`, `scrollTo(bottom)` → `scrollTop 4053`, bottom reached.
+  - Page pinned: `windowScrollY 0`, `docScrollH 808 == viewport`; main-content `735/735` (no whole-page scroll). Env panel `687/687` (placeholder, nothing selected — expected).
+  - **Key learning**: bounding the WRAPPER alone isn't enough for split — the inner panel ROW must be flex (not CSS grid auto rows) or the tracks still grow to content. `flex-1 min-h-0` on the wrapper + row + each panel column.
+- **Backup**: `ttrpg-soundboard-backup-20260907-152054` (newest; 142054 pruned to newest). `git status`: only `src/App.jsx` modified.
+- **NEXT**: user manual check in real Tauri window (single view + split view, many sounds → each grid scrolls, sidebar fixed). Test scripts `%TEMP%\opencode\sb-split-scroll{,-test.ps1,-cdp.mjs,-2.mjs,-3.mjs}`; processes cleaned up.
+
+## SESSION 2026-09-11 — E2E TEST: WEBVIEW (browser) + WINDOWS PROGRAM (Tauri) ✅ (no code changes)
+- **User request**: "end to end test on webview and windows program versions. Don't change anything just do the test and report back."
+- **Confirmed no code changes**: `git status` unchanged after the run (`src/App.jsx`, `opencode-summary.md` only); `dist/` + `src-tauri/target/` gitignored (vite build output + debug binary). NO backup was needed (nothing changed).
+- **Test harness** (all in `%TEMP%\opencode\`, NOT in repo — same pattern as previous sessions):
+  - `e2e-run.mjs` — generalized single suite parameterized via env: `CDP_PORT`, `LABEL`, `EXPECT_TAURI` (1/0), `SAVE_RESTORE` (1 = capture all localStorage before seeding, restore + reload after). Seeding now uses the CORRECT env key `ttrpg_environment` (SINGULAR — `ttrpg_environments` is ignored by the app, a latent bug in the old 9/7 seed). Covers: platform (P1–P6), single-view scroll (A1–A10), split-view scroll (B0–B7 + source-pill listing), regression feature matrix incl. env tab loads Forest (C1–C34, incl. About → Version 0.1.3, number inputs, sliders, themes, data keys, viewport fills).
+  - `e2e-all.ps1` — Phase A: `vite build` (via `cmd /c` to swallow the benign INEFFECTIVE_DYNAMIC_IMPORT warning) → `vite preview :5233` → headless Edge CDP :9333 (fresh profile `e2e-web-profile`) → suite with `EXPECT_TAURI=0`. Phase B: set `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9224 --remote-allow-origins=*`, launch `npm run tauri dev` detached, poll `http://127.0.0.1:9224/json` (up to 15 min), suite with `EXPECT_TAURI=1 SAVE_RESTORE=1`. NOTE: PS `$ErrorActionPreference='Stop'` makes the npx vite build stderr warning throw → use 'Continue' + `cmd /c ... 2>&1`.
+- **RESULTS — Phase A (webview, browser via headless Edge @ localhost:5233)**: **PASS=57 FAIL=0 WARN=3** (WARNs all expected: C18/C19 no real .mp3 in seed so no playback ring; split env panel empty-not-scrollable). Viewport 1416×808; single-view grid scrolls independently (scrollH 1636/clientH 687, page pinned, sidebar pinned top=97); split OK; pills `Default Characters|Default Environments`.
+- **RESULTS — Phase B (Windows program, `src-tauri/target/debug/app.exe`, page @ localhost:5173 via WebView2 CDP)**: **PASS=57 FAIL=0 WARN=3** (same expected WARNs; split env panel is a placeholder). Viewport 1200×800 (window 1200×800 from tauri.conf.json); single-view grid scrolls (scrollH 1948/clientH 679); split panels scroll internally (panel0 scrollH 1932/clientH 315); page pinned throughout; `isTauri=true` verified; **desktop app real data protected**: 6 localStorage keys captured and restored, `localStorage.restore: restored` + reload confirmed before app kill.
+- **Processes/ports**: after cleanup → no listeners on 5173/5233/9333/9224, no app.exe/msedge test procs. ⚠️ gotcha: the runner's kill-by-cmdline didn't reach the Tauri-launched `app.exe` (survived the npm wrapper), so `e2e-all.ps1` Phase B cleanup was supplemented manually: `Stop-Process -Id <app-pid>` + the msedgewebview2.exe child (PID holding 9224). The `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` approach works reliably for driving the real Windows webview headlessly.
+- **Backup**: none needed (no changes). Oldest-known data concern: none. `git status`: only `src/App.jsx` + `opencode-summary.md` modified (pre-existing, uncommitted).
+- **NEXT**: report handed to user (this session). No open items; user's choice on committing the uncommitted changes.
+
+## SESSION 2026-09-11 (cont.) — HARNESS HARDENED: robust process-lifecycle `e2e-all.ps1` ✅
+- **User request**: rewrite `e2e-all.ps1` (the primary E2E PowerShell runner) to prevent terminal hangs during test execution with 5 strict requirements. All implemented + parse-verified:
+  1. **Process Capture**: every background launch (`vite preview` Phase A, headless Edge Phase A, `npm run tauri dev` Phase B) now uses `Start-Process -PassThru` → held in `$previewProc` / `$edgeProc` / `$tauriProc` (the npm wrapper PID captured).
+  2. **Try/Finally**: each phase's ENTIRE body (launch → wait → suite) is wrapped in `try { } finally { }`, so cleanup runs even if a test crashes (node throws, CDP times out, etc.).
+  3. **Output Redirection**: node runner output (`node e2e-run.mjs`) is piped to a timestamped log `%TEMP%\opencode\e2e-run-<yyyyMMdd-HHmmss>.log` (`>> $Script:TestLog 2>&1` inside `Invoke-TestSuite`) — nothing printed to the terminal, no buffer truncation. Status/progress lines + summary still go to console.
+  4. **Hard Timeout**: `Assert-NotTimedOut` checks `Script:TestStartTime` every check-in point (`≥15 min` → logs + red message + `exit 1`). Bonus: Phase B already had an independent 15-min CDP readiness deadline poll on `:9224`.
+  5. **Aggressive Cleanup** in the `finally` blocks: `Stop-ProcessTree` on the captured PIDs (`$Proc.Kill($true)` — .NET tree-kill + `Stop-Process -Force` fallback), then `Remove-Orphans` (CIMInstance sweep for `*ttrpg-soundboard*`, `*vite*{preview,5173}*`, debug-port `msedge`/`msedgewebview2`), then the requested blanket `Get-Process -Name msedgewebview2 | Stop-Process -Force`, then env-var/profile cleanup (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, Edge profile dirs).
+- **PS 5.1 gotcha hit**: the `≥`/`—` characters in `Assert-NotTimedOut` strings caused **parse errors** (`Unexpected token 'tests'`). Fix: ASCII `>=` / `--` in code strings only (comments with `═`/`─`/`→` are fine). Verify with `[System.Management.Automation.Language.Parser]::ParseFile(...)` → `PARSE OK`.
+- **Note**: Phase A cleanup also removes the Edge profile dir (headless run leaves no junk). Known: `$Proc.Kill($true)` on the npm wrapper may not reach the Tauri-spawned `app.exe`/`msedgewebview2.exe` — that's why `Remove-Orphans` + the blanket webview kill exist as the net.
+
+## SESSION 2026-09-11 (cont.) — E2E HARNESS MOVED INTO THE REPO → `e2e/` ✅
+- **User request**: move the E2E harness out of `%TEMP%\opencode` into the project so it can be referenced when an E2E test is requested. Q&A: (1) move **all E2E files**, (2) target **`e2e/` subfolder**.
+- **Now in repo** `C:\Users\emire\Projects\ttrpg-soundboard\e2e\`: `e2e-all.ps1` (primary runner — the hardened one), `e2e-run.mjs` (basic suite, env CDP_PORT/LABEL/EXPECT_TAURI/SAVE_RESTORE), `e2e-features.ps1` + `e2e-features.mjs` (deep feature suite, uses WAV upload), `e2e_silence.wav`.
+- **Path fixes for relocation** (temp originals deleted — repo copy is now the single source of truth):
+  - `e2e-all.ps1`: `$proj = Split-Path -Parent $PSScriptRoot`; `Invoke-TestSuite` runs `node (Join-Path $PSScriptRoot $Mjs)`. Logs/profiles/Edge-profile still go under `%TEMP%\opencode\` (runtime artifacts stay out of the repo).
+  - `e2e-features.ps1`: same `$proj` derivation; `$harness = $PSScriptRoot` → `node "$harness\e2e-features.mjs"`.
+  - `e2e-features.mjs`: `WAV` is now `join(dirname(fileURLToPath(import.meta.url)), 'e2e_silence.wav')` (module-relative; the script self-regenerates the WAV on each run).
+  - `e2e-run.mjs`: had NO temp-path references — untouched.
+- **Verified**: both ps1 `PARSE OK` (Parser::ParseFile), both mjs `node --check` OK.
+- **How to run now**: `powershell -NoProfile -ExecutionPolicy Bypass -File e2e\e2e-all.ps1 -Phase web` (and/or `-Phase win`) from the project root; deep feature run = `e2e\e2e-features.ps1`.
+- **Backup**: `ttrpg-soundboard-backup-20260911-153349` (made before this change; newest. Old 20260907-155920 kept — did not prune without user request).
+
+## SESSION 2026-09-11 (cont.) — DEEP FEATURE E2E (upload/playback/theme/CRUD/persistence) — IN PROGRESS (no code changes)
+- **User pushed back**: the 57-check run only proved scroll/layout. Asked whether volume, local file saves, custom icon colors etc. actually work. Task: deeper E2E without changing app code.
+- **New harness** (MOST RECENT session — since moved into the repo at `e2e\`, see the "HARNESS MOVED INTO THE REPO" section above; the below describes the harness itself):
+  - `e2e-features.mjs` — deep suite, env: `CDP_PORT`, `LABEL`, `EXPECT_TAURI`, `SAVE_RESTORE`. Suites: D (add sound: real WAV upload via `DOM.setFileInputFiles`, submit, color #ff0000, loop, fadeIn=2, persistence + platform file entry), E (live playback via patched `HTMLMediaElement.prototype.play/pause` → `window.__e2eAudio`; volume, fade-in ramp, manual loop rewind, Stop All), F (theme Forest F1–F3, add character + sound persistence + reload F4–F8), G (add env sound, delete sound via modal, delete character).
+  - `e2e-features.ps1` — Phase A web: vite preview :5233 + headless Edge :9334 (fresh `e2e-feat-profile`, `--autoplay-policy=no-user-gesture-required`). Phase B win: `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9225 --remote-allow-origins=*'` + `npm run tauri dev`, polls `:9225/json` up to 15 min; asserts uploads-dir proof (`%APPDATA%\com.mrhorakhty.thespellcaster\uploads` — runner deletes non-e2e test files, keeps `*_e2e_silence.wav`); `SAVE_RESTORE=1` snapshots+restores localStorage; cleanup kills `*ttrpg-soundboard*`, msedgewebview2 w/ debug port, node/vite. Exit codes 0/1/2 (pass/warn/fail).
+  - `e2e_silence.wav` — 20s mono 8kHz silent WAV (long enough for fade-in + loop rewind) generated for uploads.
+- **Phase A first run FAILED at D3** then again at D7: root cause is a **TEST SELECTOR BUG, NOT an app bug**. The edit-bar "Add Sound"/"Add Character" buttons have NO explicit `type`, so they default to `type='submit'`; my submit-button finder (text + type=submit + first match) hit the EDIT-BAR button (styling `bg-dark-700 px-3 py-1`) BEFORE the modal's real submit (styling `bg-lime-600 px-4 py-2`). Clicking it re-ran `openAddSoundModal()` instead of submitting → modal never closed, nothing saved. Diagnosed via diag2-submit.mjs: form `checkValidity()=true`, invalid=NONE, upload label "1 file uploaded", zero React console errors — proving app side healthy. The `Toggle Edit Mode` click was ALSO wrong first time (icon-only button, no text) — fixed earlier to `button[title="Toggle Edit Mode"]` click; active styling confirmed `bg-lime-600` (App.jsx:3252).
+- **Mid-run state (before this wrap)**: Phase A deep suite: PASS=9 FAIL=25 WARN=0 (F1–F3 theme PASS, F8 theme persistence PASS, real WAV upload + label PASS; everything needing a real modal submit FAILED). Phase B (win) NOT run. D2 edit-mode check now classList-scoped (`lime|lime-600|bg-lime`); volume slider selector accepts `max==='1'||max==='1.0'` (2 places); G4 clicks Characters tab first.
+- **FIX APPLIED to harness only**: all 3 modal submits in e2e-features.mjs (lines ~148, ~269, ~316) now scoped `x.type==='submit' && /bg-lime-600/.test(x.className)` so the modal button is matched, not the edit-bar default-submit button. Opening the modal still via `window.__clickText('Add Sound'/'Add Character')` (edit-bar first match opens the same modal — fine).
+- **Cleanup DONE**: diag scripts/profiles/logs removed; processes killed; all test ports free (5233, 9334, 9225, diag 9336/9337, old 9333/9224) confirmed via Get-NetTCPConnection; `git status` unchanged (only pre-existing `src/App.jsx` + `opencode-summary.md`). No backup needed (no repo changes).
+- **NEXT (resume point)**: rerun `powershell -NoProfile -ExecutionPolicy Bypass -File e2e\e2e-features.ps1 -Phase web` (expect D→F→G to pass now that modal submit targets lime button; E tests also depend on a real sound existing), then `-Phase win` (SAVE_RESTORE + uploads-dir proof). Report PASS/FAIL/WARN per platform and append results here.
+
+## SESSION 2026-09-11 (cont.) — COMPREHENSIVE `e2e-full.mjs` SUITE VALIDATED (web + Tauri) ✅ DONE
+- **User request (resumed)**: finish hardening the E2E harness and validate the new comprehensive `e2e-full.mjs` suite in both Phase A (web) and Phase B (win).
+- **Changes made this session** (test harness ONLY — no app code touched):
+  - `e2e\e2e-all.ps1`: added `[string]$Suite = 'full'` param → `$Script:MjsFile = "e2e-$Suite.mjs"`; both `Invoke-TestSuite` calls now pass `-Mjs $Script:MjsFile`. Default suite is now `full` (was `run`). Parse OK.
+  - `e2e\e2e-full.mjs` fixes (all `node --check` OK):
+    1. **B3 `localStorage` ReferenceError (FATAL)**: line 687 called `localStorage.getItem('boxSize')` in Node context → wrapped in `evalJs`.
+    2. **log() outputs status word** (`[CAT] PASS/FAIL/WARN …`) instead of glyph-only — PS5.1 log round-trip corrupts ✓/✗/⚠ (UTF-16/ANSI mix), making FAILs greppable.
+    3. **E1/E2/J1/D1/D4 selector bug**: app nests edit-mode buttons as SIBLINGS of `[data-sound-card]` inside `div.group` (App.jsx:3059 closes the card div BEFORE the `{editMode && …}` buttons at 3062-3077). Fixed selectors to `c.parentElement?.querySelector('button[title="Edit Sound"/"Delete Sound"]')`. Diagnosed via E1-DIAG asserting `[data-sound-card]` texts (Smite/Shield Bash/Healing Light) vs Edit-btn ancestor chain (`button < div.group.relative.shrink-0`).
+    4. **Suite L (split view)**: L4/L5/L6 detected the split sidebar by requiring `overflow-y-auto` on the panel and L6 searched for `h2` "Environment" — but the real heading is **"Environments"** (App.jsx:3249) and the sidebar lacks that scroll class. Rewrote to `findSidebar(heading)` = `h2` heading → `.closest('div[class*="bg-dark-800"]')`.
+    5. **Suite X (drag reorder)**: previously skipped (`NO_RECTS`, malformed cards[3]). Now reloads page first (returns to default Paladin view, localStorage intact), re-enters edit mode, drags **last→first** card via CDP `Input.dispatchMouseEvent` (pressed → 5 moved steps → released). VERIFIED WORKING: before `["Divine Smite","Shield Bash","Healing Light","Divine Light"]` → after `["Divine Light","Divine Smite","Shield Bash","Healing Light"]`.
+- **Results**: Phase A (headless Edge :9333) **PASS=99 FAIL=0 WARN=0 exit=0**; Phase B (Tauri WebView2 :9224, SAVE_RESTORE=1) **PASS=99 FAIL=0 WARN=0 exit=0**. All 16 prior FAILs resolved; 0 remaining.
+- **Run commands now**: `powershell -NoProfile -ExecutionPolicy Bypass -File e2e\e2e-all.ps1 -Phase web` (and/or `-Phase win`, `-Suite run|full|features`). Log: `%TEMP%\opencode\e2e-run-<ts>.log` (note: node log lines can be UTF-8 while PS headers differ — read via .NET `[Text.Encoding]::UTF8` + strip NULs, or expect mixed glyphs).
+- **Gotchas recorded**: PS `Add-Content`/`Set-Content` can write UTF-16/ANSI mixed once node output streams in → grep the log with the .NET decode recipe above; template literals inside `evalJs(...)` must avoid nested backticks (`${…}` interpolation is fine, backticks are not); pick which sound is "last" via `cards[cards.length-1]`, not hardcoded index 3.
+- No backup needed (no repo fixtures changed); `git status` unchanged (only pre-existing modified files + newly added `e2e/` harness).
+
 ## Session etiquette notes
 - **FOR OPencode ONLY** (standing rule): the doc-updating rules apply only to opencode (the AI assistant), not the human user. After every meaningful step — each edit/verification/decision — update this file at the bottom ("SESSION 2026-09-05" section, or a new one for a new day): what the current task is, what's done (fixed/verified), what's in progress right now, what's next, and gotchas. If the session gets cut off (quota/tokens), this file must be enough to resume exactly. Record backups, test results, ports/processes, file:line refs.
-- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260905-182744`.
+- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260911-153349`.
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
 - `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).

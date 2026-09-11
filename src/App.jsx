@@ -3745,7 +3745,7 @@ function App() {
             </header>
 
             {/* Main Content */}
-            <div className={`flex-1 overflow-y-auto w-full ${isMobile ? 'px-3 py-3' : 'px-6 py-6'}`} style={isMobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
+            <div className={`flex flex-col flex-1 overflow-y-auto w-full ${isMobile ? 'px-3 py-3' : 'px-6 py-6'}`} style={isMobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
                 {/* Edit Mode Controls (Hidden in Split View, hidden on mobile - handled by chip bar) */}
                 {editMode && !isSplitView && !isMobile && (
                     <div className="mb-6 p-3 bg-lime-600 text-white rounded-lg w-full mx-auto">
@@ -3804,19 +3804,19 @@ function App() {
 
                 {isSplitView ? (
                     /* SPLIT VIEW LAYOUT */
-                    <div className="flex flex-col space-y-4 min-h-full">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
-                            <div className="pr-0 xl:pr-4">
+                    <div className="flex flex-col space-y-4 flex-1 min-h-0">
+                        <div className="flex flex-col xl:flex-row gap-6 flex-1 min-h-0 divide-y xl:divide-y-0 xl:divide-x divide-dark-700">
+                            <div className="flex-1 min-w-0 min-h-0 pr-0 xl:pr-4">
                                 {renderPanelSection('characters')}
                             </div>
-                            <div className="pt-6 xl:pt-0 xl:pl-4">
+                            <div className="flex-1 min-w-0 min-h-0 pt-6 xl:pt-0 xl:pl-4">
                                 {renderPanelSection('environment')}
                             </div>
                         </div>
                     </div>
                 ) : (
                     /* STANDARD SINGLE TAB VIEW LAYOUT */
-                    <div className={isMobile ? 'flex flex-col gap-4 min-h-full' : 'flex flex-col lg:flex-row gap-6 min-h-full'}>
+                    <div className={isMobile ? 'flex flex-col gap-4 min-h-full' : 'flex flex-col lg:flex-row gap-6 flex-1 min-h-0'}>
                         {/* Mobile: Collapsible left navigation panel + grid */}
                         {isMobile && (
                             <div className="flex gap-3 items-stretch flex-1 min-h-full">
@@ -4384,7 +4384,7 @@ function App() {
 
                         {/* Standard Sound Grid (desktop only; mobile uses the grid in the left-panel layout) */}
                         {!isMobile && (
-                        <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-6">
+                        <div className="flex-1 min-w-0 min-h-0 bg-dark-800 rounded-xl p-6 overflow-y-auto">
                             <div className="flex items-center justify-between gap-3 mb-4">
                                 <h2 className="text-xl font-semibold truncate">
                                     {activeCharacter ? activeCharacter.name : (activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category) || activeGroup?.name)}
