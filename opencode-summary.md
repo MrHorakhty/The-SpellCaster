@@ -370,9 +370,21 @@ Make **native desktop split view** show **group contents**. Split view (`isSplit
 - **Gotchas recorded**: PS `Add-Content`/`Set-Content` can write UTF-16/ANSI mixed once node output streams in → grep the log with the .NET decode recipe above; template literals inside `evalJs(...)` must avoid nested backticks (`${…}` interpolation is fine, backticks are not); pick which sound is "last" via `cards[cards.length-1]`, not hardcoded index 3.
 - No backup needed (no repo fixtures changed); `git status` unchanged (only pre-existing modified files + newly added `e2e/` harness).
 
+## SESSION 2026-09-11 (cont.) — E2E CLEANUP FIX: Tauri process tree killed properly ✅
+- **Problem**: `Stop-ProcessTree` (calling `.Kill($true)` on the npm wrapper PID) didn't reach the Tauri-spawned `app.exe` or its WebView2 children, leaving a frozen black window after tests.
+- **Fix in `e2e\e2e-all.ps1` Phase B finally block** (3 changes):
+  1. `Stop-ProcessTree $tauriProc` → `Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null` — kills npm wrapper tree via OS taskkill.
+  2. Added `taskkill /F /IM app.exe /T 2>&1 | Out-Null` — catches the Tauri binary + its process tree (actual exe name is `app.exe`, NOT `TheSpellCaster.exe`).
+  3. Added CIMInstance loop to find `msedgewebview2.exe` with `--webview-exe-name=SearchHost.exe` in command line → `taskkill /F /PID <pid> /T` per match. This targets only our test's WebView2 instances, not unrelated system WebView2 (WhatsApp, Google Drive, Windows Search).
+- **Verified**: 3 consecutive Phase B runs exit=0 with immediate terminal return; no orphan `app.exe` or debug-port `msedgewebview2.exe` remains. Remaining SearchHost WebView2 processes are normal Windows system instances (no `--remote-debugging-port`, parent = system SearchHost PID 15580).
+- **Gotcha**: blanket `taskkill /F /IM msedgewebview2.exe /T` would kill WhatsApp/Google Drive/Windows Search WebView2 — must filter by `--webview-exe-name=SearchHost.exe` in CommandLine.
+- Phase A (web) also re-run: exit=0, no changes needed (headless Edge cleanup was already working).
+- **E2E full results**: Phase A PASS=99 FAIL=0 WARN=0 · Phase B PASS=99 FAIL=0 WARN=0 (all 3 runs).
+- No backup needed (only `e2e/e2e-all.ps1` changed, not app code). `git status`: `e2e/e2e-all.ps1` + `opencode-summary.md` modified.
+
 ## Session etiquette notes
 - **FOR OPencode ONLY** (standing rule): the doc-updating rules apply only to opencode (the AI assistant), not the human user. After every meaningful step — each edit/verification/decision — update this file at the bottom ("SESSION 2026-09-05" section, or a new one for a new day): what the current task is, what's done (fixed/verified), what's in progress right now, what's next, and gotchas. If the session gets cut off (quota/tokens), this file must be enough to resume exactly. Record backups, test results, ports/processes, file:line refs.
-- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260911-153349`.
+- Backup before changes (see Backups) — newest: `ttrpg-soundboard-backup-20260911-153349` (no backup needed this session — only harness changed, not app code).
 - `npm run tauri android dev` by a previous session left a lingering Vite server on **port 5173**; if port-in-use errors occur, kill the PID (`netstat -ano | findstr :5173` then `taskkill /PID <pid> /F`) before re-running.
 - When editing the mobile slider/header row, keep the icon↔number geometry STABLE (fixed-width number inputs, not dynamic).
 - `vite.config.js` has a pre-existing `eslint no-undef` on `process` (it was never linted; `npx eslint src/App.jsx` is the canonical check).

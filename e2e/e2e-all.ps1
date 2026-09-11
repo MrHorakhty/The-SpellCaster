@@ -199,11 +199,16 @@ if ($Phase -in @('all', 'win')) {
         $results.Add("PHASE B (windows): exit=$code") | Out-Null
 
     } finally {
-        "`t[B-CLEANUP] stopping tauri PID $($tauriProc.Id) …" | Add-Content $Script:TestLog
-        if ($tauriProc) { Stop-ProcessTree $tauriProc }
-        "`t[B-CLEANUP] killing ALL msedgewebview2 …" | Add-Content $Script:TestLog
-        Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        "`t[B-CLEANUP] killing tauri tree PID $($tauriProc.Id) …" | Add-Content $Script:TestLog
+        if ($tauriProc) { Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null }
+        "`t[B-CLEANUP] killing remaining app.exe + SearchHost WebView2 trees …" | Add-Content $Script:TestLog
+        taskkill /F /IM app.exe /T 2>&1 | Out-Null
+        Get-CimInstance Win32_Process |
+            Where-Object {
+                $_.Name -eq 'msedgewebview2.exe' -and
+                $_.CommandLine -like '*webview-exe-name=SearchHost.exe*'
+            } |
+            ForEach-Object { taskkill /F /PID $_.ProcessId /T 2>&1 | Out-Null }
         "`t[B-CLEANUP] killing remaining orphans …" | Add-Content $Script:TestLog
         Remove-Orphans
         Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
