@@ -4099,26 +4099,48 @@ function App() {
                                                     <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'characters' && characters.map(char => (
-                                                    <button
-                                                        key={char.id}
-                                                        onClick={() => selectItem('characters', char.id)}
-                                                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                            }`}
-                                                    >
-                                                        <User size={16} className="shrink-0" />
-                                                        <span className="truncate">{char.name}</span>
-                                                    </button>
+                                                    <div key={char.id} className="relative">
+                                                        <button
+                                                            onClick={() => selectItem('characters', char.id)}
+                                                            className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                                }`}
+                                                        >
+                                                            <User size={16} className="shrink-0" />
+                                                            <span className="truncate">{char.name}</span>
+                                                        </button>
+                                                        {editMode && (
+                                                            <button
+                                                                onClick={() => handleDeleteCharacter(char.id)}
+                                                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 min-h-[24px] min-w-[24px] flex items-center justify-center"
+                                                                title={`Delete Character: ${char.name}`}
+                                                                aria-label={`Delete character ${char.name}`}
+                                                            >
+                                                                <Trash2 size={10} />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 ))}
                                                 {tabType === 'environment' && environmentSounds.map(cat => (
-                                                    <button
-                                                        key={cat.category}
-                                                        onClick={() => selectItem('environment', cat.category)}
-                                                        className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
-                                                            }`}
-                                                    >
-                                                        <Music size={16} className="shrink-0" />
-                                                        <span className="truncate">{cat.category}</span>
-                                                    </button>
+                                                    <div key={cat.category} className="relative">
+                                                        <button
+                                                            onClick={() => selectItem('environment', cat.category)}
+                                                            className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
+                                                                }`}
+                                                        >
+                                                            <Music size={16} className="shrink-0" />
+                                                            <span className="truncate">{cat.category}</span>
+                                                        </button>
+                                                        {editMode && (
+                                                            <button
+                                                                onClick={() => handleDeleteCategory(cat.category)}
+                                                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 min-h-[24px] min-w-[24px] flex items-center justify-center"
+                                                                title={`Delete Category: ${cat.category}`}
+                                                                aria-label={`Delete category ${cat.category}`}
+                                                            >
+                                                                <Trash2 size={10} />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 ))}
                                                 {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).map(ch => (
                                                     <div key={ch.id} className="relative">

@@ -3,27 +3,13 @@
 // rendering, edit mode via grid button, add/edit/delete sound via drawer,
 // character CRUD via drawer, group CRUD via drawer, empty states, settings.
 // Env: CDP_PORT, LABEL, SAVE_RESTORE ('1'), EXPECT_TAURI ('1')
-import { writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Note: the uploaded WAV is generated in-page (see uploadWav) - this suite never
+// touches e2e_silence.wav on disk, which the desktop suites (e2e-full/e2e-features)
+// still need for CDP DOM.setFileInputFiles.
 
 const DEBUG_PORT = process.env.CDP_PORT || 9224;
 const LABEL = process.env.LABEL || 'MOBILE';
 const SAVE_RESTORE = process.env.SAVE_RESTORE === '1';
-const WAV = join(dirname(fileURLToPath(import.meta.url)), 'e2e_silence.wav');
-
-// 20s silent WAV generator
-(function makeWav() {
-  const seconds = 20, rate = 8000, channels = 1, bits = 16;
-  const dataLen = seconds * rate * channels * (bits / 8);
-  const buf = Buffer.alloc(44 + dataLen);
-  buf.write('RIFF', 0); buf.writeUInt32LE(36 + dataLen, 4); buf.write('WAVE', 8);
-  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20);
-  buf.writeUInt16LE(channels, 22); buf.writeUInt32LE(rate, 24);
-  buf.writeUInt32LE(rate * channels * (bits / 8), 28); buf.writeUInt16LE(channels * (bits / 8), 32);
-  buf.writeUInt16LE(bits, 34); buf.write('data', 36); buf.writeUInt32LE(dataLen, 40);
-  writeFileSync(WAV, buf);
-})();
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 let seq = 0;
@@ -48,6 +34,21 @@ async function main() {
   ws.onmessage = ev => {
     const msg = JSON.parse(ev.data);
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+  };
+  // If the app dies (e.g. the Android WebView kills the whole app when its renderer is
+  // terminated) the socket closes with requests still in flight: every pending promise
+  // never settles, the event loop drains and node exits 0 SILENTLY, so the log looks
+  // truncated while the runner reports success. Fail loudly instead.
+  let closingIntentionally = false;
+  ws.onclose = () => {
+    if (closingIntentionally) return;
+    console.error(`[${LABEL}] FATAL: CDP socket closed with ${pending.size} unanswered request(s) - the app most likely died. Exit 3.`);
+    process.exit(3);
+  };
+  ws.onerror = (e) => {
+    if (closingIntentionally) return;
+    console.error(`[${LABEL}] FATAL: CDP socket error (${(e && e.message) || 'unknown'}). Exit 3.`);
+    process.exit(3);
   };
   const cdp = (method, params = {}) => new Promise(resolve => {
     const id = ++seq;
@@ -131,15 +132,27 @@ async function main() {
     return 'ok';
   })()`));
 
-  // Helper: upload WAV via CDP
+  // Helper: upload WAV. NOTE: do NOT use CDP DOM.setFileInputFiles here - the Android
+  // WebView rejects it as a bad IPC message ("Terminating renderer for bad IPC message,
+  // reason 2") which kills the renderer and then the whole app, so the run dies silently.
+  // Build the WAV in the page and hand it to the input via DataTransfer instead.
   async function uploadWav() {
-    for (let i = 0; i < 10; i++) {
-      const doc = await cdp('DOM.getDocument', { depth: 1 });
-      const qr = await cdp('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: 'input[type="file"][accept*=".mp3"]' });
-      if (qr.result?.nodeId) return cdp('DOM.setFileInputFiles', { nodeId: qr.result.nodeId, files: [WAV] });
-      await sleep(400);
-    }
-    return null;
+    return evalJs(`(() => {
+      const input = document.querySelector('input[type="file"][accept*=".mp3"]') || document.querySelector('input[type="file"]');
+      if (!input) return 'NO_INPUT';
+      const rate = 8000, seconds = 2, dataLen = rate * seconds;
+      const buf = new ArrayBuffer(44 + dataLen); const v = new DataView(buf);
+      const w = (o,s) => { for (let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+      w(0,'RIFF'); v.setUint32(4, 36+dataLen, true); w(8,'WAVE'); w(12,'fmt ');
+      v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+      v.setUint32(24,rate,true); v.setUint32(28,rate,true); v.setUint16(32,1,true);
+      v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,dataLen,true);
+      const file = new File([buf], 'e2e_silence.wav', { type: 'audio/wav' });
+      const dt = new DataTransfer(); dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'OK files=' + input.files.length;
+    })()`);
   }
 
   // Helper: submit modal (bg-lime-600 submit button)
@@ -343,7 +356,7 @@ async function main() {
   if (addSoundClick === 'OK') {
     await evalJs(`window.__setInput('name','Divine Light'); window.__setInput('type','Blessing'); window.__setInput('color','#a855f7');`);
     const uploaded = await uploadWav();
-    log('SOUND','A2: WAV uploaded',uploaded?'PASS':'FAIL');
+    log('SOUND','A2: WAV uploaded',String(uploaded).startsWith('OK')?'PASS':'FAIL',uploaded);
     await sleep(500);
     const addResult = await submitModal('Add Sound');
     log('SOUND','A3: Add Sound submitted',addResult==='OK'?'PASS':'FAIL',addResult);
@@ -430,12 +443,15 @@ async function main() {
     })()`);
     log('CHAR','C2: character added',charAdded?.has?'PASS':'FAIL',JSON.stringify(charAdded));
 
-    // Edit character via drawer button
+    // Rename character: on mobile there is no per-row Edit button - you tap the
+    // character/category name in the sound-grid header while in edit mode. Adding a
+    // character auto-selects it (addCharacter -> setActiveTab), so the header shows 'Rogue'.
+    await closeDrawer();
     const editCharClick = await evalJs(`(() => {
-      const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Edit Character"]')].find(b=>b.closest('div')?.textContent.includes('Rogue'));
-      if(!b) return 'NO_EDIT_BTN';
-      b.click(); return 'OK';
+      const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.trim()==='Rogue');
+      if(!h) return 'NO_HEADER_NAME';
+      if(!/text-lime-400/.test(h.className)) return 'NOT_EDITABLE';
+      h.click(); return 'OK';
     })()`);
     await sleep(500);
     log('CHAR','C3: edit modal opened',editCharClick==='OK'?'PASS':'FAIL',editCharClick);
@@ -449,12 +465,15 @@ async function main() {
         return { hasRogue:chars.some(c=>c.name==='Rogue'), hasNew:chars.some(c=>c.name==='Rogue (Stealth)') };
       })()`);
       log('CHAR','C4: rename succeeded',charEdited?.hasNew&&!charEdited?.hasRogue?'PASS':'FAIL',JSON.stringify(charEdited));
+    } else {
+      log('CHAR','C4: rename succeeded','FAIL','blocked: '+editCharClick);
     }
 
-    // Delete character via drawer button
+    // Delete character via the drawer's delete badge
+    await openDrawer();
     const delCharClick = await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Delete Character"]')].find(b=>b.closest('div')?.textContent.includes('Rogue'));
+      const b=[...d.querySelectorAll('button[title^="Delete Character"]')].find(b=>b.closest('div')?.textContent.includes('Rogue'));
       if(!b) return 'NO_DEL_BTN';
       b.click(); return 'OK';
     })()`);
@@ -504,12 +523,14 @@ async function main() {
     })()`);
     log('ENV','K2: category added',catAdded===true?'PASS':'FAIL');
 
-    // Edit category
+    // Edit category: the mobile drawer has no per-row Edit button - tap the name in the
+    // sound-grid header while in edit mode (drawer must be closed first).
+    await closeDrawer();
     const editCatClick = await evalJs(`(() => {
-      const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Edit Category"]')].find(b=>b.closest('div')?.textContent.includes('Cave'));
-      if(!b) return 'NO';
-      b.click(); return 'OK';
+      const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.trim()==='Cave');
+      if(!h) return 'NO_HEADER_NAME';
+      if(!/text-lime-400/.test(h.className)) return 'NOT_EDITABLE';
+      h.click(); return 'OK';
     })()`);
     await sleep(500);
     if (editCatClick === 'OK') {
@@ -521,12 +542,15 @@ async function main() {
         return { hasCave:env.some(e=>e.category==='Cave'), hasCrystal:env.some(e=>e.category==='Crystal Cave') };
       })()`);
       log('ENV','K3: rename succeeded',catEdited?.hasCrystal&&!catEdited?.hasCave?'PASS':'FAIL',JSON.stringify(catEdited));
+    } else {
+      log('ENV','K3: rename succeeded','FAIL','blocked: '+editCatClick);
     }
+    await openDrawer();
 
-    // Delete category
+    // Delete category via the drawer's delete badge (edit mode)
     const delCatClick = await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Delete Category"]')].find(b=>b.closest('div')?.textContent.includes('Crystal'));
+      const b=[...d.querySelectorAll('button[title^="Delete Category"]')].find(b=>b.closest('div')?.textContent.includes('Crystal'));
       if(!b) return 'NO';
       b.click(); return 'OK';
     })()`);
@@ -538,6 +562,8 @@ async function main() {
       await sleep(800);
       const catDeleted = await evalJs(`JSON.parse(localStorage.getItem('ttrpg_environment')||'[]').some(e=>e.category.includes('Crystal'))`);
       log('ENV','K5: Crystal Cave deleted',catDeleted===false?'PASS':'FAIL');
+    } else {
+      log('ENV','K5: Crystal Cave deleted','FAIL','blocked: '+delCatClick);
     }
   }
   await closeDrawer();
@@ -559,7 +585,11 @@ async function main() {
   })()`);
   await sleep(300);
 
-  const addGrpClick = await evalJs(`window.__clickText('Add Group')`);
+  const addGrpClick = await evalJs(`(() => {
+    const b = document.querySelector('button[title="Add New Group"]');
+    if (!b) return 'NO:Add New Group';
+    b.click(); return 'OK';
+  })()`);
   await sleep(500);
   log('GRP','G1: Add Group modal opened',addGrpClick==='OK'?'PASS':'FAIL',addGrpClick);
 
@@ -574,6 +604,11 @@ async function main() {
     log('GRP','G2: group added',grpAdded?.has?'PASS':'FAIL',JSON.stringify(grpAdded));
     log('GRP','G3: mode defaults to environment',grpAdded?.mode==='environment'?'PASS':'FAIL',grpAdded?.mode);
 
+    // Resolve the new group once by id, so a later rename (or a failed rename) can never
+    // cascade into every following check the way a hard-coded name did.
+    const grpId = await evalJs(`(() => { const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore'); return g?.id || ''; })()`);
+    const G = `JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.id===${JSON.stringify(grpId)})`;
+
     // Click into Dragon Lore in drawer
     await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
@@ -582,11 +617,17 @@ async function main() {
     })()`);
     await sleep(400);
 
-    // Edit group name
+    // Rename group: neither the mobile rail nor the drawer has an "Edit Group" button -
+    // a group is renamed by tapping its name in the sound-grid header while in edit mode
+    // (same affordance as characters/categories). The drawer must be closed first because
+    // the header tap is ignored while the drawer is open.
+    await closeDrawer();
     const editGrpClick = await evalJs(`(() => {
-      const b=document.querySelector('button[title="Edit Group"]');
-      if(!b) return 'NO';
-      b.click(); return 'OK';
+      const g=${G}; const name=g?.name||'';
+      const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.trim()===name);
+      if(!h) return 'NO_HEADER_NAME:'+name;
+      if(!/text-lime-400/.test(h.className)) return 'NOT_EDITABLE';
+      h.click(); return 'OK';
     })()`);
     await sleep(500);
     log('GRP','G4: edit group modal opened',editGrpClick==='OK'?'PASS':'FAIL',editGrpClick);
@@ -596,11 +637,14 @@ async function main() {
       await submitModal('Save Changes');
       await sleep(800);
       const grpEdited = await evalJs(`(() => {
-        const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
-        return { hasOld:g.some(x=>x.name==='Dragon Lore'), hasNew:g.some(x=>x.name==='Dragon Lore Reborn') };
+        const g=${G};
+        return { name:g?.name, renamed:g?.name==='Dragon Lore Reborn' };
       })()`);
-      log('GRP','G5: group renamed',grpEdited?.hasNew&&!grpEdited?.hasOld?'PASS':'FAIL',JSON.stringify(grpEdited));
+      log('GRP','G5: group renamed',grpEdited?.renamed?'PASS':'FAIL',JSON.stringify(grpEdited));
+    } else {
+      log('GRP','G5: group renamed','FAIL','blocked: '+editGrpClick);
     }
+    await openDrawer();
 
     // Mode toggle: env → characters
     const toggleClick = await evalJs(`(() => {
@@ -610,7 +654,7 @@ async function main() {
     })()`);
     await sleep(500);
     const conv1 = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return { mode:g?.mode, cats:g?.categories?.length, chars:g?.characters?.length };
     })()`);
     log('GRP','G6: mode=characters after toggle',conv1?.mode==='characters'?'PASS':'FAIL',JSON.stringify(conv1));
@@ -619,7 +663,7 @@ async function main() {
     await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Environment Pack'); if(b) b.click(); return 'OK'; })()`);
     await sleep(500);
     const conv2 = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return { mode:g?.mode, cats:g?.categories?.length };
     })()`);
     log('GRP','G7: mode=environment after toggle back',conv2?.mode==='environment'?'PASS':'FAIL',JSON.stringify(conv2));
@@ -638,7 +682,7 @@ async function main() {
       await sleep(800);
     }
     const grpCatAdded = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return g?.categories?.some(c=>c.category==='Rumors');
     })()`);
     log('GRP','G8: group category added',grpCatAdded===true?'PASS':'FAIL');
@@ -646,7 +690,7 @@ async function main() {
     // Delete group category
     const delGrpCat = await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Delete Category"]')].find(b=>b.closest('div')?.textContent.includes('Rumors'));
+      const b=[...d.querySelectorAll('button[title^="Delete Category"]')].find(b=>b.closest('div')?.textContent.includes('Rumors'));
       if(!b) return 'NO';
       b.click(); return 'OK';
     })()`);
@@ -656,7 +700,7 @@ async function main() {
       await sleep(700);
     }
     const grpCatDeleted = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return g?.categories?.some(c=>c.category==='Rumors');
     })()`);
     log('GRP','G9: group category deleted',grpCatDeleted===false?'PASS':'FAIL');
@@ -677,7 +721,7 @@ async function main() {
       await sleep(800);
     }
     const grpCharAdded = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return g?.characters?.some(c=>c.name==='Bard');
     })()`);
     log('GRP','G10: group character added',grpCharAdded===true?'PASS':'FAIL');
@@ -685,7 +729,7 @@ async function main() {
     // Delete group character
     const delGrpChar = await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Delete Character"]')].find(b=>b.closest('div')?.textContent.includes('Bard'));
+      const b=[...d.querySelectorAll('button[title^="Delete Character"]')].find(b=>b.closest('div')?.textContent.includes('Bard'));
       if(!b) return 'NO';
       b.click(); return 'OK';
     })()`);
@@ -695,15 +739,16 @@ async function main() {
       await sleep(700);
     }
     const grpCharDeleted = await evalJs(`(() => {
-      const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Dragon Lore Reborn');
+      const g=${G};
       return g?.characters?.some(c=>c.name==='Bard');
     })()`);
     log('GRP','G11: group character deleted',grpCharDeleted===false?'PASS':'FAIL');
 
     // Delete group
     const delGrpClick = await evalJs(`(() => {
+      const g=${G}; const name=g?.name||'';
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b=[...d.querySelectorAll('button[title="Delete Group: Dragon Lore Reborn"]')][0];
+      const b=[...d.querySelectorAll('button[title^="Delete Group"]')].find(b=>b.getAttribute('title')==='Delete Group: '+name);
       if(!b) return 'NO';
       b.click(); return 'OK';
     })()`);
@@ -712,7 +757,7 @@ async function main() {
       await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
       await sleep(700);
     }
-    const grpDeleted = await evalJs(`JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').some(g=>g.name==='Dragon Lore Reborn')`);
+    const grpDeleted = await evalJs(`!!${G}`);
     log('GRP','G12: group deleted',grpDeleted===false?'PASS':'FAIL','still_exists='+grpDeleted);
   }
   await closeDrawer();
@@ -729,11 +774,16 @@ async function main() {
   })()`);
   await cdp('Page.reload', { ignoreCache: true });
   await waitForReload();
+  // The mobile empty states live INSIDE the drawer, so it has to be open to see them.
+  await openDrawer();
   const emptyTexts = await evalJs(`(() => {
-    const texts = [...document.querySelectorAll('p,div,span')].map(e=>e.textContent.trim()).filter(t=>t.includes('No ') && t.includes('toggle Edit Mode'));
+    const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+    if (!d) return [];
+    const texts = [...d.querySelectorAll('p,div,span')].map(e=>e.textContent.trim()).filter(t=>t.includes('No ') && (t.includes('open Edit Mode') || t.includes('toggle Edit Mode')));
     return texts.slice(0,3);
   })()`);
   log('STATE','V1: empty-state text present',emptyTexts?.length>=1?'PASS':'FAIL',JSON.stringify(emptyTexts));
+  await closeDrawer();
   // Restore seed
   await evalJs(`(() => {
     const snd = (id,name,type,color,opts) => ({ id, name, type, icon:'Icon.png', files:[{name:name.toLowerCase().replace(/\\s+/g,'_')+'.mp3', displayName:name+'.mp3'}], color, duration:0, randomPlay:false, ...opts });
@@ -871,6 +921,7 @@ async function main() {
   console.log(`[${LABEL}] MOBILE E2E SUMMARY: PASS=${pass}  FAIL=${fail}  WARN=${warn}  TOTAL=${pass+fail+warn}`);
   console.log('==============================');
 
+  closingIntentionally = true;
   ws.close();
   process.exit(fail > 0 ? 2 : (warn > 0 ? 1 : 0));
 }

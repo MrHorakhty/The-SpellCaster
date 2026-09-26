@@ -404,3 +404,80 @@ Make **native desktop split view** show **group contents**. Split view (`isSplit
 - **SPLIT DONE (Phase C → separate file)**: `e2e\e2e-full.ps1` now contains ONLY Phases A (web) + B (win); Phase C (android) is delegated to **NEW `e2e\e2e-android.ps1`** (standalone runner, owns its own adb/emulator/CDP/pidof logic + helpers `Remove-Orphans`/`Invoke-TestSuite`/`Assert-NotTimedOut`/`Wait-Cdp`; same default `Pixel_7`, CDP :9225, `pidof com.mrhorakhty.thespellcaster.debug`, `adb forward tcp:9225 localabstract:webview_devtools_remote_<pid>`; cleans adb forward → taskkill tauri tree → app.exe → orphans → `adb emu kill` only if it started the emulator). `e2e-full.ps1` pure delegator: `& "$PSScriptRoot\e2e-android.ps1" -Suite $Suite -TestLog $Script:TestLog -TestStartTime $Script:TestStartTime`. Both files ASCII-only + UTF-8 BOM. VERIFIED: `-Phase android` via delegation → `android: exit=0` (log `e2e-run-20260911-181552.log`).
 - **Run commands now**: `powershell -NoProfile -ExecutionPolicy Bypass -File e2e\e2e-android.ps1` (android-only) or `… -File e2e\e2e-full.ps1 -Phase all|web|win|android` (web/win + delegated android). Suite control via `-Suite full|mobile|run|features` (default phase-C suite = mobile).
 - **KNOWN ISSUE (user will request fix later — DO NOT fix proactively; E2E policy applies)**: the mobile suite `e2e\e2e-mobile.mjs` output TRUNCATES after check **A2** ("WAV uploaded") in the log — only 6 of 13 suites visible (S=10, M=7, N=6, R=6, E=5, A=2 → 36 PASS, 0 FAIL) yet node exits **0**. Suites J (edit sound), C (char CRUD), K (cat CRUD), G (group CRUD), V (empty states), T (settings), D (delete+cancel) never appear in the log. Exactly the same truncation occurred in the standalone run 18:04 AND the combined `-Phase all` run 18:20 (log `e2e-run-20260911-182022.log`). Runner/phase separation NOT at fault (Phases A + B show full 99/99; delegation works). Prime suspects: (1) Node stdout via PS 5.1 `>>`/`2>&1` buffering/truncation (known repo quirk: node log lines UTF-8 vs PS UTF-16/ANSI) causing result-loss; (2) real early-exit in suite A's A3 `submitModal` step that returns 0 without the `MOBILE E2E SUMMARY` line. Lines to inspect when fixing: `e2e-mobile.mjs:348` (submitModal) & the summary/exit at `e2e-mobile.mjs:870-875`; verify by running `node e2e-mobile.mjs` with cmd-level `> log 2>&1` redirect (bypassing PS) against a live CDP :9225, expecting all 13 suite headers + the `MOBILE E2E SUMMARY: PASS=.. FAIL=.. WARN=..` line. e2e-full.mjs/e2e-features.mjs do NOT have this issue.
+
+## SESSION 2026-09-27 — MOBILE E2E TRUNCATION ROOT-CAUSED ✅ (diagnosis only, NO code changed)
+Resumed the previous session's KNOWN ISSUE ("mobile suite output truncates after A2, node exits 0"). **Root cause found and proven. No app or harness code was changed** (E2E policy respected). `git status` clean; no backup needed.
+
+### ROOT CAUSE (not a logging bug, not an app bug)
+CDP **`DOM.setFileInputFiles`** — the call `uploadWav()` makes at suite A2 — is rejected by the **Android WebView** as a bad IPC message, which kills the renderer and then the whole app:
+```
+00:33:28.516 E/chromium(5711): [ERROR:content/browser/bad_message.cc:29] Terminating renderer for bad IPC message, reason 2
+00:33:28.530 I/ActivityManager: Killing 5833:com.google.android.webview:sandboxed_process0...
+00:33:29.063 E/chromium(5711): [ERROR:android_webview/browser/aw_browser_terminator.cc:173] Renderer process (5833) crash detected (code -1).
+00:33:29.070 E/chromium(5711): [ERROR:.../aw_browser_terminator.cc:122] Render process (5833) kill (OOM or update) wasn't handed by all associated webviews, killing application.
+00:33:29.099 I/ActivityManager: Process com.mrhorakhty.thespellcaster.debug (pid 5711) has died: fg TOP
+```
+Chain: `DOM.setFileInputFiles` -> renderer terminated -> Android WebView kills the app (no `onRenderProcessGone` handler) -> node's next `Runtime.evaluate` (suite A3 `submitModal`) never resolves, and because `e2e-mobile.mjs` has **no `ws.onclose`/`onerror` handler** the socket dying releases the last event-loop handle -> **node exits 0 silently** (never prints `MOBILE E2E SUMMARY`) -> log appears to "truncate after A2". Desktop WebView2 supports the call, which is why `e2e-full.mjs` passes 99/99. The old `EXITCODE=` echo never appearing in the log is the same event (cmd wrapper died with the tree).
+
+### PROOF / validated fix (TEMP copy only — repo harness untouched)
+`%TEMP%\opencode\mobile-dt.mjs` = copy of `e2e-mobile.mjs` with `uploadWav()` (lines 134-143) replaced by an **in-page `DataTransfer`** upload (build a 2s silent WAV in JS -> `new File([buf],'e2e_silence.wav')` -> `DataTransfer` -> `input.files` -> dispatch `change`; selector `input[type="file"][accept*=".mp3"]` with fallback to any `input[type="file"]`). No `DOM.*` file call at all.
+- Result via cmd-level redirect: **all 13 suites ran, `MOBILE E2E SUMMARY: PASS=64 FAIL=4 WARN=0 TOTAL=68`**, exit 0, `localStorage restore: restored`.
+- Log: `%TEMP%\opencode\mobl-dt.log`. Runner wrapper: `%TEMP%\opencode\run-mobile-dt.cmd` (cmd-level `>` bypasses the PS 5.1 `>>` suspect — the suspect was a red herring).
+
+### The 4 FAILs, triaged
+1. **C3 `Edit Character` in drawer (`button[title="Edit Character"]`) — TEST bug, app is fine.** The mobile drawer has no per-row rename; on mobile you rename by tapping the character/category **name in the sound-grid header while in edit mode** (`src/App.jsx:3889-3907`, `handleEditCharacter` at 3893/3897). Desktop-only buttons are at 4279/4341.
+2. **C5 `Delete Character` in drawer — REAL APP GAP (mobile).** There is **no way to delete a top-level Character or Environment category on Android**: drawer rows for top-level items (`App.jsx:4101-4122`) have NO delete badge (only *group members* get badges at 4135/4157, titled `Delete Character: <name>`), the grid-heading trash was deliberately removed, and every `handleDeleteCharacter`/`handleDeleteCategory` call site (4272/4303/4334/4364) is desktop sidebar or split-view. Needs a user decision before touching app code.
+3. **G1 `Add Group` — TEST bug.** Mobile rail button is `title="Add New Group"` / `aria-label="Add New Group"` (`App.jsx:3876-3877`, edit-mode only); the exact text `Add Group` is the *desktop* edit-bar button (`App.jsx:3763`).
+4. **V1 empty-state text — TEST bug.** Test greps for `toggle Edit Mode`; the **mobile** drawer strings say `open Edit Mode` (`App.jsx:4090-4099`) while desktop says `toggle Edit Mode` (4248+).
+
+### Environment / processes (left running for follow-up)
+- Emulator `Pixel_7` PID 16920 (`emulator-5554`, boot_completed=1), started manually with `-no-snapshot-load -no-audio`.
+- `npm.cmd run tauri android dev` PID 26520 (cargo-tauri PID 23320, its Vite dev server PID 35688 on **:5173** — kill it before any other vite run).
+- App pid **9137** (relaunched with `adb shell am start -n com.mrhorakhty.thespellcaster.debug/com.mrhorakhty.thespellcaster.MainActivity` after it died).
+- `adb forward tcp:9225 localabstract:webview_devtools_remote_9137` is ACTIVE (remove with `adb forward --remove tcp:9225`).
+- CDP endpoint serves `http://tauri.localhost/`; the suite finds the page via `/json` and needs `t.type==='page' && url.startsWith('http')`.
+- Temp artifacts: `%TEMP%\opencode\{mobile-dt.mjs, run-mobile-dt.cmd, run-mobile-diag.cmd, mobl-dt.log, mobl-diag.log, mobl-diag2.log}`. Note the temp copy's `WAV` path is module-relative, so it no longer writes `e2e/e2e_silence.wav`.
+
+### NEXT (needs user decision — E2E policy: do not change app/harness code unasked)
+1. **Harness fix (recommended, validated):** in `e2e/e2e-mobile.mjs`, replace the `uploadWav()` `DOM.setFileInputFiles` body with the in-page `DataTransfer` version (also fixes the silent-exit-0 by adding a `ws.onclose` handler that logs + exits non-zero). Backup first (`ttrpg-soundboard-backup-20260927-*`).
+2. **Test selector fixes:** C3 -> tap the grid-header `h2` in edit mode instead of a drawer Edit button; G1 -> `button[title="Add New Group"]`; V1 -> match `open Edit Mode` (or accept either wording).
+3. **App gap (ask first):** add a delete affordance for top-level Characters/Environment categories on mobile (e.g. trash badges on the drawer rows at `App.jsx:4101-4122`, mirroring the group-member badges) so Android users can delete them at all.
+4. Housekeeping: `e2e/_avtest2.txt` (3 B), `e2e/e2e-all.ps1.new` (3 B) and `e2e/_e2e_pixel.png` (70 B) are tracked AV/test leftovers — ask before deleting. `e2e-all.ps1` itself must never be recreated (Bitdefender hard filename block).
+
+## SESSION 2026-09-27 (cont.) — ALL 3 FIXES IMPLEMENTED + VERIFIED ✅ (mobile 85/85, desktop 99/99)
+User approved all three fixes. **Backup first: `ttrpg-soundboard-backup-20260927-004517`** (200 files).
+
+### 1. APP FIX — mobile can now delete top-level Characters / Environment categories
+`src/App.jsx`, mobile drawer list (~4101-4150): the top-level `characters.map` / `environmentSounds.map` rows were bare buttons with **no delete affordance**, so on Android those items could not be deleted at all. Each row is now wrapped in `div.relative` with an edit-mode trash badge identical to the group-member badges: `title={`Delete Character: ${char.name}`}` / `title={`Delete Category: ${cat.category}`}` + matching `aria-label`, calling `handleDeleteCharacter(char.id)` / `handleDeleteCategory(cat.category)`. Desktop + split-view untouched. This was the one genuine app-level gap (all pre-existing `handleDeleteCharacter/Category` call sites were desktop-only).
+
+### 2. HARNESS FIXES — `e2e/e2e-mobile.mjs`
+- **`uploadWav()`**: `DOM.setFileInputFiles` -> in-page `DataTransfer` (build a 2s silent WAV with `DataView`, `new File([buf],'e2e_silence.wav')`, `DataTransfer` -> `input.files` -> dispatch `change`). Comment records WHY (Android WebView kills the renderer + app). A2 now logs the helper's return value.
+- **Dead-socket guard**: added `closingIntentionally` + `ws.onclose` / `ws.onerror` handlers that print `FATAL: CDP socket closed with N unanswered request(s)` and `process.exit(3)`. `e2e-android.ps1` already treats `exit=[1-9]` as failure, so a dead app can never look like success again. `closingIntentionally = true` is set before the final `ws.close()`.
+- **Mobile-selector fixes** (all were desktop-derived): C3 -> close drawer, tap the sound-grid header `h2` whose text is the item name (must carry `text-lime-400` = edit mode) ; C5/G9/G11 -> `button[title^="Delete Character"/"Delete Category"]` (the real titles are `Delete Character: <name>`, not the bare word) ; G1 -> `button[title="Add New Group"]` (mobile rail; `Add Group` is the desktop edit bar) ; G4 -> same header-`h2` rename as C3 (mobile has NO "Edit Group" button; drawer must be closed first because the header tap is ignored while the drawer is open) ; V1 -> the empty states live INSIDE the drawer, so `openDrawer()` first, query inside `[role="dialog"]`, accept `open Edit Mode` (mobile) or `toggle Edit Mode` (desktop), then `closeDrawer()`.
+- **Cascade-proofing**: the G suite resolved the new group by the hard-coded name `'Dragon Lore Reborn'`, so one failed rename silently failed 6 more checks. It now captures `grpId` once and builds `G` (a JS expression finding the group by id) used by G5-G12. G12 matches the badge by `title === 'Delete Group: ' + <name read in-page>`.
+- **Silent-skip class of bug fixed**: checks nested in `if (click === 'OK')` blocks never reported when the click failed — K3/K4/K5 were dead code (same wrong selectors as C3/G4) and the suite still looked green. Dependent checks now log an explicit `FAIL ... blocked: <reason>` (C4, G5, K3, K5).
+
+### 3. RESULTS
+- **Android / Pixel_7 emulator (`e2e-mobile.mjs`, 13 suites): PASS=85 FAIL=0 WARN=0 TOTAL=85**, exit 0, `localStorage restore: restored`. Log `%TEMP%\opencode\mobl-fix3.log`. All CRUD paths now really execute: C1-C7, K1-K5, G1-G12, plus S/M/N/R/E/A/J/V/T/D. (Was 36 truncated checks before the fix.)
+- **Desktop web regression (`e2e-full.mjs`, headless Edge + `vite preview :5233`): PASS=99 FAIL=0 WARN=0 TOTAL=99**, exit 0 — no regression from the App.jsx change. Log `%TEMP%\opencode\web-regress.log`.
+- Gates: `node --check e2e\e2e-mobile.mjs` exit 0 · `npx eslint src/App.jsx` 0 errors / 3 pre-existing warnings (`convertFileSrc`, `_`, `ev`) · `npx vite build` OK.
+
+### ⚠️ HAZARD FOUND in `e2e\e2e-full.ps1` (do not run `-Phase web` blindly)
+Phase A's `finally` block (`e2e-full.ps1:155-157`) runs `Get-Process -Name msedgewebview2 | Stop-Process -Force` — a **blanket kill of every WebView2 process on the machine**, even though Phase A (headless Edge) uses none. That would kill the user's WhatsApp / Google Drive WebView2. Phase B's cleanup is correctly scoped to `--webview-exe-name=SearchHost.exe` (`e2e-full.ps1:204-209`). For the desktop regression I used a PID-scoped temp script instead: `%TEMP%\opencode\web-regress.ps1` (build is already done; starts `vite preview :5233` + headless Edge :9333, runs `e2e-full.mjs`, kills only its own PIDs). Fixing line 155-157 to match Phase B's scoping needs user approval.
+
+### State / processes left running
+Emulator `Pixel_7` PID 16920 · `npm.cmd run tauri android dev` PID 26520 (Vite PID 35688 on **:5173**) · app pid **9137** · `adb forward tcp:9225 localabstract:webview_devtools_remote_9137` active. To stop: `adb forward --remove tcp:9225`; `adb emu kill`; `taskkill /PID 26520 /T /F`. Temp artifacts: `%TEMP%\opencode\{mobile-dt.mjs, web-regress.ps1, web-regress.log, run-mobile-*.cmd, mobl-*.log}`.
+
+### NEXT
+- User manual click-through on the emulator: edit mode -> drawer -> trash badge on a top-level character/category.
+- Optional: scope `e2e-full.ps1:155-157` WebView2 kill to SearchHost; delete the 3 tracked junk files; commit (`src/App.jsx` + `e2e/e2e-mobile.mjs` + `opencode-summary.md`).
+
+## SESSION 2026-09-27 (cont.) — NEW `e2e\kill-ports.bat` (user: "ports are full") ✅
+User wanted a .bat to free ports for manual testing. Added **`e2e\kill-ports.bat`** (CRLF, ASCII, no PowerShell dependency except the optional orphan sweep).
+- `kill-ports.bat` -> frees the default ports `5173 9224 9225 5233 9333 9334` (vite dev, WebView2 CDP, adb-forwarded WebView CDP, vite preview, headless-Edge CDP x2).
+- `kill-ports.bat 5173 9225` -> only the listed ports.
+- `kill-ports.bat /all` -> defaults + `app.exe` + `adb forward --remove-all` + orphan sweep (a PowerShell CIM query, scoped to `node.exe` with `tauri.js` in the command line and `cargo.exe`, so unrelated node/cargo work is untouched).
+- `kill-ports.bat /emu` -> `adb -s <serial> emu kill` (kept separate from `/all` because shutting the emulator down is destructive).
+- Per port it first tries `adb forward --remove tcp:<port>` so the **adb server itself is never killed** by the netstat sweep, then kills any remaining LISTENING PID + its tree (`taskkill /PID /T /F`), de-duplicating PIDs across IPv4/IPv6 rows, and prints a final `free` / `STILL IN USE by PID` line per port. Admins-only failures are reported instead of silently swallowed.
+- Gotcha: `^|` escapes are needed for `netstat ... ^| findstr` (not inside quotes) but must NOT be used inside the double-quoted `-Command "..."` string — cmd passes `^|` through literally and PowerShell errors with "A positional parameter cannot be found that accepts argument '^'".
+- Verified: default run freed 5173; custom-port run OK; `/all` run killed leftover PID 35140 (`tauri.js android-studio-script --target armv7`, an orphan from a killed `tauri android dev`). Emulator (`emulator-5554`) intentionally left running; `tauri android dev` + Vite are now stopped, so port 5173 is free.
