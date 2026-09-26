@@ -32,12 +32,39 @@ New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 
 # --- Helpers -----------------------------------------------------------------
 
+# PIDs that Remove-Orphans must never touch.
+# The orphan sweep matches on '*ttrpg-soundboard*', which also matches the command line
+# of the shell/agent session that launched this script - killing that would end the run
+# (and the session) mid-suite. So protect this process's whole ancestry plus anything
+# that is opencode itself.
+function Get-ProtectedPids {
+    $keep = New-Object 'System.Collections.Generic.HashSet[int]'
+
+    $id = $PID
+    for ($i = 0; $i -lt 16; $i++) {
+        if (-not $id) { break }
+        [void]$keep.Add([int]$id)
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
+        if (-not $proc -or $proc.ParentProcessId -eq 0 -or $proc.ParentProcessId -eq $id) { break }
+        $id = $proc.ParentProcessId
+    }
+
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'opencode*' -or ($_.CommandLine -like '*opencode*') } |
+        ForEach-Object { [void]$keep.Add([int]$_.ProcessId) }
+
+    return $keep
+}
+
 function Remove-Orphans {
+    $keep = Get-ProtectedPids
     Get-CimInstance Win32_Process |
         Where-Object {
-            ($_.CommandLine -like '*ttrpg-soundboard*') -or
-            ($_.CommandLine -like '*vite*5173*') -or
-            ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=*')
+            -not $keep.Contains([int]$_.ProcessId) -and (
+                ($_.CommandLine -like '*ttrpg-soundboard*') -or
+                ($_.CommandLine -like '*vite*5173*') -or
+                ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=*')
+            )
         } |
         ForEach-Object {
             try {
@@ -89,8 +116,9 @@ function Wait-Cdp {
 "=== PHASE C: ANDROID $(Get-Date -f 'HH:mm:ss') ===" | Add-Content $Script:TestLog
 Write-Host "`n=== PHASE C: ANDROID (emulator) ===" -ForegroundColor Cyan
 
-$tauriProc = $null
-$emulatorStarted = $false
+  $tauriProc = $null
+  $emulatorStarted = $false
+  $lsBackup = $null
 
 try {
     $emuRunning = & $adb devices 2>&1 | Select-String -Pattern 'emulator-\d+\s+device'
@@ -157,11 +185,46 @@ try {
     Start-Sleep -Seconds 2
     Assert-NotTimedOut -Minutes 25
 
+    # Crash-safe data guard: the suite snapshots/restores localStorage itself, but only
+    # if it survives. Take our own snapshot here and restore it from the finally block,
+    # so a crashed or killed run cannot leave the E2E seed in the user's app.
+    $lsBackup = Join-Path $tmp "ls-backup-$(Get-Date -f yyyyMMdd-HHmmss).json"
+    $env:CDP_PORT = $cdpPort
+    $env:LABEL    = 'SNAP'
+    "`t[SNAP] saving app storage -> $lsBackup" | Add-Content $Script:TestLog
+    & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save $lsBackup 2>&1 | Add-Content $Script:TestLog
+    if ($LASTEXITCODE -ne 0) {
+        "`t[SNAP] WARNING: could not snapshot app storage (exit $LASTEXITCODE) - the suite will run without a crash-safe restore." | Add-Content $Script:TestLog
+        Write-Host "WARNING: could not snapshot app storage - no crash-safe restore available." -ForegroundColor Yellow
+        $lsBackup = $null
+    } else {
+        Write-Host "App storage snapshotted -> $lsBackup"
+    }
+    Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+
     $mobileSuite = if ($Suite -eq 'full') { 'mobile' } else { $Suite }
     $code = Invoke-TestSuite -Label 'MOB' -Mjs "e2e-$mobileSuite.mjs" -Port $cdpPort -Expect '1' -SaveRestore '1'
     $results.Add("android: exit=$code") | Out-Null
 
 } finally {
+    # Restore first, while the app is still alive and CDP is still forwarded.
+    if ($lsBackup) {
+        "`t[C-CLEANUP] restoring app storage from $lsBackup ..." | Add-Content $Script:TestLog
+        $env:CDP_PORT = $cdpPort
+        $env:LABEL    = 'SNAP'
+        & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') restore $lsBackup 2>&1 | Add-Content $Script:TestLog
+        $restoreCode = $LASTEXITCODE
+        Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+        if ($restoreCode -eq 0) {
+            Write-Host "App storage restored." -ForegroundColor Green
+        } else {
+            "`t[C-CLEANUP] RESTORE FAILED (exit $restoreCode). The app may still hold E2E test data." | Add-Content $Script:TestLog
+            "`t[C-CLEANUP] Recover with: adb forward tcp:$cdpPort localabstract:webview_devtools_remote_<apppid>  then  node e2e-snapshot.mjs restore $lsBackup" | Add-Content $Script:TestLog
+            Write-Host "WARNING: storage restore failed (exit $restoreCode)." -ForegroundColor Red
+            Write-Host "  The app may still contain E2E test data. Snapshot kept at: $lsBackup" -ForegroundColor Red
+            $results.Add("WARNING: app storage restore failed (exit $restoreCode) - snapshot at $lsBackup") | Out-Null
+        }
+    }
     "`t[C-CLEANUP] removing adb forward ..." | Add-Content $Script:TestLog
     & $adb forward --remove "tcp:$cdpPort" 2>&1 | Out-Null
     "`t[C-CLEANUP] killing tauri tree ..." | Add-Content $Script:TestLog

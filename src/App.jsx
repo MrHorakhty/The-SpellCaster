@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 /* global __APP_VERSION__ */
-import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu } from 'lucide-react'
+import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle } from 'lucide-react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { platform } from '@tauri-apps/plugin-os'
 import data from './data.json'
@@ -17,6 +17,20 @@ const safeParse = (value, fallback) => {
     } catch {
         return fallback
     }
+}
+
+// Turn a failed localStorage write into something the user can act on. Without
+// this the save is only logged, so a full storage quota looks like a successful
+// edit right up until the app is reloaded and the change is gone.
+const describeSaveFailure = (scope, err) => {
+    const name = (err && err.name) || ''
+    const isQuota = name === 'QuotaExceededError'
+        || name === 'NS_ERROR_DOM_QUOTA_REACHED'
+        || (err && (err.code === 22 || err.code === 1014))
+    if (isQuota) {
+        return `Storage is full, so ${scope} could not be saved. Delete a few uploaded audio files or sounds, then try again.`
+    }
+    return `${scope} could not be saved${name ? ` (${name})` : ''}.`
 }
 
 // Version for persisted app data. Bump to force a reset to the bundled defaults.
@@ -1606,9 +1620,10 @@ function App() {
                     reader.onload = (e) => {
                         try {
                             localStorage.setItem(`sound_file_${fileName}`, e.target.result)
+                            setSaveError(null)
                             resolve()
                         } catch (err) {
-                            console.error('Failed to store file (quota exceeded?):', fileName, err)
+                            reportSaveFailure(`the uploaded audio file "${fileName}"`, err)
                             reject(err)
                         }
                     }
@@ -2794,12 +2809,24 @@ function App() {
         }))
     }
 
+    // Set when a localStorage write fails, so the user is told instead of
+    // silently losing the change on the next reload.
+    const [saveError, setSaveError] = useState(null)
+
+    // Declared as a function so it is hoisted and usable by the earlier
+    // file-upload helper below.
+    function reportSaveFailure(scope, err) {
+        console.error(`Failed to save ${scope}:`, err)
+        setSaveError(describeSaveFailure(scope, err))
+    }
+
     // Auto-save Characters to localStorage whenever they change
     useEffect(() => {
         try {
             localStorage.setItem('ttrpg_characters', JSON.stringify(characters))
+            setSaveError(null)
         } catch (err) {
-            console.error('Failed to save characters:', err)
+            reportSaveFailure('your characters and their sounds', err)
         }
     }, [characters])
 
@@ -2807,8 +2834,9 @@ function App() {
     useEffect(() => {
         try {
             localStorage.setItem('ttrpg_environment', JSON.stringify(environmentSounds))
+            setSaveError(null)
         } catch (err) {
-            console.error('Failed to save environment:', err)
+            reportSaveFailure('your environment sounds', err)
         }
     }, [environmentSounds])
 
@@ -2816,8 +2844,9 @@ function App() {
     useEffect(() => {
         try {
             localStorage.setItem('ttrpg_groups', JSON.stringify(groups))
+            setSaveError(null)
         } catch (err) {
-            console.error('Failed to save groups:', err)
+            reportSaveFailure('your groups', err)
         }
     }, [groups])
 
@@ -3459,6 +3488,24 @@ function App() {
 
     return (
         <div className="app-container h-screen flex flex-col bg-dark-900 text-slate-200">
+            {/* Save failure banner - a failed localStorage write is otherwise invisible */}
+            {saveError && (
+                <div role="alert" className="shrink-0 flex items-start gap-3 px-4 py-2.5 bg-red-700 text-white">
+                    <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">Change not saved</p>
+                        <p className="text-xs opacity-90 break-words">{saveError} It will be lost when you close the app.</p>
+                    </div>
+                    <button
+                        onClick={() => setSaveError(null)}
+                        className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-red-800 transition-colors"
+                        title="Dismiss"
+                        aria-label="Dismiss save error"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
             {/* Header */}
             <header className="app-header shrink-0 bg-dark-800 border-b border-dark-700">
                 {/* Mobile Header */}

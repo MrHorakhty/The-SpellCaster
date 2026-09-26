@@ -27,6 +27,27 @@ function Get-TestUploadCount {
     if ($c) { return @($c).Count } else { return 0 }
 }
 
+# PIDs that cleanup must never touch: this script's own ancestry (the shell/agent
+# session that launched it) plus anything that is opencode itself.
+function Get-ProtectedPids {
+    $keep = New-Object 'System.Collections.Generic.HashSet[int]'
+
+    $id = $PID
+    for ($i = 0; $i -lt 16; $i++) {
+        if (-not $id) { break }
+        [void]$keep.Add([int]$id)
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
+        if (-not $proc -or $proc.ParentProcessId -eq 0 -or $proc.ParentProcessId -eq $id) { break }
+        $id = $proc.ParentProcessId
+    }
+
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'opencode*' -or ($_.CommandLine -like '*opencode*') } |
+        ForEach-Object { [void]$keep.Add([int]$_.ProcessId) }
+
+    return $keep
+}
+
 if ($Phase -in @('all', 'web')) {
     Write-Host "`n=== PHASE A (features): WEBVIEW ===" -ForegroundColor Cyan
     Start-Process -FilePath 'npx.cmd' -ArgumentList 'vite','preview','--port','5233','--strictPort' -WorkingDirectory $proj -RedirectStandardOutput "$tmp\feat-web-preview.log" -RedirectStandardError "$tmp\feat-web-preview.err.log" -WindowStyle Hidden
@@ -73,7 +94,11 @@ if ($Phase -in @('all', 'win')) {
     Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
     Remove-Item Env:TAURI_DEV_HOST -ErrorAction SilentlyContinue
     # full cleanup: the Tauri app + its webview + the npm/node wrappers
-    Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '*ttrpg-soundboard*' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+    # Skip this script's own ancestry and opencode: the '*tauri*dev*' / project-path
+    # patterns are loose enough to match the shell/agent session that launched the run,
+    # and killing that ends the suite (and the session) before it can report.
+    $keep = Get-ProtectedPids
+    Get-CimInstance Win32_Process | Where-Object { -not $keep.Contains([int]$_.ProcessId) -and $_.ExecutablePath -like '*ttrpg-soundboard*' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
     Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=9225*' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
     Get-CimInstance Win32_Process | Where-Object { ($_.CommandLine -like '*tauri*dev*') -or ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*vite*') } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
 }

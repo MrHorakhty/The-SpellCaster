@@ -27,14 +27,41 @@ New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 
 # --- Cleanup helpers ---------------------------------------------------------
 
+# PIDs that Remove-Orphans must never touch.
+# The orphan sweep matches on '*ttrpg-soundboard*', which also matches the command line
+# of the shell/agent session that launched this script - killing that would end the run
+# (and the session) mid-suite. So protect this process's whole ancestry plus anything
+# that is opencode itself.
+function Get-ProtectedPids {
+    $keep = New-Object 'System.Collections.Generic.HashSet[int]'
+
+    $id = $PID
+    for ($i = 0; $i -lt 16; $i++) {
+        if (-not $id) { break }
+        [void]$keep.Add([int]$id)
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
+        if (-not $proc -or $proc.ParentProcessId -eq 0 -or $proc.ParentProcessId -eq $id) { break }
+        $id = $proc.ParentProcessId
+    }
+
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'opencode*' -or ($_.CommandLine -like '*opencode*') } |
+        ForEach-Object { [void]$keep.Add([int]$_.ProcessId) }
+
+    return $keep
+}
+
 function Remove-Orphans {
+    $keep = Get-ProtectedPids
     Get-CimInstance Win32_Process |
         Where-Object {
-            ($_.CommandLine -like '*ttrpg-soundboard*') -or
-            ($_.CommandLine -like '*vite*preview*5233*') -or
-            ($_.CommandLine -like '*vite*5173*') -or
-            ($_.Name -eq 'msedge.exe' -and $_.CommandLine -like '*remote-debugging-port=*') -or
-            ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=*')
+            -not $keep.Contains([int]$_.ProcessId) -and (
+                ($_.CommandLine -like '*ttrpg-soundboard*') -or
+                ($_.CommandLine -like '*vite*preview*5233*') -or
+                ($_.CommandLine -like '*vite*5173*') -or
+                ($_.Name -eq 'msedge.exe' -and $_.CommandLine -like '*remote-debugging-port=*') -or
+                ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=*')
+            )
         } |
         ForEach-Object {
             try {
