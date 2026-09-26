@@ -528,4 +528,99 @@ User: "Killing this command line during e2e means it will never finish. Let's ma
 - Verified functionally: protected set = {opencode.exe, its cmd.exe, this powershell.exe, explorer.exe}; the new filter kills only `cmd.exe` running `Run App.bat`, `node.exe` tauri.js `android dev`, and `node.exe` vite - i.e. exactly the dev stack, never the session. `Parser::ParseFile` on all three ps1: no errors.
 - Audited every other kill path in the repo: `kill-ports.bat` (port-scoped + `app.exe` + `node.exe *tauri.js*`/`cargo.exe` only) is safe as-is; `e2e-full.ps1` SearchHost/`app.exe`/tauri-tree kills are name-scoped and safe. `e2e-features.ps1` line 78's loose `'*tauri*dev*'` filter was the one other loose match and is now protected too.
 - Still open: `e2e-full.ps1:183-184` blanket-kills **all** `msedgewebview2` (safe for us, but it kills unrelated WebView2 apps); tracked junk (`e2e/_avtest2.txt`, `e2e/e2e-all.ps1.new`, `e2e/_e2e_pixel.png`); native `onRenderProcessGone`; whether `Run App.bat` should stop being gitignored; crash-safety for the Windows phase in `e2e-full.ps1` (only the Android runner snapshots localStorage).
-- **Correction:** an earlier note in this file claimed Android could not add its first group. That was wrong - the test simply never entered edit mode. With `ttrpg_groups = []`, after `Enter Edit Mode` the `+` is present and visible (`getBoundingClientRect` 20,337, w/h > 0). No bug; no change made.
+- **Correction to an earlier note in this file:** it claimed Android could not add its first group. That was wrong - the test simply never entered edit mode. With `ttrpg_groups = []`, after `Enter Edit Mode` the `+` is present and visible (`getBoundingClientRect` 20,337, w/h > 0). No bug; no change made.
+
+## SESSION 2026-09-27 (cont. 3) — README brought up to date for Android; ICON FEATURE parked for later
+User asked what else was planned, then: "Bring the readme up to date and make a note of icon feature inside opencode summary. I'll circle back to that at a later date."
+Backup first: `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20260927-020211` (202 files; correct U+00FC folder - console renders it as `Masa�st�`, that is only a codepage display issue).
+
+### 🔶 PARKED FOR LATER — the only unimplemented planned feature: ICON FEATURE
+**`ICON_FEATURE_SPEC.md`** (376 lines, created 2026-09-03, header says *"Status: Planning — do not implement until approved"*). User explicitly deferred it on 2026-09-27 - **do not start it without a fresh request.**
+- Scope: `icon` field on **Group**, **GroupChar** and **GroupCat**; an `<IconPicker>` with an Emoji tab (~120 curated TTRPG emoji) and a Lucide tab (~63 icons), rendered inline in the add/edit group modal and as an edit-mode tap popover on character/category rows.
+- Display targets: group tab on the mobile rail (icon, falling back to first letter), group tab in drawer + desktop sidebar, group heading, character rows (default `User`), category rows (default `Music`).
+- Spec already covers: no data-version bump needed (`normalizeStoredData` spreads unknown fields, missing `icon` degrades to fallback), `toggleGroupMode` must carry `icon` through env↔chars conversion, `addGroup` → `''` / `addGroupCharacter` → `'User'` / `addCategory` → `'Music'`, edit-mode-only row pickers, popover flip near screen bottom, aria-labels, 11-step implementation order, 14-item verification checklist.
+- **Implementation status: nothing done.** `IconPicker` = 0 hits, `renderIcon` = 0, `iconPickerOpen` = 0 in `src/App.jsx`. The 8 existing `icon:` fields are per-sound *image* icons and are unrelated.
+- **Line numbers in the spec are stale** (drifted during the mobile work): `normalizeStoredData` ~55 → **43**, group modal ~4367 → **4927**, `addGroup` → **2385**, `addGroupCharacter` → **1824**, `toggleGroupMode` → **2780**, `handleEditGroup` → **2482**, `groupFormData` → **730**. All symbols still exist.
+- ⚠️ **Fix before implementing:** 5 of the 63 Lucide names in the spec do **not** exist in the installed `lucide-react` 0.428.0 — `Robot`, `Witch`, `Bow`, `Spear`, `Potion`. Importing them as written breaks the build. Valid substitutes: `Bot`, `WandSparkles`, `FlaskConical` / `TestTube`, and `Target` / `ArrowUp` for bow/spear. Verified the other 58 exist (`Flower2`/`Music2`/`Volume2` are fine - lucide slugs trailing digits with a hyphen, e.g. `volume-2.js`).
+- Gotcha when re-checking icon names: do **not** test `node_modules/lucide-react/dist/esm/icons/<slug>.js` with a naive PascalCase→kebab conversion - trailing digits need a hyphen (`Volume2` → `volume-2`) or you get false "missing" results. Query `dist/lucide-react.d.ts` for exported names instead (substring matching cannot produce false negatives).
+
+### README.md updated (this session)
+- Header now advertises **Windows · Android · Web**; intro line no longer says "desktop application".
+- New **Platform Support** table: per-platform feature matrix + the verified fact that **Split View is desktop/web only** (confirmed empirically - the toggle is not rendered on the Android app at a 411x914 viewport) and that web storage is localStorage-only.
+- Features list: Split View marked desktop-only; added Android drawer/rail + edit-mode delete badges and the visible save-failure banner.
+- Tech stack: added Tauri Android target (Kotlin/Gradle, SDK 36) and `@tauri-apps/plugin-os` `isMobile` gating.
+- New **Android App Development** section: rustup targets, `npm i -g @tauri-apps/cli`, `adb devices`, `npm run tauri android dev`, `npm run tauri android init` (only if `src-tauri/gen/android` is missing), Android Studio / `Run App.bat`, plus the `kill-ports.bat` tip for `Port 5173 is already in use`. Device notes: app id `com.mrhorakhty.thespellcaster` (+`.debug`), minSdk 24, compile/target SDK 36, only INTERNET permission, keep mobile edits in `gen/android` or `isMobile`-gated.
+- Production builds: added `npm run tauri android build` with APK output path `src-tauri/gen/android/app/build/outputs/apk/`.
+- Project structure: added `src-tauri/capabilities/`, `src-tauri/gen/android/`, and the whole `e2e/` tree.
+- New **Testing** section documenting `e2e-full.ps1`, `e2e-android.ps1`, `e2e-snapshot.mjs`, `kill-ports.bat`, and the crash-safe localStorage snapshot behaviour.
+- No code was touched in this session - docs only, so no lint/build re-run was needed. `npm run lint` / `vite build` were already green after the hardening commit.
+
+### Repo status
+- All work is committed by the user as **9b47061 "More bugfixes"** (on top of 890e4c1). Working tree was clean before this docs-only session.
+- All 7 branches are fully merged into `mobile-support`; there is no unmerged work on any branch. No TODO/FIXME in `src/` or Rust sources. `ICON_FEATURE_SPEC.md` is the only spec/planning doc in the repo.
+- Remaining known debt (unchanged): native `onRenderProcessGone` recovery, storage-snapshot safety for the Windows E2E phase, `e2e-full.ps1:183-184` blanket `msedgewebview2` kill, tracked junk (`e2e/_avtest2.txt`, `e2e/e2e-all.ps1.new`, `e2e/_e2e_pixel.png`), and whether `Run App.bat` should stop being gitignored.
+
+## SESSION 2026-09-27 (cont. 4) — PROFILES + SYNC: approach CHOSEN (design discussion, NO code written)
+User wants a profile system to move their setup between desktop and Android. Constraint: "not anything intrusive, ideally no personal data". App is intended to be **released publicly**, so the design must serve users who start on one device and later add a PC.
+
+### Decision
+Options presented (A folder-sync, B LAN device-to-device, C self-hosted WebDAV/S3, D hosted provider, E manual bundle export/import). **User chose E (export/import `.spellcaster` bundle) as the shipped baseline**, with A (folder sync) as a possible later addition. E is the only option needing no transport, no accounts and no infrastructure, and it is the primitive the others are built on.
+
+### Facts established while scoping (verified in code)
+- Sync payload is small: the 29 MB / 71 files of **default sounds live in `public/assets` and ship inside the app**, referenced by filename only -> already identical on every install. Only user uploads travel.
+- Storage today: data in localStorage (`ttrpg_characters`, `ttrpg_environment` **SINGULAR**, `ttrpg_groups`, `ttrpg_data_version`, plus settings `boxSize`, `backgroundSettings`); uploaded audio + icons in `BaseDirectory.AppData` / `uploads` (`TAURI_STORAGE_DIR`, App.jsx:10); web backend uses `sound_file_*` localStorage data-URLs (~5 MB cap).
+- **Custom sound icons are also uploads** (App.jsx:1564-1566 `storeFileInLocalStorage` -> `icon: storedName`) — a bundle must carry `icons/` too, not just audio. Easy to miss.
+- **There are no `updatedAt`/`createdAt`/`deletedAt` fields anywhere** (0 hits in `src/App.jsx` + `src/data.json`) -> last-write-wins conflict resolution is impossible today. Add timestamps + tombstones now; it is the prerequisite for folder/cloud sync later.
+- `src-tauri/capabilities/default.json` grants only `fs:allow-appdata-*` + a few pathless perms -> writing a bundle to a user-picked path requires widening the fs scope.
+
+### Scope agreed as needed (7 work items)
+1. Profile model + storage refactor: `profiles` index + `profile:<uuid>:<key>` namespacing + `uploads/<profileId>/`, and a first-run migration for existing users (reuse the `ttrpg_*_old` backup trick, App.jsx:79-87). Multi-profile UI: create/rename/duplicate/delete/switch. **Highest data-loss risk — do it first and alone.**
+2. Bundle format + optional encryption: `manifest.json` (formatVersion, appVersion, per-file sha256+size) + `data.json` + `audio/` + `icons/`; reuse `normalizeStoredData` (App.jsx:43) as the forward-migration entry point; optional passphrase with AES-256-GCM **in Rust** (preferred over WebCrypto — no secure-context question, and testable from `e2e/`).
+3. Bundled-vs-uploaded provenance: a write-time flag is safer than filename guessing, so the 29 MB of built-in audio never enters a bundle.
+4. Export pipeline: streaming zip (**fflate**), never a whole-bundle `Uint8Array`; `tauri-plugin-dialog` + widened fs scope; web = Blob download; **Android SAF save is the least-known piece — spike early**; remember `main.rs`/`lib.rs` plugin parity.
+5. Import pipeline, **atomic**: validate -> temp dir -> swap. Modes: new profile / replace active / merge (needs id-collision + duplicate-name policy). Per-file progress + report.
+6. Public-release concerns: round-trip guarantee, "reset to starter sounds", clear errors on corrupt/wrong-version bundles (never a partial import), and a note that exported profiles contain the user's own audio.
+7. E2E: new `e2e/e2e-profiles.mjs` wired into `e2e-full.ps1` (seed -> export -> wipe -> import -> deep-compare). Architect for testability: import takes bytes, the UI only feeds it picker bytes — otherwise tests hit the known `DOM.setFileInputFiles` Android-WebView renderer crash.
+
+### Deliberately out of scope
+Accounts, real-time sync, WebDAV, cloud, QR. Keep a `ProfileTransport` interface with a single "file" implementation so A/B/C can be added without touching the UI.
+
+### Status
+Design discussion only — **no code written**, app untouched. Spec authored: **`PROFILE_SYNC_SPEC.md`** (14 sections, planning-only header like `ICON_FEATURE_SPEC.md`). Backup taken first per AGENTS.md: `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20260927-021859` (202 files). `git status`: `PROFILE_SYNC_SPEC.md` (new) + `README.md` + `opencode-summary.md`.
+
+### Extra facts found while authoring the spec (all verified in code)
+- **Two sound-file shapes coexist**: character/group sounds use `files: [{...}]`; legacy environment sounds use a single `file: "Name.mp3"` (`src/data.json` `environmentSounds`; playback fallback at App.jsx:2532). `files[]` entries are themselves heterogeneous (`name` / `storedName` / `displayName` / `url`, see App.jsx:1077-1084). **The exporter must walk both shapes.**
+- **Custom background image is an inline base64 data URL up to 5 MB written straight into localStorage** (`backgroundSettings.imagePreview`, App.jsx:2147-2194) — the biggest localStorage quota risk, and it must be extracted to `uploads/` and exported as a file.
+- **Crypto recommendation**: AES-256-GCM + Argon2id implemented in **Rust** (not WebCrypto) — no secure-context question on `http://tauri.localhost`, and testable from `e2e/`.
+- `fs:default` may not grant `read-dir`; needs verification, plus a widened scope for user-picked paths (today only `fs:allow-appdata-*`).
+- New frontend dep needed: **`fflate`** for streaming zip (never buffer a whole bundle in JS memory).
+- Spec §9.3 makes `importBundle(bytes)`/`exportBundle() → bytes` pure byte-level functions so E2E can test import **without** driving the native dialog (which is what triggers the Android WebView renderer crash).
+
+### NEXT
+Nothing implemented. Awaiting user approval of the spec. Recommended first move when approved: **storage adapter + profile refactor + first-run migration as its own commit** (the only high data-loss-risk item), then provenance flag, bundle format, import, export, UI, E2E.
+
+## SESSION 2026-09-27 (cont. 5) — PROFILE SPEC FINALISED: scope decisions taken (docs only, no code)
+User trimmed the design in two rounds, then answered four open questions. All decisions are now baked into `PROFILE_SYNC_SPEC.md` (16 sections). Still **planning only — nothing implemented**. Backup for the whole docs session: `ttrpg-soundboard-backup-20260927-021859` (202 files, taken before the spec was created).
+
+### Decisions (user's calls, all confirmed)
+1. **No encryption.** Bundle is a **plain, unencrypted zip**; no crypto fields in the manifest. Rationale recorded in spec §6: payload is sound effects + names, not sensitive material, and a plain file makes "send it to my group" one action. Only consequence noted: audio a user adds may be non-redistributable and a plain zip gives no protection — the Settings UI note says so.
+2. **Custom background image is NOT synced.** Per-device cosmetic; the existing inline `imagePreview` code path (App.jsx:2147-2194) is left untouched. **One behaviour deliberately kept:** export must force `background.imagePreview` to `null`, otherwise a 5 MB base64 blob rides along in `data.json`. Checklist asserts a user with a 5 MB background still gets a <1 MB bundle.
+3. **Multi-profile retained** (not single-profile + safe replace) — namespaced storage stays, and "New profile" import is the safety story (try an imported setup without losing the current one).
+4. **Merge import DEFERRED to v2.** v1 ships **New profile** (default) + **Replace active** only. Merge was the most intricate logic (id remap, duplicate names, per-record conflict rules) and buys least.
+5. **Web EXCLUDED from v1** — web keeps working as today, no export/import controls. Structural reason: web audio is base64 data-URLs in `sound_file_*` localStorage (~5 MB cap), so a web export could only ever be metadata. Enabling it later needs web audio moved out of localStorage first; the byte-level API means no rework.
+6. **Unresolvable audio policy: keep the container, drop the sound, report the count.** Import never fails over one missing file; the summary names it. Missing **icons** fall back to the default rather than dropping the sound.
+
+### Knock-on effect worth remembering
+Dropping Merge removed the **only** v1 consumer of `updatedAt`/`deletedAt` tombstones. Spec §4.3 is therefore re-labelled **optional / forward-compat insurance** for Merge + folder/cloud sync, and implementation step 2 is marked cuttable for minimum v1. Do not treat timestamps as blocking any more.
+
+### Nice side effect of dropping encryption
+**No custom Rust commands are required at all** — the feature is now frontend work plus registering `tauri-plugin-dialog` and widening the fs scope. Removes a build-toolchain risk and the `main.rs`/`lib.rs` custom-command parity trap. Spec §10 specifies pure-JS SHA-256 (`@noble/hashes`) rather than `crypto.subtle` (unavailable outside a secure context); promoting just the hash to Rust later is isolated if it proves slow.
+
+### v1 shape
+Desktop (Win/Linux/macOS) + Android · multiple named profiles per device · `.spellcaster` plain zip · import modes New profile + Replace active · web excluded · Merge deferred. `PROFILE_SYNC_SPEC.md` §13 carries a "Deferred to a later release" checklist so nothing is silently lost.
+
+### Repo status
+`git status`: `PROFILE_SYNC_SPEC.md` (new, untracked), `README.md` (modified, from the earlier docs session), `opencode-summary.md` (this file). **No app code touched in this session.**
+
+### 🔶 PARKED — user closed this out as documentation-only on 2026-09-27
+User: *"No need, just the documentation is enough for now. We will do it in a different time."* `PROFILE_SYNC_SPEC.md` header now reads **"parked by user decision"** so a future session does not start implementing it unasked. **This is the second parked spec** alongside `ICON_FEATURE_SPEC.md` — if a future session is asked to "continue the profiles work", confirm the user wants implementation before touching `src/App.jsx`. Nothing in the repo depends on either spec; both are documentation only.
