@@ -268,9 +268,9 @@ async function main() {
       if (envTab) {
         envTab.click(); await wait(300);
         log('NAV', 'C14: switch to Env', grid?.querySelector('h2')?.textContent !== 'Human Paladin' ? 'PASS' : 'FAIL', grid?.querySelector('h2')?.textContent);
-        const forest = [...sidebar.querySelectorAll('button')].find(b => b.textContent.trim() === 'Forest');
+        const forest = [...sidebar.querySelectorAll('button')].find(b => b.textContent.trim().endsWith('Forest') && !b.title);
         if (forest) { forest.click(); await wait(300); }
-        log('NAV', 'C14b: env data loads (Forest)', grid?.querySelector('h2')?.textContent === 'Forest' ? 'PASS' : 'FAIL', grid?.querySelector('h2')?.textContent);
+        log('NAV', 'C14b: env data loads (Forest)', grid?.querySelector('h2')?.textContent?.endsWith('Forest') ? 'PASS' : 'FAIL', grid?.querySelector('h2')?.textContent);
         const charTab = [...sidebar.querySelectorAll('button')].find(b => b.textContent.trim() === 'Characters');
         if (charTab) {
           charTab.click(); await wait(200);

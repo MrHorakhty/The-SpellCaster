@@ -501,7 +501,7 @@ async function main() {
   await evalJs(`(() => { const d=document.querySelector('[role="dialog"][aria-label="Navigation"]'); const b=[...d.querySelectorAll('button')].find(x=>x.textContent.trim()==='Environment'); if(b) b.click(); return 'OK'; })()`);
   await sleep(300);
   // Select Forest
-  await evalJs(`(() => { const d=document.querySelector('[role="dialog"][aria-label="Navigation"]'); const b=[...d.querySelectorAll('button')].find(x=>x.textContent.trim()==='Forest'); if(b) b.click(); return 'OK'; })()`);
+  await evalJs(`(() => { const d=document.querySelector('[role="dialog"][aria-label="Navigation"]'); const b=[...d.querySelectorAll('button')].find(x=>x.textContent.trim().endsWith('Forest')); if(b) b.click(); return 'OK'; })()`);
   await sleep(300);
 
   const addCatClick = await evalJs(`(() => {
@@ -579,7 +579,7 @@ async function main() {
   // Switch to Groups tab via rail (first click a group tab)
   await evalJs(`(() => {
     const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-    const b = [...d.querySelectorAll('button')].find(x=>x.textContent.trim()==='Tavern Pack');
+    const b = [...d.querySelectorAll('button')].find(x=>x.textContent.trim().endsWith('Tavern Pack'));
     if(b) b.click();
     return 'OK';
   })()`);
@@ -612,7 +612,7 @@ async function main() {
     // Click into Dragon Lore in drawer
     await evalJs(`(() => {
       const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
-      const b = [...d.querySelectorAll('button')].find(x=>x.textContent.trim()==='Dragon Lore');
+      const b = [...d.querySelectorAll('button')].find(x=>x.textContent.trim().endsWith('Dragon Lore'));
       if(b) b.click(); return 'OK';
     })()`);
     await sleep(400);
@@ -624,7 +624,7 @@ async function main() {
     await closeDrawer();
     const editGrpClick = await evalJs(`(() => {
       const g=${G}; const name=g?.name||'';
-      const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.trim()===name);
+      const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.trim().endsWith(name));
       if(!h) return 'NO_HEADER_NAME:'+name;
       if(!/text-lime-400/.test(h.className)) return 'NOT_EDITABLE';
       h.click(); return 'OK';

@@ -396,7 +396,7 @@ async function main() {
   // Switch to Environment tab
   await evalJs(`document.querySelector('button')?.closest('div')?.querySelector?.('button'); [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Environment')?.click()`);
   await sleep(400);
-  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Forest')?.click()`);
+  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('Forest') && !b.title)?.click()`);
   await sleep(300);
 
   await toggleEditMode(true);
@@ -458,14 +458,14 @@ async function main() {
   await sleep(900);
   const grpAdded = await evalJs(`(() => {
     const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
-    const sidebar=[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Dragon Lore');
+    const sidebar=[...document.querySelectorAll('button')].some(b=>b.textContent.trim().endsWith('Dragon Lore'));
     return { has:g.some(x=>x.name==='Dragon Lore'), sidebar, mode:g.find(x=>x.name==='Dragon Lore')?.mode };
   })()`);
   log('GRP','G1: group added',grpAdded?.has&&grpAdded?.sidebar?'PASS':'FAIL',JSON.stringify(grpAdded));
   log('GRP','G2: mode defaults to environment',grpAdded?.mode==='environment'?'PASS':'FAIL',grpAdded?.mode);
 
   // Click into Dragon Lore group
-  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Dragon Lore')?.click()`);
+  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('Dragon Lore'))?.click()`);
   await sleep(400);
 
   // Edit group name via "Edit Group" button in grid header
@@ -598,7 +598,7 @@ async function main() {
   //  H: ADD SOUND INTO GROUP (real upload to existing Tavern Pack)
   // ================================================================
   console.log(`\n[${LABEL}] === SUITE H: SOUND INTO GROUP ===`);
-  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Tavern Pack')?.click()`);
+  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('Tavern Pack') && !b.title)?.click()`);
   await sleep(400);
   await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Ambience')?.click()`);
   await sleep(400);
@@ -917,7 +917,7 @@ async function main() {
 
   // Source pills
   const pills = await evalJs(`(() => {
-    const ps=[...document.querySelectorAll('button')].filter(b=>['Default Characters','Default Environments','Tavern Pack','Hero Pack'].includes(b.textContent.trim()));
+    const ps=[...document.querySelectorAll('button')].filter(b=>['Default Characters','Default Environments','Tavern Pack','Hero Pack'].some(n=>b.textContent.trim().endsWith(n)));
     return ps.map(b=>b.textContent.trim());
   })()`);
   log('SPLIT','L3: source pills present',pills?.length>=2?'PASS':'FAIL',JSON.stringify(pills));
@@ -940,7 +940,7 @@ async function main() {
 
   // Click Hero Pack pill → Fighter
   const heroPackClick = await evalJs(`(() => {
-    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Hero Pack');
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('Hero Pack'));
     if(b) { b.click(); return 'OK'; }
     return 'NO_PILL';
   })()`);

@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 /* global __APP_VERSION__ */
-import { User, Music, Volume2, Settings, Flame, Zap, Shield, Sword, Heart, Cloud, CloudRain, Droplets, X, Plus, Edit, Trash2, Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle } from 'lucide-react'
+import {
+    User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
+    Axe, Target, Crosshair, Heart, HeartPulse, Cloud, CloudRain, CloudLightning, Droplets, X, Plus, Edit, Trash2,
+    Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle,
+    // Icon-picker catalogue (ICON_MAP). Every name here is verified to exist in
+    // the installed lucide-react version - importing a missing name breaks the build.
+    Crown, Skull, Ghost, Bot, Brain, Cat, Dog, Fish, Bird, Rabbit,
+    TreePine, TreeDeciduous, Trees, Flower, Flower2, Snowflake, Sun, Moon, Star, Wind, Waves, Wheat,
+    Castle, House, Tent, Mountain, Globe, Map as MapIcon, Compass, DoorOpen, Landmark, Anchor,
+    Wand, WandSparkles, ScrollText, KeyRound, Gem, Coins, Eye, EyeOff, Feather, Dices,
+    Bell, Megaphone, Flag, Bookmark, Tag, CircleDot, Drama
+} from 'lucide-react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { platform } from '@tauri-apps/plugin-os'
 import data from './data.json'
@@ -8,6 +19,215 @@ import data from './data.json'
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
 const TAURI_STORAGE_DIR = 'uploads'
+
+// ---------------------------------------------------------------------------
+// Icon catalogue
+//
+// An entity's `icon` is either a Lucide component name (e.g. 'Shield') or an
+// emoji string (e.g. '🐉'). An empty string means "no icon chosen", and the
+// caller falls back to its default (first letter for groups, User for
+// characters, Music for categories) so pre-existing data renders unchanged.
+// ---------------------------------------------------------------------------
+const ICON_MAP = {
+    // People & Beings
+    User, Users, Crown, Skull, Ghost, Bot, Brain, Cat, Dog, Fish, Bird, Rabbit,
+    // Combat & Weapons
+    Sword, Shield, Swords, ShieldHalf, Axe, Target, Crosshair,
+    // Nature & Elements
+    TreePine, TreeDeciduous, Trees, Flower, Flower2, Cloud, CloudRain, CloudLightning, Droplets,
+    Flame, FlameKindling, Snowflake, Sun, Moon, Star, Zap, Wind, Waves, Wheat,
+    // Places
+    Castle, House, Tent, Mountain, Globe, Map: MapIcon, Compass, DoorOpen, Landmark, Anchor,
+    // Magic & Items
+    Sparkles, Wand, WandSparkles, ScrollText, KeyRound, Gem, Coins, Heart, HeartPulse, Eye, EyeOff, Feather, Dices,
+    // Music & Misc
+    Music, Music2, Volume2, Bell, Megaphone, Flag, Bookmark, Tag, CircleDot, Drama
+}
+
+const ICON_CATEGORIES = [
+    {
+        label: 'People & Beings',
+        icons: ['User', 'Users', 'Crown', 'Skull', 'Ghost', 'Bot', 'Brain', 'Cat', 'Dog', 'Fish', 'Bird', 'Rabbit']
+    },
+    {
+        label: 'Combat & Weapons',
+        icons: ['Sword', 'Shield', 'Swords', 'ShieldHalf', 'Axe', 'Target', 'Crosshair']
+    },
+    {
+        label: 'Nature & Elements',
+        icons: ['TreePine', 'TreeDeciduous', 'Trees', 'Flower', 'Flower2', 'Cloud', 'CloudRain', 'CloudLightning', 'Droplets', 'Flame', 'FlameKindling', 'Snowflake', 'Sun', 'Moon', 'Star', 'Zap', 'Wind', 'Waves', 'Wheat']
+    },
+    {
+        label: 'Places',
+        icons: ['Castle', 'House', 'Tent', 'Mountain', 'Globe', 'Map', 'Compass', 'DoorOpen', 'Landmark', 'Anchor']
+    },
+    {
+        label: 'Magic & Items',
+        icons: ['Sparkles', 'Wand', 'WandSparkles', 'ScrollText', 'KeyRound', 'Gem', 'Coins', 'Heart', 'HeartPulse', 'Eye', 'EyeOff', 'Feather', 'Dices']
+    },
+    {
+        label: 'Music & Misc',
+        icons: ['Music', 'Music2', 'Volume2', 'Bell', 'Megaphone', 'Flag', 'Bookmark', 'Tag', 'CircleDot', 'Drama']
+    }
+]
+
+const EMOJI_CATEGORIES = [
+    { label: 'People & Characters', emojis: '🧙 🧝 🧛 🧟 🤖 👹 👺 🤠 🥷 🧙‍♀️ 🧝‍♀️ 🧛‍♀️ 🧟‍♀️ 👩‍🦰 🧔 👦 👧 👴 👲 🤵 👸 🫅' },
+    { label: 'Creatures', emojis: '🐉 🐲 🦅 🦉 🐺 🐍 🕷️ 🕸️ 🦇 🐙 🦄 🐻 🦁 🐸 🦂 🐝' },
+    { label: 'Nature & Elements', emojis: '🌲 🌳 🌿 🌺 🌸 🌾 🍂 🌙 ☀️ ⛈️ 🌊 🔥 💨 ⚡ 🌑 🌈 ❄️ 💎 🌅' },
+    { label: 'Places & Structures', emojis: '🏰 🏠 🏚️ ⛪ 🏕️ 🏛️ 🗼 🧭 🗺️ 🌋 ⛰️ 🏞️ 🕳️ 🚪 🏗️' },
+    { label: 'Items & Equipment', emojis: '⚔️ 🗡️ 🛡️ 🏹 🔮 🧪 📜 🗝️ 💰 🧰 ⚒️ 🪓 🪄 🎲 📖' },
+    { label: 'Magic & Symbols', emojis: '✨ 💀 ☠️ 🩸 👁️ 🌀 🕯️ ⭕ 🌟 💫 ⭐ 🕉️ ☸️ ⚖️' },
+    { label: 'Music & Misc', emojis: '🎵 🎶 🥁 🎭 🎪 🎯 🃏 🔔 📯 🧨 🪙 🧿' }
+]
+
+// Renders an entity icon. `fallback` is used when nothing is chosen, so every
+// call site keeps working for data that predates the icon field.
+const renderIcon = (icon, { size = 16, fallback = null, className = '' } = {}) => {
+    if (!icon) return fallback
+    const LucideIcon = ICON_MAP[icon]
+    if (LucideIcon) {
+        return <LucideIcon size={size} className={`shrink-0 ${className}`} aria-hidden="true" />
+    }
+    return (
+        <span
+            className={`shrink-0 leading-none inline-flex items-center justify-center ${className}`}
+            style={{ fontSize: size }}
+            aria-hidden="true"
+        >
+            {icon}
+        </span>
+    )
+}
+
+// True when a stored icon value is one of the curated emoji (anything that is
+// not a known Lucide name is treated as emoji, but the picker needs to know
+// which tab to open on).
+const isEmojiIcon = (value) => !value || !ICON_MAP[value]
+
+// Collapsible icon picker used by the Add/Edit Group, Character and Category
+// modals. Kept collapsed by default so those modals stay the size they are now.
+const IconPicker = ({ value, fallback, onChange }) => {
+    const [expanded, setExpanded] = useState(false)
+    const [tab, setTab] = useState(() => (isEmojiIcon(value) ? 'emoji' : 'lucide'))
+
+    // Opening the picker should land on the tab the current icon lives in.
+    const toggleExpanded = () => {
+        if (!expanded) {
+            setTab(isEmojiIcon(value) ? 'emoji' : 'lucide')
+        }
+        setExpanded(!expanded)
+    }
+
+    return (
+        <div>
+            <div className="flex items-center gap-2">
+                <div
+                    className="w-12 h-12 shrink-0 flex items-center justify-center bg-dark-700 border border-dark-600 rounded-lg"
+                    data-icon-preview={value || ''}
+                >
+                    {renderIcon(value, { size: 22, fallback })}
+                </div>
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={toggleExpanded}
+                        className="px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm font-medium transition-colors"
+                        aria-expanded={expanded}
+                    >
+                        {expanded ? 'Hide Icons' : 'Choose Icon'}
+                    </button>
+                    {value && (
+                        <button
+                            type="button"
+                            onClick={() => onChange('')}
+                            className="p-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                            title="Clear icon"
+                            aria-label="Clear icon"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {expanded && (
+                <div className="mt-3">
+                    <div className="flex mb-2 rounded-lg overflow-hidden border border-dark-600">
+                        <button
+                            type="button"
+                            onClick={() => setTab('emoji')}
+                            className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'emoji' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                        >
+                            Emoji
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTab('lucide')}
+                            className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'lucide' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'}`}
+                        >
+                            Icons
+                        </button>
+                    </div>
+                    <div className="max-h-[35vh] overflow-y-auto">
+                        {tab === 'emoji' ? EMOJI_CATEGORIES.map(cat => (
+                            <div key={cat.label} className="mb-2">
+                                <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{cat.label}</p>
+                                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
+                                    {cat.emojis.split(' ').map(e => (
+                                        <button
+                                            key={e}
+                                            type="button"
+                                            onClick={() => onChange(e)}
+                                            className={`min-h-[40px] flex items-center justify-center rounded-lg text-xl transition-colors hover:bg-dark-600 ${value === e ? 'ring-2 ring-lime-500 bg-dark-600' : ''}`}
+                                            title={e}
+                                            aria-label={`Icon ${e}`}
+                                        >
+                                            {e}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )) : ICON_CATEGORIES.map(cat => (
+                            <div key={cat.label} className="mb-2">
+                                <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{cat.label}</p>
+                                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
+                                    {cat.icons.map(name => {
+                                        const LucideIcon = ICON_MAP[name]
+                                        return (
+                                            <button
+                                                key={name}
+                                                type="button"
+                                                onClick={() => onChange(name)}
+                                                className={`min-h-[40px] flex items-center justify-center rounded-lg transition-colors hover:bg-dark-600 ${value === name ? 'ring-2 ring-lime-500 bg-dark-600' : ''}`}
+                                                title={name}
+                                                aria-label={`Icon ${name}`}
+                                            >
+                                                <LucideIcon size={20} />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// Inline editor for the icon of a built-in top-level collection (Characters /
+// Environment). Shown in edit mode; reuses the same picker as entity modals.
+const CollectionIconEditor = ({ label, value, fallback, onChange }) => (
+    <div className="rounded-lg border border-dark-600 p-2">
+        <div className="flex items-center gap-1.5 mb-1.5">
+            {renderIcon(value, { size: 14, fallback })}
+            <span className="text-xs font-medium text-slate-400">{label}</span>
+        </div>
+        <IconPicker value={value} fallback={fallback} onChange={onChange} />
+    </div>
+)
 
 // Safe JSON parse that returns a fallback instead of crashing on corrupt data
 const safeParse = (value, fallback) => {
@@ -704,14 +924,16 @@ function App() {
     const [showCharacterModal, setShowCharacterModal] = useState(false)
     const [editingCharacter, setEditingCharacter] = useState(null)
     const [characterFormData, setCharacterFormData] = useState({
-        name: ''
+        name: '',
+        icon: ''
     })
 
     // Category management states
     const [showCategoryModal, setShowCategoryModal] = useState(false)
     const [editingCategory, setEditingCategory] = useState(null)
     const [categoryFormData, setCategoryFormData] = useState({
-        name: ''
+        name: '',
+        icon: ''
     })
 
     // When a split-view-targeted modal closes, drop the group-modal target so it
@@ -728,7 +950,8 @@ function App() {
     const [showGroupModal, setShowGroupModal] = useState(false)
     const [editingGroup, setEditingGroup] = useState(null)
     const [groupFormData, setGroupFormData] = useState({
-        name: ''
+        name: '',
+        icon: ''
     })
 
     // Settings modal state
@@ -761,6 +984,19 @@ function App() {
             setBoxSizeInput(Math.round(boxSize * 100).toString())
         }
     }, [boxSize, boxSizeFocused])
+
+    // Icons for the two built-in top-level collections (Characters / Environment),
+    // stored as plain strings (emoji or Lucide name; '' = fallback User/Music).
+    const [charSectionIcon, setCharSectionIcon] = useState(() => localStorage.getItem('ttrpg_characters_icon') || '')
+    const [envSectionIcon, setEnvSectionIcon] = useState(() => localStorage.getItem('ttrpg_environment_icon') || '')
+    const updateCharSectionIcon = (value) => {
+        setCharSectionIcon(value)
+        localStorage.setItem('ttrpg_characters_icon', value)
+    }
+    const updateEnvSectionIcon = (value) => {
+        setEnvSectionIcon(value)
+        localStorage.setItem('ttrpg_environment_icon', value)
+    }
 
     const [volumeInput, setVolumeInput] = useState(() => Math.round(masterVolume * 100).toString())
     const [volumeFocused, setVolumeFocused] = useState(false)
@@ -968,6 +1204,31 @@ function App() {
     const activeGroup = groups.find(group => group.id === currentActiveGroupId)
     const activeGroupCategoryObj = (activeGroup?.categories || []).find(cat => cat.category === activeGroupCategory) || null
     const activeGroupCharacter = (activeGroup?.characters || []).find(c => c.id === activeGroupCharacterId) || null
+
+    // Heading name + icon. The icon must come from the same entity as the name,
+    // so it is resolved separately from the name rather than in one `||` chain -
+    // otherwise a group's icon would show next to a character that has none.
+    const activeHeadingEntity = activeCharacter
+        || activeEnvironmentCategory
+        || (activeGroup?.mode === 'characters' ? activeGroupCharacter : activeGroupCategoryObj)
+    const activeHeadingName = activeCharacter
+        ? activeCharacter.name
+        : activeEnvironmentCategory?.category
+            || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category)
+            || activeGroup?.name
+    const activeHeadingIsCharacter = Boolean(activeCharacter
+        || (activeGroup?.mode === 'characters' && activeGroupCharacter))
+    const activeHeadingIcon = activeHeadingEntity?.icon || ''
+    // A selected character/category keeps its own default (User / Music); with no
+    // child selected the group itself is headed, so fall back to its first letter.
+    const renderHeadingIcon = (size) => renderIcon(activeHeadingIcon, {
+        size,
+        fallback: activeHeadingEntity
+            ? (activeHeadingIsCharacter
+                ? <User size={size} className="shrink-0" />
+                : <Music size={size} className="shrink-0" />)
+            : <span className="text-xs font-semibold leading-none">{(activeGroup?.name?.charAt(0) || 'G').toUpperCase()}</span>
+    })
 
     // Select a category inside the currently-open custom group (mirrors the
     // Environment tab's per-category selection).
@@ -1735,7 +1996,7 @@ function App() {
 
     const openAddCharacterModal = () => {
         setGroupEditTargetId(null)
-        setCharacterFormData({ name: '' })
+        setCharacterFormData({ name: '', icon: '' })
         setEditingCharacter(null)
         setShowCharacterModal(true)
     }
@@ -1782,7 +2043,7 @@ function App() {
 
         if (editingCharacter) {
             if (groupCtx) {
-                updateGroupCharacter(editingCharacter.id, trimmedName, groupCtx.id)
+                updateGroupCharacter(editingCharacter.id, trimmedName, groupCtx.id, characterFormData.icon)
             } else {
                 updateCharacter(editingCharacter.id, characterFormData)
             }
@@ -1802,7 +2063,7 @@ function App() {
     const updateCharacter = (characterId, characterData) => {
         setCharacters(prev => prev.map(character =>
             character.id === characterId
-                ? { ...character, name: characterData.name.trim() }
+                ? { ...character, name: characterData.name.trim(), icon: characterData.icon ?? character.icon ?? '' }
                 : character
         ))
     }
@@ -1813,6 +2074,7 @@ function App() {
         const newCharacter = {
             id: newId,
             name: characterData.name.trim(),
+            icon: characterData.icon || '',
             sounds: []
         }
 
@@ -1829,6 +2091,7 @@ function App() {
         const newCharacter = {
             id: newId,
             name: characterData.name.trim(),
+            icon: characterData.icon || '',
             sounds: []
         }
 
@@ -1840,7 +2103,7 @@ function App() {
         setActiveGroupCharacterId(newId)
     }
 
-    const updateGroupCharacter = (characterId, newName, groupId = null) => {
+    const updateGroupCharacter = (characterId, newName, groupId = null, newIcon) => {
         const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
         if (!targetGroup) return
         setGroups(prev => prev.map(group =>
@@ -1848,7 +2111,9 @@ function App() {
                 ? {
                     ...group,
                     characters: (group.characters || []).map(ch =>
-                        ch.id === characterId ? { ...ch, name: newName } : ch
+                        ch.id === characterId
+                            ? { ...ch, name: newName, ...(newIcon !== undefined ? { icon: newIcon } : {}) }
+                            : ch
                     )
                 }
                 : group
@@ -1911,7 +2176,7 @@ function App() {
 
     const openAddCategoryModal = () => {
         setGroupEditTargetId(null)
-        setCategoryFormData({ name: '' })
+        setCategoryFormData({ name: '', icon: '' })
         setEditingCategory(null)
         setShowCategoryModal(true)
     }
@@ -2220,9 +2485,9 @@ function App() {
 
         if (editingCategory) {
             if (groupCtx) {
-                updateGroupCategory(editingCategory.category, trimmedName, groupCtx.id)
+                updateGroupCategory(editingCategory.category, trimmedName, groupCtx.id, categoryFormData.icon)
             } else {
-                updateCategory(editingCategory.category, trimmedName)
+                updateCategory(editingCategory.category, trimmedName, categoryFormData.icon)
             }
         } else {
             if (groupCtx) {
@@ -2237,14 +2502,15 @@ function App() {
         setGroupEditTargetId(null)
     }
 
-    const updateCategory = (oldName, newName) => {
+    const updateCategory = (oldName, newName, newIcon) => {
+        const withIcon = (entry) => (newIcon !== undefined ? { ...entry, icon: newIcon } : entry)
         if (tabType === 'groups' && activeGroup) {
             setGroups(prev => prev.map(group =>
                 group.id === activeGroup.id
                     ? {
                         ...group,
                         categories: (group.categories || []).map(cat =>
-                            cat.category === oldName ? { ...cat, category: newName } : cat
+                            cat.category === oldName ? withIcon({ ...cat, category: newName }) : cat
                         )
                     }
                     : group
@@ -2253,7 +2519,7 @@ function App() {
         } else {
             setEnvironmentSounds(prev => prev.map(category =>
                 category.category === oldName
-                    ? { ...category, category: newName }
+                    ? withIcon({ ...category, category: newName })
                     : category
             ))
 
@@ -2265,6 +2531,7 @@ function App() {
     const addCategory = (categoryData) => {
         const newCategory = {
             category: categoryData.name.trim(),
+            icon: categoryData.icon || '',
             sounds: []
         }
         if (tabType === 'groups' && activeGroup) {
@@ -2306,13 +2573,13 @@ function App() {
         if (tabType === 'groups' && activeGroup) {
             const character = (activeGroup.characters || []).find(c => c.id === characterId)
             if (!character) return
-            setCharacterFormData({ name: character.name })
+            setCharacterFormData({ name: character.name, icon: character.icon || '' })
             setEditingCharacter(character)
             setShowCharacterModal(true)
         } else {
             const character = characters.find(c => c.id === characterId)
             if (!character) return
-            setCharacterFormData({ name: character.name })
+            setCharacterFormData({ name: character.name, icon: character.icon || '' })
             setEditingCharacter(character)
             setShowCharacterModal(true)
         }
@@ -2326,13 +2593,13 @@ function App() {
             return
         }
 
-        setCategoryFormData({ name: categoryName })
+        setCategoryFormData({ name: categoryName, icon: category.icon || '' })
         setEditingCategory(category)
         setShowCategoryModal(true)
     }
 
     const openAddGroupModal = () => {
-        setGroupFormData({ name: '' })
+        setGroupFormData({ name: '', icon: '' })
         setEditingGroup(null)
         setShowGroupModal(true)
     }
@@ -2362,7 +2629,7 @@ function App() {
         }
 
         if (editingGroup) {
-            updateGroup(editingGroup.id, trimmedName)
+            updateGroup(editingGroup.id, trimmedName, groupFormData.icon)
         } else {
             addGroup(groupFormData)
         }
@@ -2371,10 +2638,10 @@ function App() {
         setEditingGroup(null)
     }
 
-    const updateGroup = (groupId, newName) => {
+    const updateGroup = (groupId, newName, newIcon) => {
         setGroups(prev => prev.map(group =>
             group.id === groupId
-                ? { ...group, name: newName }
+                ? (newIcon !== undefined ? { ...group, name: newName, icon: newIcon } : { ...group, name: newName })
                 : group
         ))
 
@@ -2388,6 +2655,7 @@ function App() {
         const newGroup = {
             id: newId,
             name: groupData.name.trim(),
+            icon: groupData.icon || '',
             mode: 'environment',
             sounds: [],
             categories: [],
@@ -2449,6 +2717,7 @@ function App() {
         }
         const newCategory = {
             category: categoryData.name.trim(),
+            icon: categoryData.icon || '',
             sounds: []
         }
         setGroups(prev => prev.map(group =>
@@ -2459,7 +2728,7 @@ function App() {
         setActiveGroupCategory(newCategory.category)
     }
 
-    const updateGroupCategory = (oldName, newName, groupId = null) => {
+    const updateGroupCategory = (oldName, newName, groupId = null, newIcon) => {
         const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
         if (!targetGroup) {
             return
@@ -2469,7 +2738,7 @@ function App() {
                 ? {
                     ...group,
                     categories: (group.categories || []).map(cat =>
-                        cat.category === oldName ? { ...cat, category: newName } : cat
+                        cat.category === oldName ? (newIcon !== undefined ? { ...cat, category: newName, icon: newIcon } : { ...cat, category: newName }) : cat
                     )
                 }
                 : group
@@ -2485,7 +2754,7 @@ function App() {
             return
         }
 
-        setGroupFormData({ name: group.name })
+        setGroupFormData({ name: group.name, icon: group.icon || '' })
         setEditingGroup(group)
         setShowGroupModal(true)
     }
@@ -2785,6 +3054,10 @@ function App() {
                 const converted = (group.categories || []).map(cat => ({
                     id: `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     name: cat.category,
+                    // The icon carries across the conversion. An empty icon stays
+                    // empty, so the row then falls back to the default for its new
+                    // representation (User for characters, Music for categories).
+                    icon: cat.icon || '',
                     sounds: cat.sounds || []
                 }))
                 return {
@@ -2797,6 +3070,7 @@ function App() {
                 const converted = (group.characters || []).map(ch => ({
                     id: `gcat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     category: ch.name,
+                    icon: ch.icon || '',
                     sounds: ch.sounds || []
                 }))
                 return {
@@ -3204,7 +3478,7 @@ function App() {
                     const ch = (group?.characters || []).find(c => c.id === itemId)
                     if (!ch) return
                     setGroupEditTargetId(groupId)
-                    setCharacterFormData({ name: ch.name })
+                    setCharacterFormData({ name: ch.name, icon: ch.icon || '' })
                     setEditingCharacter(ch)
                     setShowCharacterModal(true)
                 } else {
@@ -3212,7 +3486,7 @@ function App() {
                     const cat = (group?.categories || []).find(c => c.category === itemId)
                     if (!cat) return
                     setGroupEditTargetId(groupId)
-                    setCategoryFormData({ name: itemId })
+                    setCategoryFormData({ name: itemId, icon: cat.icon || '' })
                     setEditingCategory(cat)
                     setShowCategoryModal(true)
                 }
@@ -3220,14 +3494,14 @@ function App() {
                 const character = characters.find(c => c.id === itemId)
                 if (!character) return
                 setGroupEditTargetId(null)
-                setCharacterFormData({ name: character.name })
+                setCharacterFormData({ name: character.name, icon: character.icon || '' })
                 setEditingCharacter(character)
                 setShowCharacterModal(true)
             } else {
                 const category = environmentSounds.find(e => e.category === itemId)
                 if (!category) return
                 setGroupEditTargetId(null)
-                setCategoryFormData({ name: itemId })
+                setCategoryFormData({ name: itemId, icon: category.icon || '' })
                 setEditingCategory(category)
                 setShowCategoryModal(true)
             }
@@ -3252,11 +3526,11 @@ function App() {
         const handlePanelAddItem = () => {
             setGroupEditTargetId(source === 'top' ? null : source)
             if (isCharSection) {
-                setCharacterFormData({ name: '' })
+                setCharacterFormData({ name: '', icon: '' })
                 setEditingCharacter(null)
                 setShowCharacterModal(true)
             } else {
-                setCategoryFormData({ name: '' })
+                setCategoryFormData({ name: '', icon: '' })
                 setEditingCategory(null)
                 setShowCategoryModal(true)
             }
@@ -3296,7 +3570,13 @@ function App() {
                             className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${source === 'top' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                 }`}
                         >
-                            {isCharSection ? 'Default Characters' : 'Default Environments'}
+                            <span className="flex items-center gap-1.5">
+                                {renderIcon(isCharSection ? charSectionIcon : envSectionIcon, {
+                                    size: 14,
+                                    fallback: isCharSection ? <User size={14} /> : <Music size={14} />
+                                })}
+                                <span className="truncate">{isCharSection ? 'Default Characters' : 'Default Environments'}</span>
+                            </span>
                         </button>
                         {groupSections.map(section => (
                             <button
@@ -3305,7 +3585,13 @@ function App() {
                                 className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${source === section.group.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                     }`}
                             >
-                                {section.group.name}
+                                <span className="flex items-center gap-1.5">
+                                    {renderIcon(section.group.icon, {
+                                        size: 14,
+                                        fallback: <span className="text-[10px] font-semibold leading-none">{(section.group.name.charAt(0) || 'G').toUpperCase()}</span>
+                                    })}
+                                    <span className="truncate">{section.group.name}</span>
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -3366,7 +3652,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(c.id) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <User className="shrink-0" size={16} />
+                                            {renderIcon(c.icon, { fallback: <User className="shrink-0" size={16} /> })}
                                             <span className="truncate">{c.name}</span>
                                         </button>
                                         {editMode && (
@@ -3396,7 +3682,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(e.category) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <Music className="shrink-0" size={16} />
+                                            {renderIcon(e.icon, { fallback: <Music className="shrink-0" size={16} /> })}
                                             <span className="truncate">{e.category}</span>
                                         </button>
                                         {editMode && (
@@ -3437,7 +3723,7 @@ function App() {
                                                 className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isActive ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                     } ${editMode ? 'pt-8' : ''}`}
                                             >
-                                                {isCharSection ? <User className="shrink-0" size={16} /> : <Music className="shrink-0" size={16} />}
+                                                {renderIcon(item.icon, { fallback: isCharSection ? <User className="shrink-0" size={16} /> : <Music className="shrink-0" size={16} /> })}
                                                 <span className="truncate">{isCharSection ? item.name : item.category}</span>
                                             </button>
                                             {editMode && (
@@ -3884,7 +4170,7 @@ function App() {
                                                 }`}
                                             title="Characters"
                                         >
-                                            <User size={18} />
+                                            {renderIcon(charSectionIcon, { size: 18, fallback: <User size={18} /> })}
                                         </button>
                                         <button
                                             onClick={() => switchTab('environment')}
@@ -3892,7 +4178,7 @@ function App() {
                                                 }`}
                                             title="Environment"
                                         >
-                                            <Music size={18} />
+                                            {renderIcon(envSectionIcon, { size: 18, fallback: <Music size={18} /> })}
                                         </button>
                                         {groups.map(group => (
                                             <div key={group.id} className="relative">
@@ -3902,7 +4188,10 @@ function App() {
                                                         }`}
                                                     title={group.name}
                                                 >
-                                                    <span className="text-xs font-semibold leading-none">{group.name.charAt(0).toUpperCase() || 'G'}</span>
+                                                    {renderIcon(group.icon, {
+                                                        size: 20,
+                                                        fallback: <span className="text-xs font-semibold leading-none">{(group.name.charAt(0) || 'G').toUpperCase()}</span>
+                                                    })}
                                                 </button>
                                                 {editMode && isPanelOpen && (
                                                     <button
@@ -3948,9 +4237,10 @@ function App() {
                                                         handleEditGroup(activeGroup.id)
                                                     }
                                                 }}
-                                                className={`text-sm font-semibold truncate ${editMode ? 'cursor-pointer text-lime-400' : ''}`}
+                                                className={`flex items-center gap-2 min-w-0 text-sm font-semibold ${editMode ? 'cursor-pointer text-lime-400' : ''}`}
                                             >
-                                                {activeCharacter ? activeCharacter.name : activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category) || activeGroup?.name}
+                                                {renderHeadingIcon(16)}
+                                                <span className="truncate">{activeHeadingName}</span>
                                             </h2>
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
@@ -4007,14 +4297,20 @@ function App() {
                                                         className={`shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
-                                                        Characters
+                                                        <span className="flex items-center gap-1.5">
+                                                            {renderIcon(charSectionIcon, { size: 14, fallback: <User size={14} /> })}
+                                                            <span className="truncate max-w-[120px] pr-1">Characters</span>
+                                                        </span>
                                                     </button>
                                                     <button
                                                         onClick={() => switchTab('environment')}
                                                         className={`shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
-                                                        Environment
+                                                        <span className="flex items-center gap-1.5">
+                                                            {renderIcon(envSectionIcon, { size: 14, fallback: <Music size={14} /> })}
+                                                            <span className="truncate max-w-[120px] pr-1">Environment</span>
+                                                        </span>
                                                     </button>
                                                     {groups.map(group => (
                                                             <div key={group.id} className="relative shrink-0">
@@ -4023,7 +4319,13 @@ function App() {
                                                                     className={`shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'groups' && activeTab === group.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                         }`}
                                                                 >
-                                                                    <span className="truncate max-w-[120px] pr-1">{group.name}</span>
+                                                                <span className="flex items-center gap-1.5">
+                                                                        {renderIcon(group.icon, {
+                                                                            size: 14,
+                                                                            fallback: <span className="text-[10px] font-semibold leading-none">{(group.name.charAt(0) || 'G').toUpperCase()}</span>
+                                                                        })}
+                                                                        <span className="truncate max-w-[120px] pr-1">{group.name}</span>
+                                                                </span>
                                                                 </button>
                                                                 {editMode && (
                                                                     <button
@@ -4038,6 +4340,23 @@ function App() {
                                                             </div>
                                                         ))}
                                                 </div>
+
+                                                {editMode && (
+                                                    <div className="space-y-2 mb-3">
+                                                        <CollectionIconEditor
+                                                            label="Characters icon"
+                                                            value={charSectionIcon}
+                                                            fallback={<User size={14} />}
+                                                            onChange={updateCharSectionIcon}
+                                                        />
+                                                        <CollectionIconEditor
+                                                            label="Environment icon"
+                                                            value={envSectionIcon}
+                                                            fallback={<Music size={14} />}
+                                                            onChange={updateEnvSectionIcon}
+                                                        />
+                                                    </div>
+                                                )}
 
                                                 {editMode && tabType === 'groups' && activeGroup && (
                                                     <div className="flex mb-3 rounded-lg overflow-hidden border border-dark-600">
@@ -4152,7 +4471,7 @@ function App() {
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
-                                                            <User size={16} className="shrink-0" />
+                                                            {renderIcon(char.icon, { fallback: <User size={16} className="shrink-0" /> })}
                                                             <span className="truncate">{char.name}</span>
                                                         </button>
                                                         {editMode && (
@@ -4174,7 +4493,7 @@ function App() {
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
-                                                            <Music size={16} className="shrink-0" />
+                                                            {renderIcon(cat.icon, { fallback: <Music size={16} className="shrink-0" /> })}
                                                             <span className="truncate">{cat.category}</span>
                                                         </button>
                                                         {editMode && (
@@ -4196,7 +4515,7 @@ function App() {
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
-                                                            <User size={16} className="shrink-0" />
+                                                            {renderIcon(ch.icon, { fallback: <User size={16} className="shrink-0" /> })}
                                                             <span className="truncate">{ch.name}</span>
                                                         </button>
                                                         {editMode && (
@@ -4218,7 +4537,7 @@ function App() {
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeGroupCategory === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
-                                                            <Music size={16} className="shrink-0" />
+                                                            {renderIcon(cat.icon, { fallback: <Music size={16} className="shrink-0" /> })}
                                                             <span className="truncate">{cat.category}</span>
                                                         </button>
                                                         {editMode && (
@@ -4261,14 +4580,20 @@ function App() {
                                     className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
-                                    Characters
+                                    <span className="flex items-center gap-1.5">
+                                        {renderIcon(charSectionIcon, { size: 14, fallback: <User size={14} /> })}
+                                        <span className="truncate">Characters</span>
+                                    </span>
                                 </button>
                                 <button
                                     onClick={() => switchTab('environment')}
                                     className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
-                                    Environment
+                                    <span className="flex items-center gap-1.5">
+                                        {renderIcon(envSectionIcon, { size: 14, fallback: <Music size={14} /> })}
+                                        <span className="truncate">Environment</span>
+                                    </span>
                                 </button>
                                 {groups.map(group => (
                                     <div key={group.id} className="relative shrink-0">
@@ -4277,7 +4602,13 @@ function App() {
                                             className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'groups' && activeTab === group.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 }`}
                                         >
-                                            {group.name}
+                                            <span className="flex items-center gap-1.5">
+                                                {renderIcon(group.icon, {
+                                                    size: 14,
+                                                    fallback: <span className="text-[10px] font-semibold leading-none">{(group.name.charAt(0) || 'G').toUpperCase()}</span>
+                                                })}
+                                                <span className="truncate">{group.name}</span>
+                                            </span>
                                         </button>
                                         {editMode && (
                                             <button
@@ -4292,6 +4623,23 @@ function App() {
                                     </div>
                                 ))}
                             </div>
+
+                            {editMode && (
+                                <div className="space-y-2 mb-3">
+                                    <CollectionIconEditor
+                                        label="Characters icon"
+                                        value={charSectionIcon}
+                                        fallback={<User size={14} />}
+                                        onChange={updateCharSectionIcon}
+                                    />
+                                    <CollectionIconEditor
+                                        label="Environment icon"
+                                        value={envSectionIcon}
+                                        fallback={<Music size={14} />}
+                                        onChange={updateEnvSectionIcon}
+                                    />
+                                </div>
+                            )}
 
                             {editMode && tabType === 'groups' && activeGroup && (
                                 <div className="flex mb-3 rounded-lg overflow-hidden border border-dark-600">
@@ -4332,7 +4680,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <User className="shrink-0" size={16} />
+                                            {renderIcon(char.icon, { fallback: <User className="shrink-0" size={16} /> })}
                                             <span className="truncate">{char.name}</span>
                                         </button>
                                         {editMode && (
@@ -4363,7 +4711,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <Music className="shrink-0" size={16} />
+                                            {renderIcon(cat.icon, { fallback: <Music className="shrink-0" size={16} /> })}
                                             <span className="truncate">{cat.category}</span>
                                         </button>
                                         {editMode && (
@@ -4394,7 +4742,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <User className="shrink-0" size={16} />
+                                            {renderIcon(ch.icon, { fallback: <User className="shrink-0" size={16} /> })}
                                             <span className="truncate">{ch.name}</span>
                                         </button>
                                         {editMode && (
@@ -4424,7 +4772,7 @@ function App() {
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeGroupCategory === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
                                         >
-                                            <Music className="shrink-0" size={16} />
+                                            {renderIcon(cat.icon, { fallback: <Music className="shrink-0" size={16} /> })}
                                             <span className="truncate">{cat.category}</span>
                                         </button>
                                         {editMode && (
@@ -4455,8 +4803,9 @@ function App() {
                         {!isMobile && (
                         <div className="flex-1 min-w-0 min-h-0 bg-dark-800 rounded-xl p-6 overflow-y-auto">
                             <div className="flex items-center justify-between gap-3 mb-4">
-                                <h2 className="text-xl font-semibold truncate">
-                                    {activeCharacter ? activeCharacter.name : (activeEnvironmentCategory?.category || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.name : activeGroupCategoryObj?.category) || activeGroup?.name)}
+                                <h2 className="flex items-center gap-2 min-w-0 text-xl font-semibold">
+                    {renderHeadingIcon(20)}
+                    <span className="truncate">{activeHeadingName}</span>
                                 </h2>
                                 {editMode && tabType === 'groups' && activeGroup && (
                                     <div className="flex items-center gap-2 shrink-0">
@@ -4816,7 +5165,7 @@ function App() {
             {/* Character Modal */}
             {showCharacterModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
-                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">{editingCharacter ? 'Edit Character' : 'Add New Character'}</h2>
@@ -4840,6 +5189,15 @@ function App() {
                                             className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
                                             placeholder="e.g., Elf Sorcerer, Human Paladin"
                                             required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Icon</label>
+                                        <IconPicker
+                                            value={characterFormData.icon}
+                                            fallback={<User size={22} className="shrink-0 text-slate-400" />}
+                                            onChange={(icon) => setCharacterFormData(prev => ({ ...prev, icon }))}
                                         />
                                     </div>
 
@@ -4871,7 +5229,7 @@ function App() {
             {/* Category Modal */}
             {showCategoryModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
-                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
@@ -4895,6 +5253,15 @@ function App() {
                                             className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
                                             placeholder="e.g., Forest, Tavern, Battlefield"
                                             required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Icon</label>
+                                        <IconPicker
+                                            value={categoryFormData.icon}
+                                            fallback={<Music size={22} className="shrink-0 text-slate-400" />}
+                                            onChange={(icon) => setCategoryFormData(prev => ({ ...prev, icon }))}
                                         />
                                     </div>
 
@@ -4926,7 +5293,7 @@ function App() {
             {/* Group Modal */}
             {showGroupModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
-                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-xl font-bold">{editingGroup ? 'Edit Group' : 'Add New Group'}</h2>
@@ -4950,6 +5317,15 @@ function App() {
                                             className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
                                             placeholder="e.g., Villains, Allies, Sounds of the Night"
                                             required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Icon</label>
+                                        <IconPicker
+                                            value={groupFormData.icon}
+                                            fallback={<span className="text-lg font-semibold text-slate-400">{(groupFormData.name.trim().charAt(0) || 'G').toUpperCase()}</span>}
+                                            onChange={(icon) => setGroupFormData(prev => ({ ...prev, icon }))}
                                         />
                                     </div>
 

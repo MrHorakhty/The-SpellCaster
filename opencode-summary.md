@@ -624,3 +624,84 @@ Desktop (Win/Linux/macOS) + Android · multiple named profiles per device · `.s
 
 ### 🔶 PARKED — user closed this out as documentation-only on 2026-09-27
 User: *"No need, just the documentation is enough for now. We will do it in a different time."* `PROFILE_SYNC_SPEC.md` header now reads **"parked by user decision"** so a future session does not start implementing it unasked. **This is the second parked spec** alongside `ICON_FEATURE_SPEC.md` — if a future session is asked to "continue the profiles work", confirm the user wants implementation before touching `src/App.jsx`. Nothing in the repo depends on either spec; both are documentation only.
+
+## SESSION 2026-09-28 (cont. 6) — ICON FEATURE IMPLEMENTED + VERIFIED ON WEB AND ANDROID
+User reactivated the parked icon feature (ICON_FEATURE_SPEC.md, parked 2026-09-27). Backup first per AGENTS.md: `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20260928-211712` (203 files; robocopy exit 1 = success).
+
+### Implementation (all in src/App.jsx, no DATA_VERSION bump - normalizeStoredData spreads unknown fields)
+- ICON_MAP + ICON_CATEGORIES (Lucide) + EMOJI_CATEGORIES (~120 curated) + isEmojiIcon + renderIcon + IconPicker (Emoji/Icons tabs, inline in add/edit modals, aria-labels `Icon <label>`, `Clear icon`, `data-icon-preview`, shows first letter when no icon chosen).
+- Persisted on add/edit/reset/populate; group-children icons carried through toggleGroupMode; rendered in sidebar/drawer/split pills, mobile rail, rows (default User for characters, Music for categories and group categories), and both desktop+mobile headings via renderHeadingIcon (per-entity fallback; group first letter when no child selected).
+- **Critical crash fixed**: unaliased `Map` import from lucide-react shadowed global `Map` (used at `new Map()` ~691) -> `TypeError: ke is not a constructor` at boot. Fixed via `Map as MapIcon` (import line 11) and `Map: MapIcon` (ICON_MAP line 40).
+
+### Desktop web verification (temp harness `%TEMP%\opencode\icon-test.mjs` + icon-run.ps1, vite preview :5233 + headless Edge CDP :9333)
+Header, rows, sidebar/drawer tabs, split pills, picker round-trip, 24 Lucide cells incl. `Map` through the actual modal, per-area icons, bookmark/button apply, clear-icon -> letter fallback. **74/74 PASS, twice, identical.**
+
+### Android (emulator) verification - key discovery
+Repo `e2e-android.ps1` / `e2e-mobile.mjs` CANNOT run here: right after seed+`Page.reload` the WebView devtools socket dies (`[MOB] FATAL: CDP socket error (unknown). Exit 3`). A/B test with HEAD code proved it environment-side: `location.reload()` tears down `webview_devtools_remote_<pid>` on this AVD (`sdk_gphone16k_x86_64`, Android 17, emulator-5554). adb not on PATH (full path `C:\Users\emire\AppData\Local\Android\Sdk\platform-tools\adb.exe`). Running AVD is not the `Pixel_7` the suite expects.
+
+### New no-reload Android driver - `%TEMP%\opencode\icon-mobile.mjs` + icon-mobile-run2.ps1
+Seed via CDP -> `am start` HOME -> ~6s flush -> `am force-stop` -> `monkey` relaunch (cold start re-mounts React, replacing reload) -> reconnect CDP -> drive drawer/rail/modals.
+Gotchas: (1) localStorage must be flushed before force-stop or the seed is lost (2s is too short; HOME+6s is deterministic); (2) runner must keep the host Vite (:5173) alive for the whole run or the app shows the "Failed to request 10.2.0.2:5173" tauri.localhost error page; (3) on Android selecting a group auto-selects its first member, so the heading shows the member, not the group name (group-letter fallback verified on a childless group instead); (4) the "Character Pack" toggle lives inside the mobile drawer, gated `editMode && tabType==='groups' && activeGroup`.
+**Result: 52/52 PASS** across a TRUE process cold start: rail (emoji/lucide/letter), drawer tabs, headings (category emoji, Music fallback, member emoji, group letter), drawer rows (Drama / User fallback), picker round-trip (emoji -> Lucide Map -> preview svg, persisted), edit-by-heading-tap + clear -> empty persisted -> letter fallback, toggleGroupMode carrying member icon + keeping group icon.
+
+### Repo web E2E (`e2e-full.ps1 -Phase web`) - first clean run then expectation fix
+First run: 85 PASS / 14 FAIL, exit 2. Cause: NOT an app regression - the approved first-letter fallback prefixes group-tab/pill `textContent` (`DDragon Lore`, `TTavern Pack`, `HHero Pack`), breaking the suites' exact-text group matches (G-suite cascade + SPLIT L5).
+Fixed test-only expectations in **e2e/e2e-full.mjs** (sidebar `Dragon Lore` x2, `Forest`, `Tavern Pack` clicks, split pill filter + `Hero Pack` click -> endsWith + `!b.title`), **e2e/e2e-mobile.mjs** (drawer `Forest`, `Tavern Pack`, `Dragon Lore`, group heading -> endsWith), and **e2e/e2e-run.mjs** (sidebg/heading `Forest` -> endsWith). Re-run: **exit 0, 0 FAIL**. Backup before these test edits: `ttrpg-soundboard-backup-20260928-221743`.
+Note: `npm run lint` (eslint .) shows 1 PRE-EXISTING error in `vite.config.js:5` `no-undef process` (present in HEAD, file untouched) + the 3 known App.jsx warnings.
+
+### Repo state
+`git status`: `M src/App.jsx`, `M e2e/e2e-full.mjs`, `M e2e/e2e-mobile.mjs`, `M e2e/e2e-run.mjs`, `M opencode-summary.md`. `git diff --check` clean (LF->CRLF warnings only). User app data restored on the emulator from `%TEMP%\opencode\ls-backup-PRESERVED-ICONFEATURE.json` (7 keys, exit 0). Temp harnesses remain in `%TEMP%\opencode\` ready to re-run.
+
+### NEXT
+- Update `ICON_FEATURE_SPEC.md` status (planning -> implemented/verified) - not yet done.
+- Optionally clean up temp harnesses in `%TEMP%\opencode\`.
+
+---
+
+## SESSION 2026-09-28 (cont. 7) - COLLECTION ICONS: "ORIGINAL 2 GROUPS" NOW ICON-SWITCHABLE
+User follow-up request: the built-in **Characters** ("Elf Sorcerer"/"Human Paladin"/"Wood Elf Ranger") and **Environment** ("Background Music"/"Environment Effect") collections - the "original 2 groups" - showed locked User/Music icons on mobile with no icon option on web/tauri. Backed up first per AGENTS.md: `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20260928-224101`. **Note (2026-09-28 end): `ICON_FEATURE_SPEC.md` was deleted by the user as obsolete; its content is finalized in this log and in the implementation.`**
+
+### What was found
+- Defaults live in `src/data.json` `characters`/`environmentSounds` (groups array is `[]`); NOT in ttrpg_groups. isMobile is platform-based (`isTauri && platform()==='android'||'ios'`), NOT viewport - rail/drawer only render inside a real Tauri Android/iOS webview, so browser tests can't reach them (kept emulator verification for mobile).
+- Rail buttons at App.jsx (was ~4142/4150) hardcoded `<User size={18}/>`/`<Music size={18}/>`; drawer tab strip + desktop sidebar tabs + split pills were text-only. These were the LAST surfaces without a settable icon.
+
+### Implementation (all in src/App.jsx)
+- State + persistence: `ttrpg_characters_icon` / `ttrpg_environment_icon` (plain strings, lazy useState + setItem on change; no DATA_VERSION involvement). `updateCharSectionIcon`/`updateEnvSectionIcon` (App.jsx ~988 region).
+- New `CollectionIconEditor` component (module-level, after IconPicker ~App.jsx:220): label + current icon + collapsible `IconPicker`; **edit-mode-only**, rendered once in the mobile drawer (below tab strip) and once in the desktop sidebar (below tab bar) as "Characters icon" / "Environment icon".
+- Rendering wired via `renderIcon(value, {size, fallback})`: mobile rail (fallback User/Music), mobile drawer tabs, desktop sidebar tabs, split-view source pills ("Default Characters"/"Default Environments").
+- All checkboxes/lines prefixed to match `.textContent.trim()` - svg adds no text, so e2e exact/endsWith matches remain valid everywhere.
+
+### Verification (all green)
+- Desktop harness `%TEMP%\opencode\colicon-test.mjs` + `colicon-run.ps1` (vite preview :5233, headless Edge CDP :9333): **18/18 PASS** - baseline fallbacks, editor visible only in edit mode, emoji round-trip via UI (sidebar tab -> 🐉), Lucide round-trip (Drama), clear -> fallback, reload persistence, split pills show the icons.
+- **Android emulator** `%TEMP%\opencode\colicon-mobile.mjs` + `colicon-mobile-run.ps1` (same cold-start no-reload technique as icon-mobile: seed -> HOME 6s -> force-stop -> monkey relaunch -> CDP forward): **15/15 PASS** - rail 🐉/Drama, drawer tabs 🐉Characters / Drama, drawer editors present in edit mode with preview = stored value, picker -> Map persisted; keys restored (were both '').
+  - Gotcha: enter edit mode with drawer CLOSED (grid edit button ignores clicks while drawer open: `if (!isPanelOpen) setEditMode(...)`); reopen drawer to see the editors.
+- Repo web E2E re-run post-change: **PASS=99 FAIL=0 TOTAL=99**, exit 0.
+- `npx eslint src/App.jsx`: 0 errors / 3 pre-existing warnings; `npx vite build` ok; `git diff --check` clean (CRLF info only).
+
+### Repo state
+`git status`: `M ICON_FEATURE_SPEC.md`, `M e2e/e2e-full.mjs`, `M e2e/e2e-mobile.mjs`, `M e2e/e2e-run.mjs`, `M opencode-summary.md`, `M src/App.jsx`. ICON_FEATURE_SPEC.md now has a new §12 documenting the collection-icons follow-up. Nothing committed (user hasn't asked).
+
+### Desktop tauri app cache restore (same session)
+User reported the tauri cache got cleared during testing; asked to restore the original defaults. Windows desktop Tauri (`com.mrhorakhty.thespellcaster` WebView2) had the defaults AND seeded test residue (`Tavern Pack`, `Forest`, `ttrpg_groups`, stray collection-icon keys).
+- Backed up `%LOCALAPPDATA%\com.mrhorakhty.thespellcaster\EBWebView\Default\Local Storage` -> `%TEMP%\opencode\spellcaster-localstorage-backup-20260928-232309` (9 files).
+- Deleted that `Local Storage` leveldb (app was closed; confirms clean WebView2 reseed path).
+- Verified by launching `npm run tauri dev` with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9334` + CDP read (`%TEMP%\opencode\spellcaster-verify.mjs`): reseeded exactly from `src/data.json` - `char_1 Elf Sorcerer(4) / char_2 Human Paladin(3) / char_3 Wood Elf Ranger(4)`, env `Background Music(3) + Environmental Effects(4)`, `groups: []`, `data_version 3`, only the 5 normal keys (no test groups/icons/old keys). Cleaned up dev app + vite.
+### Collection-icon keys cleared on Android emulator (same session)
+User reported seeing non-default icons on mobile but correct ones on web/tauri. Root cause: emulator app stored `ttrpg_characters_icon="User"` / `ttrpg_environment_icon="Music"` (set manually by the user after seeing the 🐉/Drama test residue from the colicon runs). Functionality was never wrong - those stored values render the same lucide `User`/`Music` as the fallback used by web/tauri.
+- `%TEMP%\opencode\read-icons.mjs` (read-only CDP) confirmed the keys on the running emulator app (pid 22527; default data intact).
+- `%TEMP%\opencode\clear-icons.mjs` removed both keys in-memory.
+- Cold restart (force-stop + monkey launcher -> new pid 22823; re-started vite on :5173 for the `10.0.2.2:5173` devUrl) then re-read: **both keys `null` after restart** -> removal persisted to the Tauri storage DB. Emulator now pristine (absent -> fallback), matching web/tauri exactly; defaults intact.
+- Note: vite left running on :5173 (pid 30096) so the running emulator app keeps loading; NOT killed this time to avoid a blank emulator.
+
+### Restore Defaults — planning spec created (same session, near chat limit)
+User is planning a "Restore Defaults" button (only resets/adds the built-in default sounds) but, being near the chat limit, asked for a spec document instead of implementation. Created `RESTORE_DEFAULTS_SPEC.md` (root, mirrors PROFILE_SYNC_SPEC.md style).
+- Chosen design: **merge-by-id** — restore shipped default characters (`char_1..3`) / env categories (`Background Music`, `Environmental Effects`) and their sounds (`s_*`/`env_*`) to `data.json` values, re-add missing ones, keep user-created characters/categories/groups/uploads/icons/themes untouched. Hard-reset and DATA_VERSION-bump approaches rejected (would wipe user `ttrpg_groups`).
+- Grounded anchors: DATA_VERSION='3' App.jsx:257; readStoredData App.jsx:311; normalizeStoredData App.jsx:263; state init App.jsx:625-635; auto-save effects App.jsx:3098-3125; Settings modal App.jsx:5397; gear buttons App.jsx:3815/4066; icon keys App.jsx:994-998; `sound_file_*` cache App.jsx:1883 (defaults never use it; restore playback needs no user files).
+- Spec includes behavior contract, edge cases, testing plan (web harness + Android cold-start + e2e regression), out-of-scope list, and 4 open questions for the user (default-sound edits inside default chars, ordering, confirm copy, safety-backup keys).
+
+### NEXT
+- Session closed by user choice: vite + Android emulator app stopped; uncommitted work left as-is (git status: D ICON_FEATURE_SPEC.md, M PROFILE_SYNC_SPEC.md, M e2e/e2e-full.mjs, M e2e/e2e-mobile.mjs, M e2e/e2e-run.mjs, M opencode-summary.md, M src/App.jsx, ?? RESTORE_DEFAULTS_SPEC.md). Nothing committed (user hasn't asked).
+- Next session: pick up RESTORE_DEFAULTS_SPEC.md (merge-by-id design, 4 open questions) and/or commit when asked.
+- Optionally verify on a physical device (emulator verified; platform gate is checked).
+- Optionally clean up `%TEMP%\opencode\` harnesses (colicon-test.mjs/colicon-run.ps1, colicon-mobile.mjs/colicon-mobile-run.ps1, icon-*, spellcaster-*, read-icons.mjs, clear-icons.mjs, ls-*).
+- Watch for a future `DATA_VERSION` bump: the two new keys are plain strings, unaffected by the array-based wipe.

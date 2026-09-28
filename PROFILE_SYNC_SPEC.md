@@ -2,7 +2,7 @@
 
 > **Status**: Planning — **parked by user decision on 2026-09-27**. Documentation only; do not implement without a fresh request.
 > **Created**: 2026-09-27
-> **Related**: `ICON_FEATURE_SPEC.md` (also parked)
+> **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28)
 
 ---
 
