@@ -1,8 +1,8 @@
-# Restore Defaults — Planning Spec
+# Restore Defaults — Spec
 
-> **Status**: Planning — created 2026-09-28 by user request ("create a document about it"). **Documentation only; do not implement without a fresh request.** The session was approaching the chat limit and the button is intended for the _next_ session.
-> **Created**: 2026-09-28
-> **Related**: `PROFILE_SYNC_SPEC.md` (also parked). `opencode-summary.md` (SESSION 2026-09-28 cont. 7) carries the icon-feature decisions this builds next to.
+> **Status**: ✅ **IMPLEMENTED + VERIFIED (web) 2026-10-01.** Implemented in `src/App.jsx`; verified 34/34 with a purpose-built CDP harness plus 99/99 on the repo web suite. The four open questions in §11 were answered by the user and are now baked in. Not yet exercised on the Android emulator.
+> **Created**: 2026-09-28 · **Implemented**: 2026-10-01
+> **Related**: `PROFILE_SYNC_SPEC.md` (also parked). `opencode-summary.md` (SESSION 2026-10-01) carries the implementation + verification record.
 
 ---
 
@@ -172,6 +172,21 @@ Mirror the established harness patterns (`e2e/e2e-full.ps1`, `%TEMP%\opencode\co
 
 AGENTS.md backup rule applies **before** implementing (desktop folder copy excluding `node_modules`/`dist`/`.git`/`src-tauri/target`/`src-tauri/gen`).
 
+### 9.1 Results (all three platforms run, 2026-10-02)
+
+| Target | Result |
+|---|---|
+| Web preview (Edge CDP) | main suite **34/34**, rename-anchor probe **9/9**, corner probe **8/8**, repo suite **99/99** |
+| Desktop Tauri / WebView2 | `e2e-full.ps1 -Phase win` **99/99**, exit 0 |
+| Android emulator WebView | cold-start harness **13/13** |
+
+Two extra probes beyond the original plan, both of which found real bugs that the main suite missed:
+
+- **rename-anchor probe** — renaming a default environment category used to re-add the shipped category next to the renamed copy, duplicating every default sound. Fixed with a shipped-sound-id fallback anchor.
+- **corner probe** — a default sound could still land in two entries (a rename collision onto another default's name). Fixed by filtering "user sounds" against a **collection-wide** set of every shipped sound id.
+
+Android gotcha worth keeping: the WebView commits localStorage asynchronously, so a plain `am force-stop` right after seeding **discards the seed** and the next launch silently re-seeds shipped defaults — which looks exactly like a data bug. The working sequence is `input keyevent KEYCODE_HOME` → ~3s (pause + flush) → `am force-stop` → `monkey` relaunch → re-`adb forward` to the new pid. Also note `readStoredData` wipes a key and re-seeds defaults whenever `ttrpg_data_version !== '3'` (old value kept in `${key}_old`), so a harness seeding data without the version key looks like a bug too.
+
 ---
 
 ## 10. Out of scope (explicitly)
@@ -184,9 +199,20 @@ AGENTS.md backup rule applies **before** implementing (desktop folder copy exclu
 
 ---
 
-## 11. Open questions for the user (decide before implementing)
+## 11. Open questions — ANSWERED 2026-10-01 (user)
 
-1. **Reset user-added sounds inside a default character?** §3 keeps them (appended). Alternative: replace the entire `sounds` array (deletes them). Which matches intent?
-2. **Ordering of merged arrays:** shipped defaults first, then user content (recommended, deterministic) vs. keep user's current ordering in place.
-3. **Position of the confirm copy** and exact button label ("Restore defaults") as drafted in §7.2?
-4. **Keep the safety backup keys `ttrpg_characters_restore_backup` / `ttrpg_environment_restore_backup`**, or skip (they're clutter but cheap insurance)?
+1. **User-added sounds inside a default character/category → KEEP** (appended after the shipped ones), as drafted in §3. Nothing the user added is ever deleted by this button.
+2. **Ordering → shipped defaults first, then user entries** (deterministic, idempotent). Same for the environment category list.
+3. **Placement + confirm → Settings modal, behind a confirm**, as drafted in §7.2/§7.3. The confirm renders **stacked above** the still-open Settings modal (so Cancel returns to Settings rather than dumping the user out of it).
+4. **Safety backup keys → SKIPPED.** No `ttrpg_*_restore_backup` keys are written; §6.1 is void.
+
+### Deviation from §3 that was RESOLVED during implementation (2026-10-01)
+
+**Names now revert to the shipped values** (as §3.1 originally said) — this was changed after a real bug was found:
+
+- **The bug**: an environment category has **no id** — `updateCategory` (App.jsx:2570-2574) rewrites `entry.category`, so the *name is the only anchor*. A first implementation that anchored on the name produced a **duplicate**: renaming "Background Music" → "Music Box" and pressing Restore Defaults re-added a fresh "Background Music" **and** kept "Music Box", so `env_1` (Forest Ambience) existed twice. The user saw the shipped name reappear and reported it as "it reverts the names" — which is exactly the symptom.
+- **The fix**: `mergeShippedDefaults` matches on the key first, then **falls back to a stored entry that still carries one of that default's shipped sound ids**, claiming each stored entry at most once. The matched entry is then reset to the **shipped name** (so a rename is undone, no duplicate) and keeps its user-added sounds.
+- **Icons are still preserved** on a matched entry. `data.json` ships no icon for characters/categories, so there is nothing to restore and clearing it would destroy a choice the app cannot recover.
+- **A "user sound" is only a sound that belongs to no default at all.** A sound that belongs to a *different* default is not user content: it is filtered out by a collection-wide set of every shipped sound id. Without this, renaming a default category onto another default's name (e.g. "Environmental Effects" → "Background Music") let `env_4` (Rain) be kept *and* restored in its own home, duplicating it across both categories. Consequence, accepted: if a user deliberately moved a default sound into a different default, restore puts it back in its shipped home rather than keeping the copy.
+
+Also changed from the original sketch: the active selection is **repaired, not reset** (`setActiveCharacterId(prev => stillExists ? prev : first)`), so a still-valid selection is kept while one deleted earlier is fixed.

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
     Axe, Target, Crosshair, Heart, HeartPulse, Cloud, CloudRain, CloudLightning, Droplets, X, Plus, Edit, Trash2,
-    Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle,
+    Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle, RotateCcw,
     // Icon-picker catalogue (ICON_MAP). Every name here is verified to exist in
     // the installed lucide-react version - importing a missing name breaks the build.
     Crown, Skull, Ghost, Bot, Brain, Cat, Dog, Fish, Bird, Rabbit,
@@ -331,6 +331,59 @@ const readStoredData = (key, fallback) => {
     } catch {
         return normalizeStoredData(key, fallback)
     }
+}
+
+// Restore Defaults: put the shipped (bundled) entries back without ever deleting
+// anything the user created. `idKey` is the field identifying an entry in this
+// collection ('id' for characters, 'category' for environment categories).
+// Shipped entries come first in shipped order, each reset to its shipped state
+// (name + sounds) with the user's own sounds kept after them; user-created
+// entries follow in their existing order. Running it twice changes nothing, so
+// the button is safe to press repeatedly.
+const mergeShippedDefaults = (stored, shipped, idKey) => {
+    const storedList = Array.isArray(stored) ? stored : []
+    const shippedList = Array.isArray(shipped) ? shipped : []
+    // Every shipped sound id, across all defaults in this collection. A sound the
+    // user moved into a different default is NOT "user content": restoring it to
+    // its own home is what keeps one sound from ending up in two entries.
+    const allShippedSoundIds = new Set(
+        shippedList.flatMap(entry => (Array.isArray(entry?.sounds) ? entry.sounds.map(sound => sound?.id) : []))
+    )
+    const claimed = new Set()
+    const defaults = shippedList.map(shippedEntry => {
+        if (!shippedEntry || typeof shippedEntry !== 'object') {
+            return shippedEntry
+        }
+        const shippedSounds = Array.isArray(shippedEntry.sounds) ? shippedEntry.sounds : []
+        const shippedSoundIds = new Set(shippedSounds.map(sound => sound?.id))
+        // Prefer an exact key match. Environment categories have no id of their
+        // own - the name IS the key - and renaming one breaks that anchor, so fall
+        // back to a stored entry that still carries one of this default's sound
+        // ids. Without this, renaming a default category would re-add the shipped
+        // one alongside the renamed copy and duplicate every default sound.
+        let index = storedList.findIndex((item, i) => !claimed.has(i) && item && item[idKey] === shippedEntry[idKey])
+        if (index === -1) {
+            index = storedList.findIndex((item, i) => !claimed.has(i) && item && Array.isArray(item.sounds) && item.sounds.some(sound => shippedSoundIds.has(sound?.id)))
+        }
+        const existing = index === -1 ? null : storedList[index]
+        if (index !== -1) {
+            claimed.add(index)
+        }
+        const userSounds = Array.isArray(existing?.sounds)
+            ? existing.sounds.filter(sound => sound && !allShippedSoundIds.has(sound.id))
+            : []
+        return {
+            // Deep copy so React state never mutates the imported data.json module.
+            ...JSON.parse(JSON.stringify(shippedEntry)),
+            // The shipped name wins, so a renamed default is renamed back. The
+            // icon is kept: data.json ships none, so there is nothing to restore
+            // and clearing it would throw away a choice the app cannot recover.
+            ...(existing && typeof existing.icon === 'string' ? { icon: existing.icon } : {}),
+            sounds: [...JSON.parse(JSON.stringify(shippedSounds)), ...userSounds]
+        }
+    })
+    const userEntries = storedList.filter((item, index) => !claimed.has(index))
+    return [...defaults, ...userEntries]
 }
 
 // Function to get appropriate icon component based on sound type
@@ -957,6 +1010,7 @@ function App() {
     // Settings modal state
     const [showSettingsModal, setShowSettingsModal] = useState(false)
     const [showAboutModal, setShowAboutModal] = useState(false)
+    const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [backgroundSettings, setBackgroundSettings] = useState({
         type: 'color',
@@ -2197,6 +2251,18 @@ function App() {
             setBackgroundSettings(settings)
         }
         setShowSettingsModal(true)
+    }
+
+    const restoreDefaults = () => {
+        const mergedCharacters = mergeShippedDefaults(characters, data.characters, 'id')
+        const mergedEnvironment = mergeShippedDefaults(environmentSounds, data.environmentSounds, 'category')
+        setCharacters(mergedCharacters)
+        setEnvironmentSounds(mergedEnvironment)
+        // The lazy selection effect only fills an EMPTY active id, so a selection
+        // that no longer exists would leave the grid blank - repair it here.
+        setActiveCharacterId(prev => (mergedCharacters.some(c => c.id === prev) ? prev : mergedCharacters[0]?.id || ''))
+        setActiveEnvironmentId(prev => (mergedEnvironment.some(e => e.category === prev) ? prev : mergedEnvironment[0]?.category || ''))
+        setShowRestoreConfirm(false)
     }
 
     const handleBackgroundSettingsChange = (key, value) => {
@@ -5561,6 +5627,22 @@ function App() {
                                     </button>
                                 </div>
 
+                                {/* Restore Defaults */}
+                                <div className="pt-4 border-t border-dark-700">
+                                    <h3 className="text-lg font-medium mb-2">Restore Defaults</h3>
+                                    <p className="text-xs text-slate-400 mb-3">
+                                        Bring the built-in characters and environment sounds back to how they shipped.
+                                        Sounds you added are kept, and your own characters, categories and groups are never touched.
+                                    </p>
+                                    <button
+                                        onClick={() => setShowRestoreConfirm(true)}
+                                        className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
+                                    >
+                                        <RotateCcw size={16} />
+                                        <span>Restore defaults</span>
+                                    </button>
+                                </div>
+
                                 {/* Close Button */}
                                 <div className="pt-4 border-t border-dark-700">
                                     <button
@@ -5570,6 +5652,36 @@ function App() {
                                         Close Settings
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Restore Defaults Confirmation Modal (renders above the Settings modal) */}
+            {showRestoreConfirm && (
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
+                    <div className="bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md">
+                        <div className="p-6">
+                            <h2 className="text-xl font-bold mb-4">Restore Defaults</h2>
+                            <p className="text-slate-300 mb-6">
+                                Restore the built-in sounds to their defaults? Sounds you added are kept, and your
+                                custom groups, characters, categories and icons stay as they are. Edits you made to
+                                the built-in sounds cannot be undone automatically.
+                            </p>
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    onClick={() => setShowRestoreConfirm(false)}
+                                    className="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={restoreDefaults}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                >
+                                    Restore defaults
+                                </button>
                             </div>
                         </div>
                     </div>

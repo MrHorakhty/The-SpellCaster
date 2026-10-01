@@ -705,3 +705,191 @@ User is planning a "Restore Defaults" button (only resets/adds the built-in defa
 - Optionally verify on a physical device (emulator verified; platform gate is checked).
 - Optionally clean up `%TEMP%\opencode\` harnesses (colicon-test.mjs/colicon-run.ps1, colicon-mobile.mjs/colicon-mobile-run.ps1, icon-*, spellcaster-*, read-icons.mjs, clear-icons.mjs, ls-*).
 - Watch for a future `DATA_VERSION` bump: the two new keys are plain strings, unaffected by the array-based wipe.
+
+## SESSION 2026-10-01 — RESTORE DEFAULTS IMPLEMENTED + VERIFIED (web) ✅ (nothing committed)
+User deleted all old backups (build judged stable), then reactivated the parked `RESTORE_DEFAULTS_SPEC.md`. **Backup taken first per AGENTS.md: `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20261001-232157`** (203 files). NOTE: user reports this is now the **only** backup in existence.
+
+### The 4 open questions were answered by the user (all "recommended" except the last)
+1. **Keep** user-added sounds inside a default character/category (appended after the shipped ones) — nothing the user added is ever deleted.
+2. **Ordering:** shipped defaults first, then user entries (deterministic + idempotent). Same for environment categories.
+3. **Placement:** Settings modal, behind a confirm — as drafted. The confirm renders **stacked above the still-open Settings modal** (Cancel returns to Settings).
+4. **Safety backup keys: SKIPPED** — no `ttrpg_*_restore_backup` keys written. Spec §6.1 is void.
+
+### Implementation (all in `src/App.jsx`, 4 edits, no DATA_VERSION bump)
+- **`mergeShippedDefaults(stored, shipped, idKey)`** — new module-level helper placed just before `getSoundIcon` (was line 337, now ~371). `idKey` is `'id'` for characters, `'category'` for env categories. Shipped entries first in shipped order, each with its shipped sounds deep-copied from `data.json` (`JSON.parse(JSON.stringify(...))` so React state never mutates the imported module) + the user's own sounds appended; user-created entries follow in existing order. Deep copy is load-bearing: `data.characters` is a shared module singleton.
+- **`restoreDefaults()`** — placed next to `openSettingsModal` (~line 2237). Sets both arrays, then **repairs** the active selection: `setActiveCharacterId(prev => stillExists ? prev : mergedCharacters[0]?.id \|\| '')` (same for the env category). Closes the confirm.
+- **State** `showRestoreConfirm` added right after `showAboutModal` (~line 1000) — kept with the other modal states, before any effect that reads it (TDZ rule from the 2026-09-05 bug).
+- **UI**: `RotateCcw` added to the lucide import (line 6). A "Restore Defaults" `h3` section (`h3` + explanatory `p` + full-width dark button) sits between Legal & Credits and Close Settings in the Settings modal; a new confirm modal (`h2 "Restore Defaults"` + copy "…cannot be undone automatically." + Cancel / red Restore defaults) is rendered after the Settings modal so it paints above at the same `z-50`.
+- ⚠️ **Deliberate deviation from spec §3, flagged to the user and awaiting a yes/no**: restoring keeps the `name` and `icon` the user set on an existing default entry (shipped values are used only when the entry is re-created). The spec said reset the name too. Reasoning: the user said "only change (or add if they are removed) the **default sounds**", and a chosen emoji/Lucide icon is unrecoverable once overwritten. Reverting = drop the two `...(existing && …)` spreads in `mergeShippedDefaults`.
+
+### Verification
+- Gates: `npx eslint src/App.jsx` → **0 errors** (same 3 pre-existing warnings: `convertFileSrc`, `_`, `ev`) · `npx vite build` OK.
+- **Purpose-built harness 34/34 PASS, 0 FAIL** — `%TEMP%\opencode\restore-test.mjs` + `restore-run.ps1` (headless Edge CDP :9333, `vite preview :5233`). Seeds a mangled state (deleted `s_1`/`char_2`/`Environmental Effects`, hacked `s_2`/`env_1` metadata, a user sound + a custom character + a custom env category + a group, a renamed+emoji'd `char_1`), drives the real UI, then asserts: re-added/reset/kept split, defaults-first ordering, name+icon preserved, groups untouched, Cancel is a no-op, valid selection survives, no `restore_backup` keys, confirm stacks over Settings, grid really renders 5 cards, idempotency (2nd run byte-identical), persistence after reload.
+- **Repo web regression `e2e-full.mjs`: PASS=99 FAIL=0 WARN=0, exit 0** — no regressions. Run via `%TEMP%\opencode\regress-run.ps1`, a PID-scoped copy of `e2e-full.ps1` Phase A **minus the blanket `Get-Process msedgewebview2 | Stop-Process` kill** in its finally block (that hazard is still unfixed in the repo file; see open debt). All ports/profiles cleaned up afterwards.
+
+### Test gotchas hit this session
+- `"$env:ProgramFiles(x86)\…"` is **invalid** PowerShell (needs `${env:ProgramFiles(x86)}`) — the Edge launch silently produced a garbage path and the harness died with `FATAL no CDP page found`. Use the literal `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`.
+- The desktop Settings gear is **icon-only** with `title="Settings"` (App.jsx:3867 / 4120) — there is no button labelled "Settings" to click by text. Both are reachable on web/desktop; mobile uses the same modal via its own gear.
+- The sound-grid heading is the `h2` with `text-xl font-semibold`; a bare `document.querySelector('h2')` returns the sidebar's "Groups". Modal `h2`s are `text-xl font-bold`, so filtering on `includes('text-xl') && !includes('font-bold')` isolates the heading uniquely.
+- Sidebar row `textContent` is **prefixed by the emoji/Lucide icon glyph** (`🐉RENAMED ELF`), so exact-text row clicks fail once an icon is set — match with `endsWith`.
+- A "Restore Defaults" **section heading in Settings is an `h3`** while the confirm modal's is an `h2`; the confirm-open assertion counts both.
+- Long CDP runs print nothing until they finish (output is buffered into a log). **Launch them detached** with `Start-Process … -PassThru` and poll the log; the user aborted one blocking run.
+
+### Repo state
+`git status`: `M src/App.jsx`, `M RESTORE_DEFAULTS_SPEC.md`, `M opencode-summary.md`. HEAD is `53ce2eb "Added ability to add icons/emoji for groups"`; working tree was clean before this session. **Nothing committed** (user hasn't asked).
+
+### NEXT
+- User decision on the name/icon deviation above (keep preserving, or reset names to shipped too).
+- Optional: same verification on the Android emulator (cold-start harness; the confirm-over-Settings stacking is the only mobile-specific layout risk). Emulator is currently **not** running.
+- Optional: clean up `%TEMP%\opencode\{restore-test.mjs, restore-run.ps1, regress-run.ps1, regress*.log}`.
+- Pre-existing open debt unchanged: `e2e-full.ps1` blanket `msedgewebview2` kill + missing Windows-phase storage snapshot, native `onRenderProcessGone`, tracked junk (`e2e/_avtest2.txt`, `e2e/e2e-all.ps1.new`, `e2e/_e2e_pixel.png`), `Run App.bat` gitignore status, and `npm run lint`'s pre-existing `vite.config.js:5 no-undef process` error.
+
+## SESSION 2026-10-01 (cont.) — RENAME-ANCHOR BUG FOUND BY THE USER'S MANUAL TEST + FIXED ✅
+User tested manually: *"it does keep the added content and restores the deleted ones. It also reverts the names of default ones. It looks good enough."* That last claim contradicted the code, so it was investigated instead of assumed — and it exposed a **real bug in the merge**.
+
+### The bug
+Environment categories have **no id**: `updateCategory` (App.jsx:2570-2574) rewrites `entry.category`, so **the category name IS the only anchor**. The first implementation matched purely on that key, so a **renamed default category fell through to the "user entry" bucket** and restore re-added the shipped one *alongside* it:
+```
+envs: [{"category":"Background Music","sounds":["env_1","env_2","env_3"]},
+       {"category":"Environmental Effects","sounds":["env_4".."env_7"]},
+       {"category":"Music Box","sounds":["env_1","ue_1"]}]   <-- env_1 DUPLICATED
+```
+So "Background Music" reappearing (which the user read as a name revert) was actually a duplicate entry, and the user had two categories playing the same Forest Ambience. Character renames are unaffected — `updateCharacter` (App.jsx:2101-2107) keeps `character.id`, so the id anchor survives.
+
+### The fix (`mergeShippedDefaults` in src/App.jsx)
+1. **Two-stage anchor**: exact `idKey` match first, then a fallback matching a stored entry that still carries **one of that default's shipped sound ids** — so a renamed default category is recognised.
+2. **Each stored entry can be claimed only once** (`claimed` Set of indices) — no default can consume the same entry twice, and anything unclaimed stays a user entry.
+3. **The shipped name now wins** (the `...(existing && …) { name }` spread was removed), so a rename is undone cleanly and no duplicate appears. This is the spec's original §3.1 behaviour and matches what the user expected.
+4. **Icons are still preserved** — `data.json` ships no `icon` for characters/categories, so there is nothing to restore and clearing it would destroy an unrecoverable user choice.
+5. The active-selection repair now also covers this case: selecting "Music Box" and restoring lands on a valid category again (its name changed).
+
+### Verification after the fix (all green)
+- New probe **`%TEMP%\opencode\restore-rename.mjs`** (run via `restore-run.ps1 -Rename`): seeds `char_1` renamed to "Gandalf" with a 🐉 icon + `Background Music` renamed to "Music Box" → **PASS=9 FAIL=0**. Result: `chars[0] = {name:"Elf Sorcerer", icon:"🐉", sounds:s_1..s_4}`; `envs = [Background Music (env_1,env_2,env_3,ue_1), Environmental Effects (env_4..env_7)]` — "Music Box" gone, no duplicate sound ids, the user's `ue_1` carried into the restored category.
+- Main harness **34/34 PASS** (M4 + M18 updated to expect the shipped name back).
+- Repo web suite `e2e-full.mjs`: **PASS=99 FAIL=0 WARN=0**, exit 0.
+- `npx eslint src/App.jsx` 0 errors / 3 pre-existing warnings · `npx vite build` OK. Ports 5233/9333 free, profiles removed.
+
+### Harness gotchas (cost real time — do not repeat)
+- **Never pipe a PowerShell runner's output through `Select-Object`** in this shell — it returns *empty*. Read the log file, or run the script without a pipe.
+- `param([switch]$Rename)` must be the **first statement** of a `.ps1`; when it was inserted mid-script the parser still said PARSE OK, `param` was executed as a command, the switch never bound, and the script silently ran the *other* suite. Always confirm which suite ran by its banner line.
+- Long CDP runs buffer all output until the end → launch detached (`Start-Process … -PassThru` + `WaitForExit`) and read stdout, otherwise the tool call looks hung (the user aborted one).
+- `restore-run.ps1`'s cleanup left an orphan `vite preview` on 5233 behind its `taskkill`; always re-check listeners after a run and kill leftovers by PID.
+
+### Repo state
+`git status`: `M src/App.jsx`, `M RESTORE_DEFAULTS_SPEC.md`, `M opencode-summary.md`. HEAD `53ce2eb`. **Nothing committed.** Backup `ttrpg-soundboard-backup-20261001-232157` predates the rename fix (it has the pre-fix `mergeShippedDefaults`); take a new one before further changes.
+
+### Behaviour confirmed by the user (2026-10-02)
+User reviewed the fix and explicitly approved the semantics: **"Name should also reset with the button, icons can stay that's fine."** That is precisely the shipped behaviour — the rename-anchor fix makes the shipped name win (a renamed default is renamed back, with no duplicate entry) while a user-chosen `icon` is preserved. **No further code change was needed for this request.**
+
+New backup taken (the previous one predates the rename fix): **`ttrpg-soundboard-backup-20261002-000147`** (203 files). It is the only backup in existence.
+
+## SESSION 2026-10-02 — BACKUP PATH BUG: I was writing to a MISSPELLED OneDrive folder ✅ fixed
+User: *"you are doing backups on the wrong location. It needs to be `C:\Users\emire\OneDrive\Masaüstü`, but you are backing up to `C:\Users\emire\OneDrive\üstültÜ`."* — **the agent was at fault, twice over.**
+
+### What happened
+- `AGENTS.md` already specified the right path and warned *"build it with `[char]0x00FC`, never type the literal"*. This session ignored that guidance and hand-assembled the name as `"C:\Users\emire\OneDrive\" + [char]0x00FC + "st" + [char]0x00FC + "lt" + [char]0x00DC`, which produces **`üstültÜ`** — a leading `ü` and a capital `Ü` (0xDC) that do not belong.
+- So **both** of this session's backups landed in a stray folder next to the real one:
+  `OneDrive\üstültÜ\{ttrpg-soundboard-backup-20261001-232157, -20261002-000147}` (202 files each).
+- The correct `OneDrive\Masaüstü` was **empty of backups** (the user had deleted the earlier ones), so a whole session went unbacked-up with no visible error — exactly the failure mode `AGENTS.md` was written to prevent.
+
+### Enumerating non-ASCII folder names (the reliable check)
+`Get-ChildItem` renders `ü` as `?` in this console, so **compare char codes, not glyphs**:
+```powershell
+Get-ChildItem 'C:\Users\emire\OneDrive' -Directory |
+    ForEach-Object { "{0} | {1}" -f $_.Name, (($_.Name.ToCharArray() | ForEach-Object { [int]$_ }) -join ',') }
+```
+- `Masaüstü` (correct) → `77,97,115,97,252,115,116,252`
+- `üstültÜ` (mine)    → `252,115,116,252,108,116,220`
+
+### Cleanup done
+- Moved both backup folders into the correct `Masaüstü` (verified 202 files each afterwards).
+- The now-empty `üstültÜ` folder disappeared on its own (OneDrive sync removed the empty dir).
+- **`AGENTS.md` hardened** so this cannot recur: the rule now spells out that the name is exactly `Masa` + `ü` + `st` + `ü`, that `[char]0xDC` and any leading `ü` are wrong, gives the verified one-liner
+  `$desk = 'C:\Users\emire\OneDrive\Masa' + [char]0x00FC + 'st' + [char]0x00FC`, and requires asserting the char-code list `77,97,115,97,252,115,116,252` **before** copying. It also records that this exact mistake has now happened twice (`MasaÃ¼stÃ¼`, then `üstültÜ`).
+
+### Correct backup locations as of now
+`C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20261001-232157` and `…-20261002-000147` (the latter contains the rename fix; the former predates it).
+
+## SESSION 2026-10-02 (cont.) — SECOND MERGE BUG (duplicate sound across two defaults) FOUND + FIXED ✅
+User asked *"Are there any other tests you need to do?"* — yes. Wrote a third probe for the corners the first two suites did not reach, and it found a **second real bug**.
+
+### The probe (`%TEMP%\opencode\restore-corner.mjs`, run via `restore-run.ps1 -Corner`)
+Seed: a default character emptied of all its sounds; a default category **renamed AND emptied** (so the sound-id anchor is gone); and a **rename collision** (the "Environmental Effects" entry renamed to `"Background Music"`, carrying `env_4`).
+
+### The bug
+`env_4` (Rain) ended up in **both** categories:
+```
+envs: [Background Music (env_1,env_2,env_3,env_4), Environmental Effects (env_4..env_7), Music Box ()]
+```
+Root cause: the user-sound filter excluded only the *current* default's own shipped ids. `env_4` was not one of Background Music's ids (`env_1..3`), so it was carried over as "user content" — while Environmental Effects, having lost its name anchor, was rebuilt from scratch and also got `env_4`. Second press could not fix it (the merge is idempotent, so the duplicate was stable).
+
+### The fix
+`mergeShippedDefaults` now builds a **collection-wide** `allShippedSoundIds` set and filters user sounds against **that**, not just the current default's ids. A sound belonging to any shipped default is therefore restored only in its own home and can never be duplicated. Accepted consequence: if a user deliberately moved a default sound into a different default, restore returns it to its shipped home instead of keeping the copy.
+
+### Verification after this second fix — all green
+| Suite | Result |
+|---|---|
+| Corner probe (new) | **8/8 PASS** (was 7/8) — `Z4` duplicate gone, `Z8` still idempotent on the corner state |
+| Rename-anchor probe | **9/9 PASS** |
+| Restore Defaults main suite | **34/34 PASS** |
+| Repo web suite `e2e-full.mjs` | **PASS=99 FAIL=0 WARN=0**, exit 0 |
+| `npx eslint src/App.jsx` | 0 errors (3 pre-existing warnings) · `vite build` OK |
+
+Backup after the fix: **`ttrpg-soundboard-backup-20261002-001740`** (in the corrected `Masaüstü` folder; path char codes asserted before copying). The three backups now in `Masaüstü`: `-20261001-232157` (pre-rename-fix), `-20261002-000147`, `-20261002-001740` (current).
+
+### Harness note
+`restore-run.ps1` leaves an orphan `vite preview` on 5233 behind its own `taskkill`; that orphan then silently satisfies the *next* runner's readiness probe. Always kill leftovers by PID and re-check `Get-NetTCPConnection` before a run.
+
+### Remaining test gaps (deliberate, not blockers)
+*(Superseded — both were run later the same session; see the following section and the closing state.)*
+- **Android emulator** — never exercised. The data path is platform-independent pure React + localStorage, so the only real risk is the confirm-stacked-over-Settings layout on a phone bottom sheet. The repo's `e2e-android.ps1`/`e2e-mobile.mjs` path is also unreliable on this AVD (the WebView devtools socket dies on `Page.reload`), so it needs the cold-start harness.
+- **Phase B (desktop WebView2, `e2e-full.ps1 -Phase win`)** — the user exercised the feature manually in the real app and it behaved correctly; the 99-check Phase B suite has not been re-run since the change.
+
+## SESSION 2026-10-02 (cont.) — ANDROID (WebView) + PHASE B (WebView2) VERIFIED ✅ both test gaps closed
+User: *"Might as well do them too."* — ran both remaining verification gaps. **No product bug found in either; both platforms pass.**
+
+### Phase B — real Tauri/WebView2 desktop (`e2e\e2e-full.ps1 -Phase win`)
+- `PASS=99 FAIL=0 WARN=0 TOTAL=99`, runner `exit=0` (log `…\Temp\opencode\e2e-run-20261002-002117.log`).
+- Rust needed no rebuild (only JS changed), so CDP :9224 was up quickly.
+- `-Phase win` deliberately skips Phase A's blanket `msedgewebview2` kill. After the run the only surviving WebView2 procs were WhatsApp/DriveFS/shell scopes — none ours.
+- The runner's own `SAVE_RESTORE=1` protects the user's real desktop data, so this is safe against the live app.
+
+### Android — emulator WebView via **cold start** (`%TEMP%\opencode\restore-mobile.mjs`) → **13/13 PASS**
+`MOBILE SUMMARY: PASS=13 FAIL=0 TOTAL=14` (M0–M12). Confirmed on the real device: emptied default character refilled, custom character untouched, renamed category renamed back, shipped sounds restored, custom sound kept inside the default, no duplicate sound ids, second press idempotent.
+
+Mobile-specific layout evidence (screenshots were captured but **this model cannot view images**, so it was measured instead):
+```
+viewport 411x914 | dialog panel fixed, z-index 50, rect 0,0,411,914
+fits viewport: true | horizontal overflow: false | needs scroll: false | 2 backdrops
+confirm button rect [239,826,149,40] -> elementFromPoint at its centre = the button itself (topmost, clickable)
+```
+So the "confirmation stacked over Settings" concern is resolved on a 411x914 phone viewport.
+
+### Three harness gotchas that cost real time (worth remembering)
+1. **`am force-stop` discards freshly seeded localStorage.** The Android WebView commits localStorage asynchronously; killing the app right after writing throws it away, and the next launch silently re-seeds shipped defaults — which masquerades as a data bug. Fix: `input keyevent KEYCODE_HOME` → wait ~3s (pause + flush) → `am force-stop` → relaunch.
+2. **Never `Page.reload` in the Android WebView** (socket dies) — cold-start with HOME+force-stop+monkey instead, and re-`adb forward` to the *new* pid each time.
+3. **Muting `localStorage.setItem` to stop the app clobbering a seed also mutes the seed itself.** Seed through the captured original (`W = (k,v) => window.__origSetItem(k,v)`), keep the mute for everything else. My first attempt muted and then seeded with the muted setter, so nothing was written at all.
+Also note `readStoredData` (`src/App.jsx:311`) **wipes a key and re-seeds defaults** whenever `ttrpg_data_version !== '3'`, backing the old value up to `${key}_old` — a harness seeding data without the version key looks exactly like a bug.
+
+### Cleanup
+- Emulator debug app data cleared (`pm clear` → Success) so the seeded test values are gone.
+- `adb forward` removed, vite on 5173 killed, ports 5173/9224/9225 all free.
+
+### NEXT / closing state — Restore Defaults is DONE and fully verified
+**Nothing is in progress. All four files are ready for the user to commit** (`AGENTS.md`, `src/App.jsx`, `RESTORE_DEFAULTS_SPEC.md`, `opencode-summary.md`; HEAD before this work was `53ce2eb`, nothing pushed).
+
+Final verification matrix for the Restore Defaults feature (two real bugs found and fixed along the way, both by probes beyond the original plan):
+
+| Target | Result |
+|---|---|
+| Web preview (headless Edge, CDP) | main suite **34/34**, rename-anchor probe **9/9**, corner probe **8/8**, repo `e2e-full.mjs` **99/99** exit 0 |
+| Desktop Tauri / WebView2 | `e2e-full.ps1 -Phase win` **99/99**, exit 0 |
+| Android emulator WebView | cold-start mobile harness **13/13** |
+| Gates | `eslint src/App.jsx` 0 errors (3 pre-existing warnings) · `vite build` OK · `git diff --check` clean |
+
+Known non-blockers, deliberately left alone (all pre-existing, none requested):
+- `e2e/e2e-full.ps1` Phase A still blanket-kills every `msedgewebview2` on the machine; Phase B's kill is correctly scoped to `--webview-exe-name=SearchHost.exe`. Worked around with `-Phase win` / PID-scoped temp runners.
+- Crash-safety for the Windows phase of `e2e-full.ps1` (only the Android runner snapshots localStorage); tracked junk files `e2e/_avtest2.txt`, `e2e/e2e-all.ps1.new`, `e2e/_e2e_pixel.png`; `e2e-all.ps1` must never be recreated (Bitdefender hard filename block).
+- `ICON_FEATURE_SPEC.md` stays parked until the user asks for it.
+- Harness scripts kept in `%TEMP%\opencode` (`restore-test.mjs`, `restore-rename.mjs`, `restore-corner.mjs`, `restore-run.ps1`, `restore-mobile.mjs`, `regress-run.ps1`) — useful for re-running, delete at will.
+- Repo `e2e-android.ps1` / `e2e-mobile.mjs` path remains known-unreliable on this AVD for *seeding* purposes; the cold-start harness above is the working mobile path (85/85 for that repo suite was reached earlier on 2026-09-27)..
