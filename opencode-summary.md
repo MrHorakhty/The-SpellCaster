@@ -27,8 +27,13 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 ## Repo state
 - Branch **`mobile-support`**, in sync with `origin/mobile-support`.
 - All 7 branches are fully merged into `mobile-support`; no unmerged work anywhere.
-- Recent commits: `8ef2c6f` "Fixing known debts" · `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
-- Working tree: clean except for the doc restructure in progress.
+- Recent commits: `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts" · `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
+- ⚠️ **Uncommitted at the end of 2026-10-04** (the user had not committed these yet):
+  `?? backup-project.ps1` (new backup script), `M AGENTS.md`, `M opencode-summary.md`.
+  Commit them before relying on `backup-project.ps1` existing in a fresh clone.
+- `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
+  (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
+  ignore it. All 16 refs read cleanly.
 
 ## Architecture gotchas — do not regress these
 - **Two Rust entry points.** `src-tauri/src/main.rs` is desktop-only; `src-tauri/src/lib.rs` is Android/iOS
@@ -53,8 +58,36 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 - **`adb exec-out screencap` corrupts binary in PowerShell** — use `adb shell screencap -p /sdcard/x.png` then `adb pull`.
 - **Do not use `Page.reload` to seed mobile `localStorage`** — it is unreliable on this AVD. Cold-start the app with
   the storage already in place (see `%TEMP%\opencode\restore-mobile.mjs`).
-- **Back up before every change** — see `AGENTS.md` for the exact path construction. Do not hand-type the
-  accented folder name; it has been created wrong twice.
+- **Back up before every change** — run `.\backup-project.ps1` (see the Backups section below). Do not
+  hand-type the accented OneDrive folder name in it; it has been created wrong twice.
+
+## ⚠️ Antiviral: `e2e\e2e-full.ps1` gets quarantined
+Bitdefender detects it as `CMD:Heur.BZC.PZQ.Boxter.949` and deletes the **copy** in the OneDrive backup
+folder. It has hit twice: 2026-09-30 (ate git objects, silently corrupting the repo) and 2026-10-04 (ate
+the backup copy, leaving a 199-file backup that looked complete).
+
+**Contained, not solved** — the repo copy survives because the user excluded
+`c:\users\emire\projects\ttrpg-soundboard\e2e\` from scanning. The **backup folder is still not excluded**,
+and the user declined excluding all of OneDrive. `backup-project.ps1` verifies after copying and repairs
+from the working tree / `git show HEAD:` instead. Accepted mitigation while the e2e files are final.
+
+**Trigger, narrowed by controlled test** (variants written to `%TEMP%`, which is not excluded):
+| Variant | Result |
+|---|---|
+| original | eaten |
+| all `taskkill` / `Invoke-Expression` / `Stop-Process` stripped | **eaten** |
+| only `Remove-Item $profile -Recurse -Force` removed | **survived** |
+| kill commands only, no recursive delete | **survived** |
+| original + that one line restored | eaten |
+| `-Recurse -Force` → `-Recurse` (no `-Force`) | eaten |
+| `-Recurse -Force` → `-Force` (no `-Recurse`) | **survived** |
+| bare `Remove-Item … -Recurse -Force`, 46 bytes | **survived** |
+
+So: **`-Recurse` is the trigger, and only in combination with the rest of the file.** Not `-Force`, not the
+process kills, and the pattern alone is harmless. Fixing it would mean replacing that one line — the user
+declined for now since the e2e files are final. 💡 Also disproved: the original theory that it was the
+*bundling* of kill commands. The `rca_insight` log confirms a stable content-based detection
+(`attack_types: ["Malware"]`), which is why a fixed file always or never trips it.
 
 ## Test harnesses
 | Harness | Runs |
@@ -83,7 +116,39 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 - ProtonVPN's `10.2.0.2` interface previously collided with the emulator host mapping and baked the wrong
   dev-server host.
 
+## Backups
+Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything
+except regenerable build output (`node_modules`, `dist`, `.git`, `target`, `gen`), then verifies every
+source file reached the backup and repairs from git if not. ~203 files / ~39 MB, complete by the user's
+choice (including `public/assets` audio).
+
+💡 **The 31 GB incident:** `/XD src-tauri\target` was passed as a *path*; robocopy silently ignored it
+and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names. The script now prints
+its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
+recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
+💡 Backups accumulate — the script does not prune. Delete old ones by hand.
+Latest: `ttrpg-soundboard-backup-20261004-163113` (the user deleted the earlier ones as test artifacts).
+
+### Bitdefender quarantined the backup folder itself?
+Not excluded, but it also did not fire again during the final runs — the several test backups taken after
+the first deletion all kept `e2e-full.ps1`. Likely AV caching from the re-scan of identical content, not
+safety. Assume it *will* be eaten again; `backup-project.ps1` is the mitigation, not a fix.
+
+## Docs layout (changed 2026-10-04)
+`opencode-summary.md` was split — it had grown to 1000 lines and future sessions had to dig through
+dated history to find current state. It now holds **current state only**; the 35 dated session logs moved
+to `docs/session-history.md` (append-only, 927 lines). Same for `AGENTS.md` (115 lines, standing rules).
+**Do not merge them back.** Read the summary first, the archive only when you need past reasoning.
+
+Two new standing rules were added to `AGENTS.md` this session:
+- **Delete deprecated parts** — retired files get `git rm`'d *and* a `.gitignore` entry *and* a line in
+  the summary's Retired files section. Explicit "what NOT to delete" list: parked items, the only record
+  of a decision, working harnesses, anything uncertain. See `AGENTS.md` for the full criteria.
+
 ## Open items
+- **Antiviral quarantine of the backup** — contained via `backup-project.ps1` (verify + repair), not
+  prevented. If the e2e harness is ever edited again, expect the file to be eaten from each backup and
+  re-check a fresh backup with the script rather than trusting the robocopy exit code.
 - **Debt 6 — native `onRenderProcessGone`.** Confirmed **blocked**: the Android WebView client is
   auto-generated by `wry 0.55.1` (`RustWebViewClient.kt` under `src-tauri/gen/`, which is gitignored), so
   there is no supported hook. Only viable via an upstream wry patch or vendoring it. Do not retry blindly.
