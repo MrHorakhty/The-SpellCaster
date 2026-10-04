@@ -44,6 +44,7 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 - **Advanced Audio Playback**: Full audio support with HTML5 Audio API for reliable, low-latency playback
 - **Environmental Sound Management**: Background music and ambience with looping, fade effects, and category organization
 - **Character Sound Sets**: Create and manage multiple character profiles with custom sound configurations
+- **Move & Copy Sounds**: In edit mode, move a sound to any other character, environment category or group — or copy it, reusing the same audio without re-uploading *(a copy shares the audio file; deleting the original's container no longer breaks it)*
 - **Split View Interface**: Simultaneous access to character sounds and environmental audio *(Windows desktop only)*
 - **Android App**: Touch-optimized layout with a slide-out drawer and a bottom navigation rail, including edit mode with delete badges
 - **Timer-Based Playback**: Set custom durations for timed sound effects

@@ -312,3 +312,8 @@ e2e/_avtest*.txt
 # their designs are finalised in PROJECT_STATE.md. Block them from coming back.
 RESTORE_DEFAULTS_SPEC.md
 ICON_FEATURE_SPEC.md
+
+# Shipped 2026-10-04 as f7f316e and deleted after the user tested the build. The
+# design rationale (8 settled decisions, invariants, deferred list) is preserved in
+# docs/session-history.md, and the file itself stays in git history.
+MOVE_COPY_SOUND_SPEC.md

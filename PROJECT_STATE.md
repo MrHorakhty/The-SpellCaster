@@ -1,6 +1,8 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 19:57). Session log: `docs/session-history.md`.
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 22:47). Session log: `docs/session-history.md`.
+(The 22:41 release was slightly early: a short closing pass — reverting the SAF spike and shutting the
+emulator down — ran 22:42-22:47 without re-claiming. Docs-only, no conflict possible.)
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -16,9 +18,10 @@ Last updated: **2026-10-04**
 
 ## What the project is
 **"The SpellCaster"** — a TTRPG soundboard where the GM assigns **sounds to Characters** and
-**Environment categories**. Users play, loop, stop and reorder sounds; edit characters/categories/sounds;
-apply themes and a box-size (zoom) slider. A **Tauri 2.x** shell around a **React 19 + Vite + Tailwind**
-SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` so desktop/web stay untouched.
+**Environment categories**. Users play, loop, stop and reorder sounds; **move or copy** a sound between any
+containers (edit mode); edit characters/categories/sounds; apply themes and a box-size (zoom) slider. A
+**Tauri 2.x** shell around a **React 19 + Vite + Tailwind** SPA, ported to Android. All mobile-specific changes
+are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
 - Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (6240 lines, one monolithic component).
@@ -32,16 +35,18 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, in sync with `origin/mobile-support`.
-- All 7 branches are fully merged into `mobile-support`; no unmerged work anywhere.
-- Recent commits: `c83a72c` "More document changes" · `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts" ·
-  `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
+- Branch **`mobile-support`**. ⚠️ **`f7f316e` (move/copy feature) is committed locally but NOT pushed** —
+  `origin/mobile-support` is still at `2d525ed`, so local is `ahead 1`. The user believed it was pushed.
+- All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
+- The move/copy feature is **shipped and user-tested by hand** (2026-10-04), then committed as `f7f316e`.
+- Recent commits: `f7f316e` "Added ability to move or copy sounds between groups and characters etc." ·
+  `2d525ed` "Changes to how agents work on the project" · `c83a72c` "More document changes" ·
+  `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file (then `opencode-summary.md`) are committed in `c83a72c`.
-- ⚠️ **Uncommitted as of 2026-10-04 ~19:50 (user has not asked for a commit):** MOVE_COPY_SOUND_SPEC feature
-  implemented in `src/App.jsx` (`mintId`, `allSoundContainers`, `findSoundContainer`, `transferSound`,
-  `nextCopyName`, `openMoveCopyModal/transferSound`, picker modal UI), with `removeContainerFiles` /
-  `removeFileIfUnreferenced` / `isFileReferencedElsewhere` guarding all file cleanup; web E2E green.
-  `e2e/e2e-full.mjs` and `MOVE_COPY_SOUND_SPEC.md` touched. No Android/Windows phase run yet.
+- ⚠️ **Uncommitted as of 2026-10-04 22:50: docs only.** `D MOVE_COPY_SOUND_SPEC.md` (staged), `M .gitignore`,
+  `M README.md`, `M PROFILE_SYNC_SPEC.md`, `M PROJECT_STATE.md`, `M docs/session-history.md`. **No code
+  changes** — the SAF spike's Rust/config edits were reverted at the user's request, `cargo check` clean,
+  `npx eslint .` 0 errors. The user has not asked for a commit.
 - `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
   (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
   ignore it. All 16 refs read cleanly.
@@ -58,13 +63,14 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 - **Card `borderRadius` is a static `12px`** and deliberately does *not* scale with `boxSize`.
 - Sound cards are `<div role="button">`, **not** `<button>` — matters for CDP-driving tests.
 
-### Data-model gotchas (found 2026-10-04 while planning move/copy)
+### Data-model gotchas (found 2026-10-04 while planning move/copy, then shipped)
 - **There are FIVE container shapes for sounds, not four.** `characters[].sounds`,
   `environmentSounds[].sounds`, `groups[].categories[].sounds`, `groups[].characters[].sounds` — **plus
   `groups[].sounds`, a vestigial array that `addGroup` allocates on every group (App.jsx:3137) and nothing ever
   pushes into.** Only `deleteGroup`'s cleanup (App.jsx:3155) and the delete-confirm name lookup
   (App.jsx:5930) read it. **Any code that walks containers to find a sound or a file reference must walk all
-  five** — the four-shape assumption looks correct and is not.
+  five** — the four-shape assumption looks correct and is not. `allSoundContainers` (App.jsx:1812) is the one
+  walker that gets it right; prefer it over a hand-rolled loop.
 - **Audio bytes are keyed by `storedName`, never by sound id.** `toStoredFileName` (App.jsx:2255) mints
   `sound_<rand>_<safeName>`; the sound object holds only a *reference* in `files[].storedName`. Consequences:
   `deleteSound` (App.jsx:2179) never deletes files, but deleting a
@@ -82,9 +88,13 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
   "I called the append first, so it saves first".
 - **Categories have no id — identity is the display name.** `cat.category` is the key everywhere
   (App.jsx:1737, 2802-2814). Duplicate category names across groups therefore collide as map keys.
--   "Deletea sound must always confirm, and today it does." `handleDeleteSound` (App.jsx:2224) only opens
+- **Deleting a sound must always confirm, and today it does.** `handleDeleteSound` (App.jsx:2224) only opens
   the dialog; `deleteSound` has exactly one call site, `confirmDelete` (App.jsx:2230). Keep it that way — a
-  second unconfirmed sound-removal path is a regression.
+  second unconfirmed sound-removal path is a regression. ⚠️ **`transferSound`'s removal (App.jsx:2070) is
+  deliberately *not* a delete** — it is the source half of a silent move, scoped to the single source
+  container instead of `deleteSound`'s global sweep. Never reuse it for real deletes and never merge it into
+  `deleteSound`; the two look alike and merging them silently disables the confirmation. The reasoning is in
+  the comment at App.jsx:2060-2069.
 
 ## ⚠️ Operational warnings for agents
 - **`npm run tauri android dev` never exits** (watches for rebuilds, streams logcat). It will hang the tool
@@ -154,6 +164,8 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   skips on Windows because Tauri uses physical uploads, not localStorage). Build green, move/copy suite green.
 - Android phase → `e2e-android.ps1 -Suite full`: **85 PASS / 0 FAIL / 0 WARN / exit 0**; mobile suite passes, but
   `e2e-mobile.mjs` still has no move/copy UI tests ported.
+- ✅ **Move/copy also verified by hand** — the user tested the built app (not just E2E) on 2026-10-04 and
+  reported it works. That is why the feature and its spec are treated as done.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
@@ -172,10 +184,10 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261004-181318` (39.1 MB, 204/204 verified) — taken before starting
- MOVE_COPY_SOUND_SPEC implementation (2026-10-04 18:13).
-  
-  This file now records that the next code-touching session (this one) took one before touching code.
+Latest: `ttrpg-soundboard-backup-20261004-224636` (39.2 MB, **203/203 verified**) — taken after the SAF spike was
+reverted, so it matches the current tree (docs-only changes). The pre-spike backup `20261004-215511` is the
+one that protected the Rust files before they were touched, and is the reason the revert was risk-free.
+(203 not 204 because `MOVE_COPY_SOUND_SPEC.md` was deleted earlier the same evening.)
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
@@ -220,8 +232,8 @@ Three properties worth remembering:
 ### Planning specs in the repo root
 | Spec | Status |
 |---|---|
-| `PROFILE_SYNC_SPEC.md` | **Parked** by user decision — documentation only |
-| `MOVE_COPY_SOUND_SPEC.md` | **Implemented 2026-10-04** — move/copy + refcount guard landed; web E2E green. §2 is the settled decision list; §7 guard now covers eight sites. |
+| `PROFILE_SYNC_SPEC.md` | **Re-opened by the user 2026-10-04** (was: parked 2026-09-27). **Revised** that day — docs only, all code references re-verified against `src/App.jsx` @ 6240 lines, §0 is a revision log. **Implementation is not authorised yet** — the user wants to review the design first. Do not write app code for it unasked. |
+| `MOVE_COPY_SOUND_SPEC.md` | **Retired 2026-10-04** — shipped, user-tested, committed as `f7f316e`, spec deleted. Its 8 settled decisions, invariants and deferred list are preserved in `docs/session-history.md`; the design now lives in `src/App.jsx`. See Retired files. |
 
 ## Open items
 - **The claim/release protocol is unproven with a second agent.** Installed 2026-10-04; only opencode has
@@ -238,25 +250,66 @@ Three properties worth remembering:
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- `PROFILE_SYNC_SPEC.md` is **parked** by user decision (documentation-only for now). Do not implement unasked.
-- `MOVE_COPY_SOUND_SPEC.md` — **Implemented 2026-10-04** per §10: copy **shares** the audio file reference;
-  entry is a third per-card button in edit mode; move is silent with no confirm; append at end of target;
-  the §7 hazard got a refcount guard (`isFileReferencedElsewhere`, App.jsx:1967) as
-  a **separate follow-up** in this same session. Partial writes still rely on the
-  existing save-error banner (not atomic — see spec §5.4); picker rows have **two** buttons, no mode state;
-  copies auto-suffix `Name (copy)`.
-  ✅ Because a copy shares the source's `storedName`, deleting the *container* holding the original was guarded at
-  App.jsx:2615/2630/3041/3155/3173 and sound-modal paths at App.jsx:2454/2459/2468. The guard is landed and tested.
-- The **spec has two self-corrections already applied** that a future session must not "re-fix": the write-order
-  guarantee is best-effort (effect order, not setter order, decides what hits disk — see the gotchas above), and
-  the container-shape list is five, not four.
-- Android mobile phase run 2026-10-04 20:21 (`e2e-android.ps1 -Suite full`,
-  **85 PASS / 0 FAIL / 0 WARN**, exit 0): the *mobile* suite passed, but it
-  still does not contain the move/copy UI yet.
+- `PROFILE_SYNC_SPEC.md` — **re-opened 2026-10-04, design revised, awaiting the user's go-ahead.** Profiles +
+  export/import as a `.spellcaster` zip. Revised for real code drift, not cosmetics: `localStorage` call sites
+  went 23→**27** and there are **10** `uploads/` path sites, both key sets needing the profile prefix, plus
+  prefix *enumeration*; `ttrpg_characters_icon` / `ttrpg_environment_icon` were missing from the namespace
+  table; **`localStorageMigrationCompleted` must stay global** (prefixing it would re-run the one-time web→Tauri
+  audio sweep). Provenance turned out to be **structural, not a flag** — a reference with no `storedName` is a
+  bundled asset, so the old "add a write-time provenance flag" risk is gone. "Reset to starter sounds" already
+  shipped as `restoreDefaults` (App.jsx:2671), so it only needs profile-scoping. Two new risks added:
+  cross-profile shared blobs (never hardlink between profiles) and profile-switch state reload (revoke the
+  object-URL cache at App.jsx:2298).
+- ✅ **The Android SAF spike (spec §7/§10 step 0) is DONE and PASSES** — run 2026-10-04 on an API 37 emulator.
+  `dialog.save()` returns a **`content://` URI, not a path**; `plugin-fs` accepts that URI as `path` on mobile
+  (`#[cfg(mobile)] resolve_file` → `android.rs` `resolve_content_uri` → `getFileDescriptor` →
+  `openAssetFileDescriptor`), so a 4 KiB write + read round-tripped byte-identical and re-write truncates.
+  **No fs-scope change is needed on Android.** A raw `/sdcard/Download/…` write is **refused** ("forbidden
+  path"), so the spec's old `BaseDirectory.Download` fallback is dead. Remaining unknown: the **desktop**
+  picker-path write.
+- ⚠️ **`fs:allow-read-dir` is SINGULAR** — the first draft of this spec had it right, my 21:44 revision "fixed"
+  it to the plural `fs:allow-read-dirs` and was **wrong**; the Android build rejected it with "Permission not
+  found, expected one of …". `permissions/read-dirs.toml` defines a *set* named `read-dirs`; the per-command
+  permission is `allow-read-dir`. Build errors that print the valid id list beat reading filenames.
+- ⚠️ **On Android the fs commands take the path in different places**: `write_file` expects it in a
+  `encodeURIComponent`'d **header** with bytes as the body, `read_file` expects `{ path, options }` as **args**.
+  Getting it wrong fails as `invalid args 'path' for command 'read_file'`, which looks like a permissions
+  problem and is not.
+- ⚠️ **`tauri android dev` built the APK but never installed or launched it** (2026-10-04). The Gradle output
+  appeared complete and `pm list packages` showed the app, but the install step never ran — the app on the
+  device was a **stale** build, which produced a false "Plugin not found". Recovery: `adb install -r
+  src-tauri\gen\android\app\build\outputs\apk\x86_64\debug\app-x86_64-debug.apk`, then `adb shell monkey -p
+  com.mrhorakhty.thespellcaster.debug -c android.intent.category.LAUNCHER 1`. **If a plugin "is not found" on
+  device, verify the APK is current before debugging the capability file.**
+- ✅ **`kill-ports.bat /emu` is fixed** (2026-10-04, found broken the same day). Its `for /f` line
+  double-quoted the adb path, so cmd failed with *'"…adb.exe" devices | findstr…' is not recognized*, and the
+  backtick variant fails differently (*cannot find the file* — cmd looks for a name starting with a quote).
+  **Neither `for /f` idiom can capture a command that starts with a quoted path.** The fix redirects
+  `adb devices` to a temp file and iterates that, so the captured command starts with `type`. Verified from
+  PowerShell on a running emulator (killed it) and with none running ("no running emulator found").
+- **Move/copy feature — shipped 2026-10-04, user hand-tested, committed as `f7f316e`, spec retired.** Settled
+  behaviour, do not change unasked: copy **shares** the audio file reference (no byte duplication);
+  entry is a third per-card button in edit mode; **move is silent with no confirm**; append at end of target;
+  picker rows have **two** buttons and **no mode state**; copies auto-suffix `Name (copy)`, uniqueness checked
+  against the **destination container only**. Because a copy shares the source's `storedName`, every destructive
+  file cleanup is guarded by `isFileReferencedElsewhere` (App.jsx:1967) — container deletes at
+  App.jsx:2615/2633/3041/3155/3173, sound-modal paths at App.jsx:2454/2459/2468. Partial cross-slice writes
+  still rely on the existing save-error banner (not atomic — see the write-order gotcha above).
+- **Move/copy is not ported to the mobile E2E suite.** `e2e-mobile.mjs` has no move/copy UI tests, so the
+  Android phase (85 PASS) passes without exercising the feature at all. Web/Windows cover it (M1-M22, G1-G5).
+- Deferred from the feature's design, still open if anyone picks them up: cross-container drag-and-drop
+  (needs new sidebar drop zones — the existing hit-test only sees *rendered* cards), creating a
+  character/category/group from inside the picker, moving or copying a whole container at once, and atomic
+  cross-slice persistence (needs the parked `PROFILE_SYNC_SPEC.md` storage refactor).
 - Not yet done: release APK (needs a signing keystore), wake lock, fullscreen guard, iOS (needs macOS).
 
 ## Retired files
 Delete-then-ignore, so they cannot come back:
+- `MOVE_COPY_SOUND_SPEC.md` — shipped as `f7f316e` (created in `2d525ed`), **user hand-tested**, then deleted
+  2026-10-04 at the user's request as obsolete. Its design record — the 8 settled decisions, the
+  do-not-regress invariants, the deferred list and the real App.jsx line numbers — was moved into
+  `docs/session-history.md` (session 2026-10-04 21:26) before deletion; the prose also stays in git history
+  (`git show f7f316e:MOVE_COPY_SOUND_SPEC.md`).
 - `RESTORE_DEFAULTS_SPEC.md` — shipped as `bde7483`, deleted 2026-10-04.
 - `ICON_FEATURE_SPEC.md` — shipped as `53ce2eb`, deleted by the user 2026-09-28.
 - `e2e-all.ps1` / `e2e-all.ps1.new` — replaced by `e2e-full.ps1`; filename is AV-blocked.

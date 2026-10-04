@@ -126,8 +126,27 @@ if "!ADB!"=="" (
     goto :eof
 )
 echo  /emu:
-for /f "tokens=1" %%d in ('"!ADB!" devices ^| findstr /R /C:"emulator-[0-9]*"') do (
-    echo     shutting down %%d
-    "!ADB!" -s %%d emu kill >nul 2>&1
+rem Read the device list through a temp file. Both obvious one-liners are BROKEN
+rem when ADB is a quoted path: for /f in ('"!ADB!" devices ^| findstr ...') cannot
+rem parse nested double quotes ("... is not recognized"), and the backtick form
+rem makes cmd look for a file whose name literally starts with a quote ("cannot
+rem find the file"). Redirecting to a file first avoids the issue entirely, since
+rem the for /f command then starts with 'type' rather than with a quote.
+set "DEVLIST=%TEMP%\kill-ports-devices.txt"
+"!ADB!" devices > "!DEVLIST!" 2>nul
+set "ANY_EMU=0"
+for /f "skip=1 tokens=1,2" %%d in ('type "!DEVLIST!"') do (
+    set "SERIAL=%%d"
+    set "STATE=%%e"
+    if /i "!STATE!"=="device" (
+        echo !SERIAL! | findstr /R /C:"^emulator-" >nul 2>&1
+        if not errorlevel 1 (
+            echo     shutting down !SERIAL!
+            "!ADB!" -s "!SERIAL!" emu kill >nul 2>&1
+            set "ANY_EMU=1"
+        )
+    )
 )
+del "!DEVLIST!" >nul 2>&1
+if "!ANY_EMU!"=="0" echo     no running emulator found
 goto :eof

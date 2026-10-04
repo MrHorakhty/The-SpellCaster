@@ -1123,3 +1123,269 @@ been interrupted would have left the claim set - that is the mechanism working, 
 ### Repo state left behind
 Two uncommitted doc edits (`PROJECT_STATE.md`, `docs/session-history.md`) correcting the facts above, for the
 user to commit or discard. No app code touched at any point today. **No backup on disk.**
+
+---
+
+## SESSION 2026-10-04 21:26 - MOVE_COPY_SOUND_SPEC RETIRED (spec deleted, knowledge kept here)
+
+Docs-only, ~15 minutes. The user manually tested the move/copy build (not just E2E) and reported it works,
+then **committed and pushed** it themselves and deleted the local backups. `MOVE_COPY_SOUND_SPEC.md` is
+therefore **obsolete** and was deleted this pass, per the "delete deprecated parts" rule in `AGENTS.md`.
+
+- Backup taken first anyway (the rule is unconditional): `ttrpg-soundboard-backup-20261004-212618`,
+  **204/204 files verified, 39.2 MB**, robocopy exit 1 = success.
+- `git rm MOVE_COPY_SOUND_SPEC.md` + a `.gitignore` entry so it cannot come back silently (same treatment as
+  `RESTORE_DEFAULTS_SPEC.md` / `ICON_FEATURE_SPEC.md`).
+- ⚠️ **`mobile-support` is `ahead 1` — `f7f316e` is committed but NOT pushed**, contrary to the user's
+  recollection. So the spec's final text exists only in the local object store right now
+  (`git show f7f316e:MOVE_COPY_SOUND_SPEC.md`); once this pass is pushed it lives at `2d525ed`/`f7f316e`
+  permanently, which is why deleting it loses no history.
+
+### The knowledge the spec was the only record of — kept here on purpose
+The spec was 502 lines, of which the design rationale was never duplicated anywhere else. Retained:
+
+**Eight settled decisions (put to the user and answered 2026-10-04 — do not re-litigate unasked):**
+1. **Copy shares the source's audio file reference** — no byte duplication (quota on web); the cost was the
+   shared-file deletion hazard, later closed by the refcount guard.
+2. Entry point is a **third overlay button on the sound card** in edit mode (bottom-centre; both top corners
+   are taken by delete/edit), `title="Move or Copy Sound"` — App.jsx:3859-3861. Chosen over a context menu
+   because it matches the existing overlay idiom and is CDP-addressable by a stable `title`.
+3. **Move is silent — no confirm dialog.** Consistent with every other mutation in the app.
+4. Destination insertion is **append at the end**; reorder afterwards with the existing same-container drag.
+5. The shared-file hazard was fixed by a **reference-count guard as a separate commit** after the feature.
+6. Cross-slice persistence stays **best-effort** (one handler, existing `saveError` banner). Effect order —
+   not setter order — decides what hits disk, so a two-phase move is the only real guarantee and a move is
+   net-zero bytes; not worth the state pair/ref/tick.
+7. A target row offers **two buttons** — filled `Move` + outlined `Copy`, `title="Move to <name>"` /
+   `title="Copy to <name>"`. **No mode state**, so the destructive action can't be picked by accident, and it
+   is cheaper to test. Rejected the `IconPicker`-style segmented control for that reason.
+8. Copies are auto-suffixed **`Name (copy)`**, then `(copy 2)`, … — checked **against the destination
+   container only**, never app-wide (a global check reaches `Fireball (copy 97)` on a well-used board).
+   Secondary reason: the delete-confirm dialog *names* the sound, so two identical `Fireball` cards would make
+   it ambiguous about which is being deleted.
+
+**Invariants a future session must not regress:**
+- **`transferSound`'s scoped removal is not a delete.** It removes a sound without a confirm (correct — it is
+  the source half of a move). Never reuse it for real deletes and never fold it into `deleteSound`: merging the
+  two silently disables the delete confirmation. `deleteSound` must keep exactly one call site, `confirmDelete`.
+- **Copy must preserve `files[]` *and* the legacy `file: "Name.mp3"` field verbatim** — never rebuild `files`
+  from scratch; `playSound`'s fallback handles the legacy shape.
+- **Categories have no id** (identity = display name). The picker keys on names and shows the section name to
+  disambiguate duplicates; do **not** invent category ids in this feature.
+- **All five container shapes** must be walked (`allSoundContainers`, App.jsx:1812, includes vestigial
+  `groups[].sounds` allocated by `addGroup`). Four is not enough.
+- **No toast system** — success is silent, invalid input uses `alert()`, persistence failure uses
+  `reportSaveFailure` → the `role="alert"` banner. Do not introduce a toast layer.
+- `DATA_VERSION` stays `'3'`.
+
+**Deferred (explicitly not v1, still open if someone picks them up):** cross-container drag-and-drop via
+sidebar drop zones (the hit-test only queries *rendered* cards, so it needs new drop targets); creating a
+character/category/group from inside the picker; moving or copying a whole container at once; copying bundled
+default sounds (pointless — they reference `public/assets` by filename and are identical on every install);
+atomic cross-slice persistence (needs the parked `PROFILE_SYNC_SPEC.md` storage refactor).
+
+**Where the design lives now:** the code (`transferSound` App.jsx:2022, `allSoundContainers` :1812,
+`findSoundContainer` :1867, `isFileReferencedElsewhere` :1967, `removeFileIfUnreferenced` :1975,
+`removeContainerFiles` :1984, `nextCopyName` :1998, `openMoveCopyModal` :2081, `moveCopyTargetSections` :2101,
+per-card button :3859, picker modal :5851) plus git history for the prose. E2E coverage lives in
+`e2e/e2e-full.mjs` as **M1-M22** (move/copy UI) and **G1-G5** (refcount guard).
+
+**Still not done after shipping:** `e2e/e2e-mobile.mjs` has **no** move/copy UI tests ported — the Android
+phase passes 85/85 without exercising the feature.
+
+### Corrections to the previous session block (append-only, so corrected here)
+That block's line numbers were partly guessed/mangled. Real ones: `mintId` App.jsx:260, `allSoundContainers`
+:1812, `findSoundContainer` :1867, `isFileReferencedElsewhere` :1967, `removeFileIfUnreferenced` :1975,
+`removeContainerFiles` :1984, `nextCopyName` :1998, `transferSound` :2022, `openMoveCopyModal` :2081,
+`moveCopyTargetSections` :2101, `editingSoundContainerRef` :2437.
+
+### Repo state left behind
+`f7f316e` committed locally but **not pushed**; `2d525ed` and the feature itself are on the remote. This pass
+touches docs only: `D MOVE_COPY_SOUND_SPEC.md`, `M .gitignore`, `M PROJECT_STATE.md`, `M docs/session-history.md`.
+No app code touched, so no lint/build gate was needed.
+
+💡 Claim line first written with a **guessed** timestamp (`20:40`) and corrected to the real `21:26` right
+after — same trap as the `18:24` incident in the 2026-10-04 18:06 block. Read the clock before writing a
+claim line; the pre-change backup's own timestamp is a reliable lower bound.
+
+---
+
+## SESSION 2026-10-04 21:44 - PROFILE_SYNC_SPEC RE-OPENED AND REVISED (docs only)
+
+Second pass of the evening. The user came back for `PROFILE_SYNC_SPEC.md` — parked since 2026-09-27 — asked
+for a rundown, then asked for a **revision pass**. No app code written; the user wants to review the design
+before authorising implementation.
+
+- Backup first per `AGENTS.md`: `ttrpg-soundboard-backup-20261004-214515`, **203/203 verified, 39.2 MB**
+  (203 not 204 — `MOVE_COPY_SOUND_SPEC.md` was deleted in the previous pass).
+- Spec status changed from "parked by user decision" to **"revised 2026-10-04, implementation not yet
+  authorised"**, with a new **§0 revision log** listing the seven changes.
+
+### What was actually wrong in the spec (verified against `src/App.jsx` @ 6240 lines)
+1. **Every line reference** was from the 5751-line file. `readStoredData` 91→**317**,
+   `normalizeStoredData` 43→**269**, `normalizeHex` 1964→**2710**, settings modal 5021→**5952**,
+   legacy-`file` playback fallback 2532→**3275**, icon upload 1564→**2287-2293**.
+2. **"23 `localStorage` call sites" → 27** (13 set / 11 get / 3 remove), *plus* the code **enumerates**
+   `localStorage.length`/`key(i)` to sweep `sound_file_*` (App.jsx:1207-1211). An adapter that only wraps
+   get/set/remove is incomplete → added `keysWithPrefix` / `removeAllWithPrefix` to §4.2.
+3. **`uploads/` paths are a second front the spec never counted:** `TAURI_STORAGE_DIR` (App.jsx:22) and
+   `getTauriStoragePath` (App.jsx:2316) are referenced at 1225-1235, 2325-2342, 2374-2385, 3241 — **10 sites**
+   that all need the profile segment. Namespacing only the localStorage keys would leave Tauri profiles
+   sharing audio.
+4. **Two keys missing from the namespace table:** `ttrpg_characters_icon` / `ttrpg_environment_icon`
+   (section icons, App.jsx:1057-1065). And `localStorageMigrationCompleted` (App.jsx:1197) must stay
+   **global** — namespacing it would re-run the one-time web→Tauri audio sweep on every profile.
+5. **Provenance is structural, so the spec's risk 2 dissolved.** A bundled reference has **no `storedName`**
+   (`src/data.json` ships `{"name":"Caustic_Blast_Acid_1.mp3"}`); an upload always has one, with `name`
+   rewritten to the stored name and the human name in `displayName` (App.jsx:2404-2425). Icons behave the
+   same way (bundled = plain filename, custom = `icon_<rand>_<name>`). So the "add a write-time provenance
+   flag" step is **deleted** — it would have created a second source of truth. A second independent signal
+   exists: shipped ids from `mergeShippedDefaults`' `allShippedSoundIds` (App.jsx:355).
+6. **§10's open fs question answered.** `fs:default` is only
+   `create-app-specific-dirs` + `read-app-specific-dirs-recursive` + `deny-default` — **no `read_dir`**. The
+   permission is **`fs:allow-read-dirs`** (plural, from `permissions/read-dirs.toml`); the spec's
+   `fs:allow-read-dir` would not have resolved. Resolved crate is `tauri-plugin-fs` **2.5.2** (declared 2.5.1).
+   `tauri-plugin-dialog` is still registered nowhere; must go in **both** `main.rs` and `lib.rs`.
+7. **"Reset to starter sounds" already shipped** as `bde7483` (`restoreDefaults` App.jsx:2671,
+   `mergeShippedDefaults` :349) — §9.2 is now "make it profile-scoped", keeping its idempotent,
+   non-destructive properties.
+8. **Move/copy (`f7f316e`) makes a shared `storedName` normal**, so §5's hash dedupe became mandatory rather
+   than an optimisation, and §7's export must walk all five container shapes via `allSoundContainers`
+   (App.jsx:1812) — four would silently drop sounds.
+
+### Two new risks added (§11)
+- **Cross-profile shared blobs.** `isFileReferencedElsewhere` only scans the *active* profile's in-memory
+  state, so a future import path that links profiles could delete bytes still in use. Rule: every profile owns
+  `uploads/<profileId>/`; content-addressing dedupes within a bundle, never across profiles.
+- **Profile switch is a state reload.** Storage is read once at mount; switching profiles must also revoke
+  the object-URL cache (`getObjectUrlForBlob`, App.jsx:2298) or the previous profile's blobs leak for the
+  session.
+
+### New checklist items (§13/§14)
+Copied sound exported once (dedupe); a hand-seeded sound in the vestigial `groups[].sounds` is exported;
+deleting a profile touches only its own `uploads/<id>/`; `ttrpg_*_icon` + `boxSize` follow the profile while
+`localStorageMigrationCompleted` does not; A→B→A switch leaves no bleed-through or stale blob URLs;
+profile-scoped Restore Defaults stays idempotent. §14 adds: the E2E localStorage snapshot must scan by
+**prefix**, because a hard-coded key list from the current release silently misses `profile:*` and
+`spellcaster_profiles` — the first crashed run would then leave a half-namespaced board. Suite IDs continue
+from `P1` after `M1-M22`/`G1-G5`; `SEED` (e2e-full.mjs:102-115) is reusable but its sounds carry **no**
+`storedName`, so a provenance test also needs an uploaded fixture.
+
+### Implementation order gained a step 0
+Spike the two unknowns before anything else: **Android SAF save** (§7, never verified — still the single
+largest unknown) and **writing to a picker-chosen path** (§10, second-least-verified; if it needs a runtime
+scope grant, that would be the feature's first custom Rust command, which §10 currently claims is
+unnecessary). Both are cheap and can invalidate the design.
+
+### Repo state left behind
+Docs only: `M PROFILE_SYNC_SPEC.md`, `M PROJECT_STATE.md`, `M docs/session-history.md`, plus the previous
+pass's `D MOVE_COPY_SOUND_SPEC.md` + `M .gitignore` + those two. Still uncommitted — `f7f316e` remains
+`ahead 1` of `origin/mobile-support`. No lint/build gate needed (no code touched). Claim released.
+
+---
+
+## SESSION 2026-10-04 21:55 - ANDROID SAF SPIKE RUNED AND PASSED (spec §7 / §10 step 0)
+
+Third pass of the evening. The user asked to verify the one thing the spec said was its biggest unknown —
+Android SAF save — "without going further". Docs + a deliberate, uncommitted Rust/config spike; **no app or
+frontend source was touched.**
+
+- Backup first: `ttrpg-soundboard-backup-20261004-215511`, **203/203 verified, 39.2 MB**.
+- Spike code (still uncommitted): `Cargo.toml` + `tauri-plugin-dialog = "2"` (resolves to **2.7.3**),
+  registered in **both** `main.rs` and `lib.rs`, and `capabilities/default.json` + `fs:allow-read-dir` +
+  `dialog:allow-save` + `dialog:allow-open`. `cargo check` clean (41.8 s).
+
+### 🔴 The build caught an error I had introduced 40 minutes earlier
+The 21:44 revision "corrected" §10 to **`fs:allow-read-dirs` (plural)**, reasoning from the filename
+`permissions/read-dirs.toml`. The Android build refused it:
+
+> `Permission fs:allow-read-dirs not found, expected one of core:default, … fs:allow-read-dir, …`
+
+`read-dirs.toml` defines a **set** permission called `read-dirs`; the per-command permission is
+**`allow-read-dir` (singular)**. The original 2026-09-27 spec had it right and my revision broke it.
+Corrected in the spec, in this file, and in `PROJECT_STATE.md`. **Lesson: when a plugin rejects a permission
+name it prints the full valid list — read the error before reading filenames.**
+
+### Verdict: SAF save WORKS. Findings, in order of importance
+1. **`dialog.save()` on Android returns a `content://` URI, not a path** —
+   `content://com.android.providers.downloads.documents/document/26`. Source: `DialogPlugin.kt`
+   `saveFileDialogResult` returns `uri.toString()`. The spec's §7 phrasing "write to the chosen path" was wrong
+   about the shape of the value.
+2. **`plugin-fs` accepts that URI as `path` on mobile.** `commands.rs` has `#[cfg(mobile)] resolve_file` which,
+   for a `SafeFilePath::Url`, calls `webview.fs().open()` → `android.rs` `resolve_content_uri` → Kotlin
+   `FsPlugin.getFileDescriptor` → `contentResolver.openAssetFileDescriptor(uri, mode)` → raw fd wrapped as a
+   `std::fs::File`. The `content://` string never becomes a filesystem path.
+3. **No fs-scope widening is needed on Android** — that URL branch skips the scope check entirely.
+4. **Measured**: wrote 4096 bytes (`PK\x03\x04` + 0x41 body) → read back 4096 bytes byte-identical; re-wrote 64
+   bytes of 0x42 → read back 64 bytes of 0x42 (truncate works, not one-shot). `adb shell ls -l
+   /sdcard/Download/` showed the file at exactly those sizes. Spike files deleted afterwards.
+5. **Control: a raw write to `/storage/emulated/0/Download/ctl-probe.bin` is REFUSED** — "forbidden path …
+   maybe it is not allowed on the fs scope". So the spec's `BaseDirectory.Download` fallback is **dead on
+   Android** (scoped storage); the row was rewritten.
+6. **A cancelled picker rejects**, it does not resolve `null` (`invoke.reject("File picker cancelled")`), so
+   the export code needs a `catch`.
+
+### How it was driven without touching App.jsx — worth remembering
+- ⚠️ **`tauri android dev` built the APK but never installed or launched it.** Gradle output looked complete,
+  `pm list packages` showed the app, but the running app was a **stale** build — which produced a bogus
+  `dialog.save not allowed. Plugin not found` and nearly sent the investigation in the wrong direction.
+  Fix: `adb install -r src-tauri\gen\android\app\build\outputs\apk\x86_64\debug\app-x86_64-debug.apk`, then
+  `adb shell monkey -p com.mrhorakhty.thespellcaster.debug -c android.intent.category.LAUNCHER 1`, re-forward
+  CDP. **If a plugin is "not found" on device, verify the APK is current before debugging capabilities.**
+- **The dialog can be driven over raw CDP** — `window.__TAURI_INTERNALS__.invoke('plugin:dialog|save',
+  { options })` — so no frontend code is needed to exercise a plugin. Dynamic `import('@tauri-apps/...')`
+  from evaluated script would **not** work (Vite cannot resolve a bare specifier there).
+- ⚠️ **`write_file` and `read_file` take the path in different places.** `write_file`: path in an
+  `encodeURIComponent`'d **header**, bytes as the body. `read_file`: `{ path, options }` as **args**. Wrong
+  guess fails as `invalid args 'path' for command 'read_file'`, which reads like a permissions problem.
+- **The picker is a separate activity** and must be tapped from outside: `adb shell uiautomator dump`, find
+  `text="SAVE"` bounds, `adb shell input tap`. Always use a unique filename — an existing name triggers an
+  overwrite-confirm dialog.
+- **The WebView reloaded mid-session** (`window.__saf` went from a resolved URI to `undefined`), almost
+  certainly Vite HMR reacting to file writes. Stash state on `window` and poll it from the same CDP
+  connection; do not assume it survives between separate CDP sessions.
+- Emulator: AVD `Pixel_7`, **API 37** (`sdk_gphone16k_x86_64`), launched `-no-snapshot-load`. DocumentsUI is
+  present (`com.google.android.documentsui`) even though `cmd package resolve-activity -a
+  android.intent.action.CREATE_DOCUMENT` reports "No activity found" — that command is not a reliable probe.
+
+### Spec changes from this pass
+§0 row 8 added; §3 gained three rows (fs permission is singular, raw paths are blocked, content URIs are
+accepted); §7's platform table and the old "⚠️ spike this first" warning replaced by a **"SPIKED AND PROVEN"**
+subsection with the measured numbers and four implementation consequences (pass the URI as a **string**,
+`readFile` rejects a non-`file:` `URL` object, no Android scope change, never pretty-print the URI); §10's
+table now marks what is DONE and records that `fs:allow-read-dir` is singular; §11 risk 3 struck with the
+residual risk noted (the URI grant is **transient** — valid for the session, so export-then-share is fine but
+do not assume cross-session readability); §12 step 0 half-done — the **desktop** picker-path write is the last
+unknown; §13 gained the import-side caveat and the cancel-rejects case.
+
+### Repo state left behind
+Uncommitted: three docs files + the staged `D MOVE_COPY_SOUND_SPEC.md` + `.gitignore` + `README.md`, and the
+four Rust/config spike files listed above. `f7f316e` still `ahead 1` of origin. Emulator `Pixel_7` left
+**running**, `tauri android dev` still running detached in the background (pid 16256 chain: npm 8876 → node
+12424 → `tauri android dev`), Vite serving 5173, `adb forward tcp:9223` active, app pid 7295. **No spike
+files left in `/sdcard/Download`.** Claim released.
+
+### Closing pass, same day (user: "revert the spike and close the emulators")
+- **Spike reverted.** `git checkout --` on `src-tauri/Cargo.toml`, `Cargo.lock`, `src/main.rs`, `src/lib.rs`,
+  `capabilities/default.json`. No trace of `dialog` left in any of them; `cargo check` clean again (3.28 s);
+  `git status` shows docs only. The plugin will be re-added when the feature is actually implemented.
+- **Emulator + dev stack shut down.** `kill-ports.bat /all /emu` freed 5173/9224/9225/5233/9333/9334, removed
+  all adb forwards and killed the orphan tauri CLI (pid 12424) — but **its `/emu` branch was broken**, so the
+  emulator was killed with `adb -s emulator-5554 emu kill` instead. Logged as a finding.
+- Docs corrected so they don't contradict the tree: §10's table rows are no longer marked DONE, and
+  `PROJECT_STATE.md`'s uncommitted list is docs-only again.
+
+## SESSION 2026-10-04 22:53 - kill-ports.bat /emu FIXED, THEN COMMIT + PUSH ATTEMPTED
+
+- **`kill-ports.bat` `:emu` label rewritten.** The old line was
+  `for /f "tokens=1" %%d in ('"!ADB!" devices ^| findstr /R /C:"emulator-[0-9]*"')`, which fails whenever
+  `ADB` is a quoted path. 💡 **The general lesson, now in a comment in the file: neither `for /f` idiom can
+  capture a command that *starts with a quoted path*** — the single-quote form dies with *"is not recognized"*
+  and the backtick form dies with *"cannot find the file"* (cmd takes the quote as part of the filename).
+  Fix: redirect `adb devices` to `%TEMP%\kill-ports-devices.txt` and iterate that with `for /f … ('type "!F!"')`,
+  so the captured command begins with `type`. Also handles the no-device case with an explicit
+  "no running emulator found" message and cleans the temp file up.
+- **Verified from PowerShell**, which is where it used to fail: with a running AVD it printed
+  `shutting down emulator-5554` and the device disappeared; run again immediately it printed
+  `no running emulator found`; `/all` (ports, adb forwards, orphan tauri/cargo) still behaves.
+- Backup before the edit: `ttrpg-soundboard-backup-20261004-225340`, 203/203 verified.
