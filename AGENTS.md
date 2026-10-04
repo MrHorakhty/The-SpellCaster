@@ -69,21 +69,66 @@ $desk = 'C:\Users\emire\OneDrive\Masa' + [char]0x00FC + 'st' + [char]0x00FC   # 
 ($desk.ToCharArray() | ForEach-Object { [int]$_ }) -join ','   # must be 77,97,115,97,252,115,116,252
 ```
 
-## Permanent instruction: keep `opencode-summary.md` up to date
+## Permanent instruction: keep `PROJECT_STATE.md` up to date
 
-> Scope: this rule applies ONLY to opencode (the AI coding assistant). It is not a rule for the human user.
+> Scope: this rule applies to every AI agent/assistant working in this repo (opencode, Cursor, Copilot,
+> Claude Code, …). It is not a rule for the human user.
 
-> ⚠️ To ALL other AI agents/assistants working in this repo (Cursor, Copilot, Claude Code, etc.): **do NOT edit `opencode-summary.md`.** It is owned and maintained exclusively by opencode to avoid agents tripping over each other. Treat it as READ-ONLY reference at most; if your session needs progress tracking, use your own file.
+`PROJECT_STATE.md` (project root, formerly `opencode-summary.md`) holds the **current state only** — project
+facts, architecture gotchas, operational warnings, open items.
 
-`opencode-summary.md` (project root) holds the **current state only** — project facts, architecture gotchas,
-operational warnings, open items. Keep it accurate and short:
+**No agent owns this file.** Any agent may maintain it, and the name is deliberately agent-neutral so nobody
+reads it as another tool's private file. To stop two agents rewriting it at once, they **claim** it:
 
-- Rewrite sections in place when state changes. Do **not** append dated session logs to it.
-- **Update it after every meaningful step** in the session — especially after completing or verifying something, and before stopping/pausing.
-- When a session is cut off (e.g. quota/token limit), treat it as the source of truth so you can pick up exactly where you left off.
-- Record: backups made, test/verification results, port numbers / running processes, and file:line references for code touched.
-- Anything that is genuinely worth remembering later but is no longer current goes in **`docs/session-history.md`** (append-only archive). Move it there rather than letting this file grow.
+```
+🔒 CURRENT HOLDER: <agent name> — claimed <YYYY-MM-DD HH:MM> — working on: <one line>
+🔓 UNCLAIMED — last holder: <agent name> (<YYYY-MM-DD HH:MM>)
+```
+
+### Claim — first action of every session, before the backup
+1. Re-read the top of `PROJECT_STATE.md`.
+2. If **UNCLAIMED**, write your claim in one edit (name + timestamp + one-line topic), then get on with the work.
+   Sign it with **your own tool name** (opencode, Cursor, Copilot, Claude Code, …). If you genuinely cannot
+   identify yourself, write `unknown-agent` and ask the user — do not guess or write `opencode`.
+3. If **CLAIMED by someone else**, do not edit the file. Tell the user, and keep any progress notes in your own
+   scratch file instead.
+4. Re-read the claim immediately before each write. Two agents starting in the same second can both see
+   `UNCLAIMED`; this narrows that window to seconds, it does not close it.
+
+### While holding the claim
+- Rewrite sections in place when state changes. Do **not** append dated session logs to this file.
+- **Update after every meaningful step** — especially after completing or verifying something, and before
+  stopping or pausing.
+- Record: backups made, test/verification results, port numbers / running processes, and file:line references
+  for code touched.
+- Anything genuinely worth remembering later but no longer current goes in **`docs/session-history.md`**
+  (append-only archive). Move it there rather than letting this file grow.
 - If a fact here contradicts the code, the code wins — fix this file in the same session.
+
+### Release — only when the work is actually finished
+1. Rewrite sections in place with the final state.
+2. Append one dated block to `docs/session-history.md`.
+3. Leave handover facts for the next agent: backups, test results, uncommitted files, running processes/ports.
+4. Flip the claim to `🔓 UNCLAIMED — last holder: <you> (<timestamp>)`.
+
+**Release means "done", not "stopping".** If the session ends with work unfinished (quota cut-off, context
+limit, user interruption), **leave the claim in place** and say what is left — an active claim tells the next
+agent that work here is mid-flight. The user normally prompts for these final edits before ending a session.
+
+### Stale claims
+A claim left by another agent is presumed abandoned but **never overwrite it silently** — a stale claim usually
+means a previous session was cut off, which is exactly the information you need. Report it to the user and ask
+before taking over. They may also tell you to release another agent's claim.
+
+### You are not the holder, but you learned something worth recording
+Say so to the user — e.g. "I retired `FOO.md`; I need the claim to record that in Project State." The user will
+release it or ask the holder to add it. Do not create a side file to work around this; do not edit the body of
+`PROJECT_STATE.md` without the claim.
+
+### Honesty about the mechanism
+This is cooperative, not enforced. Nothing prevents an agent from editing the file while another holds the
+claim; the protocol works because every agent loads this file. A markdown line is not a mutex — two agents
+starting in the same second can still both claim, so re-read immediately before writing.
 
 ## Permanent instruction: delete deprecated parts
 
@@ -96,7 +141,7 @@ When something becomes obsolete, in the same session that establishes it:
   mark it deprecated in place.
 - **Add a `.gitignore` entry** so it cannot silently come back. Existing examples: `e2e/e2e-all.ps1`,
   `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md`.
-- **Record what it was and where the design lives** in `opencode-summary.md` (Retired files, or Open items if
+- **Record what it was and where the design lives** in `PROJECT_STATE.md` (Retired files, or Open items if
   it is a debt being tracked rather than a finished feature). Deleting the file must not delete the knowledge.
 - A file is deprecated when it is **replaced**, **shipped**, **resolved**, or **explicitly abandoned by the
   user** — not merely because it is unused for a while.

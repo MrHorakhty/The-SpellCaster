@@ -1,10 +1,14 @@
-# opencode — Current State
+# Project State
 
-> ⚠️ Maintained exclusively by **opencode**. Other AI agents/assistants (Cursor, Copilot, Claude Code, etc.): treat this file as **READ-ONLY reference — do NOT edit it**. If your session needs progress tracking, use your own file to avoid agents tripping over each other.
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 18:24). Session log: `docs/session-history.md`.
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
 past decision.
+
+**Any AI agent may edit this file, but only while holding the claim** (see *Permanent instruction: keep
+`PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
+genuinely finished.
 
 Last updated: **2026-10-04**
 
@@ -17,20 +21,26 @@ apply themes and a box-size (zoom) slider. A **Tauri 2.x** shell around a **Reac
 SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
-- Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (~4400 lines, one monolithic component).
+- Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (5751 lines, one monolithic component).
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage: Tauri → `BaseDirectory.AppData` via the fs plugin; web → `localStorage` `sound_file_*` data-URLs.
-- Data keys: `ttrpg_characters`, `ttrpg_environments`, `ttrpg_groups`, `ttrpg_themes`, `ttrpg_data_version`. `DATA_VERSION = '3'`.
+- Data keys: `ttrpg_characters`, `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled
+  harnesses before), `ttrpg_groups`, `ttrpg_data_version`, plus `backgroundSettings` and `boxSize`.
+  `DATA_VERSION = '3'` (App.jsx:257) — **never bump it**: the mismatch path (App.jsx:313-319) renames the
+  user's keys to `*_old` and resets to defaults.
 - Package `com.mrhorakhty.thespellcaster.debug`; `tauri.conf.json` uses `devUrl: http://localhost:5173`.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
 - Branch **`mobile-support`**, in sync with `origin/mobile-support`.
 - All 7 branches are fully merged into `mobile-support`; no unmerged work anywhere.
-- Recent commits: `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts" · `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
-- ⚠️ **Uncommitted at the end of 2026-10-04** (the user had not committed these yet):
-  `?? backup-project.ps1` (new backup script), `M AGENTS.md`, `M opencode-summary.md`.
-  Commit them before relying on `backup-project.ps1` existing in a fresh clone.
+- Recent commits: `c83a72c` "More document changes" · `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts" ·
+  `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
+- ✅ `backup-project.ps1`, `AGENTS.md` and the state file (then `opencode-summary.md`) are committed in `c83a72c`.
+- ⚠️ **Uncommitted as of 2026-10-04 (user has not asked for a commit):** `R opencode-summary.md -> PROJECT_STATE.md`
+  (rename staged) and `M` on it, `AGENTS.md`, `docs/session-history.md`, `.gitignore`, `backup-project.ps1`,
+  `MOVE_COPY_SOUND_SPEC.md`; plus `?? MOVE_COPY_SOUND_SPEC.md` (new, untracked). **No app code was
+  implemented** — `src/App.jsx` and all of `e2e/` are untouched; both 2026-10-04 sessions were docs-only.
 - `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
   (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
   ignore it. All 16 refs read cleanly.
@@ -46,6 +56,32 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
   reaches it via `10.0.2.2`. The HMR-websocket warning is cosmetic.
 - **Card `borderRadius` is a static `12px`** and deliberately does *not* scale with `boxSize`.
 - Sound cards are `<div role="button">`, **not** `<button>` — matters for CDP-driving tests.
+
+### Data-model gotchas (found 2026-10-04 while planning move/copy)
+- **There are FIVE container shapes for sounds, not four.** `characters[].sounds`,
+  `environmentSounds[].sounds`, `groups[].categories[].sounds`, `groups[].characters[].sounds` — **plus
+  `groups[].sounds`, a vestigial array that `addGroup` allocates on every group (App.jsx:2726) and nothing ever
+  pushes into.** Only `deleteGroup`'s cleanup (App.jsx:2742) and the delete-confirm name lookup
+  (App.jsx:5441) read it. **Any code that walks containers to find a sound or a file reference must walk all
+  five** — the four-shape assumption looks correct and is not.
+- **Audio bytes are keyed by `storedName`, never by sound id.** `toStoredFileName` (App.jsx:1843) mints
+  `sound_<rand>_<safeName>`; the sound object holds only a *reference* in `files[].storedName`. Consequences:
+  two sounds can legitimately share one file; `deleteSound` (App.jsx:1767) never deletes files, but deleting a
+  **container** deletes every file it references *unconditionally* (App.jsx:2194, 2628, 2744, 2763), and so
+  does removing a file in the sound modal (App.jsx:2031, 2036). **Any feature that lets two sounds share a
+  file must add a reference-count guard first.**
+- **Effect declaration order decides `localStorage` write order, not setter order.** The three auto-save
+  effects are declared `characters` (App.jsx:3164) → `environmentSounds` (App.jsx:3174) → `groups`
+  (App.jsx:3184). A mutation spanning two slices therefore persists **the `characters`/`groups` side first,
+  always** — so in any character↔group or environment↔group operation, the *removal* lands before the *append*.
+  There is **no transaction and no single write choke point**; a quota failure mid-operation leaves partial
+  state, surfaced only by the `role="alert"` banner via `reportSaveFailure` (App.jsx:3158). Do not assume
+  "I called the append first, so it saves first".
+- **Categories have no id — identity is the display name.** `cat.category` is the key everywhere
+  (App.jsx:1737, 2802-2814). Duplicate category names across groups therefore collide as map keys.
+- **Deleting a sound must always confirm, and today it does.** `handleDeleteSound` (App.jsx:1812) only opens
+  the dialog; `deleteSound` has exactly one call site, `confirmDelete` (App.jsx:1824). Keep it that way — a
+  second unconfirmed sound-removal path is a regression.
 
 ## ⚠️ Operational warnings for agents
 - **`npm run tauri android dev` never exits** (watches for rebuilds, streams logcat). It will hang the tool
@@ -127,7 +163,10 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261004-163113` (the user deleted the earlier ones as test artifacts).
+Latest: `ttrpg-soundboard-backup-20261004-180004` (39.1 MB, 204/204 verified) — taken before the
+`PROJECT_STATE.md` rename, so it holds the pre-rename `opencode-summary.md`. Also kept:
+`ttrpg-soundboard-backup-20261004-174834` (204/204). ⚠️ **Three backups now exist** (plus `165726`,
+203 files) — inside the "keep the newest one or two" rule only if you delete one; nothing was deleted.
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
@@ -135,17 +174,52 @@ the first deletion all kept `e2e-full.ps1`. Likely AV caching from the re-scan o
 safety. Assume it *will* be eaten again; `backup-project.ps1` is the mitigation, not a fix.
 
 ## Docs layout (changed 2026-10-04)
-`opencode-summary.md` was split — it had grown to 1000 lines and future sessions had to dig through
-dated history to find current state. It now holds **current state only**; the 35 dated session logs moved
-to `docs/session-history.md` (append-only, 927 lines). Same for `AGENTS.md` (115 lines, standing rules).
-**Do not merge them back.** Read the summary first, the archive only when you need past reasoning.
+This file was split from a 1000-line `opencode-summary.md` — it had grown so large that future sessions had
+to dig through dated history to find current state. It now holds **current state only**; the 35 dated session
+logs moved to `docs/session-history.md` (append-only). Same for `AGENTS.md` (standing rules).
+**Do not merge them back.** Read this file first, the archive only when you need past reasoning.
 
-Two new standing rules were added to `AGENTS.md` this session:
+Then, later the same day, it was **renamed `opencode-summary.md` -> `PROJECT_STATE.md`** (`git mv`, so history
+follows) because the old name was itself the problem: it said "opencode's file", which is what the previous
+ownership rule told every other agent. The new name is deliberately agent-neutral.
+
+### Ownership: claim / release, not "opencode only"
+The old rule was *"opencode owns this file; all other agents treat it as READ-ONLY"*. It was **replaced**
+2026-10-04 at the user's request — the reasoning and the old rule text are in `docs/session-history.md`.
+
+Why it was wrong: most sessions here are **not** opencode (Cursor, Copilot, Claude Code, mobile app, browser),
+so the file was read-only for exactly the agents doing the work, and it went stale. Now **no agent owns it** —
+whoever is working **claims** it, edits it, and **releases** it. Full protocol in `AGENTS.md`; the claim is
+line 3 of this file.
+
+Three properties worth remembering:
+- **Release means "done", not "stopping".** A session cut off mid-work must leave the claim in place — that is
+  the signal that work here is in flight.
+- **A stale claim is never overwritten silently.** It usually means a cut-off session, which is exactly the
+  information the next agent needs. Report it and ask the user.
+- **Cooperative, not enforced.** A markdown line is not a mutex; two agents starting in the same second can
+  both claim. The protocol works because every agent loads `AGENTS.md`. No lock file was added — the user
+  chose the markdown-only version as sufficient for same-checkout use.
+
+### Standing rules in `AGENTS.md`
+- **Back up before any change** — `.\backup-project.ps1` (copy + verify + auto-repair).
 - **Delete deprecated parts** — retired files get `git rm`'d *and* a `.gitignore` entry *and* a line in
-  the summary's Retired files section. Explicit "what NOT to delete" list: parked items, the only record
+  this file's Retired files section. Explicit "what NOT to delete" list: parked items, the only record
   of a decision, working harnesses, anything uncertain. See `AGENTS.md` for the full criteria.
+- **Keep `PROJECT_STATE.md` up to date** — claim, edit in place, release.
+
+### Planning specs in the repo root
+| Spec | Status |
+|---|---|
+| `PROFILE_SYNC_SPEC.md` | **Parked** by user decision — documentation only |
+| `MOVE_COPY_SOUND_SPEC.md` | **Planning** — written 2026-10-04, **8 design decisions cemented**, not implemented. Do not implement without a fresh request. §2 is the settled decision list; §7 is the one accepted hazard and §10 orders the fix. |
 
 ## Open items
+- **The claim/release protocol is unproven with a second agent.** Installed 2026-10-04; only opencode has
+  used it, and only within the session that wrote it. Watch for the failure modes on the next non-opencode
+  session: an agent that edits without claiming, an agent that never releases, or an agent that cannot tell
+  which tool it is (the protocol tells it to write its own name — if an agent can't identify itself it
+  should write `unknown-agent` and ask the user rather than guessing).
 - **Antiviral quarantine of the backup** — contained via `backup-project.ps1` (verify + repair), not
   prevented. If the e2e harness is ever edited again, expect the file to be eaten from each backup and
   re-check a fresh backup with the script rather than trusting the robocopy exit code.
@@ -156,6 +230,17 @@ Two new standing rules were added to `AGENTS.md` this session:
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
 - `PROFILE_SYNC_SPEC.md` is **parked** by user decision (documentation-only for now). Do not implement unasked.
+- `MOVE_COPY_SOUND_SPEC.md` — **8 decisions cemented 2026-10-04**: copy **shares** the audio file reference;
+  entry is a third per-card button in edit mode; move is silent with no confirm; append at end of target;
+  the §7 hazard gets a refcount guard as its **own follow-up commit** (spec §10 step 5); partial writes rely on
+  the existing save-error banner (not atomic — see spec §5.4); picker rows have **two** buttons, no mode state;
+  copies auto-suffix `Name (copy)`. **Not implemented — no source or e2e file was touched.**
+  ⚠️ Noted in the spec and **not yet guarded in code**: because a copy shares the source's `storedName`,
+  deleting the *container* holding the original (App.jsx:2194 / 2628 / 2744 / 2763) deletes the shared audio
+  and **silently breaks the copy**. The refcount guard is deferred, not done — keep this line until it lands.
+- The **spec has two self-corrections already applied** that a future session must not "re-fix": the write-order
+  guarantee is best-effort (effect order, not setter order, decides what hits disk — see the gotchas above), and
+  the container-shape list is five, not four.
 - Android phase (`-Phase android`) not run recently; needs the emulator plus a Rust Android build, and its
   repo seeding path is the unreliable `Page.reload` one above.
 - Not yet done: release APK (needs a signing keystore), wake lock, fullscreen guard, iOS (needs macOS).

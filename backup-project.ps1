@@ -7,7 +7,7 @@
 # 2026-09-30 eating git objects, and again 2026-10-04 eating the backup copy.
 # Trigger is the `Remove-Item -Recurse` on line 92 of that script, but only in
 # combination with the rest of the file (verified by controlled test - see
-# opencode-summary.md). The repo copy is safe because the user excluded
+# PROJECT_STATE.md). The repo copy is safe because the user excluded
 # c:\users\emire\projects\ttrpg-soundboard\e2e\ from scanning; the OneDrive
 # backup folder is NOT excluded, so the copy gets eaten there.
 #

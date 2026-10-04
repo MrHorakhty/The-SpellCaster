@@ -1,10 +1,10 @@
 ﻿# Session History (archive)
 
-> Append-only archive of past opencode sessions for **The SpellCaster** (`ttrpg-soundboard`).
-> Written 2026-10-04 when `opencode-summary.md` was split: that file now holds only the
+> Append-only archive of past AI-agent sessions for **The SpellCaster** (`ttrpg-soundboard`).
+> Written 2026-10-04 when the project-state file was split: that file now holds only the
 > **current** state (read it first); this file holds the dated detail of how we got there.
 > Read this ONLY when you need the reasoning behind a past decision — it is not a task list,
-> and most of it is superseded. Current state, debts and gotchas live in `../opencode-summary.md`.
+> and most of it is superseded. Current state, debts and gotchas live in `../PROJECT_STATE.md`.
 
 ---
 
@@ -925,3 +925,143 @@ Docs-only, no code touched:
 - **`README.md`**: `e2e-snapshot.mjs` description corrected (it is used by **both** runners now, not just Android); the Testing note about localStorage now says "desktop and Android runners"; documented `-Phase web|win|android` and `-Suite full|mobile|run|features`; added a warning that `e2e/e2e-all.ps1` must never be recreated because Bitdefender permanently blocks that filename at the filesystem level (with the reason and the replacements).
 - **This file**: marked the two previously-listed "known non-blockers" as fixed (they were fixed earlier the same day â€” the stale list risked a future session re-attempting them), recorded the `8ef2c6f` commit/push, and recorded that `ICON_FEATURE_SPEC.md` is deleted-not-parked.
 - âš ï¸ Gotcha re-hit: several historical backup paths in this file render as `Masa?st?` because they were captured from console output with a non-UTF-8 codepage. The **real** folder is `Masa` + `[char]0x00FC` + `st` + `[char]0x00FC` (see AGENTS.md). Do not "fix" those strings by hand-copying them.
+
+---
+
+## SESSION 2026-10-04 - MOVE / COPY SOUND: SPEC WRITTEN AND DESIGN CEMETED (docs only, zero app-code changes)
+
+**Nothing was implemented.** `src/App.jsx` and every file under `e2e/` are byte-identical to `c83a72c`. The
+whole session produced `MOVE_COPY_SOUND_SPEC.md` (498 lines) plus doc corrections. Do not expect a feature.
+
+**Why the session existed:** the user asked for a *plan* for letting sounds be moved/copied between characters,
+categories and groups in edit mode, and explicitly said not to implement until the design was cemented.
+
+### Outcome: 8 decisions, all answered by the user
+1. **Copy shares the audio file reference** (not a byte copy) - free and instant, but see the hazard below.
+2. Entry point = a **third per-card button** in edit mode, not a context menu (no menu primitive exists here).
+3. **Move is silent, no confirm.** Copy is non-destructive anyway. Deleting a sound, by contrast, must confirm
+   100% of the time - already true today, now written into the spec as an invariant so it can't regress.
+4. **Append at the end** of the destination; the user can drag to reorder afterwards.
+5. The shared-file hazard gets a **reference-count guard as its own follow-up commit**, not folded into the
+   feature - it touches 6 destructive call sites and should not be able to block or destabilise the feature.
+6. Cross-slice partial writes: **rely on the existing `saveError` banner**, do not build a two-phase move.
+7. Picker rows have **two buttons** (Move / Copy), no mode state - so the destructive action can never be
+   picked by accident. The `IconPicker`-style segmented control was rejected on exactly that ground.
+8. Copies auto-suffix **`Name (copy)`**, uniqueness scoped to the *destination container*.
+
+### The accepted hazard (spec section 7)
+Because a copy shares the source's `storedName`, deleting the **container** that held the original deletes the
+shared audio and **silently breaks the copy** - the card still renders, it just makes no sound. `deleteSound`
+(App.jsx:1767) never deletes files, but container deletion does so unconditionally per referenced file
+(App.jsx:2194, 2628, 2744, 2763), as does removing a file inside the sound modal (App.jsx:2031, 2036). Today no
+two sounds can share a `storedName` at all - `toStoredFileName` (App.jsx:1843) mints a fresh name per upload -
+so this situation is *new*. The guard (`isFileReferencedElsewhere`) is specified but **not written**, and it
+must cover `sound.icon` as well as `files[]`, since a copied custom icon dies identically. It fails safe: it
+can only ever prevent a delete, so the worst outcome is an orphaned file rather than silent audio loss.
+
+### Two self-corrections made during the session - do not "re-fix" these
+- **Write order: the first draft of the spec was wrong.** It promised that appending to the destination before
+  removing from the source would make a cross-slice move safe. It would not. React flushes passive effects in
+  **hook declaration order**, so the three auto-save effects write `characters` (App.jsx:3164) then
+  `environmentSounds` (:3174) then `groups` (:3184) - meaning in every character<->group or
+  environment<->group operation **the removal persists first**, no matter how the setters were called. There is
+  no transaction and no single write choke point. The guarantee is now stated honestly as best-effort.
+- **There are FIVE container shapes, not four.** `addGroup` allocates a vestigial top-level `sounds: []` on
+  every group (App.jsx:2726) that nothing ever pushes into; only `deleteGroup`'s cleanup (App.jsx:2742) and the
+  delete-confirm name lookup (App.jsx:5441) read it. The first draft asserted the four-shape list was
+  "exhaustive" - it is not. Any walker that finds a sound or a file reference must visit all five.
+
+### Also corrected in `opencode-summary.md` (facts that contradicted the code/git)
+- `src/App.jsx` is **5751** lines, not ~4400.
+- HEAD is **`c83a72c` "More document changes"** and the tree was clean at session start - the previous
+  "uncommitted `backup-project.ps1` / `AGENTS.md` / `opencode-summary.md`" warning was stale; all three were
+  committed in `c83a72c`.
+- Data keys: the env key is **`ttrpg_environment` (singular)**, and there is **no `ttrpg_themes` key** at all.
+  `DATA_VERSION` is still `'3'` and must never be bumped - the mismatch path (App.jsx:313-319) renames the
+  user's keys to `*_old` and resets to defaults.
+- Added a **Data-model gotchas** block recording the five-shape trap, the `storedName`-not-id audio keying,
+  effect-order write precedence, name-keyed categories, and the delete-confirms-always invariant - all of
+  these generalise past this feature.
+
+### Repo state left behind
+Uncommitted (user has not asked for a commit): `?? MOVE_COPY_SOUND_SPEC.md`, `M opencode-summary.md`,
+`M docs/session-history.md`. Backups: only `ttrpg-soundboard-backup-20261004-165726` (39.1 MB, 203/203
+verified); the older `20261004-163113` had already been deleted as a test artifact, so nothing needed pruning.
+
+### NEXT
+- Implement `MOVE_COPY_SOUND_SPEC.md` sections 10 steps 1-4 (feature), **then** step 5 (the refcount guard),
+  back to back in one session - between them the section 7 data-loss path is live.
+- Debt 6, Debt 7, `Run App.bat`, `PROFILE_SYNC_SPEC.md` all unchanged this session.
+
+---
+
+## SESSION 2026-10-04 (later) - "OPENCODE ONLY" RULE REPLACED BY A CLAIM/RELEASE PROTOCOL; FILE RENAMED
+
+Docs-only. **No app code touched**: `src/App.jsx` and everything under `e2e/` are byte-identical to `c83a72c`.
+
+**Request:** the user removed the restriction that made `opencode-summary.md` opencode-exclusive, and asked for a
+**current-holder** system instead: whoever is working edits the top of the file to claim it, and removes the
+claim at the end of the session, so two agents do not rewrite the state file at once. The user prompted for a
+plan first; nothing was written until they said proceed.
+
+**Why the old rule was wrong** (this is the reason the change was worth making, so keep it): most sessions in
+this repo are *not* opencode. "Opencode owns it, everyone else is READ-ONLY" therefore locked out exactly the
+agents doing the work, and the file went stale - the previous session had to re-derive current state from
+`git log` and the archive. **No agent owns the file; whoever is working holds it.**
+
+### What changed
+1. **`opencode-summary.md` -> `PROJECT_STATE.md`** via `git mv` (history follows). The *filename* was itself
+   part of the problem: it said "opencode's file", which is what the old warning told every other agent to
+   assume. A neutral name is load-bearing for the new rule, not cosmetic.
+2. **Claim block at line 3** of `PROJECT_STATE.md` - the ⚠️ opencode-only warning is gone, replaced by one of:
+   - `🔒 CURRENT HOLDER: <agent> - claimed <YYYY-MM-DD HH:MM> - working on: <one line>`
+   - `🔓 UNCLAIMED - last holder: <agent> (<YYYY-MM-DD HH:MM>)`
+3. **`AGENTS.md` section rewritten** as *Claim (step 0, before the backup) / While holding / Release / Stale
+   claims / Non-holders / Honesty about the mechanism*. The scope note ("applies ONLY to opencode") and the
+   do-not-edit warning are **deleted**; the knowledge they carried is in this archive and in Project State's
+   Docs layout section, so nothing was lost by removing them.
+4. **Live references updated** to the new name: `AGENTS.md`, `.gitignore` (comment), `backup-project.ps1`
+   (comment), `docs/session-history.md` header, `MOVE_COPY_SOUND_SPEC.md` §9/§10, and the state file's own
+   self-references. Historical mentions elsewhere in this archive were **left alone on purpose** - they record
+   what was true at the time.
+
+### Decisions the user made (asked, then answered)
+- **Rename to `PROJECT_STATE.md`** rather than keep the old name - recommended, and it removes the built-in
+  excuse for treating the file as another tool's private property.
+- **No "pending updates" channel.** A non-holder that learns something worth recording reports it to the user
+  ("I need the claim to record X") instead of appending to a side section. The user chose the simpler option;
+  no section was added.
+- **Markdown claim only, no lock file.** A gitignored `.session-holder` marker (atomic `New-Item -ItemType
+  Directory` on NTFS) was offered for real mutual exclusion and declined - sufficient for the realistic
+  same-checkout case, and it costs an artifact to gitignore and clean up.
+
+### The three properties worth remembering
+- **Release means "done", not "stopping".** If a session is cut off (quota, context, interruption) the claim
+  must be **left in place** - an active claim is the signal that work here is mid-flight. This is the exact
+  failure that produced the "uncommitted `M src/App.jsx`" warnings that had to be re-read in every later session.
+- **A stale claim is never overwritten silently.** It usually means a previous session was cut off, which is
+  the information the next agent needs most. Report it to the user and ask.
+- **Cooperative, not enforced.** A markdown line is not a mutex. Two agents starting in the same second can
+  both see `UNCLAIMED` and both claim; the protocol narrows that window to seconds (re-read immediately before
+  each write) and does not close it. It works because every agent loads `AGENTS.md`.
+
+### Verification
+- Backup first per `AGENTS.md`: `ttrpg-soundboard-backup-20261004-180004`, **39.1 MB, 204/204 VERIFY OK**. It
+  holds the **pre-rename** `opencode-summary.md`, since the rename happened after it.
+- `git mv` succeeded, so the rename is staged; the content edits are unstaged on top of it. Nothing committed -
+  the user has not asked for a commit.
+- Lint gate **not** run and not needed: zero JS/PS touched. `backup-project.ps1` had only a comment edited.
+- Protocol dogfooded within this session: claimed at the top, edited in place, released at the end.
+
+### Repo state left behind
+Uncommitted: `R opencode-summary.md -> PROJECT_STATE.md` (staged) + content edits to it, `M AGENTS.md`,
+`M docs/session-history.md`, `M .gitignore`, `M backup-project.ps1`, `MOVE_COPY_SOUND_SPEC.md` (untracked new
+file from the previous session). Backups on disk: `20261004-180004` (newest), `20261004-174834`, `20261004-165726`
+- three is one over the "keep the newest one or two" guidance; **nothing was deleted**, the user's call.
+
+### NEXT
+- **Watch the claim protocol on the next non-opencode session** and record whether it held. Logged as an open
+  item in `PROJECT_STATE.md`; failure modes to look for are an agent editing without claiming, never releasing,
+  or not knowing its own tool name (it should write `unknown-agent` and ask, not guess `opencode`).
+- `MOVE_COPY_SOUND_SPEC.md` implementation is still parked behind a fresh request - unchanged by this session.
+- Consider pruning to two backups.
