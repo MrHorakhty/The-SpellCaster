@@ -184,7 +184,7 @@ The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk
 │   ├── e2e-mobile.mjs       # Android UI suite
 │   ├── e2e-full.ps1         # Windows/web runner
 │   ├── e2e-android.ps1      # Android runner
-│   ├── e2e-snapshot.mjs     # localStorage backup/restore used by the Android runner
+│   ├── e2e-snapshot.mjs     # Crash-safe localStorage backup/restore used by both runners
 │   └── kill-ports.bat       # Frees dev/E2E ports (repo root copy: ../kill-ports.bat)
 ├── vite.config.js           # Vite configuration
 ├── tailwind.config.js       # Tailwind CSS configuration
@@ -292,7 +292,11 @@ End-to-end suites drive the real app over the Chrome DevTools Protocol and are r
 - `e2e/e2e-android.ps1` - Android emulator/device phase
 - `kill-ports.bat` - Frees the ports and stray processes the suites use (run it first if a run fails to start)
 
-The Android runner snapshots `localStorage` before the suite and restores it afterwards, even if the app or the run crashes, so test data never overwrites your real characters and sounds.
+Both the desktop and Android runners snapshot `localStorage` before the suite and restore it afterwards, even if the app or the run crashes, so test data never overwrites your real characters and sounds.
+
+Run a single phase with `-Phase web`, `-Phase win` or `-Phase android` (default is `all`). Pass `-Suite full|mobile|run|features` to pick the suite the phase runs.
+
+> Do not create a file named `e2e/e2e-all.ps1`. It was the original combined runner and antivirus software on this machine permanently blocks that exact filename at the filesystem level. `e2e-full.ps1` (web + Windows, delegates Android) and `e2e-android.ps1` replaced it; `.gitignore` blocks the old name from coming back.
 
 ### Git Backup Scripts
 

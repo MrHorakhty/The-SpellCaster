@@ -307,3 +307,8 @@ e2e/_e2e_pixel.png
 e2e/e2e-all.ps1
 e2e/e2e-all.ps1.new
 e2e/_avtest*.txt
+
+# Both specs below shipped and were deleted at the user's request on 2026-10-04;
+# their designs are finalised in opencode-summary.md. Block them from coming back.
+RESTORE_DEFAULTS_SPEC.md
+ICON_FEATURE_SPEC.md

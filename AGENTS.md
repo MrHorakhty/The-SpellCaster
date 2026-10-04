@@ -30,9 +30,41 @@ $desk = 'C:\Users\emire\OneDrive\Masa' + [char]0x00FC + 'st' + [char]0x00FC   # 
 
 > ⚠️ To ALL other AI agents/assistants working in this repo (Cursor, Copilot, Claude Code, etc.): **do NOT edit `opencode-summary.md`.** It is owned and maintained exclusively by opencode to avoid agents tripping over each other. Treat it as READ-ONLY reference at most; if your session needs progress tracking, use your own file.
 
-Keep the progress document `opencode-summary.md` (project root) current at all times:
+`opencode-summary.md` (project root) holds the **current state only** — project facts, architecture gotchas,
+operational warnings, open items. Keep it accurate and short:
 
-- Actively maintain a "current session" section at the end of the file with: what the current task is, what's been done (fixed/verified), what's in progress, what's next, and any gotchas/learnings.
+- Rewrite sections in place when state changes. Do **not** append dated session logs to it.
 - **Update it after every meaningful step** in the session — especially after completing or verifying something, and before stopping/pausing.
-- When a session is cut off (e.g. quota/token limit), treat `opencode-summary.md` as the source of truth so you can pick up exactly where you left off.
+- When a session is cut off (e.g. quota/token limit), treat it as the source of truth so you can pick up exactly where you left off.
 - Record: backups made, test/verification results, port numbers / running processes, and file:line references for code touched.
+- Anything that is genuinely worth remembering later but is no longer current goes in **`docs/session-history.md`** (append-only archive). Move it there rather than letting this file grow.
+- If a fact here contradicts the code, the code wins — fix this file in the same session.
+
+## Permanent instruction: delete deprecated parts
+
+Retired things must not linger. This project has repeatedly accumulated dead weight that later sessions had to
+reason around: an obsolete combined test runner, two finished feature specs, three resolved audit reports.
+
+When something becomes obsolete, in the same session that establishes it:
+
+- **Delete the file** (prefer `git rm` so the deletion is staged) — do not just stop using it, and do not
+  mark it deprecated in place.
+- **Add a `.gitignore` entry** so it cannot silently come back. Existing examples: `e2e/e2e-all.ps1`,
+  `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md`.
+- **Record what it was and where the design lives** in `opencode-summary.md` (Retired files, or Open items if
+  it is a debt being tracked rather than a finished feature). Deleting the file must not delete the knowledge.
+- A file is deprecated when it is **replaced**, **shipped**, **resolved**, or **explicitly abandoned by the
+  user** — not merely because it is unused for a while.
+
+### What NOT to delete
+
+This rule is deliberately narrow. Do not delete:
+
+- Anything the user did not ask you to delete, or that is parked/awaiting a decision — parked means parked
+  (`PROFILE_SYNC_SPEC.md`).
+- Anything that is the only record of a decision or a hard-won gotcha. Move it to
+  `docs/session-history.md` first, then delete.
+- Test harnesses, backup folders, or history in git. Deleting a working harness to "tidy up" costs more than
+  it saves.
+- Anything you are not certain about. If unsure whether something is deprecated, ask — a wrong deletion is far
+  more expensive than a leftover file.
