@@ -3,7 +3,8 @@
 # and avoid AV heuristic triggers (process kill + debug port forwarding in one script).
 # Why new filename: Bitdefender quarantined and hard-blocks the old name `e2e-all.ps1`.
 # Requirements: Start-Process -PassThru capture, try/finally cleanup, output redirect,
-#               hard 15-min timeout, aggressive msedgewebview2 kill in finally.
+#               hard 15-min timeout, process kills scoped so unrelated WebView2 apps
+#               (WhatsApp / Google Drive / Windows Search) are never touched.
 #
 # E2E TEST POLICY: When asked to run E2E, only execute and report results.
 # Do NOT modify app code or harness code - wait for user instructions.
@@ -179,9 +180,12 @@ if ($Phase -in @('all', 'web')) {
         if ($edgeProc)    { Stop-ProcessTree $edgeProc }
         if ($previewProc) { Stop-ProcessTree $previewProc }
         Remove-Orphans
-        "`t[A-CLEANUP] killing ALL msedgewebview2 ..." | Add-Content $Script:TestLog
-        Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        # NO blanket msedgewebview2 kill here. Phase A only starts headless Edge
+        # (msedge.exe) and uses no WebView2, so there is nothing of ours to reap,
+        # and Get-Process -Name msedgewebview2 would also kill the user's unrelated
+        # WebView2 apps (WhatsApp, Google Drive, Windows Search). Our own WebView2
+        # instances are always started with --remote-debugging-port, which is what
+        # Remove-Orphans filters on above.
         Remove-AllEdgeProfiles
     }
 }
@@ -196,6 +200,7 @@ if ($Phase -in @('all', 'win')) {
 
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'
     $tauriProc = $null
+    $lsBackup = $null
 
     try {
         "`tLaunching tauri dev (WEBVIEW2 debug :9224) ..." | Add-Content $Script:TestLog
@@ -220,18 +225,58 @@ if ($Phase -in @('all', 'win')) {
         Start-Sleep -Seconds 2
         Assert-NotTimedOut
 
+        # Crash-safe data guard. This phase runs against the user's REAL desktop app
+        # data. The suite snapshots/restores localStorage itself, but only if it
+        # survives; a crashed or killed run would otherwise leave the E2E seed in the
+        # app. So the runner takes its own snapshot and restores it from the finally
+        # block below (mirrors e2e-android.ps1).
+        $lsBackup = Join-Path $tmp "ls-backup-$(Get-Date -f yyyyMMdd-HHmmss).json"
+        $env:CDP_PORT = '9224'
+        $env:LABEL    = 'SNAP'
+        "`t[SNAP] saving app storage -> $lsBackup" | Add-Content $Script:TestLog
+        & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save $lsBackup 2>&1 | Add-Content $Script:TestLog
+        if ($LASTEXITCODE -ne 0) {
+            "`t[SNAP] WARNING: could not snapshot app storage (exit $LASTEXITCODE) - the suite will run without a crash-safe restore." | Add-Content $Script:TestLog
+            Write-Host "WARNING: could not snapshot app storage - no crash-safe restore available." -ForegroundColor Yellow
+            $lsBackup = $null
+        } else {
+            Write-Host "App storage snapshotted -> $lsBackup"
+        }
+        Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+
         $code = Invoke-TestSuite -Label 'WIN' -Mjs $Script:MjsFile -Port '9224' -Expect '1' -SaveRestore '1'
         $results.Add("PHASE B (windows): exit=$code") | Out-Null
 
     } finally {
+        # Restore first, while the app is still alive and CDP is still up.
+        if ($lsBackup) {
+            "`t[B-CLEANUP] restoring app storage from $lsBackup ..." | Add-Content $Script:TestLog
+            $env:CDP_PORT = '9224'
+            $env:LABEL    = 'SNAP'
+            & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') restore $lsBackup 2>&1 | Add-Content $Script:TestLog
+            $restoreCode = $LASTEXITCODE
+            Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+            if ($restoreCode -eq 0) {
+                Write-Host "App storage restored." -ForegroundColor Green
+            } else {
+                "`t[B-CLEANUP] RESTORE FAILED (exit $restoreCode). The app may still hold E2E test data." | Add-Content $Script:TestLog
+                "`t[B-CLEANUP] Recover with: npm run tauri dev, then node e2e-snapshot.mjs restore $lsBackup" | Add-Content $Script:TestLog
+                Write-Host "WARNING: storage restore failed (exit $restoreCode)." -ForegroundColor Red
+                Write-Host "  The app may still contain E2E test data. Snapshot kept at: $lsBackup" -ForegroundColor Red
+                $results.Add("WARNING: app storage restore failed (exit $restoreCode) - snapshot at $lsBackup") | Out-Null
+            }
+        }
         "`t[B-CLEANUP] killing tauri tree PID $($tauriProc.Id) ..." | Add-Content $Script:TestLog
         if ($tauriProc) { Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null }
-        "`t[B-CLEANUP] killing remaining app.exe + SearchHost WebView2 trees ..." | Add-Content $Script:TestLog
+        "`t[B-CLEANUP] killing remaining app.exe + orphaned debug WebView2 trees ..." | Add-Content $Script:TestLog
         taskkill /F /IM app.exe /T 2>&1 | Out-Null
+        # Scope by --remote-debugging-port, NOT by --webview-exe-name=SearchHost.exe:
+        # that exe name is also used by the real Windows Search shell, so matching it
+        # killed unrelated system WebView2. Only processes we started carry our port.
         Get-CimInstance Win32_Process |
             Where-Object {
                 $_.Name -eq 'msedgewebview2.exe' -and
-                $_.CommandLine -like '*webview-exe-name=SearchHost.exe*'
+                $_.CommandLine -like '*remote-debugging-port=9224*'
             } |
             ForEach-Object { taskkill /F /PID $_.ProcessId /T 2>&1 | Out-Null }
         "`t[B-CLEANUP] killing remaining orphans ..." | Add-Content $Script:TestLog

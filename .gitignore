@@ -295,3 +295,15 @@ src-tauri/gen/android/.gradle/
 src-tauri/gen/android/build/
 src-tauri/gen/android/app/build/
 src-tauri/gen/android/app/.cxx/
+
+# ========== E2E harness artifacts ==========
+# Upload fixtures written next to the suites on every run (e2e-full.mjs /
+# e2e-features.mjs / e2e-mobile.mjs regenerate them at startup).
+e2e/_e2e_pixel.png
+
+# Do NOT recreate e2e/e2e-all.ps1 - Bitdefender permanently hard-blocks that exact
+# filename at the filesystem-filter level (survives delete + folder whitelist).
+# Use e2e/e2e-full.ps1 (web + win, delegates android) and e2e/e2e-android.ps1.
+e2e/e2e-all.ps1
+e2e/e2e-all.ps1.new
+e2e/_avtest*.txt

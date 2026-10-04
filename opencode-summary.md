@@ -892,4 +892,100 @@ Known non-blockers, deliberately left alone (all pre-existing, none requested):
 - Crash-safety for the Windows phase of `e2e-full.ps1` (only the Android runner snapshots localStorage); tracked junk files `e2e/_avtest2.txt`, `e2e/e2e-all.ps1.new`, `e2e/_e2e_pixel.png`; `e2e-all.ps1` must never be recreated (Bitdefender hard filename block).
 - `ICON_FEATURE_SPEC.md` stays parked until the user asks for it.
 - Harness scripts kept in `%TEMP%\opencode` (`restore-test.mjs`, `restore-rename.mjs`, `restore-corner.mjs`, `restore-run.ps1`, `restore-mobile.mjs`, `regress-run.ps1`) — useful for re-running, delete at will.
-- Repo `e2e-android.ps1` / `e2e-mobile.mjs` path remains known-unreliable on this AVD for *seeding* purposes; the cold-start harness above is the working mobile path (85/85 for that repo suite was reached earlier on 2026-09-27)..
+- Repo `e2e-android.ps1` / `e2e-mobile.mjs` path remains known-unreliable on this AVD for *seeding* purposes; the cold-start harness above is the working mobile path (85/85 for that repo suite was reached earlier on 2026-09-27).
+
+## SESSION 2026-10-04 — KNOWN DEBTS 1-4 FIXED + VERIFIED ✅ (test/tooling only, zero app-code changes)
+User: *"Let's focus on the known debts for now."* Then explicitly chose **1-4 (all the safe ones)**, decided **5: `Run App.bat` stays gitignored**, and said **7 (`e2e-all.ps1`) stays a debt as a reminder**. User had deleted all backups; a fresh one was agreed and taken.
+
+**Backup first (AGENTS.md): `C:\Users\emire\OneDrive\Masaüstü\ttrpg-soundboard-backup-20261004-145124`** (203 files; folder leaf char codes asserted `77,97,115,97,252,115,116,252` before copying).
+⚠️ Gotcha re-hit this session: the AGENTS.md assertion snippet compares the **full path**'s char codes, not the folder name's — `$desk` starts at `67,58,92...` (`C:\...`) so an equality check against `77,97,...` always aborts. Assert on `Split-Path -Leaf $desk` instead. That's what the code below does.
+
+### Debt 4 — `npm run lint` was FAILING (pre-existing `vite.config.js:5 no-undef process`) ✅
+- `eslint.config.js`: added a **scoped** config entry `files: ['vite.config.js','eslint.config.js']` with `globals: { process: 'readonly', console: 'readonly' }`. Scoped on purpose — adding `process` to the main `**/*.{js,jsx}` globals would silently let `process` slip into browser code in `src/App.jsx`.
+- Result: `npx eslint .` → **0 errors, 3 pre-existing warnings** (`convertFileSrc`, `_`, `ev`), exit 0. `npm run lint` is green for the first time.
+
+### Debt 1 — Phase A killed EVERY WebView2 process on the machine ✅
+- `e2e/e2e-full.ps1` Phase A `finally` ran `Get-Process -Name msedgewebview2 | Stop-Process -Force` — a blanket kill that also killed the user's **WhatsApp / Google Drive / Windows Search** WebView2, even though Phase A only starts headless Edge (`msedge.exe`) and uses no WebView2 at all. **Removed.** `Remove-Orphans` already reaps ours precisely (it filters `msedgewebview2.exe` + `remote-debugging-port=*`, which only our test processes carry). Replaced with a comment recording why there is deliberately no blanket kill.
+- **Found a second instance of the same bug class while in there:** Phase B's kill filtered on `--webview-exe-name=SearchHost.exe`, but the *real* Windows Search shell uses that exe name too — so it also killed unrelated system WebView2 (the older summary had recorded surviving "normal Windows system instances", i.e. the collateral was already visible). Retightened to `--remote-debugging-port=9224`, the actual discriminator.
+- Verified empirically: after both phases, **19 `msedgewebview2` processes survived** and the Phase A log shows only `Killed PID 2600/30288 (node.exe)` — our own processes.
+
+### Debt 2 — Windows phase had no crash-safe localStorage guard ✅
+- `e2e-android.ps1` has had one since 2026-09-27; Phase B (which runs against the user's **real** desktop app data) had none, so a crashed/killed suite left the E2E seed in the app. Ported the exact pattern into `e2e-full.ps1` Phase B: `$lsBackup = $null` before the `try`, `e2e-snapshot.mjs save` after CDP is ready and **before** the suite, and `restore` as the **first** step of the `finally` (needs a live app + CDP). A failed restore records `WARNING: ...` in `$results`, which trips the runner's existing `FAILED` regex so the run exits 1, and prints a recovery command.
+- Verified live: `[SNAP] saved 8 localStorage keys (1320 bytes)` … `[SNAP] restored 8 localStorage keys` … `[SNAP] page reloaded`. Logs `%TEMP%\opencode\e2e-run-20261004-{145430,145614}.log`, snapshots `ls-backup-20261004-*.json`.
+
+### Debt 3 — tracked junk files deleted ✅
+- `git rm e2e/_avtest2.txt e2e/e2e-all.ps1.new e2e/_e2e_pixel.png`. `_e2e_pixel.png` was a **generated artifact** — `e2e-full.mjs:18-22` rewrites it on every run — so it never needed tracking. Added a `.gitignore` section: `e2e/_e2e_pixel.png`, plus `e2e/e2e-all.ps1`, `e2e/e2e-all.ps1.new`, `e2e/_avtest*.txt` so **debt 7 is now enforced by gitignore** rather than only by prose (the Bitdefender filename block survives delete + folder whitelist, so the guard matters). Verified `git check-ignore -v` matches all four; the regenerated `_e2e_pixel.png` no longer shows in `git status`.
+- **Debt 5** (`Run App.bat`): user's call — stays gitignored at `.gitignore:285`. No change made. Note the consequence: the port-5173 + diagnostic-listener fix in that file lives only on this machine.
+
+### Debt 6 — native `onRenderProcessGone`: **CONFIRMED BLOCKED, do not retry blindly**
+Traced it properly instead of assuming:
+- The Android WebViewClient is wry's, not Tauri's: `wry-0.55.1/src/android/kotlin/RustWebViewClient.kt` (extends `WebViewClient`, instantiated in `wry/src/android/main_pipe.rs:271-283`). It overrides only `shouldInterceptRequest`, `shouldOverrideUrlLoading`, `onPageStarted/Finished`, `onReceivedError` — **no `onRenderProcessGone`**.
+- The generated copy `src-tauri/gen/android/app/src/main/java/com/mrhorakhty/thespellcaster/generated/RustWebViewClient.kt` carries `/* THIS FILE IS AUTO-GENERATED. DO NOT MODIFY!! */` and is **gitignored** (`gen/android/app/.gitignore:1` → `/src/main/**/generated`), so any hand edit is wiped by the next `tauri android dev`.
+- The wry template *does* have a `{{class-extension}}` placeholder for exactly this purpose, but neither `tauri-build-2.6.3` nor `tauri-runtime-wry-2.11.4` fills it (0 hits for `class_extension` in both crates) — so there is no supported hook today. A fix requires patching wry upstream or vendoring it.
+- Practical severity is low: the crash was triggered by our own harness calling CDP `DOM.setFileInputFiles`, which was **removed from the Android path on 2026-09-27** (in-page `DataTransfer` instead). Left as-is deliberately.
+
+### Verification (both changed phases actually executed)
+| Run | Result |
+|---|---|
+| `e2e-full.ps1 -Phase web` | `FULL E2E SUMMARY: PASS=99 FAIL=0 WARN=0 TOTAL=99`, exit 0 — cleanup killed only our 2 `node.exe`, no WebView2 collateral |
+| `e2e-full.ps1 -Phase win` | `PASS=99 FAIL=0 WARN=0 TOTAL=99`, exit 0 — snapshot/restore guard fired and reported success |
+| Gates | `npx eslint .` **0 errors** / 3 pre-existing warnings · `node --check` on all 3 `.mjs` OK · `Parser::ParseFile` PARSE-OK on `e2e-full.ps1` + `e2e-android.ps1` · UTF-8 BOM preserved (239,187,191) · runner still ASCII-only · `vite build` OK |
+| Cleanup | ports 5173/9224/9225/5233/9333/9334 all free; only the agent session's own `cmd.exe`/`powershell.exe` match the orphan filter (proves `Get-ProtectedPids` works); no `app.exe` |
+
+Launch gotcha: `Start-Process … -RedirectStandardOutput` **blocks the tool call past its 120 s timeout** even with `-PassThru`. Use a wrapper `.ps1` in `%TEMP%\opencode` that runs the phases and writes one log, launch that detached, then poll the log file. Never pipe a PS runner through `Select-Object` — it returns empty.
+
+### Repo state
+`git status`: `M .gitignore`, `M e2e/e2e-full.ps1`, `M eslint.config.js`, `D e2e/_avtest2.txt`, `D e2e/_e2e_pixel.png`, `D e2e/e2e-all.ps1.new`, `M opencode-summary.md`. HEAD `bde7483 "Added Restore Defaults function"` on `mobile-support`; **nothing committed** (user hasn't asked). `src/App.jsx` untouched this session.
+Temp helper added: `%TEMP%\opencode\verify-debts.ps1` (runs `-Phase web` then `-Phase win`, one combined log).
+
+### 🚨 INCIDENT — Bitdefender stripped git OBJECTS: HEAD's `e2e-full.ps1` blob was MISSING (found + repaired)
+`git diff HEAD` failed with `fatal: unable to read 29927337c98fae39da9ed8370e8d84a982a1a1f8`. `git fsck` showed:
+```
+missing blob 29927337c98fae39da9ed8370e8d84a982a1a1f8
+missing blob 3d1fcf151b7e70470a24f58c83cd6d6b42a64182
+broken link from tree 8505be04... to blob 3d1fcf15...
+```
+- **`29927337` is HEAD's committed `e2e/e2e-full.ps1`** — i.e. the tip of `mobile-support` was not checkout-able. `git status`/`log` still worked (stat-only), so this is easy to miss; anything reading file contents from HEAD (`git diff HEAD`, `git show`, `git checkout -- <file>`, a fresh clone) would fail.
+- **Both missing blobs are `e2e/e2e-full.ps1`, and no other file in the repo is affected** — including `e2e-android.ps1`, which also uses `Start-Process` + `adb forward`. So this is a **content-signature quarantine**, the same malware-like fingerprint that got `e2e-all.ps1` hard-blocked: hidden `Start-Process -WindowStyle Hidden` + `taskkill /F /T` + `Invoke-Expression` + `--remote-allow-origins=*`, all in one file. **Every stored version of that script has been stripped.**
+- **Repair (done):** the backup taken minutes earlier was byte-identical to the missing blob (`git hash-object` on `backup-20261004-145124\e2e\e2e-full.ps1` → `29927337...`, exact match), so `git hash-object -w` restored it. Verified afterwards: `git cat-file -s` → `12162`, `git diff HEAD` works, `git diff --numstat HEAD -- e2e/e2e-full.ps1` → `51  6`. It has not been re-quarantined since.
+- **Still outstanding:** `3d1fcf15` (an older `e2e-full.ps1`) cannot be recovered, but its parent tree `8505be04` is **unreachable** — no commit in any branch references it (checked every ref in `refs/heads` + `refs/remotes`), so nothing is lost from real history. Left in place; `git gc --prune` would clear it, but there is no benefit and it would also drop the many dangling commits.
+- **Integrity verified**: all **16** branch/remote refs (`mobile-support`, `master`, `release`, `split-view`, 4 `feature/*`, plus 8 `origin/*`) read cleanly with `git ls-tree -r`.
+- ⚠️ **This will recur on every commit that touches `e2e/e2e-full.ps1`** unless Bitdefender gets an exclusion for the repo's `.git` directory. **RESOLVED 2026-10-04 — see the verification section below: the user added the exclusions and it is confirmed working.**
+- 💡 **Technique worth remembering:** when a git blob goes missing, the `opencode-summary.md` backup folder is a recovery source — snapshot it BEFORE editing and `git hash-object` the backup file to see whether it matches the wanted SHA. That is how this was identified and repaired without a network fetch.
+
+### ✅ WHITELIST VERIFIED WORKING (user added exclusions 2026-10-04 ~12:00)
+**Proof it was Bitdefender all along** — the quarantine folder holds the smoking gun. Extracting printable strings from the two `.dat` records that mention this project gives the exact paths:
+```
+Quarantine\67ea0ef9-….dat -> \\?\C:\Users\emire\Projects\ttrpg-soundboard\.git\objects\3d\1fcf151b7e70470a24f58c83cd6d6b42a64182
+Quarantine\7145f79f-….dat -> \\?\C:\Users\emire\Projects\ttrpg-soundboard\.git\objects\29\927337c98fae39da9ed8370e8d84a982a1a1f8
+```
+Both are byte-for-byte the two SHAs `git fsck` reported missing, both quarantined at `2026-09-30 01:46:35`. Case closed on the root cause.
+
+**The exclusion is registered** in `C:\ProgramData\Bitdefender\Desktop\.settings\data\<guid>\.data`, readable as plain JSON:
+```
+"ExcludeMgr": {"Settings": [
+  {"flags": 39, "path": "c:\\users\\emire\\projects\\ttrpg-soundboard\\.git\\"},
+  {"flags": 39, "path": "c:\\users\\emire\\projects\\ttrpg-soundboard\\e2e\\"}]}
+```
+Both paths are covered — `.git\` (so objects stop being eaten) and `e2e\` (so the filename block on `e2e-all.ps1` is moot anyway).
+
+**Empirical test:** wrote the *modified* `e2e/e2e-full.ps1` as a loose object — `git hash-object -w`, i.e. the exact operation a commit performs — producing blob `dde8ac16461bacd76e8ca171975cfa29c094d803`. After **3 minutes** the object file is still on disk (5168 B) and `git cat-file -s` still reads it (15289). Bitdefender's `Quarantine\cache.db` is still stamped `2026-10-04 12:00:21 PM` — i.e. it has **not** been touched since before the test, and the newest quarantined item on the machine is still from `2026-09-30`. No new quarantine. The restored HEAD blob `29927337` is also still intact.
+
+**How to re-check this in future** (no guessing needed):
+```powershell
+git hash-object -w -- e2e\e2e-full.ps1                 # write the suspicious blob
+Start-Sleep 90
+Get-Item ".git\objects\<sha[0..1]>\<sha[2..39]>"      # still there?
+(Get-Item "$env:ProgramData\Bitdefender\Desktop\Quarantine\cache.db").LastWriteTime  # bumped?
+```
+- 💡 Gotcha: Bitdefender's exclusions live in that `.settings\data\<guid>\.data` **JSON**, *not* in the registry. Searching `HKLM\SOFTWARE\Bitdefender` for the project path returns nothing — don't conclude the exclusion is missing on that basis.
+- 💡 Gotcha: `git cat-file -s` printing `15289` (the **decompressed** size) is expected; the loose object file on disk is 5168 B (zlib). Use the on-disk size when checking the file exists.
+- Still unrecoverable: `3d1fcf15`, but only referenced by the unreachable tree `8505be04` — no real history lost.
+
+### NEXT / remaining debts
+- ~~Bitdefender exclusion~~ — **done and verified 2026-10-04** (`.git\` and `e2e\` both registered; see the verification section above).
+- **Debt 6** `onRenderProcessGone` — blocked on wry (see above); only viable via an upstream patch/vendor.
+- **Debt 7** `e2e-all.ps1` — now gitignore-enforced; kept on the books as a reminder per the user.
+- `Run App.bat` remains gitignored by the user's decision — its port-5173 fix is local-only.
+- `PROFILE_SYNC_SPEC.md` stays parked. `ICON_FEATURE_SPEC.md` was deleted by the user as obsolete.
+- Not run this session: Android phase (`-Phase android`). It needs the emulator + a Rust Android build, and its seeding path is the known-unreliable `Page.reload` one; the cold-start harness in `%TEMP%\opencode` is the working mobile path.

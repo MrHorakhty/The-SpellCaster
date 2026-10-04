@@ -8,6 +8,17 @@ export default [
     ]
   },
   {
+    // Node-side config files run outside the browser, so they get Node globals.
+    // vite.config.js reads TAURI_DEV_HOST off the environment (line 5).
+    files: ['vite.config.js', 'eslint.config.js'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly'
+      }
+    }
+  },
+  {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
