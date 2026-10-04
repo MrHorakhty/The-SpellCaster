@@ -1,8 +1,9 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 22:47). Session log: `docs/session-history.md`.
-(The 22:41 release was slightly early: a short closing pass — reverting the SAF spike and shutting the
-emulator down — ran 22:42-22:47 without re-claiming. Docs-only, no conflict possible.)
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 23:00). Session log: `docs/session-history.md`.
+(Session ran 21:44-23:00: retire `MOVE_COPY_SOUND_SPEC.md`, revise `PROFILE_SYNC_SPEC.md`, run and revert the
+Android SAF spike, fix `kill-ports.bat /emu`, commit + push. Everything finished and pushed; a shorter closing
+pass 22:42-22:47 ran without re-claiming, which was a small protocol slip — docs-only, no conflict possible.)
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -187,10 +188,10 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261004-224636` (39.2 MB, **203/203 verified**) — taken after the SAF spike was
-reverted, so it matches the current tree (docs-only changes). The pre-spike backup `20261004-215511` is the
-one that protected the Rust files before they were touched, and is the reason the revert was risk-free.
-(203 not 204 because `MOVE_COPY_SOUND_SPEC.md` was deleted earlier the same evening.)
+Latest: `ttrpg-soundboard-backup-20261004-230014` (39.2 MB, **203/203 verified**) — taken after `d698d06` /
+`30fa85b` were pushed, so it matches the tree at `origin/mobile-support`. This one is **optional insurance**:
+everything in it is committed and on GitHub, so unlike previous backups it protects nothing unique.
+(203 not 204 because `MOVE_COPY_SOUND_SPEC.md` was deleted on 2026-10-04.)
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
