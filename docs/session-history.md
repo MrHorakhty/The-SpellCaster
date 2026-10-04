@@ -1389,3 +1389,17 @@ files left in `/sdcard/Download`.** Claim released.
   `shutting down emulator-5554` and the device disappeared; run again immediately it printed
   `no running emulator found`; `/all` (ports, adb forwards, orphan tauri/cargo) still behaves.
 - Backup before the edit: `ttrpg-soundboard-backup-20261004-225340`, 203/203 verified.
+
+### Commit + push — both worked first time
+- `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" — 7 files, +600/-580, then
+  `git push origin mobile-support` → **`f7f316e..d698d06`**, no auth prompt, no proxy trouble. Local and origin
+  now 0/0. 💡 **The long-standing "agents can't push" problem did not reproduce** — if it ever comes back, look
+  for a stale credential prompt before blaming the remote.
+- ⚠️ **The `post-commit` hook is a lie.** `.git/hooks/post-commit.bat` prints
+  `=== TTRPG Soundboard Backup Log ===` / `Backup created: <date>` / `Backup location: %cd%` on every commit.
+  It is six `echo` lines and **creates nothing** — and `%cd%` is the project directory, so its "location" is
+  just wherever you already are. Nothing was left behind by it (no stray folders, working tree clean), but a
+  future session could read that output as "the commit was backed up". Recorded in `PROJECT_STATE.md`; the
+  real thing is `.\backup-project.ps1`.
+- Closing correction pass committed on top: repo state now says in-sync instead of "ahead 1", the recent-commit
+  list leads with `d698d06`, and the fake-hook warning is recorded.

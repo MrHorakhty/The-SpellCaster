@@ -35,18 +35,21 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**. ⚠️ **`f7f316e` (move/copy feature) is committed locally but NOT pushed** —
-  `origin/mobile-support` is still at `2d525ed`, so local is `ahead 1`. The user believed it was pushed.
+- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-04
+  23:00). The move/copy feature and the docs work are both on GitHub.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
-- The move/copy feature is **shipped and user-tested by hand** (2026-10-04), then committed as `f7f316e`.
-- Recent commits: `f7f316e` "Added ability to move or copy sounds between groups and characters etc." ·
+- The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
+- Recent commits: `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
+  `f7f316e` "Added ability to move or copy sounds between groups and characters etc." ·
   `2d525ed` "Changes to how agents work on the project" · `c83a72c` "More document changes" ·
   `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file (then `opencode-summary.md`) are committed in `c83a72c`.
-- ⚠️ **Uncommitted as of 2026-10-04 22:50: docs only.** `D MOVE_COPY_SOUND_SPEC.md` (staged), `M .gitignore`,
-  `M README.md`, `M PROFILE_SYNC_SPEC.md`, `M PROJECT_STATE.md`, `M docs/session-history.md`. **No code
-  changes** — the SAF spike's Rust/config edits were reverted at the user's request, `cargo check` clean,
-  `npx eslint .` 0 errors. The user has not asked for a commit.
+- ✅ **Working tree clean and in sync with origin** as of 2026-10-04 23:00 (after `d698d06`).
+- ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
+  echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
+  a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
+  else. Do not read that output as "the commit was backed up" — use `.\backup-project.ps1`, which really does
+  copy and verify.
 - `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
   (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
   ignore it. All 16 refs read cleanly.
@@ -241,6 +244,9 @@ Three properties worth remembering:
   session: an agent that edits without claiming, an agent that never releases, or an agent that cannot tell
   which tool it is (the protocol tells it to write its own name — if an agent can't identify itself it
   should write `unknown-agent` and ask the user rather than guessing).
+- ✅ **Push works from this session** (2026-10-04 23:00): `git push origin mobile-support` succeeded with no
+  auth prompt or proxy trouble — `f7f316e..d698d06`. Previous sessions' push trouble is not reproducing; if it
+  returns, check for a stale credential prompt rather than assuming the remote is at fault.
 - **Antiviral quarantine of the backup** — contained via `backup-project.ps1` (verify + repair), not
   prevented. If the e2e harness is ever edited again, expect the file to be eaten from each backup and
   re-check a fresh backup with the script rather than trusting the robocopy exit code.
