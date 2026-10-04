@@ -1,6 +1,6 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 18:24). Session log: `docs/session-history.md`.
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 19:57). Session log: `docs/session-history.md`.
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -21,12 +21,12 @@ apply themes and a box-size (zoom) slider. A **Tauri 2.x** shell around a **Reac
 SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
-- Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (5751 lines, one monolithic component).
+- Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (6240 lines, one monolithic component).
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage: Tauri → `BaseDirectory.AppData` via the fs plugin; web → `localStorage` `sound_file_*` data-URLs.
 - Data keys: `ttrpg_characters`, `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled
   harnesses before), `ttrpg_groups`, `ttrpg_data_version`, plus `backgroundSettings` and `boxSize`.
-  `DATA_VERSION = '3'` (App.jsx:257) — **never bump it**: the mismatch path (App.jsx:313-319) renames the
+  `DATA_VERSION = '3'` (App.jsx:263) — **never bump it**: the mismatch path (App.jsx:322) renames the
   user's keys to `*_old` and resets to defaults.
 - Package `com.mrhorakhty.thespellcaster.debug`; `tauri.conf.json` uses `devUrl: http://localhost:5173`.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
@@ -37,10 +37,11 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 - Recent commits: `c83a72c` "More document changes" · `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts" ·
   `bde7483` "Added Restore Defaults function" · `53ce2eb` "Added ability to add icons/emoji for groups".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file (then `opencode-summary.md`) are committed in `c83a72c`.
-- ⚠️ **Uncommitted as of 2026-10-04 (user has not asked for a commit):** `R opencode-summary.md -> PROJECT_STATE.md`
-  (rename staged) and `M` on it, `AGENTS.md`, `docs/session-history.md`, `.gitignore`, `backup-project.ps1`,
-  `MOVE_COPY_SOUND_SPEC.md`; plus `?? MOVE_COPY_SOUND_SPEC.md` (new, untracked). **No app code was
-  implemented** — `src/App.jsx` and all of `e2e/` are untouched; both 2026-10-04 sessions were docs-only.
+- ⚠️ **Uncommitted as of 2026-10-04 ~19:50 (user has not asked for a commit):** MOVE_COPY_SOUND_SPEC feature
+  implemented in `src/App.jsx` (`mintId`, `allSoundContainers`, `findSoundContainer`, `transferSound`,
+  `nextCopyName`, `openMoveCopyModal/transferSound`, picker modal UI), with `removeContainerFiles` /
+  `removeFileIfUnreferenced` / `isFileReferencedElsewhere` guarding all file cleanup; web E2E green.
+  `e2e/e2e-full.mjs` and `MOVE_COPY_SOUND_SPEC.md` touched. No Android/Windows phase run yet.
 - `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
   (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
   ignore it. All 16 refs read cleanly.
@@ -60,16 +61,18 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
 ### Data-model gotchas (found 2026-10-04 while planning move/copy)
 - **There are FIVE container shapes for sounds, not four.** `characters[].sounds`,
   `environmentSounds[].sounds`, `groups[].categories[].sounds`, `groups[].characters[].sounds` — **plus
-  `groups[].sounds`, a vestigial array that `addGroup` allocates on every group (App.jsx:2726) and nothing ever
-  pushes into.** Only `deleteGroup`'s cleanup (App.jsx:2742) and the delete-confirm name lookup
-  (App.jsx:5441) read it. **Any code that walks containers to find a sound or a file reference must walk all
+  `groups[].sounds`, a vestigial array that `addGroup` allocates on every group (App.jsx:3137) and nothing ever
+  pushes into.** Only `deleteGroup`'s cleanup (App.jsx:3155) and the delete-confirm name lookup
+  (App.jsx:5930) read it. **Any code that walks containers to find a sound or a file reference must walk all
   five** — the four-shape assumption looks correct and is not.
-- **Audio bytes are keyed by `storedName`, never by sound id.** `toStoredFileName` (App.jsx:1843) mints
+- **Audio bytes are keyed by `storedName`, never by sound id.** `toStoredFileName` (App.jsx:2255) mints
   `sound_<rand>_<safeName>`; the sound object holds only a *reference* in `files[].storedName`. Consequences:
-  two sounds can legitimately share one file; `deleteSound` (App.jsx:1767) never deletes files, but deleting a
-  **container** deletes every file it references *unconditionally* (App.jsx:2194, 2628, 2744, 2763), and so
-  does removing a file in the sound modal (App.jsx:2031, 2036). **Any feature that lets two sounds share a
-  file must add a reference-count guard first.**
+  `deleteSound` (App.jsx:2179) never deletes files, but deleting a
+  **container** deletes every file it references *unconditionally* via
+  `removeContainerFiles` (App.jsx:1984, call sites App.jsx:2615, 2630, 3041, 3155, 3173), and so
+  does removing a file in the sound modal via `removeFileIfUnreferenced` (App.jsx:1975, call sites
+  App.jsx:2454, 2459, 2468). **Any feature that lets two sounds share a
+  file must add the reference-count guard** — `isFileReferencedElsewhere` (App.jsx:1967) now provides it.
 - **Effect declaration order decides `localStorage` write order, not setter order.** The three auto-save
   effects are declared `characters` (App.jsx:3164) → `environmentSounds` (App.jsx:3174) → `groups`
   (App.jsx:3184). A mutation spanning two slices therefore persists **the `characters`/`groups` side first,
@@ -79,8 +82,8 @@ SPA, ported to Android. All mobile-specific changes are gated behind `isMobile` 
   "I called the append first, so it saves first".
 - **Categories have no id — identity is the display name.** `cat.category` is the key everywhere
   (App.jsx:1737, 2802-2814). Duplicate category names across groups therefore collide as map keys.
-- **Deleting a sound must always confirm, and today it does.** `handleDeleteSound` (App.jsx:1812) only opens
-  the dialog; `deleteSound` has exactly one call site, `confirmDelete` (App.jsx:1824). Keep it that way — a
+-   "Deletea sound must always confirm, and today it does." `handleDeleteSound` (App.jsx:2224) only opens
+  the dialog; `deleteSound` has exactly one call site, `confirmDelete` (App.jsx:2230). Keep it that way — a
   second unconfirmed sound-removal path is a regression.
 
 ## ⚠️ Operational warnings for agents
@@ -145,6 +148,12 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
+- Web E2E suite `e2e/e2e-full.mjs` → **126/126 PASS, 0 FAIL** as of 2026-10-04 19:44 (includes
+  M1-M22 move/copy suite and G1-G5 refcount-guard suite).
+- Windows phase → `e2e-full.ps1 -Phase win -Suite full`: **125 PASS / 0 FAIL / 1 WARN** (G5 refcount negative test
+  skips on Windows because Tauri uses physical uploads, not localStorage). Build green, move/copy suite green.
+- Android phase → `e2e-android.ps1 -Suite full`: **85 PASS / 0 FAIL / 0 WARN / exit 0**; mobile suite passes, but
+  `e2e-mobile.mjs` still has no move/copy UI tests ported.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
@@ -163,10 +172,10 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261004-180004` (39.1 MB, 204/204 verified) — taken before the
-`PROJECT_STATE.md` rename, so it holds the pre-rename `opencode-summary.md`. Also kept:
-`ttrpg-soundboard-backup-20261004-174834` (204/204). ⚠️ **Three backups now exist** (plus `165726`,
-203 files) — inside the "keep the newest one or two" rule only if you delete one; nothing was deleted.
+Latest: `ttrpg-soundboard-backup-20261004-181318` (39.1 MB, 204/204 verified) — taken before starting
+ MOVE_COPY_SOUND_SPEC implementation (2026-10-04 18:13).
+  
+  This file now records that the next code-touching session (this one) took one before touching code.
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
@@ -212,7 +221,7 @@ Three properties worth remembering:
 | Spec | Status |
 |---|---|
 | `PROFILE_SYNC_SPEC.md` | **Parked** by user decision — documentation only |
-| `MOVE_COPY_SOUND_SPEC.md` | **Planning** — written 2026-10-04, **8 design decisions cemented**, not implemented. Do not implement without a fresh request. §2 is the settled decision list; §7 is the one accepted hazard and §10 orders the fix. |
+| `MOVE_COPY_SOUND_SPEC.md` | **Implemented 2026-10-04** — move/copy + refcount guard landed; web E2E green. §2 is the settled decision list; §7 guard now covers eight sites. |
 
 ## Open items
 - **The claim/release protocol is unproven with a second agent.** Installed 2026-10-04; only opencode has
@@ -230,19 +239,20 @@ Three properties worth remembering:
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
 - `PROFILE_SYNC_SPEC.md` is **parked** by user decision (documentation-only for now). Do not implement unasked.
-- `MOVE_COPY_SOUND_SPEC.md` — **8 decisions cemented 2026-10-04**: copy **shares** the audio file reference;
+- `MOVE_COPY_SOUND_SPEC.md` — **Implemented 2026-10-04** per §10: copy **shares** the audio file reference;
   entry is a third per-card button in edit mode; move is silent with no confirm; append at end of target;
-  the §7 hazard gets a refcount guard as its **own follow-up commit** (spec §10 step 5); partial writes rely on
-  the existing save-error banner (not atomic — see spec §5.4); picker rows have **two** buttons, no mode state;
-  copies auto-suffix `Name (copy)`. **Not implemented — no source or e2e file was touched.**
-  ⚠️ Noted in the spec and **not yet guarded in code**: because a copy shares the source's `storedName`,
-  deleting the *container* holding the original (App.jsx:2194 / 2628 / 2744 / 2763) deletes the shared audio
-  and **silently breaks the copy**. The refcount guard is deferred, not done — keep this line until it lands.
+  the §7 hazard got a refcount guard (`isFileReferencedElsewhere`, App.jsx:1967) as
+  a **separate follow-up** in this same session. Partial writes still rely on the
+  existing save-error banner (not atomic — see spec §5.4); picker rows have **two** buttons, no mode state;
+  copies auto-suffix `Name (copy)`.
+  ✅ Because a copy shares the source's `storedName`, deleting the *container* holding the original was guarded at
+  App.jsx:2615/2630/3041/3155/3173 and sound-modal paths at App.jsx:2454/2459/2468. The guard is landed and tested.
 - The **spec has two self-corrections already applied** that a future session must not "re-fix": the write-order
   guarantee is best-effort (effect order, not setter order, decides what hits disk — see the gotchas above), and
   the container-shape list is five, not four.
-- Android phase (`-Phase android`) not run recently; needs the emulator plus a Rust Android build, and its
-  repo seeding path is the unreliable `Page.reload` one above.
+- Android mobile phase run 2026-10-04 20:21 (`e2e-android.ps1 -Suite full`,
+  **85 PASS / 0 FAIL / 0 WARN**, exit 0): the *mobile* suite passed, but it
+  still does not contain the move/copy UI yet.
 - Not yet done: release APK (needs a signing keystore), wake lock, fullscreen guard, iOS (needs macOS).
 
 ## Retired files

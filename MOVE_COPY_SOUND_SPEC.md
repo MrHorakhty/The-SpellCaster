@@ -1,7 +1,7 @@
 # Move / Copy Sound — Planning Spec
 
-> **Status**: Planning — **design cemented 2026-10-04**, not yet implemented. Do not implement without a fresh
-> request, and read §2 (the eight cemented decisions) before touching anything.
+> **Status**: **Implemented 2026-10-04** (App.jsx: `transferSound`, `findSoundContainer`, `mintId`, per-card
+> "Move or Copy Sound" button with picker modal). Do not change behaviour unless the user asks.
 > **Created**: 2026-10-04
 > **Related**: `src/App.jsx`, `moveSound()` (App.jsx:1707-1765), the drag-reorder path in `renderSoundCard`
 > (App.jsx:3235-3268), `e2e/e2e-full.mjs`
@@ -316,8 +316,11 @@ when a whole container is deleted:
 | Deleting | Cleanup call sites |
 |---|---|
 | a character | App.jsx:2194-2195 |
+| a group character | App.jsx:2216-2217 |
 | an environment category | App.jsx:2628-2629 |
 | a group / group category / group character | App.jsx:2744-2745, 2763-2764 |
+| sound-modal audio removal | App.jsx:2031, 2036 |
+| sound-modal icon removal | App.jsx:2045 |
 
 So **deleting the container that holds the original will silently break the copy's audio** — the card stays,
 the play button stops producing sound, and nothing warns the user. Deleting the *sound* is safe
@@ -334,13 +337,14 @@ feature.** It is step 5 of §10, not an optional extra:
   including the vestigial `groups[].sounds`, which `deleteGroup` already walks at App.jsx:2742), returning
   whether any sound **other than** `excludeRef` still names that file. It must cover `sound.icon` as well as
   `files[]` — a copied custom icon dies by the identical mechanism.
-- Guard every destructive cleanup site: character App.jsx:2194-2195, category App.jsx:2628-2629, group
-  App.jsx:2744-2745 and 2763-2764, plus the sound-modal file removals App.jsx:2031 and 2036.
+- Guard every destructive cleanup site: character App.jsx:2194-2195, group character App.jsx:2216-2217,
+  category App.jsx:2628-2629, group App.jsx:2744-2745 and 2763-2764, plus the sound-modal file removals
+  App.jsx:2031, 2036 and icon removal App.jsx:2045.
   `excludeRef` is the container being deleted, so a file used only by that container is still removed.
 - **It fails safe, which is the whole argument for doing it.** The guard can only ever *prevent* a delete, so
   the worst outcome is an orphaned file on disk — wasted bytes, recoverable — rather than silent audio loss.
 - It is independently valuable: it also fixes the sound-modal removal path and any future file sharing.
-- It gets its own commit and its own E2E case precisely *because* it touches six destructive call sites and
+- It gets its own commit and its own E2E case precisely *because* it touches eight destructive call sites and
   should not be able to block or destabilise the feature.
 
 ---

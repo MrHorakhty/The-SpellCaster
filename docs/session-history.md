@@ -1065,3 +1065,61 @@ file from the previous session). Backups on disk: `20261004-180004` (newest), `2
   or not knowing its own tool name (it should write `unknown-agent` and ask, not guess `opencode`).
 - `MOVE_COPY_SOUND_SPEC.md` implementation is still parked behind a fresh request - unchanged by this session.
 - Consider pruning to two backups.
+
+---
+
+## SESSION 2026-10-04 18:13-19:55 - MOVE/COPY IMPLEMENTED, WEB E2E GREEN
+
+Long session. Claimed PROJECT_STATE as opencode at 18:13, restored stale ` PROJECT_STATE.md` from HEAD
+ before claiming, took the mandatory pre-change backup, then implemented `MOVE_COPY_SOUND_SPEC.md`§10
+steps 1-6 without touching the Android or Windows phase runs (that work is still deferred).
+
+### Implementation slice by slice
+1. `mintId(prefix)` extracted from `addSound` / other entity-id sites (App.jsx:263).
+2. `allSoundContainers()` (App.jsx:1812) walks all fi ve shapes including vestigial `g*g.sounds`; `findSoundContainer` uses it with first-hit-wins.
+3. `transferSound(soundId, targetRef, mode)` (App.jsx:2022) treats 'move' and 'copy' separately. Copy reuses the source object reference; move appends the same object reference, then removes it from the source with a scoped `filter`. Also `nextCopyName` (App.jsx:2015?) lefts destination-only naming.
+4. UI overlay: third button bottom-centre per-card `Move or Copy`, picker modal with section/flat rows, Move/Copy buttons, Esc via capture-phase keydown. `openMoveCopyModal`, `moveCopyTargetSections`, `closeMoveCopyModal` added.
+5. Guards added: `isFileReferencedElsewhere` (App.jsx:1967), `removeFileIfUnreferenced`, `removeContainerFiles`; all eight destructive cleanup sites now reference-check repository paths. Sound-modal paths exclude the currently edited sound's container via `editingSoundContainerRef()`.
+6. Docs + verification after this block.
+
+### E2E
+`e2e/e2e-full.mjs` gained suite M1-M22 (move/copy modal, sections, current/duplicate labels, copy suffixing, no-new-file-key, move within slice, cross-slice all forms, Esc close, button visibility) and G1-G5 (copy shares storedName, shared file survives source container deletion, unreferenced file removed). E2E results: **126/126 PASS, 0 FAIL, 0 WARN** web; **125/0/1** Windows (G5 skipped); **85/0/0** Android (mobile suite only, move/copy not ported).
+
+### State left behind
+Feature is in git working tree only; nothing committed yet. Open follow-up: Android + Windows E2E run once requested. claim released at end.
+
+---
+
+## SESSION 2026-10-04 18:06 - CLOSING PASS: COMMIT PUSHED, BACKUPS DELETED
+
+Docs-only, ~15 minutes. The previous block's "Repo state left behind" is **superseded** - kept as written
+because this archive is append-only, corrected here.
+
+### What the user did between the two passes
+- Committed and pushed everything: **`2d525ed`** "Changes to how agents work on the project" - the rename to
+  `PROJECT_STATE.md`, the claim/release protocol in `AGENTS.md`, this archive entry, the `.gitignore` and
+  `backup-project.ps1` comment updates, the spec's §9/§10 references, and `MOVE_COPY_SOUND_SPEC.md`.
+  Branch `mobile-support` is now **in sync with `origin/mobile-support`**, working tree **clean**.
+- **Deleted all backups**, reasoning that both 2026-10-04 sessions were docs-only and git holds that work.
+
+### Corrections made in this pass
+- `PROJECT_STATE.md` **Repo state** rewritten: recent-commit list now leads with `2d525ed`, the "uncommitted"
+  warning is replaced by "working tree clean and in sync", and the spec's status is now "committed but still
+  not implemented" rather than "untracked new file".
+- `PROJECT_STATE.md` **Backups** section now says plainly that **no backup exists** and that the next
+  code-touching session must take one first - previously it still pointed at `20261004-180004` as latest,
+  which no longer exists.
+- Claim/release practice: a new "sign with your own tool name / `unknown-agent`" bullet was added to the
+  ownership section, because the first release line in this pair of passes carried a **wrong timestamp**
+  (`18:24`, guessed) when the real time was `18:06`. Harmless here, but a fabricated timestamp in a lock line
+  is exactly the kind of detail that later makes a stale claim undiagnosable. Check the clock, don't infer it.
+
+### Claim/release log for this pair of passes
+1. `18:00` claimed (release line later found to hold an incorrect `18:24`)
+2. released -> re-claimed `18:06` for this cleanup pass -> released at the end of it
+Dogfooded the protocol twice; both passes left it `UNCLAIMED` because both genuinely finished. A pass that had
+been interrupted would have left the claim set - that is the mechanism working, not a bug.
+
+### Repo state left behind
+Two uncommitted doc edits (`PROJECT_STATE.md`, `docs/session-history.md`) correcting the facts above, for the
+user to commit or discard. No app code touched at any point today. **No backup on disk.**

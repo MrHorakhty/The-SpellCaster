@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const DEBUG_PORT = process.env.CDP_PORT || 9333;
 const LABEL = process.env.LABEL || 'FULL';
 const SAVE_RESTORE = process.env.SAVE_RESTORE === '1';
+const EXPECT_TAURI = process.env.EXPECT_TAURI === '1';
 const WAV = join(dirname(fileURLToPath(import.meta.url)), 'e2e_silence.wav');
 
 // Tiny 1x1 red PNG for background-image upload test
@@ -851,6 +852,282 @@ async function main() {
   await toggleEditMode(false);
 
   // ================================================================
+  //  M: MOVE / COPY SOUND
+  // ================================================================
+  // Fixture at this point (after suite D):
+  //   Human Paladin: Smite, Shield Bash      Elf Sorcerer: (empty)
+  //   Dungeon: Dripping                      Forest: (empty)
+  //   Tavern Pack / Ambience: Tavern Song    Hero Pack / Fighter: (empty)
+  console.log(`\n[${LABEL}] === SUITE M: MOVE / COPY SOUND ===`);
+  await toggleEditMode(true);
+
+  // In-page helpers for the picker: sections are keyed by their header, and row
+  // labels must be matched on the first text node so the "(duplicate here)"
+  // suffix does not defeat the comparison.
+  await evalJs(`(() => {
+    window.__mcOpen = (cardName) => {
+      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
+      if(!c) return 'NO_CARD';
+      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcSections = () => [...document.querySelectorAll('p')]
+      .filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'))
+      .map(p => p.textContent.trim());
+    window.__mcRow = (section, name) => {
+      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+      const sec=secs.find(p => p.textContent.trim()===section);
+      if(!sec) return null;
+      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+      return rows.find(r => {
+        const span=r.querySelector('span');
+        return span && span.firstChild && span.firstChild.textContent.trim()===name;
+      }) || null;
+    };
+    window.__mcTitles = (section, name) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return null;
+      return [...row.querySelectorAll('button')].map(b=>b.getAttribute('title'));
+    };
+    window.__mcClick = (section, name, verb) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return 'NO_ROW';
+      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcModalOpen = () => {
+      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
+      return !!m && !!m.closest('div[class*="fixed"]');
+    };
+    window.__confirmDialogOpen = () => !!document.querySelector('h2')?.textContent?.includes('Confirm Delete');
+    window.__soundsIn = (key, matchName) => {
+      const list=JSON.parse(localStorage.getItem(key)||'[]');
+      const out=[];
+      const walkChar=(c)=>out.push(...(c.sounds||[]).map(s=>({container:c.name||c.category, sound:s})));
+      const walkGroup=(g)=>{
+        (g.categories||[]).forEach(cat=>out.push(...(cat.sounds||[]).map(s=>({container:g.name+' / '+cat.category, sound:s}))));
+        (g.characters||[]).forEach(ch=>out.push(...(ch.sounds||[]).map(s=>({container:g.name+' / '+ch.name, sound:s}))));
+      };
+      if(key==='ttrpg_characters') list.forEach(walkChar);
+      else if(key==='ttrpg_environment') list.forEach(walkChar);
+      else list.forEach(walkGroup);
+      return out.filter(e => e.sound.name === matchName);
+    };
+    return 'ok';
+  })()`);
+
+  // --- M1: the button exists on every card, only in edit mode
+  const mBtn = await evalJs(`(() => {
+    const cards=[...document.querySelectorAll('[data-sound-card]')];
+    const withBtn=cards.filter(c=>!!c.parentElement?.querySelector('button[title="Move or Copy Sound"]'));
+    return {cards:cards.length, withBtn:withBtn.length};
+  })()`);
+  log('MOVE','M1: Move/Copy button on all cards in edit mode',mBtn?.cards>0&&mBtn?.withBtn===mBtn?.cards?'PASS':'FAIL',mBtn?.withBtn+'/'+mBtn?.cards);
+
+  // --- M2: picker opens from a card
+  const mOpen = await evalJs(`window.__mcOpen('Divine Smite')`);
+  await sleep(500);
+  const mPickerOpen = await evalJs(`window.__mcModalOpen()`);
+  log('MOVE','M2: card button opens picker',mOpen==='OK'&&mPickerOpen===true?'PASS':'FAIL','open='+mOpen+' modal='+mPickerOpen);
+
+  // --- M3: sections present, in sidebar order
+  const mSections = await evalJs(`window.__mcSections()`);
+  log('MOVE','M3: sections Characters/groups/Environments',Array.isArray(mSections)&&mSections[0]==='Characters'&&mSections.includes('Tavern Pack')&&mSections.includes('Hero Pack')&&mSections[mSections.length-1]==='Environments'?'PASS':'FAIL',JSON.stringify(mSections));
+
+  // --- M4: current container offers Copy but not Move
+  const mSelfTitles = await evalJs(`window.__mcTitles('Characters','Human Paladin')`);
+  log('MOVE','M4: current container has Copy, no Move',Array.isArray(mSelfTitles)&&!mSelfTitles.includes('Move to Human Paladin')&&mSelfTitles.includes('Copy to Human Paladin')?'PASS':'FAIL',JSON.stringify(mSelfTitles));
+
+  // --- M5: other container offers both, with distinct stable titles
+  const mOtherTitles = await evalJs(`window.__mcTitles('Characters','Elf Sorcerer')`);
+  log('MOVE','M5: target row has Move + Copy titles',Array.isArray(mOtherTitles)&&mOtherTitles.includes('Move to Elf Sorcerer')&&mOtherTitles.includes('Copy to Elf Sorcerer')?'PASS':'FAIL',JSON.stringify(mOtherTitles));
+
+  // --- M6: COPY character -> character
+  const beforeCopy = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    let sfk=0; for(let i=0;i<localStorage.length;i++){ if((localStorage.key(i)||'').startsWith('sound_file_')) sfk++; }
+    return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, soundFileKeys:sfk };
+  })()`);
+  const mCopy = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
+  await sleep(700);
+  const afterCopy = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const src=window.__soundsIn('ttrpg_characters','Divine Smite');
+    const paladin=l.find(c=>c.name==='Human Paladin');
+    const elf=l.find(c=>c.name==='Elf Sorcerer');
+    const copy=elf?.sounds?.find(s=>s.name==='Divine Smite (copy)');
+    return {
+      paladin:paladin?.sounds?.length, elf:elf?.sounds?.length,
+      srcStillThere:paladin?.sounds?.some(s=>s.name==='Divine Smite'),
+      copyFound:!!copy,
+      idsDiffer: !!copy && !!src[0] && src[0].sound.id !== copy.id,
+      sharedFile: !!copy && !!src[0] && JSON.stringify(copy.files)===JSON.stringify(src[0].sound.files),
+      legacyKept: copy ? ('file' in copy) : false,
+      fileKeys: (() => { let n=0; for(let i=0;i<localStorage.length;i++){ if((localStorage.key(i)||'').startsWith('sound_file_')) n++; } return n; })()
+    };
+  })()`);
+  log('MOVE','M6: copy adds to target, source untouched',mCopy==='OK'&&afterCopy?.paladin===beforeCopy?.paladin&&afterCopy?.elf===beforeCopy?.elf+1&&afterCopy?.srcStillThere===true?'PASS':'FAIL',JSON.stringify({before:beforeCopy,after:afterCopy}));
+  log('MOVE','M7: copy id differs from source',afterCopy?.copyFound&&afterCopy?.idsDiffer?'PASS':'FAIL','copyFound='+afterCopy?.copyFound);
+  log('MOVE','M8: copy shares files[] verbatim',afterCopy?.sharedFile?'PASS':'FAIL','');
+  log('MOVE','M9: copy keeps legacy file field',afterCopy?.legacyKept?'PASS':'FAIL','');
+
+  // --- M10: no second sound_file_* key was written (the file is genuinely shared)
+  // afterCopy.fileKeys directly checked against beforeCopy.soundFileKeys
+  log('MOVE','M10: copy wrote no new sound_file_* key',afterCopy?.fileKeys===beforeCopy?.soundFileKeys?'PASS':'FAIL','before='+beforeCopy?.soundFileKeys+' after='+afterCopy?.fileKeys);
+
+  // --- M11: second copy auto-suffixes (copy 2), scoped to the destination
+  await evalJs(`window.__mcOpen('Divine Smite')`);
+  await sleep(400);
+  const mCopy2 = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
+  await sleep(700);
+  const names2 = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return l.find(c=>c.name==='Elf Sorcerer')?.sounds?.map(s=>s.name);
+  })()`);
+  log('MOVE','M11: second copy is "Smite (copy 2)"',mCopy2==='OK'&&Array.isArray(names2)&&names2.includes('Divine Smite (copy 2)')?'PASS':'FAIL',JSON.stringify(names2));
+
+  // --- M12: same name in a DIFFERENT container is not suffixed globally
+  await evalJs(`window.__mcOpen('Divine Smite')`);
+  await sleep(400);
+  const mCopyDungeon = await evalJs(`window.__mcClick('Environments','Dungeon','Copy')`);
+  await sleep(700);
+  const dungeonNames = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]');
+    return l.find(c=>c.category==='Dungeon')?.sounds?.map(s=>s.name);
+  })()`);
+  log('MOVE','M12: copy elsewhere is "(copy)", not "(copy 3)"',mCopyDungeon==='OK'&&Array.isArray(dungeonNames)&&dungeonNames.includes('Divine Smite (copy)')?'PASS':'FAIL',JSON.stringify(dungeonNames));
+
+  // --- M13: MOVE within the same slice preserves everything and is silent
+  const beforeMove = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const s=l.find(c=>c.name==='Human Paladin')?.sounds?.find(x=>x.name==='Shield Bash');
+    window.__shieldId=s?.id; window.__shieldColor=s?.color; window.__shieldFiles=JSON.stringify(s?.files);
+    return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, sound:s };
+  })()`);
+  await evalJs(`window.__mcOpen('Shield Bash')`);
+  await sleep(400);
+  const mMove = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Move')`);
+  await sleep(800);
+  const afterMove = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const paladin=l.find(c=>c.name==='Human Paladin');
+    const elf=l.find(c=>c.name==='Elf Sorcerer');
+    const moved=elf?.sounds?.find(s=>s.name==='Shield Bash');
+    return {
+      paladin:paladin?.sounds?.length, elf:elf?.sounds?.length,
+      goneFromSource:!paladin?.sounds?.some(s=>s.name==='Shield Bash'),
+      sameId: !!moved && moved.id === window.__shieldId,
+      settingsKept: !!moved && moved.color===window.__shieldColor && moved.randomPlay===true && JSON.stringify(moved.files)===window.__shieldFiles,
+      anyDialog: !!document.querySelector('h2')?.textContent?.includes('Confirm Delete'),
+      pickerClosed: !window.__mcModalOpen()
+    };
+  })()`);
+  log('MOVE','M13: move relocates within slice',mMove==='OK'&&afterMove?.paladin===beforeMove?.paladin-1&&afterMove?.elf===beforeMove?.elf+1&&afterMove?.goneFromSource?'PASS':'FAIL',JSON.stringify({before:{p:beforeMove?.paladin,e:beforeMove?.elf},after:{p:afterMove?.paladin,e:afterMove?.elf}}));
+  log('MOVE','M14: move preserves id + settings + files',afterMove?.settingsKept?'PASS':'FAIL','');
+  log('MOVE','M15: move opens no dialog, picker closed',afterMove?.pickerClosed&&afterMove?.anyDialog===false?'PASS':'FAIL','pickerClosed='+afterMove?.pickerClosed);
+
+  // --- M16: cross-slice move from a character into a group category
+  await evalJs(`window.__mcOpen('Divine Smite')`);
+  await sleep(400);
+  const mMoveGroup = await evalJs(`window.__mcClick('Tavern Pack','Ambience','Move')`);
+  await sleep(800);
+  const groupMoved = await evalJs(`(() => {
+    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const still=c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Divine Smite');
+    const landed=g.find(x=>x.name==='Tavern Pack')?.categories?.find(cat=>cat.category==='Ambience')?.sounds?.some(s=>s.name==='Divine Smite');
+    return { stillInChar:!!still, landedInGroup:!!landed };
+  })()`);
+  log('MOVE','M16: move from character into group category',mMoveGroup==='OK'&&groupMoved?.stillInChar===false&&groupMoved?.landedInGroup===true?'PASS':'FAIL',JSON.stringify(groupMoved));
+
+  // --- M17: cross-slice move from character into environment category
+  // Ensure Elf Sorcerer is active so we can see Shield Bash
+  await evalJs(`(() => {
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Elf Sorcerer');
+    if(b) { b.click(); return 'OK'; }
+    return 'NO_BTN';
+  })()`);
+  await sleep(600);
+  const mOpenEnv = await evalJs(`window.__mcOpen('Shield Bash')`);
+  await sleep(400);
+  const mMoveEnv = await evalJs(`window.__mcClick('Environments','Dungeon','Move')`);
+  await sleep(800);
+  const envMoved = await evalJs(`(() => {
+    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
+    const e=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Shield Bash'),
+      landedInEnv:!!e.find(x=>x.category==='Dungeon')?.sounds?.some(s=>s.name==='Shield Bash')
+    };
+  })()`);
+  log('MOVE','M17: move from character into environment category',mMoveEnv==='OK'&&envMoved?.stillInChar===false&&envMoved?.landedInEnv===true?'PASS':'FAIL','open='+mOpenEnv+' click='+mMoveEnv+' env='+JSON.stringify(envMoved));
+
+  // --- M18: move into a group character (from character is cross-slice)
+  // Switch back to Human Paladin so Divine Light is visible
+  await evalJs(`(() => {
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Human Paladin');
+    if(b) { b.click(); return 'OK'; }
+    return 'NO_BTN';
+  })()`);
+  await sleep(600);
+  await evalJs(`window.__mcOpen('Divine Light')`);
+  await sleep(400);
+  const mMoveGroupChar = await evalJs(`window.__mcClick('Hero Pack','Fighter','Move')`);
+  await sleep(800);
+  const groupCharMoved = await evalJs(`(() => {
+    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Divine Light'),
+      landedInGroupChar:!!g.find(x=>x.name==='Hero Pack')?.characters?.find(ch=>ch.name==='Fighter')?.sounds?.some(s=>s.name==='Divine Light')
+    };
+  })()`);
+  log('MOVE','M18: move into a group character (cross-slice)',mMoveGroupChar==='OK'&&groupCharMoved?.stillInChar===false&&groupCharMoved?.landedInGroupChar===true?'PASS':'FAIL','click='+mMoveGroupChar+' '+JSON.stringify(groupCharMoved));
+
+  // --- M19: an empty destination is still offered and accepts a copy
+  await evalJs(`(() => {
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Elf Sorcerer');
+    if(b) { b.click(); return 'OK'; }
+    return 'NO_BTN';
+  })()`);
+  await sleep(600);
+  await evalJs(`window.__mcOpen('Divine Smite (copy)')`);
+  await sleep(400);
+  const forestRow = await evalJs(`window.__mcTitles('Environments','Forest')`);
+  const mCopyForest = await evalJs(`window.__mcClick('Environments','Forest','Copy')`);
+  await sleep(700);
+  const forestHas = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]');
+    return l.find(c=>c.category==='Forest')?.sounds?.map(s=>s.name);
+  })()`);
+  log('MOVE','M19: empty destination listed and accepts copy',Array.isArray(forestRow)&&forestRow.includes('Copy to Forest')&&Array.isArray(forestHas)&&forestHas.length===1?'PASS':'FAIL',JSON.stringify({row:forestRow,sounds:forestHas}));
+
+  // --- M20: Esc closes the picker
+  await evalJs(`window.__mcOpen('Divine Smite (copy)')`);
+  await sleep(400);
+  await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+  await sleep(400);
+  const escClosed = await evalJs(`!window.__mcModalOpen()`);
+  log('MOVE','M20: Esc closes picker',escClosed===true?'PASS':'FAIL','');
+
+  // --- M21: data version untouched, no *_old keys (no data reset)
+  const ver = await evalJs(`(() => {
+    let old=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; if(k.endsWith('_old')) old.push(k); }
+    return { v:localStorage.getItem('ttrpg_data_version'), old };
+  })()`);
+  log('MOVE','M21: DATA_VERSION still 3, no *_old keys',ver?.v==='3'&&ver?.old?.length===0?'PASS':'FAIL',JSON.stringify(ver));
+
+  // --- M22: button absent outside edit mode
+  await toggleEditMode(false);
+  await sleep(400);
+  const noEditBtns = await evalJs(`document.querySelectorAll('button[title="Move or Copy Sound"]').length`);
+  log('MOVE','M22: button hidden outside edit mode',noEditBtns===0?'PASS':'FAIL','count='+noEditBtns);
+  await toggleEditMode(true);
+
+  // ================================================================
   //  V: EMPTY STATES (seed empty characters + env, reload)
   // ================================================================
   console.log(`\n[${LABEL}] === SUITE V: EMPTY STATES ===`);
@@ -986,6 +1263,247 @@ async function main() {
   log('A11Y','Y1: card role=button',kb?.role==='button'?'PASS':'FAIL',JSON.stringify(kb));
   log('A11Y','Y2: card tabIndex=0',kb?.tabIdx==='0'?'PASS':'FAIL',kb?.tabIdx);
   log('A11Y','Y3: Enter keydown no crash',!kb?.err?'PASS':'FAIL',kb?.err);
+
+  // ================================================================
+  //  G: GUARD — shared file survives container deletion
+  // ================================================================
+  // This test is standalone: it re-seeds data with a known storedName, copies
+  // the sound, deletes the source container, and asserts the file key still
+  // exists. It runs last so its reload doesn't disturb other suites.
+  console.log(`\n[${LABEL}] === SUITE G: FILE REFCOUNT GUARD ===`);
+  await evalJs(`(() => {
+    // Seed: Human Paladin with one sound that has a known storedName
+    localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      id:'c1', name:'Human Paladin', sounds:[{
+        id:'guard_s1', name:'Guard Test', type:'Test', icon:'',
+        // Use a simple storedName we can track
+        files:[{name:'guard_test.mp3', displayName:'Guard Test.mp3', storedName:'guard_test.mp3'}],
+        color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false,
+        brightness:1, glowEnabled:false, glowProminence:0.5
+      }]
+    }]));
+    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
+    localStorage.setItem('ttrpg_data_version', '3');
+    // Create the actual file in localStorage so the app can play it
+    localStorage.setItem('sound_file_guard_test.mp3', 'data:text/plain;base64,Z3VhcmRfZGF0YQ==');
+    return 'seeded';
+  })()`);
+  await cdp('Page.reload', { ignoreCache: true });
+  await sleep(3000);
+
+  // Install the picker helpers again
+  await evalJs(`(() => {
+    window.__mcOpen = (cardName) => {
+      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
+      if(!c) return 'NO_CARD';
+      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcRow = (section, name) => {
+      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+      const sec=secs.find(p => p.textContent.trim()===section);
+      if(!sec) return null;
+      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+      return rows.find(r => {
+        const span=r.querySelector('span');
+        return span && span.firstChild && span.firstChild.textContent.trim()===name;
+      }) || null;
+    };
+    window.__mcClick = (section, name, verb) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return 'NO_ROW';
+      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcModalOpen = () => {
+      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
+      return !!m && !!m.closest('div[class*="fixed"]');
+    };
+    return 'ok';
+  })()`);
+
+  // Copy the sound to Elf Sorcerer (need to add Elf Sorcerer first)
+  await evalJs(`(() => {
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    c.push({id:'c2', name:'Elf Sorcerer', sounds:[]});
+    localStorage.setItem('ttrpg_characters', JSON.stringify(c));
+    return 'added';
+  })()`);
+  await cdp('Page.reload', { ignoreCache: true });
+  await sleep(3000);
+
+  // Re-define helpers after every reload (reloads wipe page globals)
+  await evalJs(`(() => {
+    window.__mcOpen = (cardName) => {
+      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
+      if(!c) return 'NO_CARD';
+      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcRow = (section, name) => {
+      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+      const sec=secs.find(p => p.textContent.trim()===section);
+      if(!sec) return null;
+      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+      return rows.find(r => {
+        const span=r.querySelector('span');
+        return span && span.firstChild && span.firstChild.textContent.trim()===name;
+      }) || null;
+    };
+    window.__mcClick = (section, name, verb) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return 'NO_ROW';
+      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcModalOpen = () => {
+      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
+      return !!m && !!m.closest('div[class*="fixed"]');
+    };
+    return 'ok';
+  })()`);
+  // Re-install picker helpers after reload wipes page globals
+  await evalJs(`(() => {
+    window.__mcOpen = (cardName) => {
+      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
+      if(!c) return 'NO_CARD';
+      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcRow = (section, name) => {
+      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+      const sec=secs.find(p => p.textContent.trim()===section);
+      if(!sec) return null;
+      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+      return rows.find(r => {
+        const span=r.querySelector('span');
+        return span && span.firstChild && span.firstChild.textContent.trim()===name;
+      }) || null;
+    };
+    window.__mcClick = (section, name, verb) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return 'NO_ROW';
+      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcModalOpen = () => {
+      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
+      return !!m && !!m.closest('div[class*="fixed"]');
+    };
+    return 'ok';
+  })()`);
+  await toggleEditMode(true);
+
+  // G1: Copy Guard Test -> Elf Sorcerer
+  const gOpen = await evalJs(`(() => {
+    const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes('Guard Test'));
+    if(!c) return 'NO_CARD';
+    const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+    if(!b) return 'NO_BTN';
+    b.click(); return 'OK';
+  })()`);
+  await sleep(400);
+  const gClick = await evalJs(`(() => {
+    const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+    const sec=secs.find(p => p.textContent.trim()==='Characters');
+ if(!sec) return 'NO_SEC';
+    const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+    const row=rows.find(r => { const span=r.querySelector('span'); return span && span.firstChild && span.firstChild.textContent.trim()==='Elf Sorcerer'; });
+    if(!row) return 'NO_ROW';
+    const b=row.querySelector('button[title="Copy to Elf Sorcerer"]');
+    if(!b) return 'NO_BTN';
+    b.click(); return 'OK';
+  })()`);
+  await sleep(700);
+
+  // G2: Verify copy exists and shares the storedName
+  const guardAfterCopy = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const copy=l.find(c=>c.name==='Elf Sorcerer')?.sounds?.find(s=>s.name==='Guard Test (copy)');
+    const orig=l.find(c=>c.name==='Human Paladin')?.sounds?.find(s=>s.name==='Guard Test');
+    return {
+      copyExists: !!copy,
+      sharedFile: !!copy && !!orig && copy.files?.[0]?.storedName === orig.files?.[0]?.storedName,
+      fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3')
+    };
+  })()`);
+  log('GUARD','G1: copy shares storedName',guardAfterCopy?.sharedFile?'PASS':'FAIL','open='+(gOpen?.__error || gOpen)+' click='+(gClick?.__error || gClick)+' '+JSON.stringify(guardAfterCopy));
+  log('GUARD','G2: file key exists after copy',guardAfterCopy?.fileKeyExists?'PASS':'FAIL','');
+
+  // G3: Delete Human Paladin (the container holding the original)
+  await evalJs(`(() => {
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Human Paladin');
+    if(b) { const container=b.closest('[class*="bg-dark-800"]'); if(container) { const del=container.querySelector('button[title*="Delete Character"], button[title*="Delete character"]'); if(del) del.click(); } }
+    return 'attempted';
+  })()`);
+  await sleep(500);
+  // Confirm the delete
+  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
+  await sleep(1000);
+
+  // G4: Assert the file key STILL EXISTS and the copy still plays
+  const guardAfterDelete = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const copy=l.find(c=>c.name==='Elf Sorcerer')?.sounds?.find(s=>s.name==='Guard Test (copy)');
+    return {
+      paladinGone: !l.find(c=>c.name==='Human Paladin'),
+      copyExists: !!copy,
+      fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3'),
+      copyFile: copy?.files?.[0]?.storedName
+    };
+  })()`);
+  log('GUARD','G3: source character deleted',guardAfterDelete?.paladinGone?'PASS':'FAIL','');
+  log('GUARD','G4: copy still has file key after container delete',guardAfterDelete?.fileKeyExists&&guardAfterDelete?.copyExists?'PASS':'FAIL',JSON.stringify(guardAfterDelete));
+
+  if (!EXPECT_TAURI) {
+    // G5: Negative test — a file referenced ONLY by the deleted container IS removed
+    await evalJs(`(() => {
+    localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      id:'c3', name:'Lone Character', sounds:[{
+        id:'neg_s1', name:'Orphan Test', type:'Test', icon:'',
+        files:[{name:'orphan_test.mp3', displayName:'Orphan Test.mp3', storedName:'orphan_test.mp3'}],
+        color:'#0000ff', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false,
+        brightness:1, glowEnabled:false, glowProminence:0.5
+      }]
+    }]));
+    localStorage.setItem('sound_file_orphan_test.mp3', 'data:text/plain;base64,b3JwaGFuX2RhdGE=');
+    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
+    localStorage.setItem('ttrpg_data_version', '3');
+    return 'seeded';
+  })()`);
+  await cdp('Page.reload', { ignoreCache: true });
+  await sleep(3000);
+
+  await toggleEditMode(true);
+
+  // Delete Lone Character
+  await evalJs(`(() => {
+    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Lone Character');
+    if(b) { const container=b.closest('[class*="bg-dark-800"]'); if(container) { const del=container.querySelector('button[title*="Delete Character"], button[title*="Delete character"]'); if(del) del.click(); } }
+    return 'attempted';
+  })()`);
+  await sleep(500);
+  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
+  await sleep(1000);
+
+  const guardNegative = await evalJs(`(() => {
+    return {
+      fileKeyExists: !!localStorage.getItem('sound_file_orphan_test.mp3'),
+      chars: JSON.parse(localStorage.getItem('ttrpg_characters')||'[]').length
+    };
+  })()`);
+  log('GUARD','G5: unreferenced file IS removed',guardNegative?.fileKeyExists===false&&guardNegative?.chars===0?'PASS':'FAIL',JSON.stringify(guardNegative));
+  } else {
+    log('GUARD','G5: skipped on Windows', 'WARN', 'Tauri uses physical uploads dir; localStorage seed not applicable');
+  }
 
   // ================================================================
   //  Summary + Restore

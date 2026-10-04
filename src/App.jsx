@@ -4,6 +4,7 @@ import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
     Axe, Target, Crosshair, Heart, HeartPulse, Cloud, CloudRain, CloudLightning, Droplets, X, Plus, Edit, Trash2,
     Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle, RotateCcw,
+    ArrowRightLeft,
     // Icon-picker catalogue (ICON_MAP). Every name here is verified to exist in
     // the installed lucide-react version - importing a missing name breaks the build.
     Crown, Skull, Ghost, Bot, Brain, Cat, Dog, Fish, Bird, Rabbit,
@@ -252,6 +253,11 @@ const describeSaveFailure = (scope, err) => {
     }
     return `${scope} could not be saved${name ? ` (${name})` : ''}.`
 }
+
+// Single place entity ids are minted. Sound, character, category and group ids all
+// come from here so the `${prefix}_${timestamp}_${rand}` shape stays consistent and
+// move/copy can mint a sound id without duplicating the format.
+const mintId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
 // Version for persisted app data. Bump to force a reset to the bundled defaults.
 const DATA_VERSION = '3'
@@ -989,15 +995,22 @@ function App() {
         icon: ''
     })
 
+    // Move / Copy sound states. moveCopySource is the container ref the card was
+    // rendered from - the card knows its own container, so only the destination
+    // needs resolving.
+    const [showMoveCopyModal, setShowMoveCopyModal] = useState(false)
+    const [moveCopySoundId, setMoveCopySoundId] = useState(null)
+    const [moveCopySource, setMoveCopySource] = useState(null)
+
     // When a split-view-targeted modal closes, drop the group-modal target so it
     // doesn't leak into subsequent single-tab operations.
     useEffect(() => {
         if (!groupModalTargetId && !splitSoundTarget) return
-        if (!showSoundModal && !showCharacterModal && !showCategoryModal) {
+        if (!showSoundModal && !showCharacterModal && !showCategoryModal && !showMoveCopyModal) {
             setGroupModalTargetId(null)
             setSplitSoundTarget(null)
         }
-    }, [groupModalTargetId, splitSoundTarget, showSoundModal, showCharacterModal, showCategoryModal])
+    }, [groupModalTargetId, splitSoundTarget, showSoundModal, showCharacterModal, showCategoryModal, showMoveCopyModal])
 
     // Group management states
     const [showGroupModal, setShowGroupModal] = useState(false)
@@ -1469,7 +1482,7 @@ function App() {
     }
 
     const addSound = (newSoundData) => {
-        const newId = `sound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const newId = mintId('sound')
         const normalizedFiles = normalizeStoredFileList(newSoundData.files || [])
 
         const newSound = {
@@ -1764,6 +1777,405 @@ function App() {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Container addressing (move / copy)
+    //
+    // A container is addressed by the same 4-tuple dragRef already carries:
+    //   { containerType, containerId, groupId }
+    //     character      -> containerId = character.id,     groupId = null
+    //     environment    -> containerId = category NAME,   groupId = null
+    //     group          -> containerId = category NAME,   groupId = owning group id
+    //     groupCharacter -> containerId = character.id,     groupId = owning group id
+    //     groupTop       -> containerId = group.id,         groupId = owning group id
+    //
+    // Categories have no id - identity is the display name - so containerId is a
+    // name for both category shapes. groupId is never defaulted from activeGroup,
+    // unlike moveSound: a cross-container operation cannot depend on which tab
+    // happens to be open.
+    //
+    // `groupTop` is the vestigial top-level `groups[].sounds` array that addGroup
+    // allocates and nothing populates. It is carried here so the walkers below are
+    // total: they cannot silently miss a shape the codebase itself creates. It is
+    // never offered as a picker target.
+    // -------------------------------------------------------------------------
+
+    const sameContainer = (a, b) =>
+        !!a && !!b &&
+        a.containerType === b.containerType &&
+        a.containerId === b.containerId &&
+        (a.groupId || null) === (b.groupId || null)
+
+    // Every container that can hold a sound, flattened. Walks all FIVE shapes:
+    // characters, environment categories, group categories, group characters and
+    // the vestigial groups[].sounds. Order is fixed and matches findSoundContainer,
+    // which relies on first-hit-wins being deterministic.
+    const allSoundContainers = () => {
+        const containers = []
+        characters.forEach(character => {
+            containers.push({
+                containerType: 'character',
+                containerId: character.id,
+                groupId: null,
+                label: character.name,
+                sounds: character.sounds || []
+            })
+        })
+        environmentSounds.forEach(category => {
+            containers.push({
+                containerType: 'environment',
+                containerId: category.category,
+                groupId: null,
+                label: category.category,
+                sounds: category.sounds || []
+            })
+        })
+        groups.forEach(group => {
+            ;(group.categories || []).forEach(cat => {
+                containers.push({
+                    containerType: 'group',
+                    containerId: cat.category,
+                    groupId: group.id,
+                    label: cat.category,
+                    sounds: cat.sounds || []
+                })
+            })
+            ;(group.characters || []).forEach(ch => {
+                containers.push({
+                    containerType: 'groupCharacter',
+                    containerId: ch.id,
+                    groupId: group.id,
+                    label: ch.name,
+                    sounds: ch.sounds || []
+                })
+            })
+            containers.push({
+                containerType: 'groupTop',
+                containerId: group.id,
+                groupId: group.id,
+                label: group.name,
+                sounds: group.sounds || []
+            })
+        })
+        return containers
+    }
+
+    const findContainerByRef = (ref) =>
+        allSoundContainers().find(container => sameContainer(container, ref)) || null
+
+    // Locates a sound by id. Sound ids are app-unique (mintId), so the first hit
+    // wins and no ambiguity handling is needed.
+    const findSoundContainer = (soundId) => {
+        for (const container of allSoundContainers()) {
+            const index = container.sounds.findIndex(sound => sound.id === soundId)
+            if (index !== -1) {
+                return {
+                    containerType: container.containerType,
+                    containerId: container.containerId,
+                    groupId: container.groupId,
+                    index,
+                    sound: container.sounds[index]
+                }
+            }
+        }
+        return null
+    }
+
+    // Applies `updater(sounds)` to exactly one container's sounds array, via the
+    // setter that owns it. Branch structure mirrors addSound's append path.
+    // Returns false for an unknown containerType so callers can reject.
+    const patchContainerSounds = (ref, updater) => {
+        if (ref.containerType === 'character') {
+            setCharacters(prev => prev.map(character =>
+                character.id === ref.containerId
+                    ? { ...character, sounds: updater(character.sounds || []) }
+                    : character
+            ))
+        } else if (ref.containerType === 'environment') {
+            setEnvironmentSounds(prev => prev.map(category =>
+                category.category === ref.containerId
+                    ? { ...category, sounds: updater(category.sounds || []) }
+                    : category
+            ))
+        } else if (ref.containerType === 'groupCharacter') {
+            setGroups(prev => prev.map(group =>
+                group.id === ref.groupId
+                    ? {
+                        ...group,
+                        characters: (group.characters || []).map(ch =>
+                            ch.id === ref.containerId
+                                ? { ...ch, sounds: updater(ch.sounds || []) }
+                                : ch
+                        )
+                    }
+                    : group
+            ))
+        } else if (ref.containerType === 'groupTop') {
+            setGroups(prev => prev.map(group =>
+                group.id === ref.groupId
+                    ? { ...group, sounds: updater(group.sounds || []) }
+                    : group
+            ))
+        } else if (ref.containerType === 'group') {
+            setGroups(prev => prev.map(group =>
+                group.id === ref.groupId
+                    ? {
+                        ...group,
+                        categories: (group.categories || []).map(cat =>
+                            cat.category === ref.containerId
+                                ? { ...cat, sounds: updater(cat.sounds || []) }
+                                : cat
+                        )
+                    }
+                    : group
+            ))
+        } else {
+            return false
+        }
+        return true
+    }
+
+    // -- File ownership ------------------------------------------------------
+    //
+    // Copy shares the source's audio reference, so two sounds can legitimately
+    // name the same storedName. Before that, every storedName had exactly one
+    // owner, which is why container deletion could remove files unconditionally.
+    //
+    // It can no longer. Deleting the container that holds the original would
+    // otherwise delete the bytes the copy is still pointing at: the card stays,
+    // the play button goes quiet, and nothing warns the user.
+    //
+    // This guard fails safe by construction - it can only ever PREVENT a delete,
+    // so the worst outcome is an orphaned file (wasted bytes, recoverable) rather
+    // than silent audio loss. That asymmetry is the whole argument for shipping it.
+
+    const soundReferencesFile = (sound, storedName) =>
+        (sound.files || []).some(file => (file.storedName || file.name || file.url) === storedName) ||
+        // A custom icon is a stored file too, and dies by the identical mechanism.
+        // Safe to compare against emoji/lucide names: they never equal a
+        // storedName, which always carries the `icon_<rand>_<name>` shape.
+        sound.icon === storedName
+
+    // `excludeRef` is the container whose claim on the file is ending, so its own
+    // sounds do not count as "somewhere else". A whole group is excluded with a
+    // 'groupTop' ref, which covers every category and character inside it.
+    const isExcludedContainer = (container, excludeRef) => {
+        if (!excludeRef) return false
+        if (sameContainer(container, excludeRef)) return true
+        return excludeRef.containerType === 'groupTop' && container.groupId === excludeRef.containerId
+    }
+
+    const isFileReferencedElsewhere = (storedName, excludeRef) => {
+        if (!storedName) return false
+        return allSoundContainers().some(container =>
+            !isExcludedContainer(container, excludeRef) &&
+            container.sounds.some(sound => soundReferencesFile(sound, storedName))
+        )
+    }
+
+    const removeFileIfUnreferenced = (storedName, excludeRef) => {
+        if (!storedName) return
+        if (isFileReferencedElsewhere(storedName, excludeRef)) return
+        return removeFileFromLocalStorage(storedName)
+    }
+
+    // Stop playback and release every file the given sounds reference, skipping
+    // anything another sound still points at. Names are de-duplicated because two
+    // sounds in one container can share a file (copy within a container).
+    const removeContainerFiles = (sounds, excludeRef) => {
+        const names = new Set()
+        ;(sounds || []).forEach(sound => {
+            stopSoundInstances(sound.id)
+            ;(sound.files || []).forEach(file => names.add(file.storedName || file.name || file.url))
+            if (sound.icon) names.add(sound.icon)
+        })
+        names.forEach(name => removeFileIfUnreferenced(name, excludeRef))
+    }
+
+    // Copy naming. `Fireball` -> `Fireball (copy)` -> `Fireball (copy 2)`, taking
+    // the first free suffix IN THE DESTINATION ONLY. The same name legitimately
+    // exists in several containers already - that is the point of copying - so a
+    // global uniqueness check would walk to `Fireball (copy 97)`.
+    const nextCopyName = (name, destinationSounds) => {
+        const taken = new Set((destinationSounds || []).map(sound => sound.name))
+        const first = `${name} (copy)`
+        if (!taken.has(first)) return first
+        let n = 2
+        while (taken.has(`${name} (copy ${n})`)) {
+            n++
+        }
+        return `${name} (copy ${n})`
+    }
+
+    // Moves or copies a sound into another container. `mode` is 'move' | 'copy'.
+    //
+    // On copy the new sound SHARES the source's audio reference (files[] and the
+    // legacy `file` field are carried verbatim, never rebuilt). That is why
+    // deleting a container can no longer assume it owns the bytes it references -
+    // see the isFileReferencedElsewhere guard further down.
+    //
+    // Persistence is best-effort, not atomic: the three auto-save effects are
+    // declared characters -> environmentSounds -> groups, so in any cross-slice
+    // transfer the characters/groups side persists FIRST. A move is net-zero
+    // bytes and a copy adds metadata only, so it can rarely cause a quota
+    // breach - only trip over one that was already full and already reported by
+    // the role="alert" banner.
+    const transferSound = (soundId, targetRef, mode) => {
+        const source = findSoundContainer(soundId)
+        if (!source) {
+            alert('That sound no longer exists.')
+            return false
+        }
+
+        const target = findContainerByRef(targetRef)
+        if (!target) {
+            alert('That destination no longer exists.')
+            return false
+        }
+
+        // Moving a sound into the container it is already in is a no-op at best.
+        if (mode === 'move' && sameContainer(source, targetRef)) {
+            return false
+        }
+
+        if (mode === 'copy') {
+            const copy = {
+                ...source.sound,
+                // A reused id would give two cards the same data-sound-id and
+                // break every assertion that keys off it.
+                id: mintId('sound'),
+                name: nextCopyName(source.sound.name, target.sounds)
+            }
+            patchContainerSounds(targetRef, list => [...list, copy])
+            return true
+        }
+
+        // A move relocates the SAME object reference - nothing about the sound
+        // changes, including its audio reference.
+        const appended = patchContainerSounds(targetRef, list => [...list, source.sound])
+        if (!appended) {
+            alert('That destination no longer exists.')
+            return false
+        }
+
+        // ⚠️ NOT a delete. This removal is the source half of a silent move, so it
+        // must never grow a confirm dialog - and it must never be reused for real
+        // deletes or merged into deleteSound. Deleting a sound confirms 100% of
+        // the time, and deleteSound has exactly one call site (confirmDelete); if
+        // these two ever share code the delete confirmation silently stops firing.
+        //
+        // Scoped to the ONE source container on purpose. deleteSound's global
+        // sweep - filtering the id out of every character, category and group -
+        // is correct for delete (ids are unique) but wrong here: it would also
+        // strip a same-id sound out of an unrelated container.
+        patchContainerSounds(
+            { containerType: source.containerType, containerId: source.containerId, groupId: source.groupId },
+            list => list.filter(sound => sound.id !== soundId)
+        )
+        return true
+    }
+
+    // The card knows the container it was rendered from, so opening the picker
+    // only has to capture that. splitTarget?.groupId is the owning group for both
+    // group shapes - never activeGroup, which is what makes this work from a
+    // split panel as well as the single view.
+    const openMoveCopyModal = (sound, containerType, containerId, splitTarget = null) => {
+        setMoveCopySoundId(sound.id)
+        setMoveCopySource({
+            containerType,
+            containerId,
+            groupId: splitTarget?.groupId || null
+        })
+        setShowMoveCopyModal(true)
+    }
+
+    const closeMoveCopyModal = () => {
+        setShowMoveCopyModal(false)
+        setMoveCopySoundId(null)
+        setMoveCopySource(null)
+    }
+
+    // Picker rows, grouped into sections in sidebar order: Characters -> each
+    // group -> Environments. Sections keep duplicate category names in different
+    // groups distinguishable (categories are name-keyed and have no id), and a
+    // group contributes only the rows it actually has - never an empty header.
+    const moveCopyTargetSections = () => {
+        const sections = [{
+            key: 'characters',
+            label: 'Characters',
+            rows: characters.map(character => ({
+                key: `character-${character.id}`,
+                label: character.name,
+                ref: { containerType: 'character', containerId: character.id, groupId: null }
+            }))
+        }]
+
+        groups.forEach(group => {
+            const rows = []
+            // Listed by what the group actually holds, not by `mode`: mode-based
+            // listing would hide a container whose sounds are still reachable, and
+            // both arrays can be populated by hand-edited localStorage.
+            ;(group.categories || []).forEach(cat => {
+                rows.push({
+                    // Row keys are index-suffixed: two categories in different
+                    // groups may share a name, and that must not collide.
+                    key: `group-cat-${group.id}-${rows.length}`,
+                    label: cat.category,
+                    ref: { containerType: 'group', containerId: cat.category, groupId: group.id }
+                })
+            })
+            ;(group.characters || []).forEach(ch => {
+                rows.push({
+                    key: `group-char-${group.id}-${rows.length}`,
+                    label: ch.name,
+                    ref: { containerType: 'groupCharacter', containerId: ch.id, groupId: group.id }
+                })
+            })
+            if (rows.length > 0) {
+                sections.push({ key: `group-${group.id}`, label: group.name, rows })
+            }
+        })
+
+        sections.push({
+            key: 'environment',
+            label: 'Environments',
+            rows: environmentSounds.map(category => ({
+                key: `environment-${category.category}`,
+                label: category.category,
+                ref: { containerType: 'environment', containerId: category.category, groupId: null }
+            }))
+        })
+
+        return sections
+    }
+
+    const handleMoveCopyTransfer = (targetRef, mode) => {
+        const ok = transferSound(moveCopySoundId, targetRef, mode)
+        if (ok) {
+            closeMoveCopyModal()
+        }
+    }
+
+    // Esc closes the picker. Registered in the capture phase so it runs before the
+    // drawer's own Escape handler (App.jsx:722, bubble phase on document): stopping
+    // propagation here means the event never reaches the drawer, so on mobile a
+    // single Esc dismisses the picker and not the drawer behind it.
+    useEffect(() => {
+        if (!showMoveCopyModal) {
+            return
+        }
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault()
+                e.stopPropagation()
+                closeMoveCopyModal()
+            }
+        }
+        document.addEventListener('keydown', onKeyDown, true)
+        return () => {
+            document.removeEventListener('keydown', onKeyDown, true)
+        }
+    }, [showMoveCopyModal])
+
     const deleteSound = (soundId) => {
         stopSoundInstances(soundId)
 
@@ -2018,6 +2430,17 @@ function App() {
         }
     }
 
+    // The container of the sound currently open in the modal. Detaching a file or
+    // an icon from that sound ends ITS claim on the bytes, so its own container is
+    // excluded from the reference check - otherwise every removal would be blocked
+    // by the still-saved copy of the sound and leak storage.
+    const editingSoundContainerRef = () => {
+        if (!editingSound) return null
+        const found = findSoundContainer(editingSound.id)
+        if (!found) return null
+        return { containerType: found.containerType, containerId: found.containerId, groupId: found.groupId }
+    }
+
     const removeAudioFile = async (index) => {
         const fileToRemove = audioFiles[index]
 
@@ -2028,12 +2451,12 @@ function App() {
             files: prev.files.filter((_, i) => i !== index)
         }))
 
-        await removeFileFromLocalStorage(fileToRemove.name)
+        await removeFileIfUnreferenced(fileToRemove.name, editingSoundContainerRef())
     }
 
     const clearMultipleAudioUpload = async () => {
         for (const file of audioFiles) {
-            await removeFileFromLocalStorage(file.name)
+            await removeFileIfUnreferenced(file.name, editingSoundContainerRef())
         }
 
         setAudioFiles([])
@@ -2042,7 +2465,7 @@ function App() {
 
     const clearIconUpload = async () => {
         if (soundFormData.icon) {
-            await removeFileFromLocalStorage(soundFormData.icon)
+            await removeFileIfUnreferenced(soundFormData.icon, editingSoundContainerRef())
         }
         setIconPreview('')
         setSoundFormData(prev => ({ ...prev, icon: '', iconDisplayName: '' }))
@@ -2123,7 +2546,7 @@ function App() {
     }
 
     const addCharacter = (characterData) => {
-        const newId = `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const newId = mintId('char')
 
         const newCharacter = {
             id: newId,
@@ -2140,7 +2563,7 @@ function App() {
     const addGroupCharacter = (characterData, groupId = null) => {
         const targetGroup = groupId ? groups.find(g => g.id === groupId) : activeGroup
         if (!targetGroup) return
-        const newId = `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const newId = mintId('gchar')
 
         const newCharacter = {
             id: newId,
@@ -2189,11 +2612,7 @@ function App() {
     const deleteCharacter = (characterId) => {
         const character = characters.find(c => c.id === characterId)
         if (character) {
-            (character.sounds || []).forEach(sound => {
-                stopSoundInstances(sound.id)
-                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
-                if (sound.icon) removeFileFromLocalStorage(sound.icon)
-            })
+            removeContainerFiles(character.sounds, { containerType: 'character', containerId: characterId, groupId: null })
         }
 
         setCharacters(prev => prev.filter(character => character.id !== characterId))
@@ -2211,11 +2630,7 @@ function App() {
         if (!targetGroup) return
         const character = (targetGroup.characters || []).find(c => c.id === characterId)
         if (character) {
-            (character.sounds || []).forEach(sound => {
-                stopSoundInstances(sound.id)
-                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
-                if (sound.icon) removeFileFromLocalStorage(sound.icon)
-            })
+            removeContainerFiles(character.sounds, { containerType: 'groupCharacter', containerId: characterId, groupId: targetGroup.id })
         }
 
         setGroups(prev => prev.map(group =>
@@ -2623,11 +3038,7 @@ function App() {
     const deleteCategory = (categoryName) => {
         const category = environmentSounds.find(e => e.category === categoryName)
         if (category) {
-            (category.sounds || []).forEach(sound => {
-                stopSoundInstances(sound.id)
-                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
-                if (sound.icon) removeFileFromLocalStorage(sound.icon)
-            })
+            removeContainerFiles(category.sounds, { containerType: 'environment', containerId: categoryName, groupId: null })
         }
 
         setEnvironmentSounds(prev => prev.filter(category => category.category !== categoryName))
@@ -2716,7 +3127,7 @@ function App() {
     }
 
     const addGroup = (groupData) => {
-        const newId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const newId = mintId('group')
 
         const newGroup = {
             id: newId,
@@ -2739,11 +3150,12 @@ function App() {
     const deleteGroup = (groupId) => {
         const group = groups.find(g => g.id === groupId)
         if (group) {
-            ;[...(group.sounds || []), ...(group.categories || []).flatMap(cat => cat.sounds || []), ...(group.characters || []).flatMap(ch => ch.sounds || [])].forEach(sound => {
-                stopSoundInstances(sound.id)
-                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
-                if (sound.icon) removeFileFromLocalStorage(sound.icon)
-            })
+            // 'groupTop' is the exclude-ref that means "this whole group", so the
+            // group's own categories and characters do not count as other owners.
+            removeContainerFiles(
+                [...(group.sounds || []), ...(group.categories || []).flatMap(cat => cat.sounds || []), ...(group.characters || []).flatMap(ch => ch.sounds || [])],
+                { containerType: 'groupTop', containerId: groupId, groupId: groupId }
+            )
         }
 
         setGroups(prev => prev.filter(group => group.id !== groupId))
@@ -2758,11 +3170,7 @@ function App() {
         }
         const category = (group.categories || []).find(c => c.category === categoryName)
         if (category) {
-            (category.sounds || []).forEach(sound => {
-                stopSoundInstances(sound.id)
-                ;(sound.files || []).forEach(file => removeFileFromLocalStorage(file.storedName || file.name || file.url))
-                if (sound.icon) removeFileFromLocalStorage(sound.icon)
-            })
+            removeContainerFiles(category.sounds, { containerType: 'group', containerId: categoryName, groupId: group.id })
         }
 
         setGroups(prev => prev.map(g =>
@@ -3118,7 +3526,7 @@ function App() {
             const convertingToCharacters = group.mode !== 'characters'
             if (convertingToCharacters) {
                 const converted = (group.categories || []).map(cat => ({
-                    id: `gchar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    id: mintId('gchar'),
                     name: cat.category,
                     // The icon carries across the conversion. An empty icon stays
                     // empty, so the row then falls back to the default for its new
@@ -3134,7 +3542,7 @@ function App() {
                 }
             } else {
                 const converted = (group.characters || []).map(ch => ({
-                    id: `gcat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    id: mintId('gcat'),
                     category: ch.name,
                     icon: ch.icon || '',
                     sounds: ch.sounds || []
@@ -3443,6 +3851,16 @@ function App() {
                             title="Edit Sound"
                         >
                             <Edit size={10} />
+                        </button>
+                        {/* Bottom-centre: both top corners are taken by delete and
+                            edit. Anchored to the wrapper, not the card, so it does
+                            not inherit the card's pointerdown drag handler. */}
+                        <button
+                            onClick={() => openMoveCopyModal(sound, containerType, containerId, splitTarget)}
+                            className={`absolute bottom-1 left-1/2 -translate-x-1/2 p-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            title="Move or Copy Sound"
+                        >
+                            <ArrowRightLeft size={10} />
                         </button>
                     </>
                 )}
@@ -5415,6 +5833,77 @@ function App() {
                                     </div>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Move / Copy Sound Picker */}
+            {showMoveCopyModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
+                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-bold">
+                                    Move or Copy
+                                </h2>
+                                <button
+                                    onClick={closeMoveCopyModal}
+                                    className="p-1 hover:bg-dark-700 rounded-lg"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="max-h-[35vh] overflow-y-auto">
+                                {moveCopyTargetSections().map(section => (
+                                    <div key={section.key} className="mb-3">
+                                        <p className="px-3 py-2 text-xs font-semibold uppercase text-slate-400">
+                                            {section.label}
+                                        </p>
+                                        {section.rows.map(row => {
+                                            // Move into the current container is a no-op, so
+                                            // that row is not offered. Copying into it is
+                                            // allowed - it is the natural way to get the same
+                                            // audio with a different colour, fade or icon.
+                                            const isCurrent = sameContainer(moveCopySource, row.ref)
+                                            return (
+                                                <div
+                                                    key={row.key}
+                                                    className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-dark-700 rounded-lg"
+                                                >
+                                                    <span className="text-sm text-slate-200 truncate">
+                                                        {row.label}
+                                                        {isCurrent && (
+                                                            <span className="ml-2 text-xs text-slate-400">
+                                                                (duplicate here)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <span className="flex items-center gap-2 shrink-0">
+                                                        {!isCurrent && (
+                                                            <button
+                                                                onClick={() => handleMoveCopyTransfer(row.ref, 'move')}
+                                                                className="px-3 py-1 rounded-lg bg-lime-600 text-white hover:bg-lime-700 transition-colors"
+                                                                title={`Move to ${row.label}`}
+                                                            >
+                                                                Move
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleMoveCopyTransfer(row.ref, 'copy')}
+                                                            className="px-3 py-1 rounded-lg bg-dark-700 text-slate-200 hover:bg-dark-600 border border-dark-600 transition-colors"
+                                                            title={`Copy to ${row.label}`}
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
