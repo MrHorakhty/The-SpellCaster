@@ -1,9 +1,11 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-04 23:00). Session log: `docs/session-history.md`.
-(Session ran 21:44-23:00: retire `MOVE_COPY_SOUND_SPEC.md`, revise `PROFILE_SYNC_SPEC.md`, run and revert the
-Android SAF spike, fix `kill-ports.bat /emu`, commit + push. Everything finished and pushed; a shorter closing
-pass 22:42-22:47 ran without re-claiming, which was a small protocol slip — docs-only, no conflict possible.)
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-06 22:00). Session log: `docs/session-history.md`.
+(Session 21:47-22:00: folded the user's two answers into the specs — **priming is one-shot and explicitly not
+profile content** (so: no `localStorage` key for it, and the primed set must be cleared *before* the first
+`await`), and **per-sound volume gets a live slider on the sound card** (which adds a drag/play conflict, a
+live-audio rescale path, a cost concern at ~90 cards, and an ARIA nesting problem — all specified). Audited and
+confirmed **docs only**: `src/App.jsx` is byte-identical to HEAD. **Uncommitted**, nothing authorised.)
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -13,7 +15,7 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-04**
+Last updated: **2026-10-06**
 
 ---
 
@@ -36,16 +38,18 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-04
-  23:00). The move/copy feature and the docs work are both on GitHub.
+- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-06).
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
-- Recent commits: `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
+- Recent commits: `f3e83f2` "Final state note…" · `30fa85b` "Record repo state after push…" ·
+  `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
   `f7f316e` "Added ability to move or copy sounds between groups and characters etc." ·
-  `2d525ed` "Changes to how agents work on the project" · `c83a72c` "More document changes" ·
-  `630f28f` "Some document changes" · `8ef2c6f` "Fixing known debts".
-- ✅ `backup-project.ps1`, `AGENTS.md` and the state file (then `opencode-summary.md`) are committed in `c83a72c`.
-- ✅ **Working tree clean and in sync with origin** as of 2026-10-04 23:00 (after `d698d06`).
+  `2d525ed` "Changes to how agents work on the project".
+- ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
+- ⚠️ **Uncommitted as of 2026-10-06 (docs only):** `PROFILE_SYNC_SPEC.md` + `PROJECT_STATE.md`, from the desktop
+  spike. No app code was changed — the spike edits (`Cargo.toml`, `Cargo.lock`, `src-tauri/src/main.rs`,
+  `capabilities/default.json`) were all reverted with `git checkout --` and the spike artifacts deleted from
+  Desktop/Documents/Temp. `cargo check` clean afterwards. Not committed yet — the user has not asked for a commit.
 - ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
   echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
@@ -113,6 +117,15 @@ are gated behind `isMobile` so desktop/web stay untouched.
   the storage already in place (see `%TEMP%\opencode\restore-mobile.mjs`).
 - **Back up before every change** — run `.\backup-project.ps1` (see the Backups section below). Do not
   hand-type the accented OneDrive folder name in it; it has been created wrong twice.
+- **To drive the desktop Tauri app over CDP for a spike** (no app-code changes needed): set
+  `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'`, start
+  `npm run tauri dev` detached (or just call the plugin over `window.__TAURI_INTERNALS__.invoke`), and talk to
+  `http://127.0.0.1:9224/json`. This is what `e2e-full.ps1` Phase B does. `tauri dev` rebuilt in 17-34 s per
+  change with the cargo cache warm, and re-restarts automatically when `capabilities/*.json` changes.
+  💡 A **native file dialog** cannot be dismissed from the webview: it is a Win32 `#32770` owned by `app.exe`,
+  and with `tauri dev` running hidden it is **not** the foreground window (polling `GetForegroundWindow` sees
+  `Program Manager` forever). Enumerate windows by PID + class and `PostMessage(hwnd, WM_COMMAND, IDCANCEL)` to
+  cancel, `IDOK` to accept the `defaultPath`.
 
 ## ⚠️ Antiviral: `e2e\e2e-full.ps1` gets quarantined
 Bitdefender detects it as `CMD:Heur.BZC.PZQ.Boxter.949` and deletes the **copy** in the OneDrive backup
@@ -188,10 +201,10 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261004-230014` (39.2 MB, **203/203 verified**) — taken after `d698d06` /
-`30fa85b` were pushed, so it matches the tree at `origin/mobile-support`. This one is **optional insurance**:
-everything in it is committed and on GitHub, so unlike previous backups it protects nothing unique.
-(203 not 204 because `MOVE_COPY_SOUND_SPEC.md` was deleted on 2026-10-04.)
+Latest: `ttrpg-soundboard-backup-20261006-200301` (39.2 MB, **203/203 verified**) — taken before the 2026-10-06
+desktop spike, so it matches `f3e83f2`. Previous: `ttrpg-soundboard-backup-20261004-230014` (also 39.2 MB,
+203/203), which protected nothing unique (everything in it is on GitHub).
+💡 Two backups now exist from the last two sessions — prune the 10-04 one by hand if you want only one.
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
@@ -234,9 +247,30 @@ Three properties worth remembering:
 - **Keep `PROJECT_STATE.md` up to date** — claim, edit in place, release.
 
 ### Planning specs in the repo root
+**Three new specs written 2026-10-06** for features the user queued; each is meant to be picked up **one per
+fresh session**. All three are docs-only, **none authorised for implementation**, and all three were written
+against `src/App.jsx` @ 6240 lines — **re-verify the line numbers**, they drift.
+
+| Spec | What it is | Recommended order |
+|---|---|---|
+| `PER_SOUND_VOLUME_SPEC.md` | Per-sound volume ("sound button based"). ✅ **decided: a trim (not an absolute), and a LIVE slider on every sound card** (the modal keeps one too). ~10 insertion points enumerated. Traps: the `\|\|` → `??` coercion that would silently turn a **muted** sound (0) into 100%; `updateMasterVolume`'s fade-preserving live adjust (1315-1335), which has **no test today**; the card drag/play conflict; and invalid ARIA from a slider nested inside a `role="button"` card | **BEFORE profiles** — it is content, rides the bundle free, no `DATA_VERSION` bump |
+| `HOTKEYS_SPEC.md` | Keyboard shortcuts to trigger sounds. In-app tier (a `keydown` listener) vs global (`tauri-plugin-global-shortcut`, desktop-only, `main.rs` only — the **reverse** of the dialog rule). ⚠️ a hotkey is a *reference*, and `PROFILE_SYNC_SPEC.md` §8 plus the category-name-as-identity landmine are what make that hard. ⚠️ it must not fire while a text field has focus — this app has many | **AFTER profiles** — inherit the reference story instead of solving it twice |
+| `SOUND_PRIMING_SPEC.md` | Right-click (desktop) / press-and-hold (mobile) to prime sounds that fire alongside the next trigger. ✅ **decided: ONE-SHOT, consumed by the next trigger, nothing persisted, explicitly not profile content** — so **add no `localStorage` key** (the absence is deliberate). Saved layers are **rejected**; §6 records why so it is not re-opened. Verified: the app has **no** existing right-click or long-press handling at all. ⚠️ **shares the sound card with the volume slider** | **Any time** — zero persistence work, no interaction with the profile refactor |
+
+✅ **Both open questions are answered (2026-10-06) — no decisions are pending.** Priming is **one-shot**: the
+primed set is consumed by the next trigger, nothing is persisted, and it is **explicitly not profile content** —
+so **do not add a `localStorage` key for priming**; that absence is deliberate. Per-sound volume gets a **live
+slider on the sound card**, not modal-only (the modal keeps one too). ⚠️ The two features now share the card
+element: the volume slider must `stopPropagation` (to stop play *and* prime), so prime on the card body only.
+
+⚠️ **If profiles are implemented after any of these, re-run the §3/§4.2 census in `PROFILE_SYNC_SPEC.md`
+first** — 27 storage sites, 10 `uploads/` path sites, the two `ttrpg_*_icon` keys. Those numbers have gone stale
+twice already (that is what the 2026-10-04 revision log exists for), and one new `localStorage` key makes them
+wrong immediately.
+
 | Spec | Status |
 |---|---|
-| `PROFILE_SYNC_SPEC.md` | **Re-opened by the user 2026-10-04** (was: parked 2026-09-27). **Revised** that day — docs only, all code references re-verified against `src/App.jsx` @ 6240 lines, §0 is a revision log. **Implementation is not authorised yet** — the user wants to review the design first. Do not write app code for it unasked. |
+| `PROFILE_SYNC_SPEC.md` | **Revised again 2026-10-06** — docs only. Both platform unknowns are now **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`, so `fs:allow-read-dir` is not needed), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open` — registering the plugin alone would have shipped broken), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC; a 4100-byte payload landed as 12297 bytes of comma-separated digits with **no error**). **Implementation is still not authorised** — the user wants to review the design first. Do not write app code for it unasked. |
 | `MOVE_COPY_SOUND_SPEC.md` | **Retired 2026-10-04** — shipped, user-tested, committed as `f7f316e`, spec deleted. Its 8 settled decisions, invariants and deferred list are preserved in `docs/session-history.md`; the design now lives in `src/App.jsx`. See Retired files. |
 
 ## Open items
@@ -267,17 +301,42 @@ Three properties worth remembering:
   shipped as `restoreDefaults` (App.jsx:2671), so it only needs profile-scoping. Two new risks added:
   cross-profile shared blobs (never hardlink between profiles) and profile-switch state reload (revoke the
   object-URL cache at App.jsx:2298).
+- **Three queued features have specs but no code** (written 2026-10-06, by request, for one-per-session pickup):
+  `PER_SOUND_VOLUME_SPEC.md`, `HOTKEYS_SPEC.md`, `SOUND_PRIMING_SPEC.md`. **Recommended sequence:
+  volume → priming (any time) → profiles → hotkeys.** Rationale and per-spec detail in the *Planning specs* table
+  above. ⚠️ Both design questions were answered on 2026-10-06 (priming = one-shot, not profile content; volume =
+  live card slider) — **nothing is pending**. ⚠️ Volume and priming both modify the **sound card**, so they will
+  conflict in review if built without reading each other's card section.
+- ✅ **The desktop picker-path write — DONE, PASSES** (2026-10-06, Windows, real Tauri/WebView2 over CDP :9224).
+  `dialog.save()` returns a **plain absolute path string** (not a URL, not an object); **cancel resolves `null`**
+  (the opposite of Android, which rejects). `writeFile` to that path is **denied today** — "forbidden path", and
+  `exists()` is denied too, so it is a scope limit, not a write-only limit. **Two fixes, both built and measured:**
+  (A) **runtime grant** — `app.fs_scope().allow_file(path)` via `tauri_plugin_fs::FsExt`, then the *same*
+  `writeFile` succeeds byte-identically, and a **sibling file in the same directory stays denied** ✅ recommended;
+  (B) `{"identifier":"fs:scope","allow":["**"]}` in `capabilities/default.json` — works with zero Rust but is
+  blanket-wide (Desktop, Documents, Temp and ungranted siblings all wrote). ⚠️ `allow_file` is **exact-file
+  only**; a granted *directory* does not cover new files inside it (that needs `allow_directory(dir, true)`).
 - ✅ **The Android SAF spike (spec §7/§10 step 0) is DONE and PASSES** — run 2026-10-04 on an API 37 emulator.
   `dialog.save()` returns a **`content://` URI, not a path**; `plugin-fs` accepts that URI as `path` on mobile
   (`#[cfg(mobile)] resolve_file` → `android.rs` `resolve_content_uri` → `getFileDescriptor` →
   `openAssetFileDescriptor`), so a 4 KiB write + read round-tripped byte-identical and re-write truncates.
   **No fs-scope change is needed on Android.** A raw `/sdcard/Download/…` write is **refused** ("forbidden
-  path"), so the spec's old `BaseDirectory.Download` fallback is dead. Remaining unknown: the **desktop**
-  picker-path write.
-- ⚠️ **`fs:allow-read-dir` is SINGULAR** — the first draft of this spec had it right, my 21:44 revision "fixed"
-  it to the plural `fs:allow-read-dirs` and was **wrong**; the Android build rejected it with "Permission not
-  found, expected one of …". `permissions/read-dirs.toml` defines a *set* named `read-dirs`; the per-command
-  permission is `allow-read-dir`. Build errors that print the valid id list beat reading filenames.
+  path"), so the spec's old `BaseDirectory.Download` fallback is dead. (This used to end "Remaining unknown: the
+  desktop picker-path write" — that is now closed too, see above.)
+- ⚠️ **Pass `Uint8Array`, never `Array`, to `writeFile`** (found 2026-10-06). Desktop IPC sends the `write_file`
+  body via `fetch`, and `fetch` coerces an `Array` body to `toString()`: the write **resolves**, and the file is
+  ~3× too large and unopenable. `Uint8Array`/`ArrayBuffer` are `BufferSource`s and go raw. `App.jsx` already
+  does it right (`new Uint8Array(arrayBuffer)` at App.jsx:1221 and 2324). 💡 This is why the Android spike
+  round-tripped perfectly and desktop did not: Android uses `postMessage` IPC, which preserves the array
+  (`canUseCustomProtocol = osName !== 'android'`).
+- ⚠️ **`fs:default` DOES include `read_dir`** — the 2026-10-04 revision of `PROFILE_SYNC_SPEC.md` claimed it did
+  not and was wrong. `fs:default` → `read-app-specific-dirs-recursive` → `allow-read-dir` + `scope-app-recursive`.
+  Verified in the resolved crate and measured: `readDir('uploads', AppData)` → 90 entries with the **unmodified**
+  capability file. **No `fs:allow-read-dir` needed.** (The plural-vs-singular fact stays true: the per-command
+  permission is `allow-read-dir`; `permissions/read-dirs.toml` defines a *set* named `read-dirs`.)
+- ⚠️ **Registering `tauri-plugin-dialog` is not enough** — `capabilities/default.json` also needs
+  `dialog:allow-save` + `dialog:allow-open` (or `dialog:default`), else the call fails with *"Permissions
+  associated with this command: dialog:allow-save, dialog:default"*, which reads like a plugin-registration bug.
 - ⚠️ **On Android the fs commands take the path in different places**: `write_file` expects it in a
   `encodeURIComponent`'d **header** with bytes as the body, `read_file` expects `{ path, options }` as **args**.
   Getting it wrong fails as `invalid args 'path' for command 'read_file'`, which looks like a permissions

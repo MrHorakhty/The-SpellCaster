@@ -1,10 +1,12 @@
 # Profiles + Sync — Planning Spec
 
-> **Status**: **Revised 2026-10-04** (docs only) after the user re-opened the feature. The parked
-> 2026-09-27 decision is lifted for *design work*; **implementation is still not authorised** — do not
-> write app code until the user gives the go-ahead. All code references were re-verified against
-> `src/App.jsx` at 6240 lines; see §0 for what changed.
-> **Created**: 2026-09-27 · **Revised**: 2026-10-04
+> **Status**: **Revised 2026-10-06** (docs only). Both platform unknowns are now **closed**: Android spiked
+> 2026-10-04, **desktop spiked 2026-10-06** — a user-picked path *is* writable after a one-command runtime scope
+> grant, no blanket fs scope needed (§10). The 2026-10-04 revision that fixed a wrong `fs:default`/`read_dir`
+> claim was itself wrong; §3 and §10 are corrected below. The parked 2026-09-27 decision is lifted for *design
+> work*; **implementation is still not authorised** — do not write app code until the user gives the go-ahead.
+> All code references were re-verified against `src/App.jsx` at 6240 lines; see §0 for what changed.
+> **Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06
 > **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), and the move/copy feature (shipped as `f7f316e`)
 
 ---
@@ -24,8 +26,11 @@ move facts, not decisions. Nothing in §1, §2, §5, §6 or §8 needed to change
 | 6 | **Move/copy shipped** (`f7f316e`) — two sounds can now legitimately name the **same `storedName`**, so dedupe-by-hash is mandatory, not an optimisation | §5, §7, §11 |
 | 7 | **§10's open fs question is answered** — `fs:default` does **not** grant directory listing, and the permission is `fs:allow-read-dir` (**singular** — this spec had it wrong twice; see §10) | §10 |
 | 8 | ✅ **The Android SAF spike was run on 2026-10-04 and it PASSES** — `dialog.save()` returns a `content://` URI and `plugin-fs` writes/reads it byte-identically. §7 and §10 record what it proved | §7, §10 |
+| 9 | ✅ **The desktop spike was run on 2026-10-06 and it PASSES too.** A user-picked path **is** writable; it needs **one** of two fixes, and the narrow one is a 5-line Rust command. It also **falsified a fact this spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save`), and **found a silent-corruption trap** (a plain `Array` payload is stringified). **There are now no unverified platform unknowns left in this spec.** | §3, §7, §10, §11, §12, §13 |
 
-Still unverified: **writing to a user-picked path on *desktop*** (§10). The Android side is now proven.
+**Status: both platform unknowns are now closed** (Android 2026-10-04, desktop 2026-10-06). What remains before
+implementation is a **design decision**, not a spike: pick the desktop route in §10 (recommend the runtime grant)
+and review the whole spec.
 
 ---
 
@@ -80,7 +85,11 @@ table were from the 5751-line file and were all wrong.
 | **Env data key is singular** | `ttrpg_environment`, not `ttrpg_environments` (App.jsx:3584) | A latent bug that has fooled test harnesses before; be careful in any new code |
 | **`localStorage` access is 27 call sites and includes enumeration** | 13 `setItem` / 11 `getItem` / 3 `removeItem`, plus `localStorage.length` + `localStorage.key(i)` in the `sound_file_*` sweep (App.jsx:1207-1211) and 4 `ttrpg_*_icon` writes (App.jsx:1057-1065) | The "single storage adapter" of §4.2 must own **enumeration and prefix matching**, not just get/set/remove. This spec's earlier "23 call sites" figure was already stale. |
 | **`uploads/` paths are built in 10 places** | `TAURI_STORAGE_DIR` (App.jsx:22) and `getTauriStoragePath` (App.jsx:2316), referenced at 1225-1235, 2325-2342, 2374-2385, 3241 | A per-profile `uploads/<profileId>/` prefix changes **10 path sites** on top of the 27 storage sites. Both sets must route through the adapter. |
-| **fs scope is AppData-only, and `fs:default` has no directory listing** | `src-tauri/capabilities/default.json` grants `fs:default`, `fs:allow-appdata-*`, `fs:allow-exists`, `fs:allow-read-file`, `fs:allow-write-file`, `fs:allow-mkdir`, `fs:allow-remove`. The plugin's own `default` set is only `create-app-specific-dirs` + `read-app-specific-dirs-recursive` + `deny-default` — `read_dir` is **not** in it | Enumerating `uploads/` needs **`fs:allow-read-dir`** — **singular**, confirmed by a build failure: the app's build script rejected `fs:allow-read-dirs` and printed the valid id list. See §10. |
+| **fs scope is AppData-only** | `src-tauri/capabilities/default.json` grants `fs:default`, `fs:allow-appdata-*`, `fs:allow-exists`, `fs:allow-read-file`, `fs:allow-write-file`, `fs:allow-mkdir`, `fs:allow-remove` | Anything outside the app directories is denied — **for reads as well as writes** (proven: `exists()` on a Desktop path is refused too, §10) |
+| ❌→✅ **CORRECTED 2026-10-06: `fs:default` *does* include `read_dir`** | earlier drafts of this spec claimed it did not. It does: `fs:default` → `read-app-specific-dirs-recursive` → `allow-read-dir` **+ `scope-app-recursive`**. Verified in the resolved crate (`tauri-plugin-fs-2.5.2/permissions/default.toml`) and **empirically**: `readDir('uploads', AppData)` listed **90 entries** and the AppData root listed `uploads`, with **no capability change at all** | **`fs:allow-read-dir` is NOT needed.** Building a manifest by enumerating `uploads/` works today. (The plural-vs-singular warning below is still right about the *name*, but the permission is not needed either way — drop that row from §10.) |
+| ✅ **On desktop the picker returns a plain path string, and cancel resolves `null`** | driven on Windows 2026-10-06: the save dialog is a real `#32770` that honours the `title` option; accepting it resolved a `string` (`"C:\Users\emire\Documents\spellcaster-picked.spellcaster"`), cancelling resolved `null` (`desktop.rs save_file` → `Option<FilePath>`) | **Not** a `file://` URL, **not** an object, and **not** a rejection — this is the opposite of Android, which rejects with *"File picker cancelled"*. One `try/catch` + a null check covers both platforms |
+| ⚠️ **On desktop, a plain `Array` byte payload is silently stringified** | `write_file` receives its data as the fetch body (`scripts/process-ipc-message-fn.js` returns `{contentType: 'application/octet-stream', data: message}` for arrays) — but `fetch` coerces an `Array` body to `toString()`. Measured: a 4100-byte payload landed as **12297 bytes** of `80,75,3,4,65,65,…`. A `Uint8Array` is a `BufferSource`, is sent raw, and round-tripped byte-identically | **Always pass a `Uint8Array`/`ArrayBuffer`, never `Array.from(bytes)`.** `App.jsx` already does (`new Uint8Array(arrayBuffer)` at App.jsx:1221 and 2324). 💡 This is also why the Android spike round-tripped perfectly while desktop did not: Android uses `postMessage` IPC, which preserves the array, whereas desktop uses the custom-protocol `fetch` (`canUseCustomProtocol = osName !== 'android'`) |
+| ✅ **The dialog plugin needs its own capability entries** | with the plugin registered but no `dialog:*` permission, the call fails with *"Permissions associated with this command: dialog:allow-save, dialog:default"* — **not** "Plugin not found", which is the separate mobile failure | `capabilities/default.json` must gain `dialog:allow-save` + `dialog:allow-open` (or `dialog:default`). §10's table previously listed only the plugin registration and would have shipped broken |
 | **Android cannot write outside AppData by path** | a raw write to `/storage/emulated/0/Download/…` is refused with *"forbidden path … maybe it is not allowed on the fs scope"* | The §7 `BaseDirectory.Download` fallback is **dead on Android**. Export must go through the SAF `content://` URI — which works (§7). |
 | **On Android, `plugin-fs` accepts a `content://` URI as `path`** | `commands.rs` `#[cfg(mobile)] resolve_file` → `android.rs` `resolve_content_uri` → Kotlin `FsPlugin.getFileDescriptor` → `contentResolver.openAssetFileDescriptor` → raw fd → `std::fs::File`. Verified end to end, §7 | No scope change is needed on Android for the export destination — the URL branch skips the scope check entirely. This is the single most important fact for §7. |
 | **Resolved fs plugin is 2.5.2** | `Cargo.toml` declares `tauri-plugin-fs = "2.5.1"`; semver resolves to **2.5.2** in the lockfile | Check the resolved version's permission names before adding any — the permission set is versioned. |
@@ -236,16 +245,22 @@ The one consequence to keep in mind: audio a user adds may be material they have
 3. Classify each reference as **bundled** or **uploaded**. ✅ **This is now a structural test, not a heuristic: a reference with no `storedName` is bundled, one with a `storedName` is an upload** (§3). Do **not** add the write-time provenance flag the old draft of this spec asked for — the data already distinguishes them, and a new flag would be a second source of truth to keep in sync. Keep the classification in one helper (`isUploadedReference`) so the icon path and the audio path cannot disagree.
 4. Hash each upload, dedupe by hash (**not** by `storedName` — see §5), stream into the zip.
 5. Write `manifest.json` and `data.json` — **with `background.imagePreview` forced to `null`**, so a 5 MB base64 blob is never serialised into the bundle.
-6. Stream the zip to the chosen path.
+6. Stream the zip to the chosen path — as a **`Uint8Array`**, after the desktop scope grant (§10).
 7. Show a progress dialog; allow cancel.
 
 ### Where the file goes
 
-| Platform | Mechanism |
-|---|---|
-| Windows / Linux / macOS | `tauri-plugin-dialog` save dialog → `tauri-plugin-fs` write to the picked path. ⚠️ the fs scope must permit an arbitrary user-picked path — still unverified, see §10 |
-| Android | SAF save via `tauri-plugin-dialog` → **the result is a `content://` URI, not a path** → hand that URI straight to `tauri-plugin-fs` (proven, see below) |
-| Web | **Out of scope for v1** — see below |
+| Platform | Mechanism | Proven? |
+|---|---|---|
+| Windows / Linux / macOS | `tauri-plugin-dialog` save dialog → **plain absolute path string** → runtime scope grant (§10) → `tauri-plugin-fs` write. **No capability scope widening** | ✅ **2026-10-06, Windows** |
+| Android | SAF save via `tauri-plugin-dialog` → **the result is a `content://` URI, not a path** → hand that URI straight to `tauri-plugin-fs` (no scope check on that branch) | ✅ **2026-10-04, API 37 emulator** |
+| Web | **Out of scope for v1** — see below | n/a |
+
+### ⚠️ Write the bytes as a `Uint8Array`, on every platform
+`exportBundle()` returns `bytes`; whatever hands them to `writeFile` must pass a **`Uint8Array`** (or
+`ArrayBuffer`). A plain array is **silently corrupted on desktop** — see §3. The failure is quiet: the write
+succeeds, the file is the wrong size, and the bundle is unopenable. Cheap guard: assert
+`bytes instanceof Uint8Array` at the single call site, and let the §13 bundle-size check catch it.
 
 **Web is excluded from v1.** The web build keeps working exactly as it does today (a viewer/editor with its own localStorage data), but it gets no export/import buttons. The reason is structural, not a preference: web audio lives as base64 data-URLs in localStorage under `sound_file_*`, which caps out around 5 MB, so a web export could only ever be metadata and would be a misleading promise. Supporting web properly means first moving web audio out of localStorage into real files, which is a separate piece of work. The interface should be written so web can be enabled later behind the same byte-level `exportBundle`/`importBundle` functions (§9.3) with no rework.
 
@@ -341,43 +356,100 @@ than adding a seventh modal:
 
 ## 10. Required plugin / capability changes
 
-**Re-verified 2026-10-04, and the Android half *executed* 2026-10-04.** The spike that verified §7 needed the
-dialog plugin and these permissions — **those spike edits were reverted afterwards** (at the user's request),
-so nothing below is in the tree yet. `cargo check` was clean both with and without them.
+**Re-verified 2026-10-04; Android half *executed* 2026-10-04; desktop half *executed* 2026-10-06.** Both spikes
+needed the dialog plugin — **those spike edits were reverted afterwards** (at the user's request), so nothing
+below is in the tree yet. `cargo check` was clean before, during and after.
 
 | Change | Where | Why |
 |---|---|---|
-| `tauri-plugin-dialog` | `src-tauri/src/main.rs` **and** `src-tauri/src/lib.rs` | save + open file pickers. **Both entry points** — plugins registered only in `main.rs` are silently missing on mobile. Adding it to only one is not a shortcut: with it missing from `lib.rs` the app rejects the call with **`dialog.save not allowed. Plugin not found`**, which is exactly the failure this row exists to prevent (observed during the spike) |
-| **`fs:allow-read-dir`** (**singular**) | `src-tauri/capabilities/default.json` | enumerate `uploads/` to build a manifest. `fs:default` does **not** include `read_dir` (the plugin's `default` set is `create-app-specific-dirs` + `read-app-specific-dirs-recursive` + `deny-default`). ⚠️ **The name is the per-command permission `allow-read-dir`; `permissions/read-dirs.toml` defines a *set* called `read-dirs`, which is a different identifier.** This spec claimed the plural first and was wrong — the build rejected `fs:allow-read-dirs` with "Permission not found, expected one of …" and listed the valid ids. **Use the singular.** (Whether it is needed at all is unproven: `uploads/` is inside AppData, which is already readable, so the manifest could equally be built from state alone.) |
-| ⚠️ Widened `fs` scope for a user-picked destination — **desktop only** | `src-tauri/capabilities/default.json` | today only `fs:allow-appdata-*` is granted, so a desktop picker path will be denied. **Not needed on Android** — proven: the mobile path takes the `content://` URL branch with no scope check, and raw paths are refused outright. **This is now the last unverified item in the feature** |
+| `tauri-plugin-dialog` | `src-tauri/src/main.rs` **and** `src-tauri/src/lib.rs` | save + open file pickers. **Both entry points** — plugins registered only in `main.rs` are silently missing on mobile. Adding it to only one is not a shortcut: with it missing from `lib.rs` the app rejects the call with **`dialog.save not allowed. Plugin not found`**, which is exactly the failure this row exists to prevent (observed during the Android spike) |
+| ⚠️ **`dialog:allow-save` + `dialog:allow-open`** (or `dialog:default`) | `src-tauri/capabilities/default.json` | **This row was missing and would have shipped broken.** Registering the plugin is not enough: with no `dialog:*` permission the call fails with *"Permissions associated with this command: dialog:allow-save, dialog:default"*. Verified on desktop 2026-10-06 — that error only appears **after** adding the permission does the picker open |
+| ❌ **`fs:allow-read-dir` — NOT NEEDED, drop it** | ~~`capabilities/default.json`~~ | This spec used to claim `fs:default` has no directory listing. **It does**: `fs:default` → `read-app-specific-dirs-recursive` → `allow-read-dir` + `scope-app-recursive`. Measured 2026-10-06 with the **unmodified** capability file: `readDir('uploads', AppData)` → **90 entries**, AppData root → `uploads`. Enumerating `uploads/` to build a manifest therefore needs **no permission change at all**. (The earlier build error that rejected `fs:allow-read-dirs` was real, but it was fixing a non-problem: `permissions/read-dirs.toml` defines a *set* named `read-dirs`; the per-command permission is `allow-read-dir`. Keep that in mind if you ever do need it.) |
+| ✅ **Desktop destination: a runtime scope grant — RECOMMENDED** | **one new Rust command**, see below | Answering the old "last unverified item". **Both** routes below were built and measured; the grant is the one to ship |
 | New frontend deps: **`fflate`** (zip) + a SHA-256 helper | `package.json` | streaming zip create/extract; small, fast, no native build step. For hashing use a small pure-JS implementation (e.g. `@noble/hashes`) — **not** `crypto.subtle`, which is unavailable outside a secure context, and not a Rust command, which would re-add the native work this design no longer needs. Neither is installed yet: current deps are `@tauri-apps/plugin-fs`, `@tauri-apps/plugin-os`, `lucide-react`, `react`, `react-dom` |
-| (`src-tauri/Cargo.toml`) | — | `tauri-plugin-dialog = "2"` **must be added** alongside `tauri-plugin-fs = "2.5.1"` / `-log = "2"` / `-os = "2.2.0"`; it resolves to **2.7.3**. The resolved fs version is **2.5.2**, so read permission names from the resolved crate, not the declared one |
+| (`src-tauri/Cargo.toml`) | — | `tauri-plugin-dialog = "2"` **must be added** alongside `tauri-plugin-fs = "2.5.1"` / `-log = "2"` / `-os = "2.2.0"`; it resolves to **2.7.3** and pulls `rfd 0.16.0`. All 12 added packages were already in the local cargo cache, so `cargo check --offline` resolved without network. The resolved fs version is **2.5.2**, so read permission names from the resolved crate, not the declared one |
 
-**No custom Rust commands are required.** With encryption dropped there is no crypto to do in Rust, so the whole feature is frontend work plus registering `tauri-plugin-dialog`. The only native surface is the plugin registration, the fs scope, and the platform pickers.
+### ✅ Desktop destination: the last unknown, closed (spiked 2026-10-06, Windows)
 
-Integrity hashing is still worth keeping (it is what makes "abort on corrupt bundle" possible), and it can be done in pure JS. If it ever proves slow on large libraries, promoting just the hash to a Rust command is an isolated, low-risk change.
+**The question.** `dialog.save()` returns an absolute path the user chose, but today's fs scope is AppData-only, so
+`writeFile` to that path fails: *"forbidden path: C:\Users\emire\Desktop\… maybe it is not allowed on the scope for
+`allow-write-file` permission in your capability file"*. **Reads are denied too** — `exists()` on the same path
+fails identically. (On Android none of this applies: the `content://` URI branch skips the scope check entirely.)
 
-💡 If writing to a picker-chosen path turns out to need a runtime scope grant (i.e. `fs:scope` cannot express
-"wherever the user just picked"), that *would* introduce the first custom Rust command. Find out during the
-**desktop** spike, not during UI work. Android no longer has this risk.
+**Both fixes work. They were built and measured, not reasoned about.**
+
+| | **A — runtime scope grant (recommended)** | **B — static capability scope** |
+|---|---|---|
+| What | one Rust command, below | `{ "identifier": "fs:scope", "allow": [ "**" ] }` in `capabilities/default.json` |
+| Rust code | ~5 lines | none |
+| Write to a picked Desktop path | ✅ 4100-byte round trip byte-identical | ✅ same |
+| Blast radius | **that one file only** — a sibling file in the same directory stayed denied | **the whole filesystem** — Desktop, Documents and Temp all wrote, and an ungranted sibling file wrote too |
+| Verdict | narrow, explicit, auditable | ⚠️ a public app whose frontend can write anywhere is a different security posture; only reasonable if you also accept that any future XSS or injected dependency can write anywhere |
+
+The code for A — the *same mechanism the fs plugin itself uses for drag-and-drop*
+(`tauri-plugin-fs-2.5.2/src/lib.rs`, `RunEvent::WindowEvent::DragDrop` → `app.fs_scope().allow_file(path)`).
+`FsExt::fs_scope()` returns a clone of the plugin's shared `Arc<ScopeInner>`, so the mutation is immediately
+visible to the command layer's own `is_allowed` check:
+
+```rust
+use tauri_plugin_fs::FsExt;
+
+#[tauri::command]
+fn grant_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    app.fs_scope().allow_file(&path).map_err(|e| e.to_string())
+}
+```
+
+Register it with `.invoke_handler(tauri::generate_handler![grant_path])` and call it between the picker and the
+write. No capability file change, no `fs:scope` entry, no `**`.
+
+⚠️ **`allow_file` covers that exact path only.** Granting a *directory* does **not** let you write a new file
+inside it (measured) — that needs `allow_directory(dir, true)`, which is also what the plugin uses for
+dropped folders. The save dialog returns a file, so `allow_file` is the right call.
+
+💡 If you would rather not add a command, `std::fs::write` inside a command works too (verified) — but it moves
+byte handling into Rust and breaks the §9.3 purity that keeps `exportBundle` testable. Prefer A.
+
+**Net native surface: one ~5-line command, one plugin registration, two `dialog:*` capability entries, and no
+fs-scope widening.** The earlier draft's "No custom Rust commands are required" is superseded: the desktop spike
+showed the scope *can* be granted at runtime, which is the cheapest way to keep it narrow, and the command is the
+entire price. With encryption dropped there is still no crypto in Rust.
+
+Integrity hashing is still worth keeping (it is what makes "abort on corrupt bundle" possible), and it can be
+done in pure JS. If it ever proves slow on large libraries, promoting just the hash to a Rust command is an
+isolated, low-risk change.
 
 ### How the spike was driven (reproduce it without writing app code)
 
 The dialog could be exercised **without touching `src/App.jsx`**, which is why this was cheap:
 
-- `tauri android dev` → Gradle builds `app-x86_64-debug.apk` but did **not** install it here; `adb install -r`
-  the APK from `src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/` and launch it manually.
-- Forward the WebView devtools socket (`adb forward tcp:9223 localabstract:webview_devtools_remote_<pid>`) and
-  drive the plugin over raw CDP: `window.__TAURI_INTERNALS__.invoke('plugin:dialog|save', { options })`.
-- ⚠️ **The two fs commands take the path in different places.** `write_file` expects it in a **header**
-  (`encodeURIComponent`d) with the bytes as the body; `read_file` expects `{ path, options }` as **args**.
-  Getting this wrong fails as `invalid args 'path' for command 'read_file'`, which looks like a permissions
-  problem and is not.
-- The system picker is a separate activity, so it must be tapped from outside: `adb shell uiautomator dump`,
-  find `text="SAVE"` bounds, `adb shell input tap <x> <y>`.
-- 💡 The WebView reloaded at least once mid-session (`window.__saf` went from a resolved URI to `undefined`),
-  almost certainly Vite HMR reacting to file writes. **Stash state on `window` and poll it in the same
-  connection; do not assume it survives between separate CDP sessions.**
+- **Desktop (2026-10-06):** the same CDP route as the Windows E2E phase —
+  `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'`, then
+  `npm run tauri dev` detached, then drive `window.__TAURI_INTERNALS__.invoke(...)` over
+  `http://127.0.0.1:9224/json`. `tauri dev` rebuilt on each capability change in ~17-34 s (deps were cached).
+- **Dismissing the native dialog from outside:** the save dialog is a Win32 `#32770` owned by `app.exe`.
+  `EnumWindows` filtered to the app's PID found it; `PostMessage(hwnd, WM_COMMAND, IDCANCEL)` **cancelled** it
+  (resolved `null`) and the same call with `IDOK` **accepted** the `defaultPath` (resolved the path string). 💡
+  The dialog is **not** the foreground window when `tauri dev` runs hidden — polling `GetForegroundWindow`
+  sees `Program Manager` forever. Enumerate by PID + class instead.
+- **Android (2026-10-04):**
+  - `tauri android dev` → Gradle builds `app-x86_64-debug.apk` but did **not** install it here; `adb install -r`
+    the APK from `src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/` and launch it manually.
+  - Forward the WebView devtools socket (`adb forward tcp:9223 localabstract:webview_devtools_remote_<pid>`) and
+    drive the plugin over raw CDP: `window.__TAURI_INTERNALS__.invoke('plugin:dialog|save', { options })`.
+  - The system picker is a separate activity, so it must be tapped from outside: `adb shell uiautomator dump`,
+    find `text="SAVE"` bounds, `adb shell input tap <x> <y>`.
+- ⚠️ **The two fs commands take the path in different places, on both platforms.** `write_file` expects it in a
+  **header** (`encodeURIComponent`d) with the bytes as the body; `read_file` expects `{ path, options }` as
+  **args**. Getting it wrong fails as `invalid args 'path' for command 'read_file'`, which looks like a
+  permissions problem and is not. 💡 `read_dir`'s `baseDir` is a **`u16` enum**, not the `'$APPDATA'` string the
+  JS API uses — passing the string fails with `invalid type: string "$APPDATA", expected u16` (`AppData` = 14).
+- ⚠️ **Verify bytes on disk, not just the promise.** A rejected promise is unambiguous, but a *resolved* one can
+  still have written the wrong bytes (§7, the `Array` trap). `Get-Item`/`ReadAllBytes` on the target after each
+  write; that is what caught it.
+- 💡 The WebView reloaded at least once mid-session (Android: `window.__saf` went from a resolved URI to
+  `undefined`), almost certainly Vite HMR reacting to file writes. **Stash state on `window` and poll it in the
+  same connection; do not assume it survives between separate CDP sessions.**
 
 ---
 
@@ -414,15 +486,23 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    in one go, plus revoking cached object URLs (`getObjectUrlForBlob` cache, App.jsx:2298) or the previous
    profile's blobs leak for the session. Design the switch as an explicit reload path rather than three
    setters, and decide early whether it is a full remount.
+8. **NEW — a byte payload can be silently corrupted and it looks like success.** Desktop IPC sends the
+   `write_file` body through `fetch`, and an `Array` body is coerced to a comma-joined string: the write
+   *resolves*, and the file is 3× too large and unopenable (§3, §7). No error anywhere. Guard the single call
+   site (`bytes instanceof Uint8Array`) and keep the §13 bundle-size assertion, which fails loudly on this.
+9. **CLOSED — desktop picker-path write.** ✅ spiked 2026-10-06 (§10). Not a risk any more: the runtime grant
+   works and is narrow. The only way to get this wrong now is to reach for the `fs:scope: ["**"]` shortcut,
+   which works too and hands the frontend write access to the whole filesystem. Prefer the grant.
 
 ---
 
 ## 12. Implementation order
 
-0. ~~**Spike the two unknowns on real hardware first**~~ — ✅ **the Android half is done** (2026-10-04, §7 and
-   §10: SAF save/read verified byte-identical on an API 37 emulator, and it turned out **not** to need a scope
-   change). **Remaining: the desktop picker-path write** (§10). It is a five-minute check on the Windows
-   phase — do it before step 6, not during UI work.
+0. ~~**Spike the two unknowns on real hardware first**~~ — ✅ **BOTH halves done** (Android 2026-10-04, desktop
+   2026-10-06). Android: SAF save/read verified byte-identical on an API 37 emulator, no scope change needed.
+   Desktop: `dialog.save` → plain path string, cancelled → `null`, and the write works after a runtime
+   `allow_file` grant, byte-identical. **No platform unknowns remain.** What is left is the §10 design choice
+   (grant vs `**`) — take the grant — and the user's review of this spec.
 1. **Storage adapter + profile refactor + first-run migration.** Alone, in its own commit. Nothing else starts
    until existing users are proven safe. Scope per §4.2: **27** `localStorage` sites, **10** `uploads/` path
    sites, prefix enumeration, and the two `ttrpg_*_icon` keys. `localStorageMigrationCompleted` stays global.
@@ -431,7 +511,9 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    it before the bundle format so §13's bundle-size assertion has something to test.
 4. **Bundle format** — `manifest.json` / `data.json` schema + zip read/write.
 5. **Import** (atomic, both v1 modes) — before export, so a bundle is provably readable before we can produce one.
-6. **Export + destination pickers** (desktop + Android SAF; web excluded in v1).
+6. **Export + destination pickers** (desktop runtime grant + Android SAF; web excluded in v1). The picker
+   contract is platform-asymmetric: **desktop resolves a path string or `null`, Android resolves a `content://`
+   URI or rejects** — one `try`/`catch` plus a null check covers both.
 7. **UI** — profiles modal, Settings section, progress + report. Profile-scoped Restore Defaults (§9.2).
 8. **E2E suite** + docs (README testing section).
 
@@ -456,13 +538,29 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [ ] **The two `ttrpg_*_icon` keys and `boxSize` follow the profile**, and `localStorageMigrationCompleted` does **not** get a profile prefix (a prefixed one would re-run the one-time audio sweep).
 - [ ] **Profile switch is clean:** switch A → B → A with different boards and different section icons; no bleed-through, and no stale blob URLs (a sound from A must not play after switching to B).
 - [ ] **Restore Defaults stays idempotent and non-destructive** after being profile-scoped: press it twice on a profile with user sounds, and nothing user-created is lost (§9.2).
+- [ ] **No `fs:scope: ["**"]` and no blanket write scope ships.** Assert it in review: `capabilities/default.json`
+      contains no `fs:scope` entry with a wildcard, and the only fs paths the frontend can write are the app
+      directories plus the single file the user just picked.
+- [ ] **The grant is per-file, not per-directory.** After exporting to `X`, writing `X.bak` in the same folder
+      through `writeFile` must be **refused** — that is what makes the grant worth having.
+- [ ] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes
+      (open the file and compare size + zip magic; do not trust the resolved promise). Round-trip it back through
+      `dialog.open()` + import.
+- [ ] **Bytes are handed over as a `Uint8Array`.** Regression guard for §11 risk 8: export a bundle and assert
+      the file's on-disk size matches the returned byte length exactly. A `Array.from(bytes)` payload produces a
+      ~3× larger file of comma-separated digits and **no error**.
 - [ ] Android: export → import on the same device via a user-picked SAF location. ⚠️ **Import needs its own
       `dialog.open()`, which returns a URI the same way — so the read path is proven by symmetry, but the
       picker is a second `ACTION_OPEN_DOCUMENT` and the *selected* document may be one this app no longer has a
       grant for. Test it rather than assuming.** The export half of this line is already proven (§7).
-- [ ] ⚠️ **A user-cancelled picker rejects, it does not resolve to null.** `saveFileDialogResult` calls
-      `invoke.reject("File picker cancelled")` on `RESULT_CANCELED`, so the export code needs a `catch` — an
-      `await` with no handler produces an unhandled rejection and a silent no-op in the UI.
+- [ ] ⚠️ **A picker cancel is handled on both platforms, and they differ.** **Android rejects**
+      (`saveFileDialogResult` → `invoke.reject("File picker cancelled")`); **desktop resolves `null`**
+      (`desktop.rs save_file` → `Option<FilePath>`, measured 2026-10-06). An `await` with no handler on Android
+      produces an unhandled rejection and a silent no-op; on desktop a `null` path passed to `writeFile` throws.
+      Both need handling, and neither platform's behaviour may be assumed for the other.
+- [ ] **The dialog permissions are present in `capabilities/default.json`** (`dialog:allow-save` +
+      `dialog:allow-open`, or `dialog:default`). Without them the call fails with *"Permissions associated with
+      this command: dialog:allow-save, dialog:default"* — which reads like a plugin-registration bug and is not.
 - [ ] The web build is **unchanged** — no export/import controls, and its existing behaviour intact.
 - [ ] Two profiles side by side have fully independent data, settings and audio.
 - [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds; `cargo check` clean.

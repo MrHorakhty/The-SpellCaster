@@ -1403,3 +1403,185 @@ files left in `/sdcard/Download`.** Claim released.
   real thing is `.\backup-project.ps1`.
 - Closing correction pass committed on top: repo state now says in-sync instead of "ahead 1", the recent-commit
   list leads with `d698d06`, and the fake-hook warning is recorded.
+
+---
+
+## 2026-10-06 20:02-21:05 - opencode - desktop spike: the last PROFILE_SYNC_SPEC unknown
+
+**Asked by the user**: "there is still 1 unknown factor in PROFILE_SYNC_SPEC about desktop behavior, is that
+correct?" - yes, exactly one. Then: "let's verify/test those today". Docs only; no app code was written.
+
+### The answer to the standing unknown
+`PROFILE_SYNC_SPEC.md` §10 said the *desktop picker-path write* was "the last unverified item in the feature".
+**It is now spiked and it passes.** Built on Windows (real Tauri + WebView2, driven over CDP :9224 exactly like
+`e2e-full.ps1` Phase B) with temporary `__spike_*` commands in `main.rs`, then reverted.
+
+| Probe | Result |
+|---|---|
+| `dialog.save()` reachable with the plugin registered but no `dialog:*` permission | fails with *"Permissions associated with this command: dialog:allow-save, dialog:default"* |
+| `dialog.save()` cancel (real `#32770` dismissed with `WM_COMMAND`/`IDCANCEL`) | **resolves `null`** - `desktop.rs save_file` -> `Option<FilePath>` |
+| `dialog.save()` accept (`WM_COMMAND`/`IDOK`) | resolves a **`string`**: `C:\Users\emire\Documents\spellcaster-picked.spellcaster` |
+| `fs.writeFile` to a Desktop path, current capability file | **DENIED** - "forbidden path ... `allow-write-file` permission in your capability file" |
+| `fs.exists()` on that same path | **also denied** - it is a scope limit, not a write-only limit |
+| **`fs:read_dir` on `AppData/uploads`, capability file unmodified** | **PASS - 90 entries** (AppData root: `uploads`) |
+| runtime `app.fs_scope().allow_file(path)` then the *same* `writeFile` | **PASS - 4100 bytes, byte-identical round trip** |
+| sibling file in the granted directory, never granted | still **DENIED** - the grant is per-file |
+| capability-only `{ "identifier": "fs:scope", "allow": ["**"] }` | **PASS**, but blanket: Desktop, Documents, Temp and an ungranted sibling all wrote |
+| `allow_file` on a *directory*, then write a new file inside it | **DENIED** - needs `allow_directory(dir, true)` |
+| `std::fs::write` in a command (no fs plugin at all) | PASS - works, but breaks §9.3 purity |
+
+**Recommendation written into the spec: the runtime grant.** ~5 lines, the same mechanism the fs plugin itself
+uses for drag-and-drop (`tauri-plugin-fs-2.5.2/src/lib.rs` `RunEvent::WindowEvent::DragDrop` ->
+`app.fs_scope().allow_file(path)`); `FsExt::fs_scope()` clones the plugin's shared `Arc<ScopeInner>` so the
+mutation is visible to the command layer's own `is_allowed`. No capability edit, no `fs:scope`, no `**`.
+
+### Three corrections and one trap, all now in the spec
+1. **The spec asserted something false.** It claimed `fs:default` does not include `read_dir`. It does:
+   `fs:default` -> `read-app-specific-dirs-recursive` -> `allow-read-dir` + `scope-app-recursive`. Confirmed in
+   the resolved crate (`permissions/default.toml`) and measured. **So `fs:allow-read-dir` is not needed** and
+   the §10 row is marked "drop it". (The plural/singular name fact survives: the per-command permission is
+   `allow-read-dir`, `permissions/read-dirs.toml` defines a *set* named `read-dirs`. The 2026-10-04 revision
+   that "fixed" the singular to the plural had been reacting to a real build error while fixing a non-problem.)
+2. **A capability row was missing entirely.** `dialog:allow-save` + `dialog:allow-open` (or `dialog:default`).
+   Registering `tauri-plugin-dialog` alone would have shipped broken, with an error message that reads like a
+   plugin-registration bug.
+3. **Platform-asymmetric cancel.** Android **rejects** ("File picker cancelled"); desktop **resolves `null`**.
+   Both need handling; neither platform's contract may be assumed for the other.
+4. **Silent byte corruption.** My first probe passed `Array.from(bytes)`; the write *resolved* and the file was
+   **12297 bytes** of `80,75,3,4,65,65,...` instead of 4100 binary bytes. Cause: desktop IPC sends the
+   `write_file` body through `fetch`, and `fetch` coerces an `Array` body via `toString()`
+   (`scripts/process-ipc-message-fn.js` returns `contentType: application/octet-stream` but the browser still
+   stringifies it). `Uint8Array`/`ArrayBuffer` are `BufferSource`s and go raw. `App.jsx` is already correct
+   (`new Uint8Array(arrayBuffer)` at 1221 / 2324). This also explains why the Android spike round-tripped
+   perfectly: Android uses `postMessage` IPC, which preserves the array (`canUseCustomProtocol = osName !==
+   'android'`). Recorded as §11 risk 8 with an E2E guard, because it fails with **no error anywhere**.
+
+### Housekeeping
+- Backup `ttrpg-soundboard-backup-20261006-200301`, 203/203 verified, 39.2 MB, taken before the spike.
+- Spike reverted: `git checkout --` on `Cargo.toml`, `Cargo.lock`, `src-tauri/src/main.rs`,
+  `capabilities/default.json`; all spike `.bin`/`.spellcaster` artifacts deleted from Desktop, Documents and
+  Temp; `app.exe` and the dev server killed, ports 5173/9224 free; `cargo check` clean, 0 warnings.
+- `tauri-plugin-dialog = "2"` resolves to 2.7.3 and pulls `rfd 0.16.0`; **all 12 added packages were already in
+  the local cargo cache**, so `cargo check --offline` worked with no network.
+- **Not committed.** Only `PROFILE_SYNC_SPEC.md` and `PROJECT_STATE.md` are modified, docs only. The user has
+  not asked for a commit.
+
+---
+
+## 2026-10-06 21:12-21:40- opencode - three new planning specs (volume, hotkeys, priming)
+
+**Asked by the user**: three features are queued after profiles - per-sound ("sound button") volume, hotkeys,
+and sound priming (right-click desktop / press-and-hold mobile, primed sounds fire alongside the next trigger).
+He also observed that my todo list lags behind what I have actually done, and asked me to make **separate spec
+files** so each feature can be picked up in a fresh session.
+
+### Answering the ordering question (it is not one question)
+The three features are **not** the same kind of thing, so there is no single answer:
+
+- **Per-sound volume is content.** It sits beside `fadeIn`/`fadeOut`/`loop`/`brightness`, which the profile bundle
+  already carries, so it rides along for free with no exporter work and no `DATA_VERSION` bump
+  (`normalizeStoredData`, App.jsx:269, spreads unknown sound fields). -> **before profiles.**
+- **Hotkeys are a pointer at content.** A binding is a reference to a sound, and references are exactly what
+  `PROFILE_SYNC_SPEC.md` §8 (unresolvable audio references) and the category-name-as-identity landmine are about.
+  -> **after profiles**, storing bindings per profile so they always resolve and ride the bundle free.
+- **Priming is two features in one name.** Model A (session state, `useState`, nothing persisted) has *zero*
+  interaction with the profile refactor and can be built any time. Model B (saved named layers) *is* content.
+  -> Model A any time; Model B before profiles.
+
+Recommended sequence: **volume -> (priming Model B if wanted) -> profiles -> hotkeys.**
+
+### Files written (all docs-only, none authorised for implementation)
+- `PER_SOUND_VOLUME_SPEC.md`
+- `HOTKEYS_SPEC.md`
+- `SOUND_PRIMING_SPEC.md`
+
+Each carries a verified-fact table, the decision that must be made before coding, implementation-order notes, a
+verification checklist, E2E guidance and a deferred list. Line numbers were re-verified against `App.jsx` @ 6240
+this session so a fresh session does not have to rediscover them.
+
+### Code facts established while writing them (all verified 2026-10-06)
+- `masterVolume` is `useState(1.0)` at App.jsx:**760** and is **never persisted** - the only volume that exists.
+  It is applied at **four** sites, not one: 3299, 3337, 3379, 3392 (the last three are `applyFadeIn` targets).
+- `updateMasterVolume` (1315) live-rescales playing elements while preserving their fade fraction (1325-1335)
+  and assumes every element's target *is* master. This is the only place that mutates a playing element's
+  volume and it has **no test**. Recommended fix: stamp `audio._baseVolume` at creation (next to `audio._soundId`
+  at 3301) and have that path read it - no lookup, no container walk.
+- ⚠️ **The new-sound save path (1490-1502) is an explicit allowlist**, so a field missing there is silently
+  dropped for new sounds while edits survive (the edit path at 1593-1601 spreads `...newSoundData`). That is the
+  most likely way to ship this feature half-working.
+- ⚠️ **The `||` trap**: the file normalises optional fields with `||` (e.g. `brightness || 1` at 1497), which
+  would turn a legitimately **muted** sound (volume 0) into 1. Must use `?? 1`. Precedent for the careful form
+  exists 5 lines later (`loop: newSoundData.loop !== undefined ? ... : ...` at 1502).
+- `transferSound`'s copy branch spreads `...source.sound` (2041) and only overrides `id`/`name`, so move and copy
+  carry a new per-sound field for free. Move keeps the same object reference.
+- Sound ids are minted once via `mintId('sound')` (260, called at 1485 and 2045) and never regenerated.
+- `playSound(sound)` at 3256 takes a **sound object**, early-returns in `editMode` (3257), auto-enables audio
+  (3259-3261), honours `randomPlay` (3268, a new random *file* per play), and registers each instance under its
+  own `audioInstanceKey` (3303) in `audioElementsRef`. `stopSound` 3472 / `stopSoundInstances` 3464 /
+  `stopAllSounds` 3476.
+- **There is no right-click or long-press handling anywhere in App.jsx** - no `onContextMenu`, no `contextmenu`
+  listener, no long-press helper, no `onTouchStart`. The only pointer handler is `onPointerDown` at 3643
+  (drag-and-drop). Priming's gesture is therefore greenfield, with no precedent to copy.
+- Hotkeys must not fire while a text field has focus. The app has many: `volumeInput` (1068), the numeric
+  `duration`/`fadeIn`/`fadeOut` fields (5529/5541/5553), plus search and picker inputs. Existing `keydown`
+  listeners to coordinate with: 728 (document, bubble) and 2166 (capture, closes the move/copy modal).
+- `tauri-plugin-global-shortcut` would be **desktop-only** and goes in `main.rs` **only** - the **reverse** of
+  the dialog rule in `PROFILE_SYNC_SPEC.md` §10. Noted the trap: a desktop-only plugin in the mobile `lib.rs`
+  binary can pass a desktop build and break the APK, so verify the Android target after adding it.
+
+### Two questions left for the user
+1. Is per-sound volume **modal-only** (cheap, recommended for v1) or a **live slider on each card** (matches
+   "sound button based" more literally, but adds a control to a `div role="button"` and a touch-vs-tap conflict)?
+2. Is priming **sticky for the session**, **one-shot**, or a **saved named layer**? Only the third is content.
+
+### Housekeeping
+- Backup `ttrpg-soundboard-backup-20261006-213005`, 203/203 verified, 39.2 MB.
+- **Uncommitted**, docs only: the three new specs plus `PROFILE_SYNC_SPEC.md`, `PROJECT_STATE.md` and this file
+  from the spike session. No app code was touched in either session. The user has not asked for a commit.
+
+### 21:47-22:00 - the two design questions answered, and a docs-only audit
+
+**User**: priming is **one-shot** ("I should have specified it is not profile content but you picked it up
+anyway"), per-sound volume should have a **live slider** ("ideally"), and asked for confirmation that the last
+three features were documents only.
+
+**Audit result - confirmed, with evidence**: every modified tracked file is a `.md`; `src/App.jsx` hashes
+identical to the HEAD blob (`193b1685...`); nothing under `src/`, `src-tauri/` or any config file differs from
+HEAD. Untracked additions are the three new spec files only. Both sessions were documentation-only.
+
+**Answers folded into the specs:**
+
+1. **Priming = one-shot.** Collapsed `SOUND_PRIMING_SPEC.md` from a two-model split to the single chosen design.
+   Model B (saved named layers) is now **explicitly rejected**, with §6 kept purely as the record of why so a
+   later session does not re-open it. Two consequences written in:
+   - **No `localStorage` key for priming.** Flagged as a deliberate absence, not an oversight, and added to the
+     verification checklist.
+   - ⚠️ **The capture-and-clear must happen synchronously, before any `await`.** `playSound` is async (3256), so
+     clearing the primed set afterwards would let a second trigger pick up the same primed sounds and play them
+     twice. `playWithPrimes` now reads the set and calls `setPrimedSoundIds(new Set())` before the first `await`.
+   - Because priming is now the cheapest of the three features (zero persistence, zero interaction with the
+     profile refactor), its recommended position changed from "Model A before profiles" to **any time**.
+
+2. **Per-sound volume = live card slider.** The modal-only option is gone; §2b is new and specifies the work the
+   live slider actually implies, none of which was in the modal-only version:
+   - **The drag/play conflict** - a card is a click target and a slider is a drag target, so the slider needs
+     `stopPropagation` on `pointerdown`, and playback must move to `click` if it is not already there. Flagged
+     that the card's existing `onPointerDown` (3643, drag-and-drop) is the likely conflict.
+   - **"Live" means audible now** - adjusting a currently playing or looping sound must rescale its live
+     `Audio` elements. The hook exists (`audio._soundId` at 3301, `audioElementsRef` at 3304). Explicitly **not**
+     a reuse of `updateMasterVolume`, which iterates all elements by master ratio; instead extract the shared
+     "rescale while preserving fade fraction" helper and use it in both places.
+   - **Cost** - one slider per card, ~90 sounds on a busy account; recommends a compact level bar rather than a
+     full master-style slider, and notes a hover-reveal is unusable on touch.
+   - **ARIA** - a slider nested inside a `role="button"` card is invalid ARIA; flagged as a decision to make
+     before coding because it affects the markup of every card.
+   - Two new E2E requirements: the card drag must not play the sound, and a live change must be audible on a
+     playing/looping sound without restarting it.
+
+**Cross-spec conflict now recorded in both files:** volume and priming now both modify the sound card. The volume
+slider's `stopPropagation` serves both purposes (stops play *and* prime), priming should be card-body-only, and
+each spec says to re-read the other's card section before implementing. This is the one place two of these
+features will collide in review.
+
+Backup `ttrpg-soundboard-backup-20261006-213714`, **206/206 verified**, 39.3 MB (203 + the 3 new specs).
+Still uncommitted; no app code touched at any point in either session.
