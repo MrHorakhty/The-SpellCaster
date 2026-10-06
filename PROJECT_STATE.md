@@ -1,10 +1,10 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-06 23:24 — working on: final doc pass, then commit + push volume
-(prior holder: opencode, released 2026-10-06 23:20 — **per-sound volume is DONE**: shipped, hand-tested by the
-user, and green on all three gates** (web 147, Windows 146, Android 85). Next feature is
-`SOUND_PRIMING_SPEC.md`; new E2E ids must start at **P17**.)
-(last holder before this: opencode, released 2026-10-06 22:18 — docs only. 20:02-21:00: spiked and closed the last open unknown in
+🔓 UNCLAIMED — last holder: opencode (2026-10-06 23:32). **Per-sound volume is DONE and pushed as `10fe6e2`**:
+shipped, hand-tested by the user, and green on all three gates (web 147, Windows 146, Android 85). Working tree
+clean apart from the known EOL-only `src-tauri/Cargo.toml`. Next feature is `SOUND_PRIMING_SPEC.md`; new E2E ids
+must start at **P17**. Profiles and hotkeys remain **unauthorised** pending the user's review.
+(Two sessions before this: opencode, docs only, released 2026-10-06 22:18. 20:02-21:00: spiked and closed the last open unknown in
 `PROFILE_SYNC_SPEC.md` §10 — the **desktop** picker-path write — which passes via a ~5-line runtime
 `fs_scope().allow_file` grant, no blanket scope; also falsified the spec's `fs:default`/`read_dir` claim, found
 the missing `dialog:allow-save` capability, and found a silent byte-corruption trap (`Array` vs `Uint8Array`).
@@ -44,21 +44,23 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**. ✅ **Per-sound volume committed and pushed 2026-10-06 23:2x** (hash in Recent
-  commits). ✅ **Push works, no auth prompt or proxy trouble** — consistent with 2026-10-04 and 2026-10-06.
+- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-06
+  23:31). ✅ **Per-sound volume committed as `10fe6e2` and pushed** — `c96193c..10fe6e2`.
+  ✅ **Push works, no auth prompt or proxy trouble** — consistent with 2026-10-04 and 2026-10-06.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
-- Recent commits: per-sound volume (2026-10-06) · a final state note for it ·
+- Recent commits: `10fe6e2` "Add per-sound volume, with a live slider on every sound card" ·
+  `c96193c` "Release the claim with a session summary for 2026-10-06" ·
+  `a1f0e8b` "Record post-push state after the desktop spike and the three new specs" ·
   `0a6f346` "Close the desktop spike, add specs for volume, hotkeys and priming" ·
-  `f3e83f2` "Final state note…" · `30fa85b` "Record repo state after push…" ·
   `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
   `f7f316e` "Added ability to move or copy sounds…".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
-- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 23:3x.
-- ⚠️ **`src-tauri/Cargo.toml` will show as modified in `git status` even when its content is untouched** — the
-  working copy has LF endings while the committed blob has CRLF, so `git diff` reports **no content change**
-  (`git diff -w` and a normalised hash both confirm it). Do not "fix" it by sweeping it into a commit; if you
-  want a clean `git status`, change the EOL deliberately and say so in the commit.
+- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 23:31 — with **one expected exception**:
+  `src-tauri/Cargo.toml` shows as modified while containing **no content change**. Its working copy has LF
+  endings and the committed blob has CRLF, so `git diff` reports nothing and a normalised hash confirms the
+  content is identical. **Do not "fix" it by sweeping it into a commit**; if you want a clean `git status`,
+  change the EOL deliberately and say so in the commit message.
 - ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
   echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
