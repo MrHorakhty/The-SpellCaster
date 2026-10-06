@@ -679,6 +679,78 @@ const fadeOutAudio = (audio, fadeOutSeconds, onComplete) => {
     }, stepDuration)
 }
 
+// Rescale a playing element to `target`, preserving its position within a running
+// fade so a volume change stays smooth instead of snapping flat. Shared by the
+// master slider and the per-sound card slider - the arithmetic is fiddly and
+// there is only one copy of it on purpose.
+const rescaleAudioTarget = (audio, target) => {
+    if (!audio || typeof audio.volume === 'undefined') {
+        return
+    }
+
+    if (audio.fadeInInterval) {
+        const oldTarget = audio._fadeTargetVolume ?? 1
+        const fraction = oldTarget > 0 ? Math.min(1, Math.max(0, (audio.volume || 0) / oldTarget)) : 0
+        audio._fadeTargetVolume = target
+        audio.volume = Math.min(target, fraction * target)
+    } else {
+        audio.volume = target
+    }
+}
+
+// A sound's own level is a 0-1 TRIM on top of the master volume, and an absent
+// field means 100%. Coerce with Number() rather than `||`: 0 is a legitimate
+// level (a deliberately muted sound) and `0 || 1` would revive it on the next
+// save. Number() also normalises the string a range/number input hands over.
+const normalizeSoundVolume = (value) => {
+    const num = Number(value)
+    return Number.isFinite(num) ? Math.min(1, Math.max(0, num)) : 1
+}
+
+// Keys that hold either sounds (patched) or further containers (recurse into).
+// Together these cover all FIVE container shapes: characters[].sounds,
+// environmentSounds[].sounds, groups[].categories[].sounds,
+// groups[].characters[].sounds and the vestigial groups[].sounds.
+const SOUND_CONTAINER_KEYS = ['sounds', 'categories', 'characters']
+
+// Map every sound reachable from `list` through `visit`, returning the original
+// array when nothing matched so untouched branches keep their identity and a
+// volume drag does not re-render the whole board. Hand-rolling this per slice is
+// how the four-shape assumption gets made - walk the keys instead.
+const mapSoundContainers = (list, visit) => {
+    if (!Array.isArray(list)) {
+        return list
+    }
+
+    let changed = false
+    const next = list.map(entry => {
+        if (!entry || typeof entry !== 'object') {
+            return entry
+        }
+
+        let item = entry
+        SOUND_CONTAINER_KEYS.forEach(key => {
+            const child = entry[key]
+            if (!Array.isArray(child)) {
+                return
+            }
+
+            const mapped = key === 'sounds'
+                ? child.map(sound => (sound && typeof sound === 'object' ? visit(sound) : sound))
+                : mapSoundContainers(child, visit)
+
+            if (mapped.some((value, i) => value !== child[i])) {
+                item = { ...item, [key]: mapped }
+                changed = true
+            }
+        })
+
+        return item
+    })
+
+    return changed ? next : list
+}
+
 function App() {
     // Load from localStorage first, fallback to data.json if it's a first-time load
     const [characters, setCharacters] = useState(() => {
@@ -973,7 +1045,8 @@ function App() {
         fadeOut: 0,
         loop: false,
         glowEnabled: false,
-        glowProminence: 0.5
+        glowProminence: 0.5,
+        volume: 1
     })
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [itemToDelete, setItemToDelete] = useState(null)
@@ -1073,6 +1146,25 @@ function App() {
             setVolumeInput(Math.round(masterVolume * 100).toString())
         }
     }, [masterVolume, volumeFocused])
+
+    // Same focus-safe pattern for the sound modal's volume field, so the number
+    // box can be cleared and retyped without the value snapping back mid-edit.
+    const [soundVolumeInput, setSoundVolumeInput] = useState('100')
+    const [soundVolumeFocused, setSoundVolumeFocused] = useState(false)
+
+    useEffect(() => {
+        if (!soundVolumeFocused) {
+            setSoundVolumeInput(Math.round(normalizeSoundVolume(soundFormData.volume) * 100).toString())
+        }
+    }, [soundFormData.volume, soundVolumeFocused])
+
+    const setSoundVolumePercent = (raw) => {
+        const parsed = parseInt(raw, 10)
+        if (Number.isNaN(parsed)) {
+            return
+        }
+        setSoundFormData(prev => ({ ...prev, volume: Math.min(100, Math.max(0, parsed)) / 100 }))
+    }
 
     // State for storing loaded image URLs
     const [loadedIcons, setLoadedIcons] = useState({})
@@ -1323,19 +1415,69 @@ function App() {
 
         audioElementsRef.current.forEach((audio) => {
             if (audio && typeof audio.volume !== 'undefined') {
-                if (audio.fadeInInterval) {
-                    // Mid-fade: scale the current level proportionally to the new
-                    // target and let the running ramp continue toward it, so a
-                    // master-volume change stays smooth instead of snapping flat.
-                    const oldTarget = audio._fadeTargetVolume ?? 1
-                    const fraction = oldTarget > 0 ? Math.min(1, Math.max(0, (audio.volume || 0) / oldTarget)) : 0
-                    audio._fadeTargetVolume = nowEnabled ? volume : 0
-                    audio.volume = Math.min(audio._fadeTargetVolume, fraction * audio._fadeTargetVolume)
-                } else {
-                    audio.volume = nowEnabled ? volume : 0
-                }
+                // Each element carries its own sound's trim, so the target is
+                // the master value times that sound's level - not the master
+                // value alone. An element created before this existed has no trim
+                // and falls back to 100%.
+                const target = (nowEnabled ? volume : 0) * (audio._soundVolume ?? 1)
+                // Keep _baseVolume in step. It is read back at loop re-entry, so
+                // leaving it at its creation value would fade a looping sound back
+                // down to the level it started at after a master change.
+                audio._baseVolume = target
+                rescaleAudioTarget(audio, target)
             }
         })
+    }
+
+    // Live per-sound level change from a card slider. Only touches instances of
+    // this sound, and uses the same fade-preserving arithmetic as the master
+    // slider. Deliberately not updateMasterVolume: that iterates every element
+    // and scales by the master ratio, which is a different operation.
+    const updateSoundVolume = (soundId, level) => {
+        const soundVolume = normalizeSoundVolume(level)
+        const target = masterVolume * soundVolume
+
+        audioElementsRef.current.forEach((audio) => {
+            if (!audio || audio._soundId !== soundId) {
+                return
+            }
+
+            audio._soundVolume = soundVolume
+            audio._baseVolume = target
+            rescaleAudioTarget(audio, target)
+        })
+    }
+
+    // Write a field onto one sound wherever it lives, in any of the five
+    // container shapes. Sound ids are app-unique, so the first match wins and
+    // there is no ambiguity to handle. Branches with no match keep their
+    // identity, so only the slice actually holding the sound re-renders.
+    const patchSoundById = (soundId, patch) => {
+        const visit = (sound) => (sound.id === soundId ? { ...sound, ...patch } : sound)
+
+        setCharacters(prev => mapSoundContainers(prev, visit))
+        setEnvironmentSounds(prev => mapSoundContainers(prev, visit))
+        setGroups(prev => mapSoundContainers(prev, visit))
+    }
+
+    // A card slider drag updates the UI and the audio on every pointermove, but
+    // the persisted field is written once on commit. The auto-save effects are
+    // undebounced and stringify the whole slice into localStorage synchronously,
+    // so persisting per move would make dragging a 90-sound board stutter.
+    // `null` means no drag in progress.
+    const [cardVolumeDraft, setCardVolumeDraft] = useState(null)
+
+    const previewCardVolume = (soundId, value) => {
+        const level = normalizeSoundVolume(value)
+        setCardVolumeDraft({ soundId, level })
+        updateSoundVolume(soundId, level)
+    }
+
+    const commitCardVolume = (soundId, value) => {
+        const level = normalizeSoundVolume(value)
+        setCardVolumeDraft(null)
+        patchSoundById(soundId, { volume: level })
+        updateSoundVolume(soundId, level)
     }
 
     const toggleFullscreen = async () => {
@@ -1385,7 +1527,8 @@ function App() {
             loop: defaultLoop,
             randomPlay: false,
             glowEnabled: false,
-            glowProminence: 0.5
+            glowProminence: 0.5,
+            volume: 1
         })
         setIconPreview('')
 
@@ -1437,7 +1580,8 @@ function App() {
             fadeOut: sound.fadeOut || 0,
             loop: loopValue,
             glowEnabled: sound.glowEnabled || false,
-            glowProminence: sound.glowProminence || 0.5
+            glowProminence: sound.glowProminence || 0.5,
+            volume: normalizeSoundVolume(sound.volume)
         })
         setEditingSound(sound)
         setShowSoundModal(true)
@@ -1499,7 +1643,12 @@ function App() {
             duration: parseFloat(newSoundData.duration) || 0,
             fadeIn: parseFloat(newSoundData.fadeIn) || 0,
             fadeOut: parseFloat(newSoundData.fadeOut) || 0,
-            loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups')
+            loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups'),
+            // This object literal is an explicit allowlist: a field missing here is
+            // dropped for every newly created sound, while edits survive it because
+            // the edit path spreads. volume has to be listed here or every new sound
+            // silently plays at 100%.
+            volume: normalizeSoundVolume(newSoundData.volume)
         }
 
         if (splitSoundTarget) {
@@ -1599,6 +1748,7 @@ function App() {
             fadeOut: parseFloat(newSoundData.fadeOut) || 0,
             loop: newSoundData.loop !== undefined ? newSoundData.loop : false,
             randomPlay: newSoundData.randomPlay || false,
+            volume: normalizeSoundVolume(newSoundData.volume)
         }
 
         if (splitSoundTarget) {
@@ -3261,6 +3411,8 @@ function App() {
         }
 
         const soundKey = sound.id
+        const soundVolume = normalizeSoundVolume(sound.volume)
+        const baseVolume = masterVolume * soundVolume
         const normalizedFiles = normalizeStoredFileList(sound.files || [])
         let fileToPlay
 
@@ -3296,9 +3448,15 @@ function App() {
 
         const audio = new Audio(soundUrl)
         audio.loop = false
-        audio.volume = masterVolume
+        // The sound's own level is a trim on the master volume. Record both parts
+        // on the element: `_soundVolume` lets the master slider recompute the
+        // product for THIS sound later, and `_baseVolume` is the target fades run
+        // to, so a fade-in ends at the sound's level rather than at master.
+        audio.volume = baseVolume
         audio._blobUrl = createdBlobUrl
         audio._soundId = soundKey
+        audio._soundVolume = soundVolume
+        audio._baseVolume = baseVolume
 
         const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         audioElementsRef.current.set(audioInstanceKey, audio)
@@ -3334,7 +3492,7 @@ function App() {
         }
 
         if (sound.fadeIn > 0) {
-            applyFadeIn(audio, masterVolume, sound.fadeIn)
+            applyFadeIn(audio, baseVolume, sound.fadeIn)
         }
 
         if (!sound.loop && sound.duration > 0) {
@@ -3376,7 +3534,10 @@ function App() {
                     audio.currentTime = 0
                     if (firstLoopPlay && sound.fadeIn > 0) {
                         firstLoopPlay = false
-                        applyFadeIn(audio, masterVolume, sound.fadeIn)
+                        // Read the target back off the element rather than closing over
+                        // baseVolume: if the card slider moved this sound's level while
+                        // it was already looping, the next loop must start at the new one.
+                        applyFadeIn(audio, audio._baseVolume ?? baseVolume, sound.fadeIn)
                     }
                 }
             })
@@ -3389,7 +3550,10 @@ function App() {
                 audio.currentTime = 0
                 if (firstLoopPlay && sound.fadeIn > 0) {
                     firstLoopPlay = false
-                    applyFadeIn(audio, masterVolume, sound.fadeIn)
+                    // Read the target back off the element rather than closing over
+                    // baseVolume: if the card slider moved this sound's level while
+                    // it was already looping, the next loop must start at the new one.
+                    applyFadeIn(audio, audio._baseVolume ?? baseVolume, sound.fadeIn)
                 }
                 audio.play().catch(() => {})
             })
@@ -3626,214 +3790,224 @@ function App() {
         const IconComponent = getSoundIcon(sound.type)
         const isDragging = draggedSoundId === sound.id
         const isDragTarget = dragOverSoundId === sound.id && !isDragging
+        // Show the in-flight drag value so the slider tracks the pointer, and fall
+        // back to the persisted field (absent === 100%).
+        const cardVolume = cardVolumeDraft && cardVolumeDraft.soundId === sound.id
+            ? cardVolumeDraft.level
+            : normalizeSoundVolume(sound.volume)
+        const cardVolumePercent = Math.round(cardVolume * 100)
 
         return (
             <div
                 key={sound.id}
-                className={`group relative shrink-0 ${isMobile ? 'w-full' : ''}`}
+                // Two levels: the outer div is the grid cell and owns the volume row,
+                // the inner one is the card's positioning context so the edit-mode
+                // buttons keep anchoring to the card rather than to the taller stack.
+                className={`group relative shrink-0 flex flex-col gap-1 ${isMobile ? 'w-full' : ''}`}
                 style={isMobile ? {} : { width: `${140 * boxSize}px` }}
             >
-                <div
-                    data-sound-card
-                    data-sound-id={sound.id}
-                    role="button"
-                    tabIndex={editMode ? -1 : 0}
-                    aria-disabled={editMode}
-                    draggable={false}
-                    onPointerDown={(e) => {
-                        if (!editMode || e.button !== 0) return
-                        e.preventDefault()
-                        try {
-                            e.target.setPointerCapture(e.pointerId)
-                        } catch {
-                            // ignore capture errors
-                        }
-                        dragRef.current = {
-                            draggedId: sound.id,
-                            containerType,
-                            containerId,
-                            groupId: splitTarget?.groupId || null,
-                            startX: e.clientX,
-                            startY: e.clientY,
-                            element: e.currentTarget,
-                        }
-                        setDraggedSoundId(sound.id)
-                    }}
-                    onPointerCancel={() => {
-                        dragRef.current = null
-                        setDraggedSoundId(null)
-                        setDragOverSoundId(null)
-                    }}
-                    onPointerMove={(e) => {
-                        if (!dragRef.current) return
-                        const dx = e.clientX - dragRef.current.startX
-                        const dy = e.clientY - dragRef.current.startY
-                        if (Math.abs(dx) + Math.abs(dy) < 4) return
-                        try {
-                            e.target.releasePointerCapture(e.pointerId)
-                        } catch {
-                            // ignore if capture was already released
-                        }
-                        const moveHandler = (ev) => {
-                            const allCards = document.querySelectorAll('[data-sound-card]')
-                            let foundTarget = null
-                            allCards.forEach(card => {
-                                const rect = card.getBoundingClientRect()
-                                if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
-                                    ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
-                                    const cardId = card.dataset.soundId
-                                    if (cardId !== dragRef.current.draggedId) {
-                                        foundTarget = cardId
-                                    }
-                                }
-                            })
-                            if (foundTarget !== dragRef.current.currentTargetId) {
-                                dragRef.current.currentTargetId = foundTarget
-                                setDragOverSoundId(foundTarget)
+                <div className="relative">
+                    <div
+                        data-sound-card
+                        data-sound-id={sound.id}
+                        role="button"
+                        tabIndex={editMode ? -1 : 0}
+                        aria-disabled={editMode}
+                        draggable={false}
+                        onPointerDown={(e) => {
+                            if (!editMode || e.button !== 0) return
+                            e.preventDefault()
+                            try {
+                                e.target.setPointerCapture(e.pointerId)
+                            } catch {
+                                // ignore capture errors
                             }
-                        }
-                        const endDrag = (committed) => {
-                            document.removeEventListener('pointermove', moveHandler)
-                            document.removeEventListener('pointerup', upHandler)
-                            document.removeEventListener('pointercancel', onDocCancel)
-                            window.removeEventListener('blur', onDocBlur)
-                            if (committed && dragRef.current.currentTargetId) {
-                                moveSound(
-                                    dragRef.current.draggedId,
-                                    dragRef.current.currentTargetId,
-                                    dragRef.current.containerType,
-                                    dragRef.current.containerId,
-                                    dragRef.current.groupId
-                                )
+                            dragRef.current = {
+                                draggedId: sound.id,
+                                containerType,
+                                containerId,
+                                groupId: splitTarget?.groupId || null,
+                                startX: e.clientX,
+                                startY: e.clientY,
+                                element: e.currentTarget,
                             }
+                            setDraggedSoundId(sound.id)
+                        }}
+                        onPointerCancel={() => {
+                            dragRef.current = null
                             setDraggedSoundId(null)
                             setDragOverSoundId(null)
-                            dragRef.current = null
-                        }
-                        const upHandler = (ev) => {
-                            endDrag(true)
-                        }
-                        const onDocCancel = () => {
-                            endDrag(false)
-                        }
-                        const onDocBlur = () => {
-                            endDrag(false)
-                        }
-                        document.addEventListener('pointermove', moveHandler)
-                        document.addEventListener('pointerup', upHandler)
-                        document.addEventListener('pointercancel', onDocCancel)
-                        window.addEventListener('blur', onDocBlur)
-                    }}
-                    onClick={() => {
-                        if (!editMode) playSound(sound)
-                    }}
-                    onKeyDown={(e) => {
-                        if (editMode) return
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            playSound(sound)
-                        }
-                    }}
-                    className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying && !editMode ? 'ring-2 ring-lime-500' : ''
-                        } ${isDragTarget ? 'ring-2 ring-lime-500 border-lime-400' : ''
-                        } ${isDragging ? 'opacity-40' : ''} ${editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
-                    style={{
-                        backgroundColor: 'var(--theme-bg-secondary)',
-                        borderColor: sound.color,
-                        padding: `${8 * boxSize}px`,
-                        borderRadius: '12px',
-                        touchAction: editMode ? 'none' : undefined,
-                        ...getGlowEffectStyle(sound)
-                    }}
-                >
-                    <div
-                        className="flex flex-col items-center justify-center w-full"
+                        }}
+                        onPointerMove={(e) => {
+                            if (!dragRef.current) return
+                            const dx = e.clientX - dragRef.current.startX
+                            const dy = e.clientY - dragRef.current.startY
+                            if (Math.abs(dx) + Math.abs(dy) < 4) return
+                            try {
+                                e.target.releasePointerCapture(e.pointerId)
+                            } catch {
+                                // ignore if capture was already released
+                            }
+                            const moveHandler = (ev) => {
+                                const allCards = document.querySelectorAll('[data-sound-card]')
+                                let foundTarget = null
+                                allCards.forEach(card => {
+                                    const rect = card.getBoundingClientRect()
+                                    if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
+                                        ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+                                        const cardId = card.dataset.soundId
+                                        if (cardId !== dragRef.current.draggedId) {
+                                            foundTarget = cardId
+                                        }
+                                    }
+                                })
+                                if (foundTarget !== dragRef.current.currentTargetId) {
+                                    dragRef.current.currentTargetId = foundTarget
+                                    setDragOverSoundId(foundTarget)
+                                }
+                            }
+                            const endDrag = (committed) => {
+                                document.removeEventListener('pointermove', moveHandler)
+                                document.removeEventListener('pointerup', upHandler)
+                                document.removeEventListener('pointercancel', onDocCancel)
+                                window.removeEventListener('blur', onDocBlur)
+                                if (committed && dragRef.current.currentTargetId) {
+                                    moveSound(
+                                        dragRef.current.draggedId,
+                                        dragRef.current.currentTargetId,
+                                        dragRef.current.containerType,
+                                        dragRef.current.containerId,
+                                        dragRef.current.groupId
+                                    )
+                                }
+                                setDraggedSoundId(null)
+                                setDragOverSoundId(null)
+                                dragRef.current = null
+                            }
+                            const upHandler = (ev) => {
+                                endDrag(true)
+                            }
+                            const onDocCancel = () => {
+                                endDrag(false)
+                            }
+                            const onDocBlur = () => {
+                                endDrag(false)
+                            }
+                            document.addEventListener('pointermove', moveHandler)
+                            document.addEventListener('pointerup', upHandler)
+                            document.addEventListener('pointercancel', onDocCancel)
+                            window.addEventListener('blur', onDocBlur)
+                        }}
+                        onClick={() => {
+                            if (!editMode) playSound(sound)
+                        }}
+                        onKeyDown={(e) => {
+                            if (editMode) return
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                playSound(sound)
+                            }
+                        }}
+                        className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying && !editMode ? 'ring-2 ring-lime-500' : ''
+                            } ${isDragTarget ? 'ring-2 ring-lime-500 border-lime-400' : ''
+                            } ${isDragging ? 'opacity-40' : ''} ${editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                         style={{
-                            marginBottom: `${4 * boxSize}px`
+                            backgroundColor: 'var(--theme-bg-secondary)',
+                            borderColor: sound.color,
+                            padding: `${8 * boxSize}px`,
+                            borderRadius: '12px',
+                            touchAction: editMode ? 'none' : undefined,
+                            ...getGlowEffectStyle(sound)
                         }}
                     >
-                        {sound.icon ? (
-                            <img
-                                src={tintedIcons[`${sound.icon}|${sound.color || 'default'}|${sound.brightness || 1}`] || loadedIcons[sound.icon] || `/assets/${sound.icon}`}
-                                alt={sound.name}
-                                className="mb-1 object-contain shrink-0"
-                                style={{
-                                    width: `${48 * boxSize}px`,
-                                    height: `${48 * boxSize}px`
-                                }}
-                            />
-                        ) : (
-                            <IconComponent
-                                size={40 * boxSize}
-                                className="mb-1 shrink-0"
-                                style={sound.color === 'transparent' ? {
-                                    filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
-                                } : sound.color !== '#84cc16' ? {
-                                    filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
-                                } : {}}
-                            />
-                        )}
-
                         <div
-                            className="font-medium text-center truncate w-full px-1 shrink-0"
+                            className="flex flex-col items-center justify-center w-full"
                             style={{
-                                fontSize: `${16 * boxSize}px`,
-                                lineHeight: `${24 * boxSize}px`
+                                marginBottom: `${4 * boxSize}px`
                             }}
                         >
-                            {sound.name}
-                        </div>
-                        <div
-                            className="text-slate-400 text-center truncate w-full px-1 shrink-0"
-                            style={{
-                                fontSize: `${11 * boxSize}px`,
-                                lineHeight: `${16 * boxSize}px`
-                            }}
-                        >
-                            {sound.type}
-                        </div>
+                            {sound.icon ? (
+                                <img
+                                    src={tintedIcons[`${sound.icon}|${sound.color || 'default'}|${sound.brightness || 1}`] || loadedIcons[sound.icon] || `/assets/${sound.icon}`}
+                                    alt={sound.name}
+                                    className="mb-1 object-contain shrink-0"
+                                    style={{
+                                        width: `${48 * boxSize}px`,
+                                        height: `${48 * boxSize}px`
+                                    }}
+                                />
+                            ) : (
+                                <IconComponent
+                                    size={40 * boxSize}
+                                    className="mb-1 shrink-0"
+                                    style={sound.color === 'transparent' ? {
+                                        filter: `brightness(0) saturate(100%) invert(1) sepia(1) saturate(10) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                                    } : sound.color !== '#84cc16' ? {
+                                        filter: `sepia(0.5) saturate(200%) hue-rotate(${getHueRotateFromColor(sound.color)}deg) brightness(${sound.brightness || 1})`
+                                    } : {}}
+                                />
+                            )}
 
-                        {/* Loop Indicator */}
-                        {!editMode && sound.loop && (
-                            <InfinityIcon
-                                className="absolute text-blue-500"
-                                size={12 * boxSize}
+                            <div
+                                className="font-medium text-center truncate w-full px-1 shrink-0"
                                 style={{
-                                    bottom: `${8 * boxSize}px`,
-                                    right: `${8 * boxSize}px`
+                                    fontSize: `${16 * boxSize}px`,
+                                    lineHeight: `${24 * boxSize}px`
                                 }}
-                                title="Looping enabled"
-                            />
-                        )}
-
-                        {/* Multi-file Indicator */}
-                        {!editMode && sound.files && sound.files.length > 1 && (
-                            <Shuffle
-                                className="absolute text-purple-500"
-                                size={12 * boxSize}
-                                style={{
-                                    top: `${8 * boxSize}px`,
-                                    right: `${8 * boxSize}px`
-                                }}
-                                title={`${sound.files.length} files available`}
-                            />
-                        )}
-
-                        {/* Stop Button */}
-                        {isPlaying && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    stopSound(sound)
-                                }}
-                                className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
-                                title="Stop Sound"
                             >
-                                <Square size={12} />
-                            </button>
-                        )}
+                                {sound.name}
+                            </div>
+                            <div
+                                className="text-slate-400 text-center truncate w-full px-1 shrink-0"
+                                style={{
+                                    fontSize: `${11 * boxSize}px`,
+                                    lineHeight: `${16 * boxSize}px`
+                                }}
+                            >
+                                {sound.type}
+                            </div>
+
+                            {/* Loop Indicator */}
+                            {!editMode && sound.loop && (
+                                <InfinityIcon
+                                    className="absolute text-blue-500"
+                                    size={12 * boxSize}
+                                    style={{
+                                        bottom: `${8 * boxSize}px`,
+                                        right: `${8 * boxSize}px`
+                                    }}
+                                    title="Looping enabled"
+                                />
+                            )}
+
+                            {/* Multi-file Indicator */}
+                            {!editMode && sound.files && sound.files.length > 1 && (
+                                <Shuffle
+                                    className="absolute text-purple-500"
+                                    size={12 * boxSize}
+                                    style={{
+                                        top: `${8 * boxSize}px`,
+                                        right: `${8 * boxSize}px`
+                                    }}
+                                    title={`${sound.files.length} files available`}
+                                />
+                            )}
+
+                            {/* Stop Button */}
+                            {isPlaying && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        stopSound(sound)
+                                    }}
+                                    className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
+                                    title="Stop Sound"
+                                >
+                                    <Square size={12} />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
 
                 {/* Edit Mode Actions */}
                 {editMode && (
@@ -3853,7 +4027,7 @@ function App() {
                             <Edit size={10} />
                         </button>
                         {/* Bottom-centre: both top corners are taken by delete and
-                            edit. Anchored to the wrapper, not the card, so it does
+                            edit. Anchored to this stack, not the card, so it does
                             not inherit the card's pointerdown drag handler. */}
                         <button
                             onClick={() => openMoveCopyModal(sound, containerType, containerId, splitTarget)}
@@ -3864,6 +4038,39 @@ function App() {
                         </button>
                     </>
                 )}
+                </div>
+
+                {/* Per-sound volume. Sits OUTSIDE the role="button" card, for two
+                    reasons: it never inherits the card's click (so dragging it cannot
+                    play the sound) or its edit-mode pointerdown drag, and it keeps
+                    an interactive control out of a button role. Adjusts the level of
+                    sounds that are already playing or looping. */}
+                <div className="flex items-center gap-1 px-0.5 shrink-0">
+                    <span
+                        className="text-[9px] text-slate-500 tabular-nums w-6 shrink-0 text-right"
+                        aria-hidden="true"
+                    >
+                        {cardVolumePercent}%
+                    </span>
+                    <input
+                        type="range"
+                        data-sound-volume={sound.id}
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={cardVolume}
+                        aria-label={`${sound.name} volume`}
+                        aria-valuenow={cardVolumePercent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        title={`${sound.name} volume: ${cardVolumePercent}% (trim on the master volume)`}
+                        onChange={(e) => previewCardVolume(sound.id, e.target.value)}
+                        onPointerUp={(e) => commitCardVolume(sound.id, e.target.value)}
+                        onKeyUp={(e) => commitCardVolume(sound.id, e.target.value)}
+                        onBlur={(e) => commitCardVolume(sound.id, e.target.value)}
+                        className="slider h-3 min-w-0 flex-1 cursor-pointer"
+                    />
+                </div>
             </div>
         )
     }
@@ -5572,6 +5779,56 @@ function App() {
                                             <label htmlFor="loop" className="text-sm">
                                                 Loop sound continuously
                                             </label>
+                                        </div>
+
+                                        {/* Sound Volume. A trim ON TOP OF the master
+                                            volume, not a replacement for it: the
+                                            effective level is master x this. Writes the
+                                            same field as the card slider. */}
+                                        <div className="pt-4 border-t border-dark-700">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label htmlFor="soundVolumeRange" className="text-sm font-medium">
+                                                    Sound Volume
+                                                </label>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <input
+                                                        type="number"
+                                                        id="soundVolumeNumber"
+                                                        min="0"
+                                                        max="100"
+                                                        inputMode="numeric"
+                                                        value={soundVolumeFocused ? soundVolumeInput : Math.round(normalizeSoundVolume(soundFormData.volume) * 100)}
+                                                        onFocus={() => {
+                                                            setSoundVolumeInput(Math.round(normalizeSoundVolume(soundFormData.volume) * 100).toString())
+                                                            setSoundVolumeFocused(true)
+                                                        }}
+                                                        onChange={(e) => {
+                                                            setSoundVolumeInput(e.target.value)
+                                                            setSoundVolumePercent(e.target.value)
+                                                        }}
+                                                        onBlur={() => {
+                                                            setSoundVolumeFocused(false)
+                                                            setSoundVolumePercent(soundVolumeInput)
+                                                        }}
+                                                        className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                                    />
+                                                    <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                id="soundVolumeRange"
+                                                data-sound-volume-modal
+                                                min="0"
+                                                max="1"
+                                                step="0.01"
+                                                value={normalizeSoundVolume(soundFormData.volume)}
+                                                onChange={(e) => setSoundFormData(prev => ({ ...prev, volume: Number(e.target.value) }))}
+                                                className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer slider"
+                                            />
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Trim applied on top of the master volume. 100% leaves this sound alone.
+                                            </p>
                                         </div>
 
                                         {/* Glow Effect Controls */}

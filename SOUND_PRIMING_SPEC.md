@@ -11,8 +11,11 @@
 > **Related**: `HOTKEYS_SPEC.md` (a hotkey must fire the primed set too — §5), `PER_SOUND_VOLUME_SPEC.md`
 > (⚠️ its card slider and this feature's card gesture compete for the same element — §3),
 > `PROFILE_SYNC_SPEC.md`.
-> ⚠️ **Recommended order: any time.** It is the cheapest of the three features and the only one with zero
-> persistence work.
+> ⚠️ **Recommended order: any time, but build it AFTER `PER_SOUND_VOLUME_SPEC.md` (2026-10-06).** It is the
+> cheapest of the three features and the only one with zero persistence work. Volume went first and settled the
+> sound card: the volume slider is a sibling of the card, **not** a descendant, so the nesting/ARIA problem is
+> already solved and priming needs no `stopPropagation` on the slider — §3's "hold/drag on the slider" warning is
+> moot as built. What priming still owns: the hold timer, `contextmenu` suppression, and the double-fire trap.
 
 ---
 
@@ -253,7 +256,11 @@ absence is a deliberate design decision, not an oversight.
 - [ ] The native context menu never appears on a card.
 - [ ] Press-and-hold does not raise the OS text-selection callout, and does not start a drag.
 - [ ] **Every container shape works**: a primed sound in a character, an environment category, a group category,
-      a group character, and the vestigial `groups[].sounds` (seed that one by hand — no UI puts anything there).
+      and a group character. ⚠️ **the vestigial `groups[].sounds` cannot be tested this way** —
+      `normalizeStoredData`'s group branch returns `sounds: []` and folds any legacy array into a `Default`
+      category, so **that array is wiped on every read**. Seeding it by hand and reloading proves nothing; assert
+      the `Default`-category fold instead (which is the path that actually survives a reload), or assert
+      in-session without a reload.
 - [ ] Stopping a multi-primed trigger stops **all** the sounds it started, and `stopAllSounds` is unaffected.
 - [ ] A primed sound whose file is missing does not break the primary trigger.
 - [ ] Primed state does **not** survive a reload and does **not** appear in any exported bundle.

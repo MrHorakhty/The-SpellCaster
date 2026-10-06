@@ -1,15 +1,24 @@
 # Per-Sound Volume — Planning Spec
 
-> **Status**: **New spec, 2026-10-06; decision folded in the same day.** Design only — **implementation is not
-> authorised.** No app code has been written. Line numbers were verified against `src/App.jsx` at **6240 lines**
-> on 2026-10-06; they drift, so re-verify before editing (the pattern in this project is that they go stale — see
-> `PROFILE_SYNC_SPEC.md` §0). **Created**: 2026-10-06
-> **Decided**: the level is a **trim**, not an absolute (§2), and the UI is a **live slider on the sound card**,
-> not modal-only (§2b). Two implementation consequences worth reading before starting: the card drag/play
-> conflict (§2b.1) and the ARIA shape of a control nested inside a `role="button"` card (§2b.4).
+> **Status**: ✅ **SHIPPED and HAND-TESTED 2026-10-06** — implemented, E2E-verified, and the user booted the
+> built app and reported it "works as intended from the brief testing". It clears the same bar move/copy did.
+> Design decisions below are the record; where this file was **wrong about the code**, the corrections are marked
+> ✅ RESOLVED / ✅ CORRECTION with the reason.
+> **Verified**: `npx eslint .` → 0 errors (3 pre-existing warnings); `npx vite build` green;
+> **web E2E 147 PASS / 0 FAIL / 0 WARN**; **Windows E2E 146 PASS / 0 FAIL / 1 WARN** (the WARN is the
+> pre-existing G5 skip); **Android 85 PASS / 0 FAIL / 0 WARN / exit 0** (2026-10-06 23:03) plus a real
+> screenshot confirming the row's layout. Suite **P** (`P1`-`P16`) in `e2e/e2e-full.mjs`. ⚠️ Suite P is **not**
+> ported to `e2e-mobile.mjs`, so the Android run proves no regression rather than volume working there.
+> **Decisions**: the level is a **trim**, not an absolute (§2), the UI is a **live slider on the sound card**
+> (§2b), and — decided while building — the card control sits **outside** the `role="button"` card (§2b.4).
+> **Line numbers below were verified against the 6240-line `src/App.jsx` on 2026-10-06 and have since drifted**
+> (the file is now ~6500 lines); the *structure* is accurate, the line numbers are not.
 > **Related**: `PROFILE_SYNC_SPEC.md` (profiles — a per-sound volume is *content* and rides the bundle for free),
-> `HOTKEYS_SPEC.md`, `SOUND_PRIMING_SPEC.md`. Playback internals are shared by all three; **§2b.2 and §3** below
-> are the parts that must not be designed twice (the live rescale and the fade-fraction arithmetic).
+> `HOTKEYS_SPEC.md`, `SOUND_PRIMING_SPEC.md`.
+> 💡 **Two shipped behaviours that are design decisions, not accidents**: a drag writes local state on every
+> pointermove but persists **once on commit** (`cardVolumeDraft`), because the auto-save effects are undebounced and
+> stringify the whole slice synchronously — persisting per move stutters a 90-sound board. And loop re-entry reads
+> `_baseVolume` back off the element, which is why the master path has to keep it fresh (§3).
 
 ---
 
@@ -123,12 +132,30 @@ handles it) rather than snapping the level.
 
 ### 2b.4 Accessibility
 
-The cards already use `role="button"`. A slider inside a button-role element needs `role="slider"` (or a real
-`input[type=range]`) plus `aria-valuenow`/`aria-label`, and keyboard support — the existing sliders handle keys via
-`onKeyDown` (App.jsx:4333, 4378, 4466, 4515), so follow that pattern or keyboard tests will not find it. A nested
-interactive control inside `role="button"` is also invalid ARIA; if that proves troublesome, make the card a
-`role="group"` containing a real play button plus the slider. **Decide this before coding** — it affects markup
-for every card.
+The cards already use `role="button"`.
+
+✅ **RESOLVED 2026-10-06 — no `role="group"` conversion. Put the control outside the card.**
+The in-repo precedent already answers this: the edit-mode buttons are anchored to the **wrapper** `div`, not the
+card, with the comment *"Anchored to the wrapper, not the card, so it does not inherit the card's pointerdown drag
+handler"*. A nested control already exists inside the card (the stop button, which uses `e.stopPropagation()`), so
+nested-ARIA-invalidity is the shipped status quo rather than a new problem to solve.
+
+Shipped shape: the card gained one wrapper level — an outer div (the grid cell, now `flex flex-col`, holding the
+volume row) containing an inner `relative` div that holds the card plus the edit-mode buttons. That keeps the
+edit buttons anchored to the card's own box while the volume row sits below it. Consequences, all of them good:
+
+- The slider is **not** a descendant of `[data-sound-card]`, so dragging it cannot trigger the card's `onClick`
+  and cannot arm the card's edit-mode drag. **No `stopPropagation` is needed at all.**
+- The nesting/ARIA question disappears rather than being designed around.
+- It also answers `SOUND_PRIMING_SPEC.md` §3: prime on the card body, and the slider needs no special-casing
+  because it is not inside the card.
+
+Accessibility on the control itself is cheap: it is a **native `<input type="range">`**, so arrow keys work with no
+`onKeyDown` handler. Add `aria-label` plus `aria-valuenow`/`valuemin`/`valuemax`, and a stable
+`data-sound-volume="<soundId>"` selector so tests do not have to guess at markup.
+
+⚠️ The card plays on **`onClick`**, and `onPointerDown` arms a drag **only when `editMode` is true** — so the
+conflict is click-bubbling outside edit mode and pointer-capture inside it. Both disappear with the wrapper.
 
 ---
 
@@ -159,6 +186,20 @@ and no id resolution. This keeps the whole feature inside `App.jsx` with **zero*
 one field, and it does not care that a sound's own volume changed *after* it started playing (the element keeps
 the level it began with — which is the sane behaviour anyway).
 
+⚠️⚠️ **`updateMasterVolume` MUST also refresh `_baseVolume`, not just the live volume.** This is a real bug, caught
+by the E2E suite on 2026-10-06, and it is invisible if you only assert the audible level: rescaling the element
+without updating `_baseVolume` leaves it at its creation value, and `playSound` reads `_baseVolume` back at
+**loop re-entry** — so a looping sound would fade back down to the level it started at after any master change.
+Shipped fix: set `audio._baseVolume = target` inside the same loop, before `rescaleAudioTarget`.
+
+Shipped, and worth keeping as the shape of the whole feature:
+
+| Helper | Role |
+|---|---|
+| `normalizeSoundVolume(value)` | one definition of "absent === 100%", coerces the input's **string** to a number, clamps to 0–1. Use it in **both** save paths, not just one |
+| `rescaleAudioTarget(audio, target)` | the fade-preserving rescale, extracted from `updateMasterVolume` and shared with the per-sound path — there is exactly one copy of that arithmetic on purpose |
+| `mapSoundContainers(list, visit)` + `patchSoundById(id, patch)` | write a field onto a sound in **any** of the five container shapes, returning untouched branches unchanged so a drag does not re-render the board. Do **not** hand-roll per-slice setters: PROJECT_STATE records that the four-shape assumption "looks correct and is not" |
+
 ⚠️ Whatever is chosen, `updateMasterVolume`'s fade-preserving arithmetic must be regression-tested: it is the only
 place in the app that mutates a playing element's volume, and it has no test today.
 
@@ -180,8 +221,8 @@ spreads. This is the single most likely way to ship a half-working feature.
 | 6 | App.jsx:3299, 3337, 3379, 3392 — the four volume applications | use the combined target from §3 |
 | 7 | App.jsx:1315-1335 — `updateMasterVolume` | use `audio._baseVolume`; extract the shared fade-fraction rescale helper (§2b.2) |
 | 8 | sound modal UI, beside `fadeIn` (5541) / `fadeOut` (5553) / `loop` (5566) | a slider + a numeric field, mirroring the master slider's two-control pattern |
-| 9 | **the sound card component** — a per-card live level control (§2b) | new UI + `stopPropagation` so dragging it never plays the sound; **decide the ARIA shape first** (§2b.4) |
-| 10 | **live per-sound rescale on slider move** (§2b.2) | a new path over `audioElementsRef` filtered by `audio._soundId` — not a reuse of `updateMasterVolume` |
+| 9 | **the sound card component** — a per-card live level control (§2b) | new UI. ✅ **shipped as a SIBLING of the card, not inside it**, so it inherits neither the card's click nor its edit-mode pointerdown drag — no `stopPropagation` needed (§2b.4) |
+| 10 | **live per-sound rescale on slider move** (§2b.2) | a new path over `audioElementsRef` filtered by `audio._soundId` — not a reuse of `updateMasterVolume`. Plus the persist-on-commit split (§7), because the auto-save effects are undebounced |
 
 **`transferSound` needs nothing.** Its copy branch spreads `...source.sound` (App.jsx:2041) and only overrides
 `id` and `name`, so a moved or copied sound keeps its level automatically. Move keeps the same object reference.
@@ -229,46 +270,83 @@ guard for this whole section.
 
 ## 7. E2E notes
 
-- **New ID range: continue from `P1`** (`PROFILE_SYNC_SPEC.md` §14 records `EDIT` at `E5`, `SOUND` at `J8`,
-  move/copy at `M1-M22` + `G1-G5`). Coordinate with `HOTKEYS_SPEC.md` and `SOUND_PRIMING_SPEC.md` if they land
-  first — pick one continuation point and put it in this file.
-- Sound cards are **`<div role="button">`, not `<button>`** — query `[data-sound-card]`, never `button`. ⚠️ the
-  card slider is a **nested interactive control inside that**, so give it a stable selector (e.g.
-  `[data-sound-volume]`) or every test has to guess at markup.
-- Sliders in this app are **not** native `<input type=range>` — the master ones are custom divs with `onKeyDown`
-  handlers (App.jsx:4333, 4378, 4466, 4515). Follow that pattern, or keyboard tests will not find the control.
-  To drive one over CDP: dispatch `pointerdown`/`pointermove`/`pointerup` at the fill's coordinates, or drive the
-  keyboard handler with `Input.dispatchKeyEvent`.
-- ⚠️ **The card-drag/play conflict (§2b.1) is the test that matters most**: a drag across the card's slider must
-  change the level **and not play the sound**. If that regresses, every other assertion is noise.
-- Also assert: the *next* play uses the new level; a **currently playing** sound is rescaled live (§2b.2); a
-  looping sound is rescaled without restarting.
-- Assertions worth writing: the field survives save+reload; **0 stays 0**; a sound at 50% combined with a master
-  at 50% is quieter than either alone; changing master mid-fade does not jump the level.
+- **New ID range: `P1`-`P16`** — **taken** by this feature on 2026-10-06, as Suite P in `e2e/e2e-full.mjs`. Note it
+  skipped P1–P9 ids and settled on the P1 block the other queued specs reserved; `SOUND_PRIMING_SPEC.md` and
+  `HOTKEYS_SPEC.md` must **not** reuse P. Suite V (`[WEBV]`) and Suite I are separate mobile suites.
+- Sound cards are **`<div role="button">`, not `<button>`** — query `[data-sound-card]`, never `button`.
+- ✅ **CORRECTION: the sliders in this app ARE native `<input type="range">`** (header and settings modal), each
+  paired with a sibling `input[type=number]`. This section previously claimed the opposite and pointed at
+  `onKeyDown` handlers as the pattern — those handlers belong to the **number** inputs. Consequences: keyboard
+  support is free (no `onKeyDown` needed), and over CDP you drive a slider through the **native value setter** plus
+  a bubbling `input` event, *not* by dispatching pointer moves:
+  ```js
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  setter.call(el, String(v));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  ```
+  Setting `.value` directly does **not** work — React tracks the value on the DOM node.
+- ⚠️ **Assert the persisted field, not the audible level, and beware unregistered elements.** Only elements still in
+  `audioElementsRef` get rescaled, and a short or undecodable fixture fires `ended` → `cleanupAudio` → unregistered
+  within milliseconds. An `ended` element still reports `paused === false`, so a liveness check cannot detect it —
+  which makes such a test pass or fail for the wrong reason. Shipped fixture: a **real bundled asset**
+  (`Longbow_4.mp3`) with `loop: true`, and no `storedName` so it resolves from `/assets`. An earlier hand-written
+  data-URL WAV of a few ms of silence reported no usable duration, never engaged the loop, and made the
+  live-rescale assertions vacuous on **both** web and Windows.
+- ⚠️ **The live-rescale test must be self-contained.** Reusing an element created by an earlier test step is not
+  safe. Create a fresh one, note the element count first, then walk it through two master values: an element
+  created at master 1 starts at 0.5, so observing it drop to 0.2 proves it was still registered when the master
+  changed. Shipped as P9a–P9d.
+- ⚠️ **A trusted click is required to keep an element registered on web.** `element.click()` from `Runtime.evaluate`
+  is not a user gesture, so autoplay is refused and `play()` rejects. Use
+  `Input.dispatchMouseEvent` at the card's `getBoundingClientRect()` centre.
+- ⚠️ **The card-drag/play conflict is structurally impossible as built** (§2b.4): assert `nested === 0`, i.e. no
+  `[data-sound-volume]` has a `[data-sound-card]` ancestor. That is a stronger and more stable assertion than
+  simulating a drag.
 - The Windows phase runs against the user's real data and snapshots/restores `localStorage`
   (`e2e/e2e-snapshot.mjs`), so a volume test cannot eat a real board.
+- The seeded key set includes `ttrpg_themes`, which **no version of the app has** — the suites still seed it
+  (`docs/session-history.md`: *"there is no `ttrpg_themes` key at all"*). Do not treat it as a regression, and do
+  not write a "no new key" assertion without it in the expected set.
 
 ---
 
 ## 8. Verification checklist
 
-- [ ] A sound can be set to a level other than 100% and it survives **reload**.
-- [ ] **A sound set to 0% is still 0% after reload** (the `||` trap, §4).
-- [ ] Newly created sounds get 100%, and existing sounds with no field play unchanged.
-- [ ] Master × per-sound: the audible result is the product, not either alone.
-- [ ] A sound with `fadeIn` fades **to its own level**, not to master.
-- [ ] **The card slider drags without playing the sound** (stopPropagation works), and tapping the card body still
-      plays (§2b.1).
-- [ ] **The level change is audible while the sound is playing**, and on a looping sound, without restarting it
-      (§2b.2).
-- [ ] A sound **mid-fade-out** whose slider moves does not snap its level.
-- [ ] The card slider is keyboard operable and exposes `aria-valuenow`; the modal slider and the card slider stay
-      in sync (either can change the value).
-- [ ] Changing the master slider **mid-fade** does not jump the level (the §3 path; no coverage exists today).
-- [ ] Looping a sound keeps the per-sound level on every loop iteration, not just the first play.
-- [ ] Master volume is **still not persisted** after this ships.
-- [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds.
-- [ ] E2E: web + Windows phases pass with no new skips; new IDs do not collide with the other queued specs.
+Automated — Suite P, `e2e/e2e-full.mjs`. `P1`-`P16` are the shipped IDs; the **P9** group is split into four.
+
+- [x] `P10`/`P11` A sound set to 0% is still 0% after **reload** (the `||` trap, §4).
+- [x] `P1`/`P3`/`P12` Every card exposes a slider; newly created sounds default to 100%, and a sound with no
+      field plays unchanged at 100%.
+- [x] `P6`/`P7`/`P8` Master × per-sound: the audible result is the **product** (master 0.4 × trim 0.5 = 0.2).
+- [x] `P2` **The slider is not inside the `role="button"` card** (`nested === 0`), so dragging it cannot play the
+      sound and cannot arm the edit-mode drag (§2b.1, §2b.4).
+- [x] `P4` The slider carries `aria-label` + `aria-valuenow`; being a native range, keyboard operation is free.
+- [x] `P9a`-`P9d` The level changes **while the sound is playing**, on a looping sound without restarting it, and
+      `_baseVolume` tracks the master change so the loop re-entry does not snap back (§3).
+- [x] `P15`/`P16` The modal control and the card control write the **same field**, and either one updates the other.
+- [x] `P13` `DATA_VERSION` still `'3'` and no `*_old` keys were written.
+- [x] `P14a`/`P14b` **No new `localStorage` key**; no key holds volume, and the master slider is still
+      session-only.
+- [x] `npx eslint .` → 0 errors; `npx vite build` succeeds.
+- [x] E2E: web **147 PASS / 0 FAIL / 0 WARN**; Windows **146 PASS / 0 FAIL / 1 WARN** (pre-existing G5 skip);
+      Android **85 PASS / 0 FAIL / 0 WARN**.
+
+Not covered by automation — **still open**:
+
+- [ ] **Changing the master slider mid-fade does not jump the level.** The `rescaleAudioTarget` arithmetic is
+      shared and now has coverage for the non-fade branch; the mid-fade branch (`_fadeTargetVolume` set, ramp
+      still running) is **not** exercised, because the fixtures finish before a fade completes. Needs a long
+      `fadeIn` sound.
+- [ ] **A sound mid-fade-out whose slider moves does not snap its level.** Same reason.
+- [ ] **Looping keeps the level on every iteration** — P9 covers the master change against a looping sound, but
+      not an actual loop boundary crossing.
+- [ ] ⚠️ **Suite P is not ported to `e2e-mobile.mjs`.** The Android phase passes (85/85) and a screenshot confirms
+      the layout, so this is a coverage gap rather than a known problem — but nothing automated asserts the slider
+      on a real touch device. Same gap move/copy has.
+- [ ] 💡 **Design opinion wanted on how loud the control looks.** A screenshot of a four-card board on a Pixel-class
+      emulator shows four full-width blue bars. That is the direct consequence of "always visible, live slider on
+      every card" (hover-reveal is unusable on touch), and §2b.3 flagged "a wall of visual noise" as the risk.
+      Shrinking it is purely cosmetic — no logic depends on the size.
 
 ---
 
@@ -278,4 +356,4 @@ guard for this whole section.
   that would need a new persisted structure, and therefore a `PROFILE_SYNC_SPEC.md` §4.2 census re-run.
 - Per-sound **pan** / balance, if it is ever wanted — the same four call sites and the same card control apply.
 - MIDI-style CC-style external control (out of scope; this is a soundboard, not an instrument).
-- ~~A card-level volume slider~~ — **no longer deferred; decided 2026-10-06 and specified in §2b.**
+- ~~A card-level volume slider~~ — shipped 2026-10-06, as a sibling of the card rather than inside it (§2b.4).

@@ -528,7 +528,11 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [ ] Import is atomic: kill the app mid-import → the previous profile is intact and usable.
 - [ ] A known 3-character / 11-sound seed produces a bundle containing **only** user uploads (assert total bytes < 1 MB) — proves provenance classification.
 - [ ] A sound **copied** into another character (§ move/copy, `f7f316e`) appears **once** in the bundle, not twice — proves dedupe-by-hash (§5).
-- [ ] Export walks **all five** container shapes: a sound sitting in `groups[].sounds` (the vestigial array) is exported. Seed it by hand, since no UI puts anything there.
+- [ ] Export walks **all five** container shapes: a sound sitting in `groups[].sounds` (the vestigial array) is
+      exported. ⚠️ **that array cannot be tested by seeding it and reloading** — `normalizeStoredData`'s group
+      branch returns `sounds: []` and folds a legacy array into a `Default` category, so it is **wiped on every
+      read**. Assert the `Default`-category fold (the shape that actually survives a reload), or seed in-session
+      without a reload.
 - [ ] A custom sound icon survives export/import as a **file** in `icons/`, not as inline base64.
 - [ ] The custom background image is **absent** from the bundle: `data.json` contains no `imagePreview` and no `background/` entry, and a fresh import falls back to the theme colour until the user picks an image. A user with a 5 MB background set still gets a bundle under 1 MB.
 - [ ] "New profile" import leaves the active profile untouched; "Replace active" is recoverable.

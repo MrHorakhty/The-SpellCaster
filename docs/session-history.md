@@ -1620,3 +1620,93 @@ repeat it.
 
 ⚠️ **Three backups now exist** (20261004-230014, 20261006-200301, 20261006-213714) and **all three protect nothing
 unique** - every file in them is committed and pushed. Prune by hand.
+
+---
+
+## 2026-10-06 22:31 - 23:05 - opencode - sequencing, then SHIPPING per-sound volume
+
+**First half: verify the recommended order rather than trust it.** The three queued specs all carried a
+"recommended order" claim. Checked each against the 6240-line `src/App.jsx` instead of taking them on trust. The
+order **held** - volume -> priming -> profiles -> hotkeys - but the check was worth more than the answer:
+
+- Re-counted the profiles census: **27 `localStorage` sites + 10 `uploads/` path sites, both still accurate.**
+- Confirmed `normalizeStoredData` only spreads and repairs array shapes, so a new sound field survives reload with
+  **no `DATA_VERSION` bump** - which is *why* volume must land before the storage refactor.
+- Found the code had **already solved the sound-card nesting problem**: the edit-mode buttons are anchored to the
+  wrapper `div` with the comment "Anchored to the wrapper, not the card, so it does not inherit the card's
+  pointerdown drag handler". That single fact decided the card's final shape.
+- Confirmed zero `onContextMenu` / `onTouchStart` / `longPress` hits - priming really is greenfield.
+
+**Four spec facts were wrong** (all corrected in place, code wins):
+1. `PER_SOUND_VOLUME_SPEC.md` said the sliders are **not** native `<input type=range>`. They are - `min=0 max=1
+   step=0.01`, paired with a sibling number input. The `onKeyDown` handlers it pointed at belong to the *number*
+   inputs. Keyboard support is free; over CDP you set `.value` + fire `input`, not pointer moves.
+2. The spec's open "decide the ARIA shape before coding" was already answered by the wrapper precedent.
+3. The new-sound-allowlist warning was **already biting**: `glowEnabled` / `glowProminence` are in the form
+   template and the hydrate path but **absent from the 1488-1503 allowlist**, so a newly created sound silently
+   loses its glow. Left unfixed - out of scope, and the user had not asked.
+4. `groups[].sounds` is **wiped on read** (`normalizeStoredData` returns `sounds: []` on the group branch), so the
+   "seed it by hand" checklist item in both the priming and profile specs **cannot survive a reload**. Two
+   checklists contained an unpassable test.
+
+**Second half: shipped per-sound volume.** One optional `volume` field, a **trim** on top of master.
+`normalizeSoundVolume()` is the single definition of "absent === 100%" and is used in **both** save paths - the
+edit path spreads so it survives anyway, the **new**-sound path is an explicit allowlist and would silently drop
+it. `rescaleAudioTarget()` was extracted from `updateMasterVolume` and shared with the new per-sound path, so the
+fiddly fade-fraction arithmetic exists once. `mapSoundContainers()` + `patchSoundById()` write the field in any of
+the five container shapes and return untouched branches unchanged.
+
+Two decisions that are not accidental:
+- **The card slider is a SIBLING of the card, not a descendant.** One extra wrapper level; it inherits neither the
+  card's `onClick` nor its edit-mode pointerdown drag, so no `stopPropagation` and no `role="group"` conversion.
+- **A drag persists once on commit, not per pointermove.** The three auto-save effects are undebounced and
+  `JSON.stringify` the whole slice into localStorage synchronously; persisting per move stutters a 90-sound board.
+
+**The E2E suite caught a real bug that asserting the audible level would have hidden.** `updateMasterVolume`
+rescaled playing elements but never refreshed `audio._baseVolume`, so it stayed at its creation value - and
+`playSound` reads `_baseVolume` back at **loop re-entry**. A looping sound would have faded back down to the level
+it started at after any master change. Fixed by setting `_baseVolume = target` in the same loop; `P9d` guards it.
+**Lesson worth keeping: when a value is read back later, assert that it is refreshed, not just that the output
+looks right.**
+
+**Two fixture traps that made the live-rescale assertions vacuous** - they "passed" on web while exercising
+nothing:
+- Only elements still in `audioElementsRef` get rescaled. A short/undecodable fixture fires `ended` ->
+  `cleanupAudio` -> unregistered within milliseconds, and **an ended element still reports `paused === false`**, so
+  a liveness check cannot see it.
+- `element.click()` from `Runtime.evaluate` is not a user gesture, so web refuses autoplay and `play()` rejects.
+Fix: a **real bundled asset** (`Longbow_4.mp3`, no `storedName` so it resolves from `/assets`) with `loop: true`,
+driven by `Input.dispatchMouseEvent`, and P9 walks **one fresh element** through two master values - created at
+master 1 it starts at 0.5, so seeing it drop to 0.2 proves it was still registered.
+
+**Verification**: eslint 0 errors (3 pre-existing warnings); vite build green; **web 147 PASS / 0 FAIL / 0 WARN**;
+**Windows 146 PASS / 0 FAIL / 1 WARN** (pre-existing G5 skip); **Android 85 PASS / 0 FAIL / 0 WARN / exit 0**;
+plus a real emulator screenshot confirming the volume row's layout. The user **hand-tested the built app** and
+reported it "works as intended from the brief testing" - the same bar move/copy cleared.
+
+**Two harness facts learned the hard way** (now in `PROJECT_STATE.md`):
+- **E2E output does not go to the console.** `e2e-full.ps1` writes the suite to
+  `%TEMP%\opencode\e2e-run-<timestamp>.log`; only `Write-Host` phase lines reach stdout. The log is **mixed
+  encoding** (ANSI header, UTF-16LE body), so `Get-Content` shows spaced-out text. Decode with
+  `[System.Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($p)).Replace([string][char]0,'')`.
+  **Run the runner detached and poll the log** - a foreground `| Select-Object -Last N` buffers everything and
+  returns nothing until the very end, which reads exactly like a hang.
+- `ttrpg_themes` is seeded by all four suites but **no version of the app has that key**. Any "no new
+  localStorage key" assertion must include it or it fails for a reason unrelated to the code. I wrote that
+  assertion wrong first and it failed as P14.
+
+**Android needed the documented manual recovery again.** `tauri android dev` built and installed the APK but
+never launched it (package present, `pidof` empty) - the exact 2026-10-04 failure. `adb install -r` +
+`adb shell monkey -p ... LAUNCHER 1` fixed it and the runner picked the pid up from there. 💡 Also noted that Vite
+lists the **ProtonVPN `10.2.0.2` adapter first** in its Network lines, which is the documented collision risk.
+
+**NOTHING COMMITTED** - `src/App.jsx`, `e2e/e2e-full.mjs` and the four docs are all modified in the working tree.
+`src-tauri/Cargo.toml` shows as modified but is **byte-identical after EOL normalisation** (worktree LF, blob
+CRLF); `git diff` shows no content change and it is not mine to commit.
+
+**Next**: `SOUND_PRIMING_SPEC.md` - cheapest feature, zero persistence, and it now builds on volume's card shape.
+New E2E ids must start at **P17** (P1-P16 are taken by Suite P).
+
+**Handover**: released the claim 23:20. Volume done and uncommitted; next is priming (`P17`+ ids).
+`docs/session-history.md` itself has a **pre-existing leading BOM** (present in the 22:47 backup, not introduced
+by the 23:05 append) - harmless, left alone.

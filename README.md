@@ -49,6 +49,7 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 - **Android App**: Touch-optimized layout with a slide-out drawer and a bottom navigation rail, including edit mode with delete badges
 - **Timer-Based Playback**: Set custom durations for timed sound effects
 - **Advanced Audio Controls**: Fade in/out effects, looping options, and master volume control
+- **Per-Sound Volume**: Each sound has its own level, adjustable from a slider on its card or in the sound editor. It is a **trim on top of** the master volume, not a replacement for it — so master stays the device level and the effective volume is `master × this sound's level`. Changing it is audible immediately, even on a sound that is already playing or looping
 - **File Management**: Sophisticated file handling with Tauri FS plugin and localStorage fallback
 - **Customizable Interface**: Background image support, dark theme optimized for gaming sessions
 - **Multiple Sound Files**: Support for multiple audio files per sound with random playback options
@@ -226,7 +227,8 @@ The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk
           "fadeIn": 0,                  // Fade in duration (seconds)
           "fadeOut": 0,                 // Fade out duration (seconds)
           "glowEnabled": true,          // Enable glow effect
-          "glowProminence": 0.5         // Glow intensity (0-1)
+          "glowProminence": 0.5,        // Glow intensity (0-1)
+          "volume": 0.6                 // Per-sound level, 0-1 (optional)
         }
       ]
     }
@@ -246,6 +248,7 @@ The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk
           "loop": true,                 // Typically true for environmental sounds
           "fadeIn": 2.5,
           "fadeOut": 3.0,
+          "volume": 1,                  // 1 = untouched by the master trim
           "isEnvironmental": true       // Mark as environmental sound
         }
       ]
@@ -253,6 +256,10 @@ The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk
   ]
 }
 ```
+
+💡 `volume` is **optional and an absent field means 100%**, so existing boards need no migration and a redundant
+`1` is never written. Because `0` is a legitimate level (a deliberately muted sound), it must be read with `??`
+and never with `||` — `0 || 1` would silently un-mute a sound on the next save.
 
 ### Advanced Features
 

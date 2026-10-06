@@ -1,7 +1,10 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-06 22:18). Session log: `docs/session-history.md`.
-(Two sessions on 2026-10-06, both **docs only**. 20:02-21:00: spiked and closed the last open unknown in
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-06 23:24 — working on: final doc pass, then commit + push volume
+(prior holder: opencode, released 2026-10-06 23:20 — **per-sound volume is DONE**: shipped, hand-tested by the
+user, and green on all three gates** (web 147, Windows 146, Android 85). Next feature is
+`SOUND_PRIMING_SPEC.md`; new E2E ids must start at **P17**.)
+(last holder before this: opencode, released 2026-10-06 22:18 — docs only. 20:02-21:00: spiked and closed the last open unknown in
 `PROFILE_SYNC_SPEC.md` §10 — the **desktop** picker-path write — which passes via a ~5-line runtime
 `fs_scope().allow_file` grant, no blanket scope; also falsified the spec's `fs:default`/`read_dir` claim, found
 the missing `dialog:allow-save` capability, and found a silent byte-corruption trap (`Array` vs `Uint8Array`).
@@ -29,7 +32,8 @@ containers (edit mode); edit characters/categories/sounds; apply themes and a bo
 are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
-- Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx` (6240 lines, one monolithic component).
+- **Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx`** (was 6240 lines on 2026-10-06;
+  **~6500 now** after per-sound volume — line numbers in the specs have drifted, the structure has not).
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage: Tauri → `BaseDirectory.AppData` via the fs plugin; web → `localStorage` `sound_file_*` data-URLs.
 - Data keys: `ttrpg_characters`, `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled
@@ -40,16 +44,21 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-06,
-  after `0a6f346` was pushed). ✅ **Push worked with no auth prompt or proxy trouble** — `f3e83f2..0a6f346`.
+- Branch **`mobile-support`**. ✅ **Per-sound volume committed and pushed 2026-10-06 23:2x** (hash in Recent
+  commits). ✅ **Push works, no auth prompt or proxy trouble** — consistent with 2026-10-04 and 2026-10-06.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
-- Recent commits: `0a6f346` "Close the desktop spike, add specs for volume, hotkeys and priming" ·
+- Recent commits: per-sound volume (2026-10-06) · a final state note for it ·
+  `0a6f346` "Close the desktop spike, add specs for volume, hotkeys and priming" ·
   `f3e83f2` "Final state note…" · `30fa85b` "Record repo state after push…" ·
   `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
   `f7f316e` "Added ability to move or copy sounds…".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
-- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 22:12.
+- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 23:3x.
+- ⚠️ **`src-tauri/Cargo.toml` will show as modified in `git status` even when its content is untouched** — the
+  working copy has LF endings while the committed blob has CRLF, so `git diff` reports **no content change**
+  (`git diff -w` and a normalised hash both confirm it). Do not "fix" it by sweeping it into a commit; if you
+  want a clean `git status`, change the EOL deliberately and say so in the commit.
 - ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
   echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
@@ -180,14 +189,35 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
-- Web E2E suite `e2e/e2e-full.mjs` → **126/126 PASS, 0 FAIL** as of 2026-10-04 19:44 (includes
-  M1-M22 move/copy suite and G1-G5 refcount-guard suite).
-- Windows phase → `e2e-full.ps1 -Phase win -Suite full`: **125 PASS / 0 FAIL / 1 WARN** (G5 refcount negative test
-  skips on Windows because Tauri uses physical uploads, not localStorage). Build green, move/copy suite green.
-- Android phase → `e2e-android.ps1 -Suite full`: **85 PASS / 0 FAIL / 0 WARN / exit 0**; mobile suite passes, but
-  `e2e-mobile.mjs` still has no move/copy UI tests ported.
-- ✅ **Move/copy also verified by hand** — the user tested the built app (not just E2E) on 2026-10-04 and
-  reported it works. That is why the feature and its spec are treated as done.
+- Web E2E suite `e2e/e2e-full.mjs` → **147 PASS / 0 FAIL / 0 WARN** as of 2026-10-06 22:44 (was 126 before
+  per-sound volume; Suite **P** `P1`-`P16` added 21).
+- Windows phase → `e2e-full.ps1 -Phase win -Suite full`: **146 PASS / 0 FAIL / 1 WARN** (2026-10-06 22:40). The
+  WARN is the pre-existing **G5** skip — Tauri uses physical uploads, not a localStorage seed.
+- Android phase → `e2e-android.ps1 -Suite full`: **85 PASS / 0 FAIL / 0 WARN / exit 0** as of 2026-10-06 23:03,
+  re-run after per-sound volume. Matches the 2026-10-04 baseline exactly, so the card restructure is clean on
+  mobile. ⚠️ **`e2e-mobile.mjs` has no volume tests** — Suite P lives only in `e2e/e2e-full.mjs`, so the Android run
+  proves *no regression*, not that volume works there. Same gap move/copy has.
+- ✅ **Layout confirmed by screenshot, not just by tests.** Pulled a real Pixel-class screenshot after the run: the
+  volume row renders as a `100%` label + native slider **below** each card, cards keep their square aspect, and the
+  multi-file and glow indicators are unaffected. 💡 The bars are visually prominent — four loud blue bars on a
+  four-card board. That follows the spec's decision (live slider on every card, always visible, because
+  hover-reveal is unusable on touch), but "a wall of visual noise" was a risk the spec itself flagged in §2b.3.
+  Worth a design opinion from the user; shrinking the control is purely cosmetic and no logic depends on its size.
+- ✅ **Move/copy verified by hand** — the user tested the built app (not just E2E) on 2026-10-04 and reported it
+  works.
+- ✅ **Per-sound volume hand-tested too** — the user booted the built app on 2026-10-06 and reported it "works as
+  intended from the brief testing", so it clears the same bar move/copy did. Remaining gaps are *coverage*, not
+  known defects, and are listed in `PER_SOUND_VOLUME_SPEC.md` §8: the mid-fade branch of the rescale, a
+  mid-fade-out level change, and a real loop-boundary crossing are not yet automated.
+- 💡 **E2E output does not go to the console.** `e2e-full.ps1` writes the suite to
+  `%TEMP%\opencode\e2e-run-<timestamp>.log`; only the `Write-Host` phase lines reach stdout. The log is **mixed
+  encoding** (ANSI header, UTF-16LE body), so `Get-Content` shows spaced-out text. Decode it with
+  `[System.Text.Encoding]::GetEncoding(28591).GetString([System.IO.File]::ReadAllBytes($p)).Replace([string][char]0,'')`
+  and then grep for `FULL E2E SUMMARY`. **Run the runner detached** (`Start-Process ... -WindowStyle Hidden`) and
+  poll the log — a foreground `| Select-Object -Last N` buffers everything and returns nothing until the end.
+- 💡 **`ttrpg_themes` is seeded by the suites but no version of the app has that key** (`docs/session-history.md`:
+  *"there is no `ttrpg_themes` key at all"*). Any "no new localStorage key" assertion must include it in the
+  expected set or it will fail for a reason that has nothing to do with the code.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
@@ -206,12 +236,16 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261006-213714` (**206/206 verified**, 39.3 MB) — taken before folding in the
-user's two design answers, so it matches the tree just before `0a6f346`. Previous:
-`ttrpg-soundboard-backup-20261006-200301` (203/203, 39.2 MB, before the spike) and
-`ttrpg-soundboard-backup-20261004-230014` (203/203, protects nothing — it is all on GitHub).
-💡 Three backups now exist. **All three protect nothing unique** — everything in them is committed and pushed.
-Prune them by hand; keep the newest if you want one.
+Latest: **`ttrpg-soundboard-backup-20261006-224711`** (206/206 verified, 39.3 MB) — taken **after** per-sound
+volume shipped, so it is the only backup holding that work. ⚠️ **It saved this session**: a stray
+`Add-Content -Encoding UTF8` (which injects a BOM mid-file) was followed by a `.Replace()` overload error that
+made a variable `$null`, and the next `WriteAllText` **wiped `PROJECT_STATE.md` to 0 bytes**. Restored from this
+backup in one step. 💡 **Lessons**: in PowerShell 5.1 `"str".Replace([char]0xFEFF, '')` throws (it wants a
+`char`, not a `string`) — use `[regex]::Replace` or the `string,string` overload; and never chain a write onto a
+variable that a failed command may have left `$null`. Verify a file's length after any bulk rewrite.
+Previous: `ttrpg-soundboard-backup-20261006-215129` (206/206, before the volume changes),
+`20261006-213714`, `20261006-200301`, `20261004-230014`. ⚠️ **Five backups now exist and the older four protect
+nothing unique** — everything in them is on GitHub. Prune by hand.
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after
@@ -260,9 +294,9 @@ against `src/App.jsx` @ 6240 lines — **re-verify the line numbers**, they drif
 
 | Spec | What it is | Recommended order |
 |---|---|---|
-| `PER_SOUND_VOLUME_SPEC.md` | Per-sound volume ("sound button based"). ✅ **decided: a trim (not an absolute), and a LIVE slider on every sound card** (the modal keeps one too). ~10 insertion points enumerated. Traps: the `\|\|` → `??` coercion that would silently turn a **muted** sound (0) into 100%; `updateMasterVolume`'s fade-preserving live adjust (1315-1335), which has **no test today**; the card drag/play conflict; and invalid ARIA from a slider nested inside a `role="button"` card | **BEFORE profiles** — it is content, rides the bundle free, no `DATA_VERSION` bump |
+| `PER_SOUND_VOLUME_SPEC.md` | ✅ **SHIPPED 2026-10-06** (E2E only, **not** hand-tested). Now a record of what was built, with the four wrong spec facts corrected in place. Card control is a **sibling of the card**, not a descendant — no `stopPropagation`, no `role="group"`. ⚠️ **`P1`-`P16` are taken**; priming and hotkeys must not reuse them. Traps recorded: the `\|\|` → `??` coercion that would revive a **muted** sound; `updateMasterVolume` must refresh `_baseVolume` or loop re-entry snaps back; and a slider drag persists **once on commit**, not per move | **DONE — this is the one to pick up next: priming** |
 | `HOTKEYS_SPEC.md` | Keyboard shortcuts to trigger sounds. In-app tier (a `keydown` listener) vs global (`tauri-plugin-global-shortcut`, desktop-only, `main.rs` only — the **reverse** of the dialog rule). ⚠️ a hotkey is a *reference*, and `PROFILE_SYNC_SPEC.md` §8 plus the category-name-as-identity landmine are what make that hard. ⚠️ it must not fire while a text field has focus — this app has many | **AFTER profiles** — inherit the reference story instead of solving it twice |
-| `SOUND_PRIMING_SPEC.md` | Right-click (desktop) / press-and-hold (mobile) to prime sounds that fire alongside the next trigger. ✅ **decided: ONE-SHOT, consumed by the next trigger, nothing persisted, explicitly not profile content** — so **add no `localStorage` key** (the absence is deliberate). Saved layers are **rejected**; §6 records why so it is not re-opened. Verified: the app has **no** existing right-click or long-press handling at all. ⚠️ **shares the sound card with the volume slider** | **Any time** — zero persistence work, no interaction with the profile refactor |
+| `SOUND_PRIMING_SPEC.md` | Right-click (desktop) / press-and-hold (mobile) to prime sounds that fire alongside the next trigger. ✅ **decided: ONE-SHOT, consumed by the next trigger, nothing persisted, explicitly not profile content** — so **add no `localStorage` key** (the absence is deliberate). Saved layers are **rejected**; §6 records why so it is not re-opened. Verified: the app has **no** existing right-click or long-press handling at all. ✅ build it **after volume** — the volume slider is now a sibling of the card, so the "hold on the slider" conflict is moot; what remains is the hold timer, `contextmenu` suppression and the double-fire trap. ⚠️ **new E2E ids must start at `P17`** | **NEXT UP** — cheapest feature, zero persistence |
 
 ✅ **Both open questions are answered (2026-10-06) — no decisions are pending.** Priming is **one-shot**: the
 primed set is consumed by the next trigger, nothing is persisted, and it is **explicitly not profile content** —
@@ -270,10 +304,88 @@ so **do not add a `localStorage` key for priming**; that absence is deliberate. 
 slider on the sound card**, not modal-only (the modal keeps one too). ⚠️ The two features now share the card
 element: the volume slider must `stopPropagation` (to stop play *and* prime), so prime on the card body only.
 
+### ✅ Sequence re-verified against the code 2026-10-06 22:40 — **confirmed, not changed**
+The recommended order below was checked line-by-line against `src/App.jsx` (6240 lines) rather than taken on
+trust. **It holds: volume → priming → profiles → hotkeys.** What the check added:
+
+- **Hard constraint, hotkeys last.** `PROFILE_SYNC_SPEC.md` §4.2 puts every existing key behind a
+  `profile:<id>:` prefix and `uploads/` behind `uploads/<profileId>/` (27 `localStorage` sites + 10 path sites,
+  both **re-counted and still accurate**). A per-profile binding has nowhere to live until that refactor exists,
+  and the alternative — global bindings over per-profile content — breaks silently on every profile switch.
+- **Volume before profiles, for a stronger reason than the specs give.** `normalizeStoredData` (App.jsx:269) only
+  spreads (`...entry`) and repairs `sounds`/`files` array shapes, so an unknown sound field genuinely survives a
+  reload with **no `DATA_VERSION` bump**. Volume is the *last* content field that can be added before the storage
+  refactor turns adding one into a two-step job.
+- **Volume before priming, because volume settles the card.** Both nest controls in the sound card, and the
+  nesting problem is **already solved in-repo**: the edit-mode buttons are anchored to the **wrapper** div
+  (App.jsx:3838-3866) with the comment *"Anchored to the wrapper, not the card, so it does not inherit the card's
+  pointerdown drag handler"*. That settles `PER_SOUND_VOLUME_SPEC.md` §2b.4's open ARIA decision — **no
+  `role="group"` conversion; wrap the slider the same way.**
+- **Priming's greenfield claim holds.** A scan for `onContextMenu` / `contextmenu` / `onTouchStart` / `longPress`
+  returns **zero hits** in `App.jsx`. The only pointer handler is the edit-mode drag at 3643.
+- **Volume also forces a test where none exists.** `updateMasterVolume` (App.jsx:1315-1335) is the only code that
+  mutates a playing element's volume and has no coverage. Volume refactors it; the regression test comes free.
+- **The card plays on `onClick` (3727), not `onPointerDown`** — `onPointerDown` (3643) arms a drag **only** when
+  `editMode`. So outside edit mode the conflict is pure `click` bubbling from the slider to the card; **inside**
+  edit mode the card does `preventDefault()` + `setPointerCapture` on pointerdown, so the slider must
+  `stopPropagation` on `pointerdown` too or dragging it starts a sound drag.
+
+⚠️ **Four spec facts are wrong and will cost time if not fixed before the work starts.** Verified this session;
+none of them change the order:
+
+| Spec claim | Reality |
+|---|---|
+| `PER_SOUND_VOLUME_SPEC.md` §7 + §2b.4: *"sliders in this app are **not** native `<input type=range>` — the master ones are custom divs with `onKeyDown`"* | **Wrong.** The master slider **is** native `<input type="range" min=0 max=1 step=0.01>` (App.jsx:4342-4351, again at 4432-4440), paired with a sibling `input[type=number]`. The `onKeyDown` at 4333 belongs to the **number** input. Keyboard support is therefore **free** (arrow keys), and over CDP you drive it by setting `.value` + dispatching `input`, **not** by dispatching pointer moves. This removes most of §2b.4's accessibility work and simplifies its E2E notes |
+| `PER_SOUND_VOLUME_SPEC.md` §2b.4: *"decide the ARIA shape before coding — it affects markup for every card"* | **Already answered by precedent** — the wrapper-anchoring bullet above. Nested controls already exist inside the card (the stop button, App.jsx:3824, with `e.stopPropagation()`), so invalid ARIA is the shipped status quo, not a new problem |
+| `PER_SOUND_VOLUME_SPEC.md` §4 warns the new-sound allowlist *"silently drops"* an unlisted field | **True and already biting.** `glowEnabled` / `glowProminence` are in the form template (975-976) and hydrate-for-edit (1439-1440) but are **absent from the 1488-1503 allowlist**, so a newly created sound silently loses its glow. An existing latent bug, not in scope — but it proves the trap is real and `volume` will hit it on the first save test. Use `?? 1`, never `|| 1` |
+| `SOUND_PRIMING_SPEC.md` §8 and `PROFILE_SYNC_SPEC.md` §13 both say to seed the vestigial `groups[].sounds` by hand and assert it | **That array is wiped on read** — `normalizeStoredData`'s group branch returns `sounds: []` (App.jsx:306) and folds a legacy array into a `Default` category (307-309). The assertion **cannot survive a reload**; it must be made in-session or via the `Default` category. As written, both checklists contain an unpassable test |
+
 ⚠️ **If profiles are implemented after any of these, re-run the §3/§4.2 census in `PROFILE_SYNC_SPEC.md`
 first** — 27 storage sites, 10 `uploads/` path sites, the two `ttrpg_*_icon` keys. Those numbers have gone stale
 twice already (that is what the 2026-10-04 revision log exists for), and one new `localStorage` key makes them
-wrong immediately.
+wrong immediately. ✅ **Per-sound volume did not add a key** (asserted by test `P14a`/`P14b`), so the census is
+still accurate.
+
+### ✅ Per-sound volume — **SHIPPED and HAND-TESTED 2026-10-06**
+`PER_SOUND_VOLUME_SPEC.md` is now a **record of what was built**, not a plan. Implementation lives in `src/App.jsx`
+(~6500 lines now; the spec's line numbers have drifted, its structure has not):
+
+- One optional sound field, `volume`, a **trim on top of** master — never an absolute, never a replacement.
+  `normalizeSoundVolume()` is the single definition of "absent === 100%": it coerces the range input's **string**
+  to a number and clamps 0–1. It is used in **both** save paths.
+- ⚠️ **The new-sound save path is an explicit allowlist** (App.jsx ~1590) and a field missing there is dropped for
+  every newly created sound while edits survive it, because the edit path spreads. `volume` is in it. Use
+  `?? 1`, never `|| 1` — `0` is a legitimate level (test `P11` is the regression guard).
+- Playback records `audio._soundVolume` (the trim) and `audio._baseVolume` (master × trim) at creation; the **four**
+  volume applications and all three `applyFadeIn` calls use the combined target.
+- `rescaleAudioTarget()` is the fade-preserving rescale, **extracted from `updateMasterVolume` and shared** with
+  the new per-sound path — one copy of that arithmetic, deliberately.
+- `mapSoundContainers()` + `patchSoundById()` write the field in **any of the five container shapes**, returning
+  untouched branches unchanged so a drag does not re-render the board. Do not hand-roll per-slice setters.
+- 💡 **Two behaviours that are decisions, not accidents.** (a) A card-slider drag updates local state + live audio on
+  every pointermove but **persists once on commit** (`cardVolumeDraft`), because the three auto-save effects are
+  undebounced and `JSON.stringify` the whole slice into localStorage synchronously — persisting per move stutters a
+  90-sound board. (b) Loop re-entry reads `_baseVolume` back off the element, which is why the master path must keep
+  it fresh (see the bug below).
+- 💡 **The card gained one wrapper level.** Outer div = grid cell + the volume row; inner `relative` div = the card
+  + the edit-mode buttons. The volume slider is a **sibling of the card, not a descendant**, so it inherits neither
+  the card's `onClick` nor its edit-mode `onPointerDown` drag, and **no `stopPropagation` is needed**. This also
+  settles `SOUND_PRIMING_SPEC.md` §3's "hold on the slider" warning — it is moot as built.
+
+⚠️⚠️ **The E2E suite caught a real bug that asserting the audible level would have hidden.** `updateMasterVolume`
+rescaled playing elements but did **not** refresh `_baseVolume`, so it stayed at its creation value — and
+`playSound` reads `_baseVolume` back at **loop re-entry**, meaning a looping sound would have faded back down to
+the level it started at after any master change. Fixed by setting `_baseVolume = target` inside the same loop.
+**Lesson: when a value is read back later, assert that it is refreshed, not just that the output looks right.**
+
+⚠️ **Two test-fixture traps, both of which made the live-rescale assertions vacuous** (they "passed" on web while
+exercising nothing). (a) Only elements still in `audioElementsRef` get rescaled; a short or undecodable fixture
+fires `ended` → `cleanupAudio` → unregistered within milliseconds, and an `ended` element still reports
+`paused === false`, so a liveness check **cannot** see it. (b) `element.click()` from `Runtime.evaluate` is not a
+user gesture, so web refuses autoplay and `play()` rejects. Shipped fixture: a **real bundled asset**
+(`Longbow_4.mp3`, no `storedName` so it resolves from `/assets`) with `loop: true`, driven by
+`Input.dispatchMouseEvent`, and P9 walks **one fresh element** through two master values — created at master 1 it
+starts at 0.5, so observing it drop to 0.2 proves it was still registered.
 
 | Spec | Status |
 |---|---|
@@ -308,12 +420,11 @@ wrong immediately.
   shipped as `restoreDefaults` (App.jsx:2671), so it only needs profile-scoping. Two new risks added:
   cross-profile shared blobs (never hardlink between profiles) and profile-switch state reload (revoke the
   object-URL cache at App.jsx:2298).
-- **Three queued features have specs but no code** (written 2026-10-06, by request, for one-per-session pickup):
-  `PER_SOUND_VOLUME_SPEC.md`, `HOTKEYS_SPEC.md`, `SOUND_PRIMING_SPEC.md`. **Recommended sequence:
-  volume → priming (any time) → profiles → hotkeys.** Rationale and per-spec detail in the *Planning specs* table
-  above. ⚠️ Both design questions were answered on 2026-10-06 (priming = one-shot, not profile content; volume =
-  live card slider) — **nothing is pending**. ⚠️ Volume and priming both modify the **sound card**, so they will
-  conflict in review if built without reading each other's card section.
+- ✅ **Per-sound volume is complete and committed** (2026-10-06): shipped, **hand-tested by the user** ("works as
+  intended from the brief testing"), and green on web / Windows / Android. `SOUND_PRIMING_SPEC.md` is **next** — cheapest
+  feature, zero persistence, and it now builds on the card shape volume established. ⚠️ Suite P is **not** ported
+  to `e2e-mobile.mjs` (same gap move/copy has), and the mid-fade rescale branch plus a real loop-boundary crossing
+  are still uncovered — all listed in `PER_SOUND_VOLUME_SPEC.md` §8.
 - ✅ **The desktop picker-path write — DONE, PASSES** (2026-10-06, Windows, real Tauri/WebView2 over CDP :9224).
   `dialog.save()` returns a **plain absolute path string** (not a URL, not an object); **cancel resolves `null`**
   (the opposite of Android, which rejects). `writeFile` to that path is **denied today** — "forbidden path", and

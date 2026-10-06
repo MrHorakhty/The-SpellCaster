@@ -1265,6 +1265,267 @@ async function main() {
   log('A11Y','Y3: Enter keydown no crash',!kb?.err?'PASS':'FAIL',kb?.err);
 
   // ================================================================
+  //  P: PER-SOUND VOLUME
+  // ================================================================
+  // Seeds one sound with an explicit 0.5 trim and one with NO `volume` field at
+  // all (absent === 100%), because the two interesting failures are "the trim is
+  // ignored" and "`|| 1` revived a deliberately muted sound".
+  // Both are loop:true and point at a REAL bundled asset, on purpose. An earlier
+  // version used a hand-written data: WAV of a few milliseconds of silence: it
+  // reported no usable duration, so the loop never engaged, `ended` fired
+  // immediately and cleanupAudio unregistered the element - at which point
+  // updateMasterVolume no longer rescales it and the live-rescale assertions
+  // below silently passed or failed for the wrong reason. A real multi-second mp3
+  // with loop:true stays registered, so that path is genuinely exercised.
+  // No `storedName` => classified as bundled and resolved from /assets.
+  console.log(`\n[${LABEL}] === SUITE P: PER-SOUND VOLUME ===`);
+  await evalJs(`(() => {
+    localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      id:'c1', name:'Human Paladin', sounds:[
+        { id:'vol_half', name:'Half Volume', type:'Test', icon:'',
+          files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
+          color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:true, randomPlay:false,
+          brightness:1, volume:0.5 },
+        { id:'vol_none', name:'No Field', type:'Test', icon:'',
+          files:[{name:'Frostbite_3.mp3', displayName:'Frostbite_3.mp3'}],
+          color:'#00ff00', duration:0, fadeIn:0, fadeOut:0, loop:true, randomPlay:false,
+          brightness:1 }
+      ]
+    }]));
+    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
+    localStorage.setItem('ttrpg_data_version', '3');
+    // No sound_file_* keys: both sounds are bundled assets resolved from /assets.
+    return 'seeded';
+  })()`);
+  await cdp('Page.reload', { ignoreCache: true });
+  await sleep(3000);
+
+  // Helpers are re-installed after every reload, since the page wipes them.
+  const installVolHelpers = `(() => {
+    // React tracks the range's value on the DOM node, so setting .value directly
+    // is not seen; go through the native setter and fire a bubbling input event.
+    window.__setRange = (el, v) => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(el, String(v));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    window.__volSlider = (name) => {
+      const card = [...document.querySelectorAll('[data-sound-card]')].find(c => c.textContent.includes(name));
+      if (!card) return null;
+      return document.querySelector('[data-sound-volume="' + card.dataset.soundId + '"]');
+    };
+    window.__commitVol = (name, v) => {
+      const s = window.__volSlider(name);
+      if (!s) return 'NO_SLIDER';
+      window.__setRange(s, v);
+      s.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      return s.value;
+    };
+    // Capture every Audio the app constructs so playback internals are assertable.
+    window.__hookAudio = () => {
+      if (window.__origAudio) return 'already';
+      window.__audios = [];
+      window.__origAudio = window.Audio;
+      window.Audio = function(...a) { const el = new window.__origAudio(...a); window.__audios.push(el); return el; };
+      window.Audio.prototype = window.__origAudio.prototype;
+      return 'hooked';
+    };
+    window.__playCard = (id) => {
+      const c = document.querySelector('[data-sound-card][data-sound-id="' + id + '"]');
+      if (!c) return 'NO_CARD';
+      c.click();
+      return 'OK';
+    };
+    return 'ok';
+  })()`;
+  await evalJs(installVolHelpers);
+
+  // P1-P3: the control exists on every card, sits OUTSIDE the role="button" card
+  // (so dragging it cannot play the sound and it is not a nested interactive
+  // control inside a button role), and defaults to 100% when the field is absent.
+  const p1 = await evalJs(`(() => {
+    const cards = [...document.querySelectorAll('[data-sound-card]')];
+    const sliders = [...document.querySelectorAll('[data-sound-volume]')];
+    return {
+      cards: cards.length,
+      sliders: sliders.length,
+      nested: sliders.filter(s => s.closest('[data-sound-card]')).length,
+      outside: sliders.length > 0 && sliders.every(s => !s.closest('[data-sound-card]')),
+      values: sliders.map(s => s.value),
+      aria: sliders.map(s => s.getAttribute('aria-label'))
+    };
+  })()`);
+  log('VOL','P1: every card exposes a volume slider',p1?.cards>0 && p1?.sliders===p1?.cards?'PASS':'FAIL',JSON.stringify(p1));
+  log('VOL','P2: slider is outside the role=button card',p1?.outside && p1?.nested===0?'PASS':'FAIL',`nested=${p1?.nested}`);
+  log('VOL','P3: absent volume field reads 100%',p1?.values?.includes('1')?'PASS':'FAIL',JSON.stringify(p1?.values));
+  log('VOL','P4: slider carries an aria-label',p1?.aria?.every(a=>!!a)?'PASS':'FAIL',JSON.stringify(p1?.aria));
+
+  // P5-P7: playback. Master starts at 1, so a 0.5 trim must yield 0.5.
+  await evalJs(`window.__hookAudio()`);
+  await evalJs(`window.__playCard('vol_half')`);
+  await sleep(1200);
+  const p5 = await evalJs(`(() => {
+    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
+    const a = els[els.length-1];
+    return a ? { trim:a._soundVolume, base:a._baseVolume, vol:a.volume } : null;
+  })()`);
+  log('VOL','P5: element records the sound own trim',p5?.trim===0.5?'PASS':'FAIL',JSON.stringify(p5));
+  log('VOL','P6: level is master x trim (1 x 0.5)',p5?.base===0.5 && p5?.vol===0.5?'PASS':'FAIL',JSON.stringify(p5));
+
+  // P7: a sound with no field at all plays at 100%.
+  await evalJs(`window.__playCard('vol_none')`);
+  await sleep(1000);
+  const p7 = await evalJs(`(() => {
+    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_none');
+    const a = els[els.length-1];
+    return a ? { trim:a._soundVolume, base:a._baseVolume, vol:a.volume } : null;
+  })()`);
+  log('VOL','P7: sound with no field plays at 100%',p7?.trim===1 && p7?.base===1?'PASS':'FAIL',JSON.stringify(p7));
+
+  // P8: master x trim is the audible product - master 0.4 with a 0.5 trim = 0.2.
+  await evalJs(`(() => {
+    const m = document.querySelector('input[type=range][title^="Volume:"]');
+    if (!m) return 'NO_MASTER';
+    window.__setRange(m, 0.4);
+    return 'OK';
+  })()`);
+  await sleep(400);
+  await evalJs(`window.__playCard('vol_half')`);
+  await sleep(1000);
+  const p8 = await evalJs(`(() => {
+    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
+    const a = els[els.length-1];
+    return a ? { base:a._baseVolume, vol:a.volume, trim:a._soundVolume } : null;
+  })()`);
+  log('VOL','P8: master 0.4 x trim 0.5 = 0.2',p8?.base===0.2 && p8?.vol===0.2?'PASS':'FAIL',JSON.stringify(p8));
+
+  // P9: the master path multiplies by each element's OWN trim, and keeps
+  // _baseVolume in step. Self-contained on purpose: it creates one fresh element
+  // and walks it through two master values. Only REGISTERED elements get
+  // rescaled, so the two-step below is self-discriminating - a fresh element
+  // created at master 1 starts at 0.5, so seeing it drop to 0.2 proves it was
+  // still registered when the master changed. The seeded sounds loop, so it is.
+  // The click is a real CDP mouse event, not element.click(): a synthetic click
+  // is not a user gesture, so autoplay is refused and play() rejects.
+  const halfCoords = await evalJs(`(() => {
+    const c = document.querySelector('[data-sound-card][data-sound-id="vol_half"]');
+    if (!c) return null;
+    const r = c.getBoundingClientRect();
+    return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+  })()`);
+  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 1); return 'OK'; })()`);
+  await sleep(300);
+  const before9 = await evalJs(`(() => {
+    window.__n9 = (window.__audios||[]).filter(x => x._soundId === 'vol_half').length;
+    return { n: window.__n9 };
+  })()`);
+  log('VOL','P9-setup: trusted click path available',halfCoords && before9?.n>=0?'PASS':'FAIL',JSON.stringify({coords:halfCoords,prior:before9}));
+  if (halfCoords) {
+    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: halfCoords.x, y: halfCoords.y, button: 'left', clickCount: 1 });
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: halfCoords.x, y: halfCoords.y, button: 'left', clickCount: 1 });
+  }
+  await sleep(250);
+  const fresh = await evalJs(`(() => {
+    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
+    if (els.length <= window.__n9) return null;
+    window.__p9el = els[els.length-1];
+    return { base: window.__p9el._baseVolume, vol: window.__p9el.volume, trim: window.__p9el._soundVolume };
+  })()`);
+  log('VOL','P9a: fresh element starts at master 1 x trim 0.5',fresh?.base===0.5 && fresh?.vol===0.5?'PASS':'FAIL',JSON.stringify(fresh));
+
+  // Master down to 0.4 -> the live element must become 0.2 (and _baseVolume too,
+  // because playSound reads it back at loop re-entry).
+  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 0.4); return 'OK'; })()`);
+  await sleep(250);
+  const p9down = await evalJs(`window.__p9el ? { base: window.__p9el._baseVolume, vol: window.__p9el.volume } : null`);
+  log('VOL','P9b: master 0.4 rescales the live element to 0.2',Math.abs((p9down?.vol ?? 0) - 0.2) < 0.001?'PASS':'FAIL',JSON.stringify(p9down));
+
+  // Back to 1 -> 0.5 again. A stale _baseVolume would leave the loop re-entry
+  // fading this sound to the level it started at.
+  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 1); return 'OK'; })()`);
+  await sleep(250);
+  const p9up = await evalJs(`window.__p9el ? { base: window.__p9el._baseVolume, vol: window.__p9el.volume } : null`);
+  log('VOL','P9c: master back to 1 restores 0.5',Math.abs((p9up?.vol ?? 0) - 0.5) < 0.001?'PASS':'FAIL',JSON.stringify(p9up));
+  log('VOL','P9d: _baseVolume tracks the master change (loop re-entry)',Math.abs((p9up?.base ?? 0) - 0.5) < 0.001?'PASS':'FAIL',JSON.stringify(p9up));
+
+  // P10-P12: persistence. 0 is the regression guard for the `||` trap: a muted
+  // sound must still be muted after the save/reload cycle.
+  const p10pre = await evalJs(`window.__commitVol('Half Volume', 0)`);
+  await sleep(600);
+  const p10stored = await evalJs(`(() => {
+    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return c[0]?.sounds?.map(s => [s.id, s.volume]);
+  })()`);
+  log('VOL','P10: commit wrote 0 to storage',p10pre==='0' && JSON.stringify(p10stored)?.includes('["vol_half",0]')?'PASS':'FAIL',`slider=${p10pre} stored=${JSON.stringify(p10stored)}`);
+
+  await cdp('Page.reload', { ignoreCache: true });
+  await sleep(3000);
+  await evalJs(installVolHelpers);
+
+  const p11 = await evalJs(`(() => {
+    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const s = window.__volSlider('Half Volume');
+    const none = window.__volSlider('No Field');
+    return {
+      stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
+      slider: s?.value,
+      noneSlider: none?.value,
+      version: localStorage.getItem('ttrpg_data_version'),
+      oldKeys: Object.keys(localStorage).filter(k=>k.endsWith('_old'))
+    };
+  })()`);
+  log('VOL','P11: 0 SURVIVES reload (the || trap)',p11?.stored===0 && p11?.slider==='0'?'PASS':'FAIL',JSON.stringify(p11));
+  log('VOL','P12: untouched sound still reads 100% after reload',p11?.noneSlider==='1'?'PASS':'FAIL',p11?.noneSlider);
+  log('VOL','P13: DATA_VERSION still 3, no *_old keys',p11?.version==='3' && p11?.oldKeys?.length===0?'PASS':'FAIL',JSON.stringify({v:p11?.version,old:p11?.oldKeys}));
+
+  // P14: the feature added no storage key. The sound's level rides INSIDE the
+  // existing sound objects, and the master volume stays session-only.
+  // `ttrpg_themes` is in the expected set because the suites themselves still
+  // seed it - the app has no such key (docs/session-history.md:979).
+  const p14 = await evalJs(`Object.keys(localStorage).filter(k => !k.startsWith('sound_file_')).sort()`);
+  const knownKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted'];
+  const unexpected = (p14||[]).filter(k => !knownKeys.includes(k));
+  const volumeKeys = (p14||[]).filter(k => /volume/i.test(k));
+  log('VOL','P14a: no new localStorage key added',unexpected.length===0?'PASS':'FAIL',JSON.stringify(unexpected));
+  log('VOL','P14b: no key holds volume (it rides the sound object)',volumeKeys.length===0?'PASS':'FAIL',JSON.stringify(volumeKeys));
+
+  // P15: the modal reads the same field, and writing it there updates the card.
+  await toggleEditMode(true);
+  await evalJs(`(() => {
+    const c=document.querySelector('[data-sound-card][data-sound-id="vol_half"]');
+    const b=c.parentElement?.querySelector('button[title="Edit Sound"]');
+    if (b) b.click();
+    return 'OK';
+  })()`);
+  await sleep(800);
+  const p15 = await evalJs(`(() => ({
+    range: document.querySelector('#soundVolumeRange')?.value,
+    number: document.querySelector('#soundVolumeNumber')?.value
+  }))()`);
+  log('VOL','P15: modal slider mirrors the persisted level',p15?.range==='0' && p15?.number==='0'?'PASS':'FAIL',JSON.stringify(p15));
+
+  await evalJs(`(() => {
+    const el = document.querySelector('#soundVolumeRange');
+    if (!el) return 'NO_RANGE';
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(el, '0.5');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return 'OK';
+  })()`);
+  await submitModal('Save Changes');
+  await sleep(1000);
+  await toggleEditMode(false);
+  const p16 = await evalJs(`(() => {
+    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
+      slider: window.__volSlider('Half Volume')?.value
+    };
+  })()`);
+  log('VOL','P16: modal write persists and the card slider follows',p16?.stored===0.5 && p16?.slider==='0.5'?'PASS':'FAIL',JSON.stringify(p16));
+
+  // ================================================================
   //  G: GUARD — shared file survives container deletion
   // ================================================================
   // This test is standalone: it re-seeds data with a known storedName, copies
