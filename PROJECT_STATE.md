@@ -1,8 +1,13 @@
 # Project State
 
-🔒 **CURRENT HOLDER: opencode** — claimed 2026-10-06 22:12 — working on: recording the post-push state for
-commit `0a6f346`. Will release immediately. Session log: `docs/session-history.md`.
-(Previous holder: opencode, released 2026-10-06 22:00.)
+🔓 **UNCLAIMED** — last holder: opencode (2026-10-06 22:18). Session log: `docs/session-history.md`.
+(Two sessions on 2026-10-06, both **docs only**. 20:02-21:00: spiked and closed the last open unknown in
+`PROFILE_SYNC_SPEC.md` §10 — the **desktop** picker-path write — which passes via a ~5-line runtime
+`fs_scope().allow_file` grant, no blanket scope; also falsified the spec's `fs:default`/`read_dir` claim, found
+the missing `dialog:allow-save` capability, and found a silent byte-corruption trap (`Array` vs `Uint8Array`).
+21:12-22:00: wrote three specs for queued features and folded in the user's answers — **priming is one-shot and
+explicitly not profile content**, **per-sound volume is a live card slider**. Pushed as `0a6f346` + `a1f0e8b`.
+**Nothing is authorised for implementation; no app code was touched.**)
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
