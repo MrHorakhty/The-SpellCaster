@@ -1,11 +1,8 @@
 # Project State
 
-🔓 **UNCLAIMED** — last holder: opencode (2026-10-06 22:00). Session log: `docs/session-history.md`.
-(Session 21:47-22:00: folded the user's two answers into the specs — **priming is one-shot and explicitly not
-profile content** (so: no `localStorage` key for it, and the primed set must be cleared *before* the first
-`await`), and **per-sound volume gets a live slider on the sound card** (which adds a drag/play conflict, a
-live-audio rescale path, a cost concern at ~90 cards, and an ARIA nesting problem — all specified). Audited and
-confirmed **docs only**: `src/App.jsx` is byte-identical to HEAD. **Uncommitted**, nothing authorised.)
+🔒 **CURRENT HOLDER: opencode** — claimed 2026-10-06 22:12 — working on: recording the post-push state for
+commit `0a6f346`. Will release immediately. Session log: `docs/session-history.md`.
+(Previous holder: opencode, released 2026-10-06 22:00.)
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -38,23 +35,26 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-06).
+- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-06,
+  after `0a6f346` was pushed). ✅ **Push worked with no auth prompt or proxy trouble** — `f3e83f2..0a6f346`.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
-- Recent commits: `f3e83f2` "Final state note…" · `30fa85b` "Record repo state after push…" ·
+- Recent commits: `0a6f346` "Close the desktop spike, add specs for volume, hotkeys and priming" ·
+  `f3e83f2` "Final state note…" · `30fa85b` "Record repo state after push…" ·
   `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
-  `f7f316e` "Added ability to move or copy sounds between groups and characters etc." ·
-  `2d525ed` "Changes to how agents work on the project".
+  `f7f316e` "Added ability to move or copy sounds…".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
-- ⚠️ **Uncommitted as of 2026-10-06 (docs only):** `PROFILE_SYNC_SPEC.md` + `PROJECT_STATE.md`, from the desktop
-  spike. No app code was changed — the spike edits (`Cargo.toml`, `Cargo.lock`, `src-tauri/src/main.rs`,
-  `capabilities/default.json`) were all reverted with `git checkout --` and the spike artifacts deleted from
-  Desktop/Documents/Temp. `cargo check` clean afterwards. Not committed yet — the user has not asked for a commit.
+- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 22:12.
 - ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
   echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
   else. Do not read that output as "the commit was backed up" — use `.\backup-project.ps1`, which really does
   copy and verify.
+- 💡 **Writing a multi-line git message from PowerShell 5.1**: `Out-File -Encoding UTF8` prepends a **BOM**, which
+  lands inside the commit subject (`﻿Close the desktop…`). Use
+  `[System.IO.File]::WriteAllText($p, $msg, (New-Object System.Text.UTF8Encoding($false)))` instead. To check for
+  a BOM afterwards, read the object with `git cat-file commit HEAD` — **not** `git log | Out-File`, which adds a
+  BOM of its own and fakes the problem.
 - `git fsck` reports one **unreachable** missing blob `3d1fcf15` under the unreachable tree `8505be04`
   (Bitdefender ate it on 2026-09-30). No branch or remote references it, so **no real history is lost** —
   ignore it. All 16 refs read cleanly.
@@ -201,10 +201,12 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: `ttrpg-soundboard-backup-20261006-200301` (39.2 MB, **203/203 verified**) — taken before the 2026-10-06
-desktop spike, so it matches `f3e83f2`. Previous: `ttrpg-soundboard-backup-20261004-230014` (also 39.2 MB,
-203/203), which protected nothing unique (everything in it is on GitHub).
-💡 Two backups now exist from the last two sessions — prune the 10-04 one by hand if you want only one.
+Latest: `ttrpg-soundboard-backup-20261006-213714` (**206/206 verified**, 39.3 MB) — taken before folding in the
+user's two design answers, so it matches the tree just before `0a6f346`. Previous:
+`ttrpg-soundboard-backup-20261006-200301` (203/203, 39.2 MB, before the spike) and
+`ttrpg-soundboard-backup-20261004-230014` (203/203, protects nothing — it is all on GitHub).
+💡 Three backups now exist. **All three protect nothing unique** — everything in them is committed and pushed.
+Prune them by hand; keep the newest if you want one.
 
 ### Bitdefender quarantined the backup folder itself?
 Not excluded, but it also did not fire again during the final runs — the several test backups taken after

@@ -1585,3 +1585,38 @@ features will collide in review.
 
 Backup `ttrpg-soundboard-backup-20261006-213714`, **206/206 verified**, 39.3 MB (203 + the 3 new specs).
 Still uncommitted; no app code touched at any point in either session.
+
+### 22:00-22:15 - final tidy, commit and push
+
+**Last doc fixes before committing** (the user asked for any remaining changes):
+- `PER_SOUND_VOLUME_SPEC.md`: fixed a **wrong cross-reference** in the header - it pointed at "§8" for the shared
+  playback internals, but §8 is the verification checklist; now points at **§2b.2 and §3**. Removed a duplicated
+  "live slider" heading left inside §2 and repointed it at §2b. Retitled §6 from "Edge cases to decide" to
+  "Edge cases - recommendations, confirm rather than re-derive" since the decisions are now made.
+- `SOUND_PRIMING_SPEC.md`: §3's subheading still said "**Two** ways this can go wrong" after the card-collision
+  item was added as a third. Fixed.
+- Normalised the three new specs to **CRLF** (no BOM) so they match the other spec files on disk. Verified no BOM
+  by checking the first three bytes. This is cosmetic only - `core.autocrlf=true` normalises the index either way,
+  which is why `docs/session-history.md` shows +182 rather than a whole-file rewrite.
+
+**Audited docs-only one final time before staging**: every modified tracked file is a `.md`, `src/App.jsx` hashes
+identical to HEAD, and zero files changed under `src/`, `src-tauri/` or any `*.json`/`*.js`/`*.jsx`/`*.html`.
+
+**Commit `0a6f346`** (6 files, +1169/-69): "Close the desktop spike, add specs for volume, hotkeys and priming".
+Style follows the repo's existing commits - sentence-case subject, no conventional-commit prefixes, a body that
+explains *why* rather than restating the diff.
+
+⚠️ **Hit a real PowerShell 5.1 trap**: `Out-File -Encoding UTF8` prepends a **BOM**, so the first commit's subject
+was `﻿Close the desktop…` (U+FEFF inside the message). Fixed with `--amend` using
+`[System.IO.File]::WriteAllText(..., (New-Object System.Text.UTF8Encoding($false)))`. The subject is now clean.
+💡 Worse, **my first verification of the fix was itself wrong** - I checked with `git log -1 | Out-File -Encoding
+UTF8`, which adds a BOM of its own and made it look like the problem persisted. `git cat-file commit HEAD` is the
+correct way to inspect the raw message. Both lessons are now in `PROJECT_STATE.md` so the next session does not
+repeat it.
+
+**Pushed**: `f3e83f2..0a6f346` to `origin/mobile-support`, no auth prompt, no proxy trouble. Local and origin now
+0/0. The decorative post-commit hook printed its usual fake "backup" banner; the real one is
+`ttrpg-soundboard-backup-20261006-213714`, 206/206 verified.
+
+⚠️ **Three backups now exist** (20261004-230014, 20261006-200301, 20261006-213714) and **all three protect nothing
+unique** - every file in them is committed and pushed. Prune by hand.
