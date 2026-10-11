@@ -2172,3 +2172,25 @@ Phase 3b (the AGENTS.md definition-of-done) is the only remaining item. Claim he
 | Android | 189 / 0 / 1 (G5) | 1 |
 
 Working tree clean. Claim **released** (UNCLAIMED). `stash@{0}` (2026-08-11) still parked, still the user's call.
+## SESSION 2026-10-11 (close) - stash@{0} dropped after verifying it obsolete
+
+The last parked item was `stash@{0}`, *"On feature/multiple-sound-files: Backup before reroll to master"*
+(2026-08-11, `src/App.jsx`). The user noted multiple sound files has been implemented for a while and was
+working when last checked, so the branch work is long merged - but **the stash is not the branch**, so it was
+verified before dropping rather than assumed dead.
+
+| | stash `efeb907` | HEAD |
+|---|---|---|
+| `src/App.jsx` lines | **2194** | 6769 |
+| `storedName` | **0** | 45 |
+| `toStoredFileName` | **0** | 3 |
+| `audioFiles` | **0** | 13 |
+
+Zero occurrences of every symbol the feature is built on: it is the **before-side** snapshot taken before the
+branch was rolled onto master. Its added lines are `console.log` debug calls and a split-layout sketch whose own
+placeholders read *"Character list will go here"*, over single-file logic (`soundFormData.file`,
+`` soundUrl = `/assets/${sound.file}` ``) and a validation guard requiring `!audioFile && !soundFormData.file`.
+
+💡 The reusable lesson: **grep the stashed blob for the feature's core symbols before deciding a stash is
+dead.** "That branch was merged" does not imply "that stash is empty" - the stash captured a *different point
+in time* from the merge, and here it pointed backwards, not forwards. There are now **no stashes** in this repo.

@@ -114,11 +114,15 @@ are gated behind `isMobile` so desktop/web stay untouched.
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
   else. Do not read that output as "the commit was backed up" — use `.\backup-project.ps1`, which really does
   copy and verify.
-- 💡 **An old stash is still parked**: `stash@{0}` — *"On feature/multiple-sound-files: Backup before reroll to
-  master"*, dated **2026-08-11**, touching `src/App.jsx` (87+/224-). It predates all seven branches being merged
-  into `mobile-support` (2026-10-04), so it is almost certainly a dead pre-merge safety net. **Not dropped, and
-  not mentioned anywhere in this file until 2026-10-11.** Decide with the user before touching it — a stash is
-  cheap insurance and a wrong `git stash drop` is not recoverable from the reflog for long.
+- ✅ **The 2026-08-11 stash is gone** — `stash@{0}` (*"On feature/multiple-sound-files: Backup before reroll to
+  master"*, touching `src/App.jsx`) was **dropped 2026-10-11** after the user confirmed multiple sound files has
+  shipped and been working for a while. Verified obsolete before dropping, not assumed: the stash's `App.jsx` is
+  **2194 lines with 0 occurrences of `storedName`, `toStoredFileName` or `audioFiles`** — the before-side
+  snapshot taken before the branch was rolled onto master. HEAD is 6769 lines with 45 / 3 / 13 respectively.
+  Its "added" lines are `console.log` debug calls and a split-layout sketch whose own placeholder text reads
+  *"Character list will go here"*, plus single-file logic (`soundFormData.file`, `!/assets/${sound.file}`).
+  **There are now no stashes in this repo.** 💡 If a `feature/*` stash reappears, the same test applies: grep
+  the stashed blob for the feature's core symbols before deciding.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
 - Recent commits: `10fe6e2` "Add per-sound volume, with a live slider on every sound card" ·
