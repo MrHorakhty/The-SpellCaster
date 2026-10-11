@@ -2388,3 +2388,22 @@ the only copy that is both complete and independent.
 `e2e/coverage.manifest.json` **when you start it**, marked `planned`; flipping to `shipped` is what forces
 its tests to exist. `node e2e/check-coverage.mjs --update` re-syncs id lists - review the diff, and note it
 rewrites the whole file in canonical JSON, which is how a PowerShell `ConvertTo-Json` round trip gets undone.
+## SESSION 2026-10-11 (final, cont.) - all backup folders cleared
+
+Cleared the remaining three after the final push: **3 folders / ~118 MB -> 0**. Cumulative for the session:
+**10 folders / ~355 MB -> 0.**
+
+Preconditions checked before deleting, not assumed: `origin/mobile-support` 0 ahead / 0 behind, working tree
+clean, and the newest backup's 220 files all present in the working tree.
+
+**Why zero is correct and not merely tidy.** A backup holds only source, docs, tests and `public/assets`, all
+of which are in git at `origin`; a fresh clone plus `npm install` reproduces its entire contents. And the
+asymmetry worth remembering: `backup-project.ps1` reports `VERIFY OK` and Bitdefender then eats
+`e2e/e2e-full.ps1` from the copy anyway (2026-09-30, 2026-10-04). So "VERIFY OK, therefore safe to delete the
+old ones" and "VERIFY OK, therefore safe to keep this one" are **not equally strong arguments** - the remote is
+the only copy that is both complete and independent.
+
+**The standing rule in `AGENTS.md` changed accordingly.** "Keep the newest one or two and delete the rest by
+hand" became "can be cleared entirely once pushed", with the two rules that survive untouched: back up before
+any change, and re-take one at the end of a work session so the folder you have matches the final commit.
+Between sessions, no folder is needed at all.

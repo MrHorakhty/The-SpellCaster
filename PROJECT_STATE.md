@@ -458,10 +458,20 @@ which is sound: backups hold only source, docs, tests and `public/assets`, all o
 cleared after the final push.** Before the first prune, every file in all 8 was diffed against the repo and
 `git ls-files`; the only files not in the working tree were the three retired suites, recoverable from
 `dc9c276:e2e/...`, verified with `git cat-file -e`, and `dc9c276` is on `origin/mobile-support`. So the prune
-provably lost nothing. 💡 **This is the one item in this section that is `VERIFY OK`-dependent**: the script's
-own warning that Bitdefender eats `e2e-full.ps1` from backup folders means a backup is not as trustworthy as
-its "VERIFY OK" suggests — but that no longer matters once the work is pushed, which is the only reason it is
-safe to delete them all.
+provably lost nothing. 💡 **There are currently ZERO backup folders, and that is deliberate.** The user cleared them once the work was
+pushed, which is sound: backups hold only source, docs, tests and `public/assets`, all of which are in git at
+`origin/mobile-support`, so a fresh clone plus `npm install` reproduces everything a backup contains. 💡 That
+also disposes of the standing "the script does not prune, delete old ones by hand" advice in `AGENTS.md` —
+**after a successful push, you do not need one at all.** Two rules still hold and are unaffected:
+- **Back up before any change** — take one at the start of a work session, and
+- **re-take one at the end**, because the folder you want is the one matching the final commit.
+
+⚠️ The reason clearing them is *better* than keeping them, not merely tidier: `backup-project.ps1` reports
+`VERIFY OK` and Bitdefender then eats `e2e/e2e-full.ps1` from the copy anyway — that has happened at least
+twice (2026-09-30 from `.git\objects`, 2026-10-04 from a backup folder). **A "verified" backup is not
+automatically a complete one**, which is precisely why "VERIFY OK, so it is safe to delete the old ones" and
+"VERIFY OK, so it is safe to keep this one" are not equally strong arguments. The remote is the only copy that
+is both complete and independent.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the

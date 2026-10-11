@@ -47,9 +47,19 @@ the file — stripping all process-kill commands did **not** help, and the patte
 is harmless. The e2e files are currently final and committed, so `backup-project.ps1` repairing from git
 is the accepted mitigation. The user declined excluding all of OneDrive.
 
-### Known: backups accumulate — prune them yourself
-The script does **not** delete old backups. After several in one session there can be a dozen folders
-totalling ~400 MB. Keep the newest one or two and delete the rest by hand.
+### Known: backups accumulate — and can be cleared entirely once pushed
+The script does **not** delete old backups. During a work session several accumulate; keep the newest one or
+two while you are still changing things.
+
+⚠️ **Once the work is pushed, you do not need any of them.** A backup holds only source, docs, tests and
+`public/assets` — all of which are in git — so a fresh clone plus `npm install` reproduces its entire
+contents. Deleting every backup folder is safe *and* preferable, because `VERIFY OK` is not the same as
+complete: Bitdefender still eats `e2e/e2e-full.ps1` from backup copies (see above), so a "verified" backup is
+not necessarily a whole one. The remote is the only copy that is both complete and independent.
+
+This does not weaken **backup before any change** — take one at the start of a work session, and re-take one
+at the end so the surviving folder matches the final commit. It means the *between*-session state needs no
+folder at all.
 
 ### Build that path in PowerShell — do NOT type the accented characters
 
