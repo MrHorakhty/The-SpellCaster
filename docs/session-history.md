@@ -2107,4 +2107,29 @@ Web 172 -> 200 and Android 161 -> 189 are entirely the three ported specs.
   not corruption (220 lines vs 217 in HEAD, 17.7 KB, reads clean).
 - `e2e/e2e-full.ps1` was edited (the `ValidateSet`). The repo `.git` exclusions added 2026-10-04 are confirmed
   working, so the commit is safe - and having it committed is what gives `backup-project.ps1` a
-  `git show HEAD:e2e/e2e-full.ps1` fallback if Bitdefender eats the blob again.
+  `git show HEAD:e2e/e2e-full.ps1` fallback if Bitdefender eats the blob again.## SESSION 2026-10-11 (cont.) - Phase 3a+3c COMMITTED as 23bf458
+
+Closed the Phase 3 work after all three gates came back green, rather than leaving another session's worth
+uncommitted. **Web 200/0/0 exit 0, Windows 199/0/1 exit 1, Android 189/0/1 exit 1** - 0 FAIL everywhere, both
+nonzero exits being the pre-existing G5 skip.
+
+- Commit **`23bf458`** "Ship sound priming, refactor the E2E harness, and add a coverage gate" - 30 files,
+  covering priming + the shared-spec refactor + Phase 3 together, because all three were uncommitted.
+- ⚠️ **NOT PUSHED.** `origin/mobile-support` is still at `10fe6e2`-era state; this is the user's call.
+- **`src-tauri/Cargo.toml` was correctly not swept in**, despite `git add -A -- src-tauri` naming the pathspec:
+  git normalised the LF working copy to the committed blob, so `HEAD:src-tauri/Cargo.toml` and
+  `HEAD~1:src-tauri/Cargo.toml` are both `f701a93a`. **Verified by hash, not by eyeballing `git status`.**
+- The **decorative post-commit hook** printed `=== TTRPG Soundboard Backup Log === / Backup created: ... /
+  Backup location: /c/Users/emime/Projects/ttrpg-soundboard` on commit. That is the project directory, not a
+  backup folder, and **no backup happened**. Ran `.\backup-project.ps1` for real:
+  **`ttrpg-soundboard-backup-20261011-120339`**, 219/219 verified, 39.5 MB - the first backup holding all three
+  phases' work. Rollback point for the session is `ttrpg-soundboard-backup-20261011-102658` (217/217).
+- The AV-sensitive blob survived the commit: `HEAD:e2e/e2e-full.ps1` = `60f4645b`, 15765 bytes, readable, so
+  `backup-project.ps1` now has a `git show HEAD:` fallback for it.
+- Commit message written with `[System.IO.File]::WriteAllText(..., UTF8Encoding($false))` - no BOM
+  (first bytes `83,104,105` = "Shi"), confirmed afterwards with `git cat-file commit HEAD`.
+- 💡 A `--stat --name-only` grep for `Cargo.toml` reported a false positive: `git show` prints the commit
+  MESSAGE before the file list, and the message mentions Cargo.toml. **Check the blob hash, not the file list**,
+  when verifying what a commit actually contains.
+
+Phase 3b (the AGENTS.md definition-of-done) is the only remaining item. Claim held by opencode.

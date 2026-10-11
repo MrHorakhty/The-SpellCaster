@@ -12,8 +12,8 @@ Stop All, and the `loop`/`fadeIn` modal round-trip). Then `git rm`'d `e2e/e2e-ru
 **New `e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`** (36 suites, 305 ids) fail if the inventory
 drifts from the code, if a shared spec is imported but never run, if one runs on only one entrypoint, or if a
 retired file returns. Gates: **web 200/0/0 exit 0 · Windows 199/0/1 exit 1 (pre-existing G5) · Android
-189/0/1 exit 1 (same G5). 0 FAIL on all three.** ⚠️ Phase 3b (AGENTS.md definition-of-done) is the only
-remainder. ⚠️ **Not committed, not pushed.**
+189/0/1 exit 1 (same G5). 0 FAIL on all three.** **All committed as `23bf458`** (2026-10-11 12:03) — priming + the harness refactor + Phase 3 in one commit.
+**Not pushed yet.** Phase 3b (AGENTS.md definition-of-done) is the only remainder.
 Previous (Phase 2, opencode, claimed 2026-10-10 22:10, released 23:12): **closed the mobile coverage gaps** by moving five
 more suites out of the entrypoints and into shared specs run from *both* platforms. New:
 `e2e/specs/indicators.mjs` (U1–U7), `sliders.mjs` (B1–B4 box-size), `soundintogroup.mjs` (H1–H2),
@@ -103,20 +103,26 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-08
   22:0x). ✅ **Per-sound volume committed as `10fe6e2` and pushed** — `c96193c..10fe6e2`.
   ✅ **Push works, no auth prompt or proxy trouble** — consistent with 2026-10-04 and 2026-10-06.
-- ⚠️ **Priming and the whole harness refactor are implemented but NOT committed** (as of 2026-10-11). Working
-  tree changes: `src/App.jsx`, `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs` (Suite Q touch priming + Suite P touch
-  volume + Suite M move/copy, added 2026-10-10), `SOUND_PRIMING_SPEC.md` (build record),
-  `PER_SOUND_VOLUME_SPEC.md` (§8 updated), `PROJECT_STATE.md`, `docs/session-history.md`. Plus the shared-harness
-  refactor (2026-10-10): **new** `e2e/lib/*`, `e2e/specs/*`. Plus Phase 3 (2026-10-11): **new**
-  `e2e/check-coverage.mjs`, `e2e/coverage.manifest.json`, `e2e/specs/{platform,scroll,playback}.mjs`;
-  **deleted** `e2e/e2e-run.mjs`, `e2e/e2e-features.mjs`, `e2e/e2e-features.ps1`; **modified** `e2e/e2e-full.ps1`,
-  `e2e/e2e-android.ps1` (added `ValidateSet`), `.gitignore`, `README.md`. Plus the usual EOL-only
-  `src-tauri/Cargo.toml` non-diff. Nothing has been pushed.
+- ✅ **Priming and the whole harness refactor are COMMITTED as `23bf458`** (2026-10-11 12:03), 30 files, after
+  the Phase 3 coverage gate and the port-then-retire. **⚠️ Still not pushed.** Commit contents: `src/App.jsx`,
+  `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `e2e/e2e-full.ps1`, `e2e/e2e-android.ps1`, `README.md`,
+  `.gitignore`, `PROJECT_STATE.md`, `docs/session-history.md`, `SOUND_PRIMING_SPEC.md`,
+  `PER_SOUND_VOLUME_SPEC.md`, **new** `e2e/check-coverage.mjs`, `e2e/coverage.manifest.json`, `e2e/lib/*`,
+  `e2e/specs/*`, **deleted** `e2e/e2e-run.mjs`, `e2e/e2e-features.mjs`, `e2e/e2e-features.ps1`.
+  💡 **`src-tauri/Cargo.toml` was correctly NOT swept in** — the `git add -A -- src-tauri` pathspec staged it but
+  git normalised the LF working copy to match the committed blob, so `HEAD:src-tauri/Cargo.toml` and
+  `HEAD~1:src-tauri/Cargo.toml` are the **same hash** `f701a93a`. Verified, not assumed.
+  ✅ The AV-sensitive blob survived the commit: `HEAD:e2e/e2e-full.ps1` = `60f4645b`, 15765 bytes, readable.
+- ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
+  echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
+  a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
+  else. Do not read that output as "the commit was backed up" — use `.\backup-project.ps1`, which really does
+  copy and verify.
 - 💡 **An old stash is still parked**: `stash@{0}` — *"On feature/multiple-sound-files: Backup before reroll to
   master"*, dated **2026-08-11**, touching `src/App.jsx` (87+/224-). It predates all seven branches being merged
   into `mobile-support` (2026-10-04), so it is almost certainly a dead pre-merge safety net. **Not dropped, and
-  not mentioned anywhere in this file until now.** Decide with the user before touching it — a stash is cheap
-  insurance and a wrong `git stash drop` is not recoverable from the reflog for long.
+  not mentioned anywhere in this file until 2026-10-11.** Decide with the user before touching it — a stash is
+  cheap insurance and a wrong `git stash drop` is not recoverable from the reflog for long.
 - All 7 branches were fully merged into `mobile-support` as of 2026-10-04; no unmerged feature work anywhere.
 - The move/copy feature is **shipped and user-tested by hand** (2026-10-04), committed as `f7f316e`.
 - Recent commits: `10fe6e2` "Add per-sound volume, with a live slider on every sound card" ·
@@ -374,8 +380,11 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: **`ttrpg-soundboard-backup-20261011-102658`** (217/217 verified, 39.5 MB) — taken **before** the Phase 3
-coverage-manifest and port-then-retire work, per the "back up before any change" rule.
+Latest: **`ttrpg-soundboard-backup-20261011-120339`** (219/219 verified, 39.5 MB) — taken **after** commit
+`23bf458`, so it is the first backup holding the priming work, the harness refactor **and** Phase 3.
+Previous: **`ttrpg-soundboard-backup-20261011-102658`** (217/217 verified, 39.5 MB) — taken **before** the Phase 3
+coverage-manifest and port-then-retire work, per the "back up before any change" rule. That one is the rollback
+point for this session.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the
@@ -626,7 +635,8 @@ cancels, edit mode does not prime, a tap fires the primed set and consumes it, t
   machine-checked coverage gate (`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`), and retired the two
   legacy suites **by porting first**: `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, each run
   from both entrypoints. Gates **web 200/0/0 exit 0 · Windows 199/0/1 exit 1 · Android 189/0/1 exit 1** — 0 FAIL on
-  all three, the two nonzero exits both being the pre-existing G5 skip. ⚠️ **Not committed, not pushed.**
+  all three, the two nonzero exits both being the pre-existing G5 skip. ✅ **Committed as `23bf458`**
+  (2026-10-11 12:03), 30 files. **Not pushed yet.**
   💡 **The lesson worth keeping: "delete the legacy suites" was wrong as written, and the audit is what caught
   it.** ~31 tests lived only in those two files. Any future retirement should start by diffing what a file
   uniquely covers — `check-coverage.mjs --update` on a manifest built while they still exist would have surfaced
