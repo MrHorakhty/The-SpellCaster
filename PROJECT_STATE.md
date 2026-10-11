@@ -253,7 +253,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 | `e2e/e2e-full.ps1` | Phase A `web` (headless Edge/CDP) + Phase B `win` (real Tauri/WebView2) |
 | `e2e/e2e-android.ps1` | Android emulator/device phase |
 | `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs` | the two entrypoints the phases drive |
-| `e2e/check-coverage.mjs` | **static coverage gate (2026-10-11)** — no browser, no CDP. Cross-checks `coverage.manifest.json` against the code; `--update` re-syncs the id lists and nothing else |
+| `e2e/check-coverage.mjs` | **static coverage gate (2026-10-11)** — no browser, no CDP. Two layers: a **suite** registry (ids cannot drift or rot, shared specs must run on both entrypoints) and a **features** registry (a `shipped` feature with no covering suite is an error). `--update` re-syncs the id lists and nothing else |
 | `e2e/lib/` | **shared plumbing** (2026-10-10): `cdp.mjs` (CDP connect + `sleep` + `evalJs`, fatal socket-exit 3), `report.mjs` (`createReport`, same exit-code contract), `page.mjs` (`SEED`/`PAGE_HELPERS`/`INSTRUMENT_AUDIO`/`CAPTURE_LS`/`restoreLs`/`submitModalExpr`), `driver.mjs` (`makeDriver`: `trustedTap` mouse+touch, `centeredCard`, `dragFromTo`, edit-mode enter/exit), `spec-runner.mjs` (`runSpecs`) |
 | `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 9 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12 |
 
@@ -300,9 +300,31 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   Pixel_7 emulator). Same **G5** skip and the same deliberate exit-1 as Windows — see the warning further down.
   Was 161 before Phase 3. ⚠️ Emulator touch pipeline, **not a physical device**.
 - ✅ **`node e2e/check-coverage.mjs` is green** (2026-10-11): *"OK — manifest, code and platform wiring agree"*
-  — 36 suites, 305 ids, 9 shared specs each verified imported AND passed to `runSpecs()` by **both**
+  — 37 suites, 308 ids, 9 shared specs each verified imported AND passed to `runSpecs()` by **both**
   entrypoints. It is **static** (no browser, no CDP), so it belongs in any pre-commit sweep. Run
   `node e2e/check-coverage.mjs --update` after adding/renaming a test and review the id diff.
+- 🆕 **The features registry — this is what answers "will my new feature be tested?"** (added 2026-10-11).
+  The suite registry could only enforce that coverage does not **rot**; it said nothing about coverage
+  **existing**. Ship a feature with zero tests and every check still passed. `coverage.manifest.json` now
+  carries a `features` array: **23 shipped, 2 planned, 22 shipped features covered.** A `shipped` feature
+  with an empty `coveredBy` **fails** unless it carries an explicit `gap` reason, which then prints on every
+  run. `planned` features must *not* claim coverage (catches a spec that shipped without being updated).
+  💡 **Register the feature when you START it, marked `planned` — not when you finish it.** That is the
+  moment the question should be asked; flipping to `shipped` is what forces the tests to exist. All five
+  failure modes were verified with deliberately-injected bad entries, not assumed.
+- ⚠️ **One real coverage gap, now tracked mechanically rather than in prose**: **Reset to starter sounds** has
+  no suite at all (`restoreDefaults`, App.jsx:2959, wired at 6698). Deferred twice — once in Phase 2, once in
+  Phase 3 — because it **wipes the seeded fixture every later suite reads**, so it must re-seed and run last.
+  It is registered as a `shipped` feature with a `gap` reason, so it now prints on every checker run instead of
+  living only in this paragraph.
+- ⚠️ **The checker had a blind spot, found while building the features registry.** Its category regex was
+  `[A-Za-z]+`, which excludes digits, so the keyboard suite's `'A11Y'` category **never matched** — its three
+  passing tests (Y1–Y3) were invisible to every check while the checker still reported green. Fixed two ways:
+  the class is now `[A-Za-z0-9]+`, and a new `UNCATEGORISED_SUITE` check fails when a file logs under a category
+  **no manifest suite claims** (without it, a category the scanner sees but the manifest omits is scanned by
+  nobody — its ids are never counted, never registered, never reported). Suite **Y** is now registered
+  (`e2e-full.mjs::Y`, 126 desktop tests). 💡 **Lesson: a scanner's own regex is part of what you have to verify.**
+  A pattern that is too narrow does not error — it silently reports green over a region it never read.
 - ⚠️ **Three real defects the new specs caught, all in the tests rather than the app** — keep them in mind,
   they are the same three traps the next port will hit:
   1. **Ternary precedence in a status argument.** `cond ? a : b ? 'PASS' : 'FAIL'` binds as

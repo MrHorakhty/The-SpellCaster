@@ -2229,3 +2229,59 @@ record.** I had inferred it from the fact that a log existed and contained a mat
 mechanism happened, not that the prose had failed to capture it. The general form of this mistake is the same
 one that produces phantom incident stories: assembling several true observations into a causal narrative no
 single record supports.
+## SESSION 2026-10-11 (close) - FEATURES REGISTRY, and the blind spot it exposed
+
+Question asked: *now the E2Es are re-done, when a new feature is added will it be included in them?*
+
+**Honest answer before the change: no.** `check-coverage.mjs` enforced that coverage cannot **rot**, never that
+coverage **exists**. Ship a feature with zero tests and the checker stayed green, all three phases stayed green,
+nothing warned. The only thing doing that job was habit - the E2E checklist sections in `SOUND_PRIMING_SPEC.md`
+§7 and `PER_SOUND_VOLUME_SPEC.md` §8 - which depended on whoever wrote the next spec remembering to write one.
+
+**Added a `features` registry** to `coverage.manifest.json`. Every shipped capability is listed, each mapping to
+the suites covering it:
+
+- `status: "shipped"` with an empty `coveredBy` and no `gap` -> **FAILS**.
+- `gap` present -> reported on **every** run, so known debt cannot go quiet.
+- `status: "planned"` must **not** claim coverage -> catches a spec that shipped without being updated.
+- `spec` must name a file that exists. `coveredBy` refs must resolve to real `<file>::<key>` suites.
+
+Current state: **23 shipped, 2 planned, 22 covered.** All five failure modes were verified by injecting
+deliberately-bad entries and confirming the checker caught each, then restoring byte-identically - a gate that
+was never seen to fail is not known to work.
+
+💡 **The intended workflow: register the feature when you START, marked `planned`.** The checker then lists it
+under "no coverage expected", and flipping it to `shipped` is what forces the tests to exist. Registering at the
+end is too late - that is exactly the gap this closes.
+
+### ⚠️ THE REAL FINDING: the checker had a blind spot
+
+Building the features registry is what prompted an audit of what the checker could actually see. It could not
+see a whole suite.
+
+`LOG_RE`'s category class was `[A-Za-z]+`, which **excludes digits**. The keyboard suite logs under
+`'A11Y'`, so it never matched - and **Y1/Y2/Y3 (three passing tests, confirmed present in the last web run)
+were invisible to every check while the checker reported "OK".**
+
+Fixed two ways, because the regex alone was not enough:
+
+1. The class is now `[A-Za-z0-9]+`.
+2. A new **`UNCATEGORISED_SUITE`** check fails when a file logs under a category **no manifest suite claims**.
+   Without it, fixing the regex only changes the symptom: a category the scanner can see but the manifest omits
+   is still scanned by nobody, because the id-sync checks only run for suites that exist. Its ids would be
+   counted by nothing and reported by nothing. That structural hole is what let A11Y hide in the first place.
+
+Suite **Y** is now registered (`e2e-full.mjs::Y`, desktop only, with the "near-vacuous for a soft keyboard"
+note). Counts moved 36 suites/305 ids -> **37/308**.
+
+💡 **Lesson: a scanner's own regex is part of what you have to verify.** A pattern that is too narrow does not
+error and does not warn - it silently reports green over a region it never read, which is the worst failure mode
+for a gate whose entire purpose is to catch what was missed. I declared this checker "green" earlier the same
+day and it was green over three real tests it could not see.
+
+### The one real gap it now tracks
+
+**Reset to starter sounds** has **no suite at all** (`restoreDefaults`, App.jsx:2959, wired at 6698). Deferred
+twice - Phase 2 and Phase 3 - because it **wipes the seeded fixture every later suite reads**, so it must
+re-seed and run last. It is registered as `shipped` with a `gap` reason, so it prints on every run instead of
+living only in a prose paragraph.

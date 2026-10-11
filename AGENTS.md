@@ -204,6 +204,21 @@ After adding, renaming or deleting a test, run `node e2e/check-coverage.mjs --up
 diff** before committing. The checker is what stops a spec from silently running on one platform only, and
 what catches a test that exists in the code but in no inventory.
 
+### A shipped feature with no tests FAILS the gate
+The checker has two layers, and they are not the same thing:
+
+- The **suite** registry enforces that coverage cannot *rot* — ids stay registered, specs keep running on both
+  platforms, retired files stay retired.
+- The **features** registry enforces that coverage *exists*. Every shipped capability is listed in
+  `e2e/coverage.manifest.json` under `features`, each mapping to the suites that cover it. A `shipped` feature
+  with an empty `coveredBy` is an error — you must either write the tests or record an explicit `gap` reason,
+  which then prints on every run so the debt cannot quietly disappear.
+
+So when you build a feature: **add a `features` entry the moment you start, not when you finish.** Marking it
+`planned` first is the honest move — the checker will list it under "no coverage expected", and flipping it to
+`shipped` is what forces the tests to exist. If you ship without registering, the gate stays green, because no
+registry can catch a feature nobody wrote down.
+
 ### The user-visible bar
 E2E green is not the whole bar for a **user-facing** feature. Move/copy and per-sound volume both shipped only
 after the user **hand-tested the built app**; say so explicitly in the report, and never imply a hand-test that

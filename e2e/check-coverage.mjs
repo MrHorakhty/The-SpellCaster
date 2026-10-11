@@ -47,7 +47,12 @@ const SPEC_DIR = 'specs';
 // Matches log('CAT','name' — the label may be a concatenation ('T3: '+theme), so
 // only the leading string literal is captured and the id is pulled out of that.
 // Ids are letter(s) + digits + an optional sub-letter (P9a, P23b, Q6c).
-const LOG_RE = /log\(\s*'([A-Za-z]+)'\s*,\s*'([^']*)'/g;
+//
+// The CATEGORY class must allow digits. It did not, and that was a real blind
+// spot: 'A11Y' (the keyboard suite) never matched, so its three tests were
+// invisible to every check below while the checker still reported green.
+// Anything narrower than [A-Za-z0-9]+ silently hides whole suites.
+const LOG_RE = /log\(\s*'([A-Za-z0-9]+)'\s*,\s*'([^']*)'/g;
 const ID_RE = /^([A-Z]+\d+[a-z]?)/;
 
 const UPDATE = process.argv.includes('--update');
@@ -260,10 +265,60 @@ for (const f of scanned) {
   if (!suites.some(s => s.file === f)) err('ORPHAN_FILE', `${f} is never referenced by the manifest — add a suite for it`);
 }
 
+// Every category present in a file must be CLAIMED by some suite. Without this,
+// a category the scanner recognises but no manifest suite names is scanned by
+// nobody: the id-sync checks only run for suites that exist, so its tests are
+// never counted, never registered and never reported. That is how the keyboard
+// suite sat in e2e-full.mjs for a whole session with no manifest entry.
+const claimedCats = new Set(suites.map(s => `${s.file}::${s.cat}`));
+for (const f of scanned) {
+  for (const cat of scanFile(f).byCat.keys()) {
+    if (!claimedCats.has(`${f}::${cat}`)) {
+      err('UNCATEGORISED_SUITE', `${f} logs under category ${cat}, which no manifest suite claims — its tests are counted by nothing. Add a suite for it.`);
+    }
+  }
+}
+
 // (5) retired files must stay gone.
 for (const r of manifest.retired || []) {
   if (existsSync(join(HERE, r))) err('RETIRED_PRESENT', `${r} is retired but is back on disk`);
   if (existsSync(join(dirname(HERE), r))) err('RETIRED_PRESENT', `${r} is retired but is back at the repo root`);
+}
+
+// ---- features: does every shipped capability actually have coverage? --------
+// The suite registry above can only enforce that coverage does not ROT. It says
+// nothing about coverage existing in the first place: ship a feature with no
+// tests and every check above still passes. This block closes that, and it is
+// the only thing that makes "will my new feature be tested?" answerable.
+
+const features = manifest.features || [];
+const gaps = [];
+const shipRoot = dirname(HERE);
+
+if (!features.length) err('NO_FEATURES', 'the manifest declares no features — the "is this feature covered?" question cannot be answered');
+
+for (const f of features) {
+  if (!f.name) { err('FEATURE_NO_NAME', 'a features[] entry has no "name"'); continue; }
+  if (!['shipped', 'planned'].includes(f.status)) {
+    err('FEATURE_BAD_STATUS', `feature "${f.name}" has status "${f.status}"; expected "shipped" or "planned"`);
+    continue;
+  }
+  if (f.spec && !existsSync(join(shipRoot, f.spec))) {
+    err('FEATURE_SPEC_MISSING', `feature "${f.name}" names spec ${f.spec}, which does not exist`);
+  }
+  const covered = f.coveredBy || [];
+  for (const ref of covered) {
+    if (!seen.has(ref)) err('FEATURE_BAD_REF', `feature "${f.name}" points at suite "${ref}", which is not in the manifest`);
+  }
+  if (f.status === 'shipped' && !covered.length) {
+    // The whole point of this block. A shipped feature with no tests must be
+    // either covered or carry an explicit, reported reason.
+    if (f.gap) gaps.push(f);
+    else err('FEATURE_UNCOVERED', `feature "${f.name}" is shipped but has no covering suite and no recorded gap`);
+  }
+  if (f.status === 'planned' && covered.length) {
+    err('FEATURE_PREMATURELY_COVERED', `feature "${f.name}" is planned, not implemented, but claims a covering suite — either it shipped or the suite is wrong`);
+  }
 }
 
 // Non-test labels are suite footers ("Suite S") and skip paths ("drag skipped").
@@ -298,6 +353,16 @@ console.log(`  from a platform branch, is one id but can emit two results at run
 console.log(`  The E2E summary is the authority on how many actually ran.`);
 if (nonTest.length) console.log(`  ${nonTest.length} non-test log labels (suite footers / skips): ${[...new Set(nonTest)].join(', ')}`);
 for (const n of notes) console.log(`  note: ${n}`);
+
+const shipped = features.filter(f => f.status === 'shipped');
+const planned = features.filter(f => f.status === 'planned');
+console.log('------------------------------------------------------');
+console.log(`  features: ${shipped.length} shipped, ${planned.length} planned, ${shipped.filter(f => (f.coveredBy || []).length).length} shipped features covered`);
+if (gaps.length) {
+  console.log(`  ${gaps.length} shipped feature(s) with a RECORDED coverage gap (not a failure, but not quiet):`);
+  for (const g of gaps) console.log(`    - ${g.name}: ${g.gap}`);
+}
+for (const p of planned) console.log(`  planned, no coverage expected: ${p.name}${p.spec ? ` (${p.spec})` : ''}`);
 
 if (findings.length) {
   console.log('------------------------------------------------------');

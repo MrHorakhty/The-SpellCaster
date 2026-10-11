@@ -24,6 +24,187 @@
   ],
   "version": 1,
   "updated": "2026-10-11",
+  "$featuresComment": [
+    "Every shipped capability the app has. This is what answers 'will my new",
+    "feature end up in the tests?' — a `shipped` feature with an empty",
+    "`coveredBy` FAILS the checker, so you cannot mark something done without",
+    "either tests or an explicit `gap` reason. That is the whole point: the",
+    "suite registry alone only enforces that coverage cannot rot, never that",
+    "new coverage must exist.",
+    "",
+    "status: `shipped` = implemented in the app, so it MUST be covered.",
+    "        `planned` = spec written, not implemented, so it need not be.",
+    "gap:    an optional reason a `shipped` feature is knowingly uncovered.",
+    "        Reported on every run, not a silent pass.",
+    "coveredBy: suite refs as `<file>::<key>`. A missing ref is an error."
+  ],
+  "features": [
+    {
+      "name": "Sound priming",
+      "spec": "SOUND_PRIMING_SPEC.md",
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::Q", "e2e-mobile.mjs::Q"],
+      "note": "mouse right-click and touch press-and-hold; shipped 2026-10-08, hand-tested 2026-10-10"
+    },
+    {
+      "name": "Per-sound volume",
+      "spec": "PER_SOUND_VOLUME_SPEC.md",
+      "status": "shipped",
+      "coveredBy": ["specs/volume.mjs::P"],
+      "note": "live card slider; shipped 2026-10-06, hand-tested"
+    },
+    {
+      "name": "Move / copy sound",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::M", "e2e-mobile.mjs::M-move"],
+      "note": "spec retired after shipping; design now lives in src/App.jsx"
+    },
+    {
+      "name": "Live audio playback",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/playback.mjs::Z"],
+      "note": "fade-in ramp, master controls driving live audio, loop boundary, Stop All"
+    },
+    {
+      "name": "Board scroll containment",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/scroll.mjs::R"],
+      "note": "the grid scrolls and the page does not; layout differs desktop vs mobile"
+    },
+    {
+      "name": "Responsive layout / isMobile gate",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/platform.mjs::W"],
+      "note": "guards that mobile chrome never appears on desktop, or the reverse"
+    },
+    {
+      "name": "Sound add / edit / delete",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::A", "e2e-full.mjs::J", "e2e-full.mjs::D", "e2e-mobile.mjs::A", "e2e-mobile.mjs::J", "e2e-mobile.mjs::D"],
+      "note": "delete is always confirmed; the Cancel path is asserted too"
+    },
+    {
+      "name": "Character CRUD",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::C", "e2e-mobile.mjs::C"]
+    },
+    {
+      "name": "Environment category CRUD",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::K", "e2e-mobile.mjs::K"]
+    },
+    {
+      "name": "Groups CRUD",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::G", "e2e-mobile.mjs::G"],
+      "note": "group mode toggle, categories and characters inside a group"
+    },
+    {
+      "name": "Themes and settings",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::T", "e2e-mobile.mjs::T"]
+    },
+    {
+      "name": "Edit mode and per-card controls",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::E", "e2e-mobile.mjs::E"]
+    },
+    {
+      "name": "Card indicators",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/indicators.mjs::U"],
+      "note": "loop / glow / multi-file indicators and the div role=button contract"
+    },
+    {
+      "name": "Box size (zoom)",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/sliders.mjs::B"]
+    },
+    {
+      "name": "Drag to reorder",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/drag.mjs::X"]
+    },
+    {
+      "name": "Shared-file reference guard",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/refcount.mjs::G"],
+      "note": "G5 is a WARN under Tauri by design, not a gap"
+    },
+    {
+      "name": "Add a sound into a group category",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["specs/soundintogroup.mjs::H"]
+    },
+    {
+      "name": "Empty states",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::V", "e2e-mobile.mjs::V"]
+    },
+    {
+      "name": "Split view",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::L"],
+      "note": "desktop only; N/A on a phone"
+    },
+    {
+      "name": "Keyboard accessibility",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-full.mjs::Y"],
+      "note": "desktop only by design; near-vacuous for the Android soft keyboard"
+    },
+    {
+      "name": "Mobile drawer navigation",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-mobile.mjs::N"]
+    },
+    {
+      "name": "Mobile layout and icon rail",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": ["e2e-mobile.mjs::M-layout"]
+    },
+    {
+      "name": "Reset to starter sounds",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [],
+      "gap": "No suite covers it (restoreDefaults, App.jsx:2959, wired at 6698). Deferred twice: it WIPES the seeded fixture every later suite reads, so it has to re-seed and run last. Real, tracked debt."
+    },
+    {
+      "name": "Profile sync and export/import",
+      "spec": "PROFILE_SYNC_SPEC.md",
+      "status": "planned",
+      "coveredBy": [],
+      "note": "NOT IMPLEMENTED. Implementation is unauthorised - the user wants to review the design first. Do not write app code for it unasked."
+    },
+    {
+      "name": "Keyboard hotkeys",
+      "spec": "HOTKEYS_SPEC.md",
+      "status": "planned",
+      "coveredBy": [],
+      "note": "NOT IMPLEMENTED and not authorised. Recommended AFTER profiles."
+    }
+  ],
   "retired": [
     "e2e-run.mjs",
     "e2e-features.mjs",
@@ -766,6 +947,24 @@
         "G5"
       ],
       "idPattern": "^G\\d"
+    },
+    {
+      "key": "Y",
+      "cat": "A11Y",
+      "title": "Keyboard accessibility",
+      "file": "e2e-full.mjs",
+      "covers": "cards expose role=button + tabindex, and an Enter keydown does not crash",
+      "platforms": [
+        "web",
+        "win"
+      ],
+      "idPattern": "^Y\\d",
+      "ids": [
+        "Y1",
+        "Y2",
+        "Y3"
+      ],
+      "note": "desktop only by design - tabindex and Enter-keydown are meaningful for a physical keyboard and near-vacuous for the Android soft keyboard"
     },
     {
       "key": "W",
