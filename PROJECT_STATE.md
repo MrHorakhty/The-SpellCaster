@@ -255,7 +255,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 | `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs` | the two entrypoints the phases drive |
 | `e2e/check-coverage.mjs` | **static coverage gate (2026-10-11)** — no browser, no CDP. Two layers: a **suite** registry (ids cannot drift or rot, shared specs must run on both entrypoints) and a **features** registry (a `shipped` feature with no covering suite is an error). `--update` re-syncs the id lists and nothing else |
 | `e2e/lib/` | **shared plumbing** (2026-10-10): `cdp.mjs` (CDP connect + `sleep` + `evalJs`, fatal socket-exit 3), `report.mjs` (`createReport`, same exit-code contract), `page.mjs` (`SEED`/`PAGE_HELPERS`/`INSTRUMENT_AUDIO`/`CAPTURE_LS`/`restoreLs`/`submitModalExpr`), `driver.mjs` (`makeDriver`: `trustedTap` mouse+touch, `centeredCard`, `dragFromTo`, edit-mode enter/exit), `spec-runner.mjs` (`runSpecs`) |
-| `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 9 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12 |
+| `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 10 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, `reset.mjs` O1–O10 |
 
 - Flags: `-Phase web|win|android|all` (default `all`), `-Suite full|mobile`. ⚠️ `run|features` were removed
   2026-10-11 when those suites were retired; both runners now carry a `ValidateSet`, so a stale `-Suite` value
@@ -290,15 +290,15 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
-- Web E2E suite `e2e/e2e-full.mjs` → **200 PASS / 0 FAIL / 0 WARN, exit 0** as of 2026-10-11 11:41
-  (`e2e-run-20261011-113830.log`). Was 172 before Phase 3; **+28** are the three ported specs (W1–W6, R1–R10,
-  Z1–Z12). Run both standalone in a headed browser and via `e2e-full.ps1 -Phase web` (headless).
-- Windows phase → `e2e-full.ps1 -Phase win -Suite full`: **199 PASS / 0 FAIL / 1 WARN, exit 1** (2026-10-11
-  11:48, `e2e-run-20261011-114452.log`). The WARN is the pre-existing **G5** skip — Tauri uses physical uploads,
-  not a localStorage seed. Exit is **1** because of that warn (`process.exit(fail>0?2:(warn>0?1:0))`), not a failure.
-- Android phase → **189 PASS / 0 FAIL / 1 WARN / exit 1** on 2026-10-11 11:56 (`e2e-android-20261011-115224.log`,
-  Pixel_7 emulator). Same **G5** skip and the same deliberate exit-1 as Windows — see the warning further down.
-  Was 161 before Phase 3. ⚠️ Emulator touch pipeline, **not a physical device**.
+- Web E2E suite `e2e/e2e-full.mjs` → **210 PASS / 0 FAIL / 0 WARN, exit 0** as of 2026-10-11 12:41
+  (`e2e-run-20261011-123816.log`). Was 172 before Phase 3; **+38** are the four ported/added specs
+  (W1–W6, R1–R10, Z1–Z12, O1–O10).
+- Windows phase → `e2e-full.ps1 -Phase win -Suite full`: **209 PASS / 0 FAIL / 1 WARN, exit 1** (2026-10-11
+  12:48, `e2e-run-20261011-124417.log`). The WARN is the pre-existing **G5** skip — Tauri uses physical uploads,
+  not a localStorage seed. Exit is **1** because of that warn, not a failure.
+- Android phase → **199 PASS / 0 FAIL / 1 WARN / exit 1** on 2026-10-11 12:56 (`e2e-android-20261011-125200.log`,
+  Pixel_7 emulator). Same **G5** skip and the same deliberate exit-1 as Windows. Was 161 before Phase 3.
+  ⚠️ Emulator touch pipeline, **not a physical device**.
 - ✅ **`node e2e/check-coverage.mjs` is green** (2026-10-11): *"OK — manifest, code and platform wiring agree"*
   — 37 suites, 308 ids, 9 shared specs each verified imported AND passed to `runSpecs()` by **both**
   entrypoints. It is **static** (no browser, no CDP), so it belongs in any pre-commit sweep. Run
@@ -306,17 +306,30 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - 🆕 **The features registry — this is what answers "will my new feature be tested?"** (added 2026-10-11).
   The suite registry could only enforce that coverage does not **rot**; it said nothing about coverage
   **existing**. Ship a feature with zero tests and every check still passed. `coverage.manifest.json` now
-  carries a `features` array: **23 shipped, 2 planned, 22 shipped features covered.** A `shipped` feature
-  with an empty `coveredBy` **fails** unless it carries an explicit `gap` reason, which then prints on every
-  run. `planned` features must *not* claim coverage (catches a spec that shipped without being updated).
+  carries a `features` array: **23 shipped, 2 planned, and all 23 shipped features covered — zero recorded
+  gaps.** A `shipped` feature with an empty `coveredBy` **fails** unless it carries an explicit `gap` reason,
+  which then prints on every run. `planned` features must *not* claim coverage (catches a spec that shipped
+  without being updated).
   💡 **Register the feature when you START it, marked `planned` — not when you finish it.** That is the
   moment the question should be asked; flipping to `shipped` is what forces the tests to exist. All five
   failure modes were verified with deliberately-injected bad entries, not assumed.
-- ⚠️ **One real coverage gap, now tracked mechanically rather than in prose**: **Reset to starter sounds** has
-  no suite at all (`restoreDefaults`, App.jsx:2959, wired at 6698). Deferred twice — once in Phase 2, once in
-  Phase 3 — because it **wipes the seeded fixture every later suite reads**, so it must re-seed and run last.
-  It is registered as a `shipped` feature with a `gap` reason, so it now prints on every checker run instead of
-  living only in this paragraph.
+- ✅ **The last coverage gap is CLOSED — Reset to starter sounds now has a suite.** `e2e/specs/reset.mjs`
+  (**O1–O10**), shared, runs last in both entrypoints. It ships as `restoreDefaults` (App.jsx:2959 →
+  `mergeShippedDefaults`, App.jsx:349), which is a **merge, not a wipe**, and each assertion pins one clause of
+  that contract: the entry point confirms and changes nothing (O1), Cancel is a real out (O2), shipped entries
+  come first in shipped order (O3), a renamed shipped character is renamed back (O4), the user's own sounds
+  survive *after* the shipped ones (O5), user-created entries follow (O6), a renamed default **environment
+  category** is restored via the sound-id fallback (O7), groups are untouched (O8), a user-set icon survives
+  (O9), and it is idempotent (O10).
+  ⚠️ **The reason it was deferred twice was only half right.** It was recorded as "wipes the fixture every later
+  suite reads" — true of the board it rewrites, but it does not destroy user content, so a **self-seeding** spec
+  running **last** was always safe. The blocker was never the behaviour; it was that the spec had not been
+  written. 💡 Two traps it pins, both from reading `mergeShippedDefaults`: environment categories have **no id**
+  — `category` IS the key (App.jsx:343) — so renaming a default breaks the name anchor and the function falls
+  back to matching a stored entry carrying one of that default's sound ids (App.jsx:371-373); without the
+  fallback, renaming a default category duplicates every default sound. And a sound is user content only if its
+  id is in **no** default's sound list (App.jsx:355), so a shipped sound dragged into another character is
+  restored home rather than duplicated.
 - ⚠️ **The checker had a blind spot, found while building the features registry.** Its category regex was
   `[A-Za-z]+`, which excludes digits, so the keyboard suite's `'A11Y'` category **never matched** — its three
   passing tests (Y1–Y3) were invisible to every check while the checker still reported green. Fixed two ways:

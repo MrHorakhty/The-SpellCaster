@@ -36,6 +36,7 @@ import { refcount } from './specs/refcount.mjs';
 import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
+import { resetDefaults } from './specs/reset.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9224;
 const LABEL = process.env.LABEL || 'MOBILE';
@@ -1468,6 +1469,14 @@ async function main() {
   // localStorage case, which is not applicable under Tauri and logs a WARN -
   // Android reports 1 WARN / exit 1 exactly like the Windows phase.
   await runSpecs(ctx, [refcount]);
+
+  // ================================================================
+  //  O: RESET TO STARTER SOUNDS (shared spec - see e2e/specs/reset.mjs)
+  // ================================================================
+  // Genuinely last. The only spec that REWRITES the board into a different
+  // shape, deferred twice until it became safe to make self-seeding. Both
+  // headers expose title="Settings", so opening the modal needs no driver help.
+  await runSpecs(ctx, [resetDefaults]);
 
   // ================================================================
   //  Summary + Restore

@@ -2285,3 +2285,51 @@ day and it was green over three real tests it could not see.
 twice - Phase 2 and Phase 3 - because it **wipes the seeded fixture every later suite reads**, so it must
 re-seed and run last. It is registered as `shipped` with a `gap` reason, so it prints on every run instead of
 living only in a prose paragraph.
+## SESSION 2026-10-11 (close) - RESET TO STARTER SOUNDS: the last coverage gap, closed
+
+Built `e2e/specs/reset.mjs` (**O1-O10**), shared, runs LAST in both entrypoints. **All 23 shipped features
+now have coverage; zero recorded gaps.**
+
+**The recorded reason for deferring it twice was only half right.** Both `PROJECT_STATE.md` and Phase 2's notes
+said *"wipes the fixture every later suite reads"*. True of the board it rewrites - but `restoreDefaults` is a
+**merge, not a wipe**, and each assertion pins a clause of that contract. So a **self-seeding** spec running
+**last** was always safe. The blocker was never the behaviour; it was that nobody had written the spec. Two
+deferrals of a solvable problem is the thing to distrust here.
+
+**What it covers** (`restoreDefaults`, App.jsx:2959 -> `mergeShippedDefaults`, App.jsx:349), each test one
+clause: O1 the entry point confirms and changes nothing, O2 Cancel is a real out, O3 shipped entries come
+first in shipped order, O4 a renamed shipped character is renamed back, O5 user sounds survive **after** the
+shipped ones, O6 user-created entries follow, O7 a renamed default **environment category** restores via the
+sound-id fallback, O8 groups are untouched, O9 a user-set icon survives, O10 it is idempotent.
+
+**Two real traps pinned, both found by reading the function rather than testing it:**
+
+- Environment categories have **no id** - `category` IS the key (App.jsx:343). Renaming one breaks the name
+  anchor, so the function falls back to matching a stored entry carrying one of that default's sound ids
+  (App.jsx:371-373). **Without that fallback, renaming a default category re-adds the shipped one alongside
+  the renamed copy and duplicates every default sound.** A test that never renames a category would never see
+  it, so the fixture renames on purpose and asserts `env_4..env_7 + mine_3` exactly.
+- A sound is user content only if its id is in **no** default's sound list (`allShippedSoundIds`, App.jsx:355),
+  so a shipped sound the user dragged into a different character is restored to its own home rather than
+  duplicated. O5 pins the other side of that rule with a genuinely user id.
+
+**One bug in the spec itself, caught by the first run:** O2 referenced the Node-side helper `names()` from
+inside a page expression, where it is not defined. `evalJs` returned `{__error: "ReferenceError"}` rather than
+throwing, so the test reported FAIL with the reference error as its "detail" - which is readable, but only
+because the detail carries the exception. Fixed by inlining the predicate. Separately, the O7 detail string
+used `names()` on environment entries, printing `categories=[null,null]`; environment entries have `category`,
+not `name`, so a shared mapper silently hides which side failed. Added a `cats()` helper.
+
+### Gates
+
+| Phase | Result | Exit | Log |
+|---|---|---|---|
+| Web | **210 / 0 / 0** | 0 | `e2e-run-20261011-123816.log` |
+| Windows | **209 / 0 / 1** (G5) | 1 | `e2e-run-20261011-124417.log` |
+| Android | **199 / 0 / 1** (G5) | 1 | `e2e-android-20261011-125200.log` |
+
+Web 200 -> 210, Android 189 -> 199: exactly the ten new tests. `check-coverage.mjs` exit 0, `eslint` 0 errors /
+3 pre-existing warnings, `node --check` clean on all touched files.
+
+💡 The features registry **did its job the moment it existed**: it printed "Reset to starter sounds: no suite"
+on every run until this spec landed, which is exactly what turned it from a forgotten item into the next task.

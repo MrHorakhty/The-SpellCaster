@@ -35,6 +35,7 @@ import { refcount } from './specs/refcount.mjs';
 import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
+import { resetDefaults } from './specs/reset.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9333;
 const LABEL = process.env.LABEL || 'FULL';
@@ -1578,6 +1579,17 @@ async function main() {
   // sound, deletes the source container and asserts the file key survives. It runs
   // last so its reloads cannot disturb other suites.
   await runSpecs(ctx, [refcount]);
+
+  // ================================================================
+  //  O: RESET TO STARTER SOUNDS (shared spec - see e2e/specs/reset.mjs)
+  // ================================================================
+  // Genuinely last, and for a different reason than the others: this is the only
+  // spec that REWRITES the board into a different shape. It is safe here because
+  // it seeds its own fixture first, which is what finally unblocked it — it had
+  // been deferred twice on the grounds that it "wipes the fixture every later
+  // suite reads", and that was true only of the old shared-then-relied-upon
+  // suites. It seeds, it acts, and nothing runs after it.
+  await runSpecs(ctx, [resetDefaults]);
 
   // ================================================================
   //  Summary + Restore

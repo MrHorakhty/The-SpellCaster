@@ -8,7 +8,7 @@
     "    node e2e/check-coverage.mjs --update",
     "rewrites them and leaves everything else alone. Review the diff. The",
     "hand-maintained parts are `key`, `cat`, `title`, `file`, `export`,",
-    "`platforms` and `covers` Ã¢â‚¬â€ a new suite needs one of these blocks by hand.",
+    "`platforms` and `covers` ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â a new suite needs one of these blocks by hand.",
     "",
     "`key` is the suite's stable handle and must be unique WITHIN its file.",
     "`cat` is the log category and is NOT unique: SOUND covers three separate",
@@ -26,7 +26,7 @@
   "updated": "2026-10-11",
   "$featuresComment": [
     "Every shipped capability the app has. This is what answers 'will my new",
-    "feature end up in the tests?' — a `shipped` feature with an empty",
+    "feature end up in the tests?' Ã¢â‚¬â€ a `shipped` feature with an empty",
     "`coveredBy` FAILS the checker, so you cannot mark something done without",
     "either tests or an explicit `gap` reason. That is the whole point: the",
     "suite registry alone only enforces that coverage cannot rot, never that",
@@ -43,152 +43,211 @@
       "name": "Sound priming",
       "spec": "SOUND_PRIMING_SPEC.md",
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::Q", "e2e-mobile.mjs::Q"],
+      "coveredBy": [
+        "e2e-full.mjs::Q",
+        "e2e-mobile.mjs::Q"
+      ],
       "note": "mouse right-click and touch press-and-hold; shipped 2026-10-08, hand-tested 2026-10-10"
     },
     {
       "name": "Per-sound volume",
       "spec": "PER_SOUND_VOLUME_SPEC.md",
       "status": "shipped",
-      "coveredBy": ["specs/volume.mjs::P"],
+      "coveredBy": [
+        "specs/volume.mjs::P"
+      ],
       "note": "live card slider; shipped 2026-10-06, hand-tested"
     },
     {
       "name": "Move / copy sound",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::M", "e2e-mobile.mjs::M-move"],
+      "coveredBy": [
+        "e2e-full.mjs::M",
+        "e2e-mobile.mjs::M-move"
+      ],
       "note": "spec retired after shipping; design now lives in src/App.jsx"
     },
     {
       "name": "Live audio playback",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/playback.mjs::Z"],
+      "coveredBy": [
+        "specs/playback.mjs::Z"
+      ],
       "note": "fade-in ramp, master controls driving live audio, loop boundary, Stop All"
     },
     {
       "name": "Board scroll containment",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/scroll.mjs::R"],
+      "coveredBy": [
+        "specs/scroll.mjs::R"
+      ],
       "note": "the grid scrolls and the page does not; layout differs desktop vs mobile"
     },
     {
       "name": "Responsive layout / isMobile gate",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/platform.mjs::W"],
+      "coveredBy": [
+        "specs/platform.mjs::W"
+      ],
       "note": "guards that mobile chrome never appears on desktop, or the reverse"
     },
     {
       "name": "Sound add / edit / delete",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::A", "e2e-full.mjs::J", "e2e-full.mjs::D", "e2e-mobile.mjs::A", "e2e-mobile.mjs::J", "e2e-mobile.mjs::D"],
+      "coveredBy": [
+        "e2e-full.mjs::A",
+        "e2e-full.mjs::J",
+        "e2e-full.mjs::D",
+        "e2e-mobile.mjs::A",
+        "e2e-mobile.mjs::J",
+        "e2e-mobile.mjs::D"
+      ],
       "note": "delete is always confirmed; the Cancel path is asserted too"
     },
     {
       "name": "Character CRUD",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::C", "e2e-mobile.mjs::C"]
+      "coveredBy": [
+        "e2e-full.mjs::C",
+        "e2e-mobile.mjs::C"
+      ]
     },
     {
       "name": "Environment category CRUD",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::K", "e2e-mobile.mjs::K"]
+      "coveredBy": [
+        "e2e-full.mjs::K",
+        "e2e-mobile.mjs::K"
+      ]
     },
     {
       "name": "Groups CRUD",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::G", "e2e-mobile.mjs::G"],
+      "coveredBy": [
+        "e2e-full.mjs::G",
+        "e2e-mobile.mjs::G"
+      ],
       "note": "group mode toggle, categories and characters inside a group"
     },
     {
       "name": "Themes and settings",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::T", "e2e-mobile.mjs::T"]
+      "coveredBy": [
+        "e2e-full.mjs::T",
+        "e2e-mobile.mjs::T"
+      ]
     },
     {
       "name": "Edit mode and per-card controls",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::E", "e2e-mobile.mjs::E"]
+      "coveredBy": [
+        "e2e-full.mjs::E",
+        "e2e-mobile.mjs::E"
+      ]
     },
     {
       "name": "Card indicators",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/indicators.mjs::U"],
+      "coveredBy": [
+        "specs/indicators.mjs::U"
+      ],
       "note": "loop / glow / multi-file indicators and the div role=button contract"
     },
     {
       "name": "Box size (zoom)",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/sliders.mjs::B"]
+      "coveredBy": [
+        "specs/sliders.mjs::B"
+      ]
     },
     {
       "name": "Drag to reorder",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/drag.mjs::X"]
+      "coveredBy": [
+        "specs/drag.mjs::X"
+      ]
     },
     {
       "name": "Shared-file reference guard",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/refcount.mjs::G"],
+      "coveredBy": [
+        "specs/refcount.mjs::G"
+      ],
       "note": "G5 is a WARN under Tauri by design, not a gap"
     },
     {
       "name": "Add a sound into a group category",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["specs/soundintogroup.mjs::H"]
+      "coveredBy": [
+        "specs/soundintogroup.mjs::H"
+      ]
     },
     {
       "name": "Empty states",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::V", "e2e-mobile.mjs::V"]
+      "coveredBy": [
+        "e2e-full.mjs::V",
+        "e2e-mobile.mjs::V"
+      ]
     },
     {
       "name": "Split view",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::L"],
+      "coveredBy": [
+        "e2e-full.mjs::L"
+      ],
       "note": "desktop only; N/A on a phone"
     },
     {
       "name": "Keyboard accessibility",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-full.mjs::Y"],
+      "coveredBy": [
+        "e2e-full.mjs::Y"
+      ],
       "note": "desktop only by design; near-vacuous for the Android soft keyboard"
     },
     {
       "name": "Mobile drawer navigation",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-mobile.mjs::N"]
+      "coveredBy": [
+        "e2e-mobile.mjs::N"
+      ]
     },
     {
       "name": "Mobile layout and icon rail",
       "spec": null,
       "status": "shipped",
-      "coveredBy": ["e2e-mobile.mjs::M-layout"]
+      "coveredBy": [
+        "e2e-mobile.mjs::M-layout"
+      ]
     },
     {
       "name": "Reset to starter sounds",
       "spec": null,
       "status": "shipped",
-      "coveredBy": [],
-      "gap": "No suite covers it (restoreDefaults, App.jsx:2959, wired at 6698). Deferred twice: it WIPES the seeded fixture every later suite reads, so it has to re-seed and run last. Real, tracked debt."
+      "coveredBy": [
+        "specs/reset.mjs::O"
+      ],
+      "note": "was the one uncovered shipped feature until 2026-10-11; must run last"
     },
     {
       "name": "Profile sync and export/import",
@@ -1041,6 +1100,33 @@
         "Z8",
         "Z9"
       ]
+    },
+    {
+      "key": "O",
+      "cat": "RESET",
+      "title": "Reset to starter sounds",
+      "file": "specs/reset.mjs",
+      "export": "resetDefaults",
+      "covers": "the settings-modal Restore Defaults merge: shipped entries first and restored, user sounds kept, user entries and groups untouched, idempotent",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^O\\d",
+      "ids": [
+        "O1",
+        "O10",
+        "O2",
+        "O3",
+        "O4",
+        "O5",
+        "O6",
+        "O7",
+        "O8",
+        "O9"
+      ],
+      "note": "must run LAST - it is the only spec that rewrites the board into a different shape"
     }
   ]
 }
