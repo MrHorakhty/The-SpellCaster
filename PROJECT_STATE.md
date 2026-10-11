@@ -428,9 +428,11 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   add is the **mechanism**, which no prose entry spells out.
   The harness no longer writes there — every redirect now goes to `$tmp` = `%TEMP%\opencode\`
   (`e2e-android.ps1:152-153`, `e2e-full.ps1:165-221`) — so these are one-off debris from a manual launch.
-  **Left in place 2026-10-11 at the user's decision:** they were referred to as "backups" and are not. They are
-  ~30 KB and would show a recurrence immediately. **If they are deleted, nothing in this section is lost** — the
-  mechanism is written out above.
+  ✅ **SETTLED 2026-10-11 — kept, and this is closed. Do not raise it again.** The user's call was to leave
+  them in place once they were explained: ~30 KB, and they would show a recurrence immediately. **Nothing is
+  lost if they are ever deleted** — the mechanism is written out above and the finding survives in
+  `docs/session-history.md`. They were referred to as "backups" once, which is how this got re-raised twice;
+  they are not backups and there is no decision outstanding.
 
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything

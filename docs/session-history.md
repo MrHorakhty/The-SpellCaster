@@ -2333,3 +2333,21 @@ Web 200 -> 210, Android 189 -> 199: exactly the ten new tests. `check-coverage.m
 
 💡 The features registry **did its job the moment it existed**: it printed "Reset to starter sounds: no suite"
 on every run until this spec landed, which is exactly what turned it from a forgotten item into the next task.
+## SESSION 2026-10-11 (close) - the Desktop logs are closed, stop re-raising them
+
+The user pointed out we had "been over the ProtonVPN logs". They were right, and the cause was mine: after
+the explanation I kept listing them in my end-of-turn summaries as "awaiting your call". The decision had
+already been made - keep them, ~30 KB, once explained - but I had written the state file as *"Left in place
+2026-10-11 at the user's decision"*, which reads as pending forever. Re-reading it two sessions later, no
+wonder it looked open.
+
+Now reads **SETTLED 2026-10-11 - kept, and this is closed. Do not raise it again**, plus a note that they
+were once referred to as "backups" (which is how it got re-raised) and that nothing is lost if they are ever
+deleted.
+
+💡 **The generalisable mistake:** "at the user's decision" is a state that does not decay. A file that says
+"pending" stays pending forever unless someone actively closes it, so an item resolved in conversation keeps
+looking unresolved in the record - and gets re-raised by anyone reading it, including me. A decision that has
+been made must be written down as **made**, with its date, in the same edit that records the reasoning.
+Compare: the claim line in this file uses `UNCLAIMED - last holder: <name> (<timestamp>)`, which states the
+outcome and who made it. The ProtonVPN note had the rationale but not the outcome.
