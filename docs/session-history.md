@@ -2351,3 +2351,40 @@ looking unresolved in the record - and gets re-raised by anyone reading it, incl
 been made must be written down as **made**, with its date, in the same edit that records the reasoning.
 Compare: the claim line in this file uses `UNCLAIMED - last holder: <name> (<timestamp>)`, which states the
 outcome and who made it. The ProtonVPN note had the rationale but not the outcome.
+## SESSION 2026-10-11 (final) - handover
+
+**Everything is committed and pushed. `origin/mobile-support` is 0 ahead / 0 behind, working tree clean.**
+
+### Final state
+- Phase 3 complete: coverage gate, legacy suites ported-then-retired, AGENTS.md definition-of-done, features
+  registry, and the checker's own blind spot fixed.
+- **38 suites, 318 tests, 10 shared specs, 23/23 shipped features covered, zero recorded gaps.**
+- Gates: web **210/0/0 exit 0** · Windows **209/0/1 exit 1** · Android **199/0/1 exit 1**. Both nonzero exits
+  are the pre-existing G5 skip, by design - `0 FAIL` is the signal, not the exit code.
+- eslint 0 errors / 3 pre-existing warnings. `check-coverage.mjs` exit 0.
+
+### Backup situation - read this before re-running anything
+The user authorised **clearing the backup folders once the work was pushed**, which is sound: backups hold
+only source, docs, tests and `public/assets`, all of which are in git at `origin/mobile-support`. A fresh clone
+plus `npm install` reproduces everything a backup contains, so after a push the backups are redundant.
+
+⚠️ The reason to actually do it: `backup-project.ps1` reports `VERIFY OK` and Bitdefender then eats
+`e2e/e2e-full.ps1` from the copy anyway - that has happened at least twice (2026-09-30 from `.git\objects`,
+2026-10-04 from a backup folder). **A "verified" backup is not automatically a complete one.** The remote is
+the only copy that is both complete and independent.
+
+### Handover facts for the next session
+- **Claim released** (UNCLAIMED, last holder opencode 2026-10-11 13:12).
+- No running processes or forwarded ports; the emulator is shut down.
+- No stashes in the repo.
+- The four ProtonVPN logs on the Desktop are **settled and closed** - kept deliberately, do not re-raise.
+- **Next features:** `PROFILE_SYNC_SPEC.md` and `HOTKEYS_SPEC.md`, both `planned` in the features registry so
+  the checker lists them under "no coverage expected". **Neither is authorised for implementation.** Hotkeys
+  is recommended *after* profiles, because a per-profile binding has nowhere to live until that spec's storage
+  refactor exists.
+
+### If you pick up the harness work
+`AGENTS.md` has the definition of done - seven gates in order. Register a feature in
+`e2e/coverage.manifest.json` **when you start it**, marked `planned`; flipping to `shipped` is what forces
+its tests to exist. `node e2e/check-coverage.mjs --update` re-syncs id lists - review the diff, and note it
+rewrites the whole file in canonical JSON, which is how a PowerShell `ConvertTo-Json` round trip gets undone.

@@ -1,14 +1,19 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-11 12:15) — **Phase 3 complete, all work committed AND pushed**
-**Phase 3 is CLOSED and pushed as `dc9c276..7455c3b`.** Phase 3a added the machine-checked coverage gate
-(`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json` — 36 suites, 305 ids). Phase 3c was rescoped by its own
-audit: "delete `e2e-run.mjs` / `e2e-features.mjs`" turned out to hide **~31 tests that existed nowhere else**, so
-it became port-first — `specs/platform.mjs` (**W1–W6**), `specs/scroll.mjs` (**R1–R10**),
-`specs/playback.mjs` (**Z1–Z12**), all three run from *both* entrypoints — and only then the `git rm`, the
-`.gitignore` blocks and the `-Suite` `ValidateSet`. Phase 3b added the **definition of done** to `AGENTS.md`.
-**Gates: web 200/0/0 exit 0 · Windows 199/0/1 exit 1 · Android 189/0/1 exit 1 — 0 FAIL on all three.**
-Commits: `23bf458` (priming + harness refactor + Phase 3a/3c), `8a2d900` (state record), `7455c3b` (DoD).
+🔓 UNCLAIMED — last holder: opencode (2026-10-11 13:12) — **Phase 3 complete; everything committed and pushed, 0 ahead / 0 behind**
+**Phase 3 is CLOSED. Everything below is committed and pushed; `origin/mobile-support` is 0 ahead / 0 behind.**
+Phase 3a added the machine-checked coverage gate (`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`).
+Phase 3c was rescoped by its own audit: "delete `e2e-run.mjs` / `e2e-features.mjs`" turned out to hide **~31
+tests that existed nowhere else**, so it became port-first — `specs/platform.mjs` (**W1–W6**),
+`specs/scroll.mjs` (**R1–R10**), `specs/playback.mjs` (**Z1–Z12**), all run from *both* entrypoints — and only
+then the `git rm`, the `.gitignore` blocks and the `-Suite` `ValidateSet`. Phase 3b added the **definition of
+done** to `AGENTS.md`.
+**Then, later the same session:** a **features registry** (so a `shipped` feature cannot lack tests), a fix to a
+**blind spot in the checker itself** (its category regex excluded digits, hiding the whole `A11Y` keyboard
+suite), and **`specs/reset.mjs`** (**O1–O10**) closing the last uncovered feature.
+**Now: 38 suites, 318 tests, 10 shared specs, 23/23 shipped features covered, zero gaps.**
+**Gates: web 210/0/0 exit 0 · Windows 209/0/1 exit 1 · Android 199/0/1 exit 1 — 0 FAIL on all three**
+(both nonzero exits are the pre-existing G5 skip, by design).
 Previous (Phase 2, opencode, claimed 2026-10-10 22:10, released 23:12): **closed the mobile coverage gaps** by moving five
 more suites out of the entrypoints and into shared specs run from *both* platforms. New:
 `e2e/specs/indicators.mjs` (U1–U7), `sliders.mjs` (B1–B4 box-size), `soundintogroup.mjs` (H1–H2),
@@ -300,7 +305,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   Pixel_7 emulator). Same **G5** skip and the same deliberate exit-1 as Windows. Was 161 before Phase 3.
   ⚠️ Emulator touch pipeline, **not a physical device**.
 - ✅ **`node e2e/check-coverage.mjs` is green** (2026-10-11): *"OK — manifest, code and platform wiring agree"*
-  — 37 suites, 308 ids, 9 shared specs each verified imported AND passed to `runSpecs()` by **both**
+  — **38 suites, 318 ids, 10 shared specs** each verified imported AND passed to `runSpecs()` by **both**
   entrypoints. It is **static** (no browser, no CDP), so it belongs in any pre-commit sweep. Run
   `node e2e/check-coverage.mjs --update` after adding/renaming a test and review the id diff.
 - 🆕 **The features registry — this is what answers "will my new feature be tested?"** (added 2026-10-11).
@@ -445,15 +450,18 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: **`ttrpg-soundboard-backup-20261011-120800`** (219/219 verified, 39.5 MB) — taken **after** the push, so it
-is the only backup matching `7455c3b` exactly. Also kept: **`ttrpg-soundboard-backup-20261011-120701`**
-(219/219, 39.5 MB), taken just before the AGENTS.md edit.
-🗑️ **Pruned 2026-10-11 at the user's request: 8 older backups deleted, ~315 MB reclaimed** (10 folders / ~355 MB
-→ 2 folders / ~79 MB). Before deleting, every file in all 8 was checked against the repo and `git ls-files`;
-the only files not present in the working tree were the three retired suites, and those are recoverable from
-`dc9c276:e2e/e2e-run.mjs` etc. — `dc9c276` is on `origin/mobile-support`, verified with `git cat-file -e`.
-Previous (all now deleted): `20261011-120339`, `20261011-102658`, `20261010-221101`, `20261010-214021`,
-`20261010-212155`, `20261010-211224`, `20261010-205141`, `20261008-205212`.
+Latest: **`ttrpg-soundboard-backup-20261011-130235`** (220/220 verified, 39.5 MB) — taken after the Reset spec
+shipped, so it matches the final commit. **The user authorised clearing the rest once everything was pushed**,
+which is sound: backups hold only source, docs, tests and `public/assets`, all of which are in git at
+`origin/mobile-support`, so a fresh clone plus `npm install` reproduces them. Anything older is redundant.
+🗑️ **Pruned 2026-10-11 twice: 10 folders / ~355 MB -> 2 / ~79 MB (8 deleted, ~315 MB), then the remainder
+cleared after the final push.** Before the first prune, every file in all 8 was diffed against the repo and
+`git ls-files`; the only files not in the working tree were the three retired suites, recoverable from
+`dc9c276:e2e/...`, verified with `git cat-file -e`, and `dc9c276` is on `origin/mobile-support`. So the prune
+provably lost nothing. 💡 **This is the one item in this section that is `VERIFY OK`-dependent**: the script's
+own warning that Bitdefender eats `e2e-full.ps1` from backup folders means a backup is not as trustworthy as
+its "VERIFY OK" suggests — but that no longer matters once the work is pushed, which is the only reason it is
+safe to delete them all.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the
