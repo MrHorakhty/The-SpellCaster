@@ -140,11 +140,20 @@ When something becomes obsolete, in the same session that establishes it:
 - **Delete the file** (prefer `git rm` so the deletion is staged) — do not just stop using it, and do not
   mark it deprecated in place.
 - **Add a `.gitignore` entry** so it cannot silently come back. Existing examples: `e2e/e2e-all.ps1`,
-  `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md`.
+  `e2e/e2e-run.mjs`, `e2e/e2e-features.mjs`, `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md`.
 - **Record what it was and where the design lives** in `PROJECT_STATE.md` (Retired files, or Open items if
   it is a debt being tracked rather than a finished feature). Deleting the file must not delete the knowledge.
 - A file is deprecated when it is **replaced**, **shipped**, **resolved**, or **explicitly abandoned by the
   user** — not merely because it is unused for a while.
+
+### Retiring a TEST file is a different act from retiring a doc
+⚠️ **A retired doc loses prose. A retired test loses passing coverage, and nothing will ever report the hole.**
+Before deleting any test harness, diff what it uniquely covers against everything else, and **port that
+coverage first**, then delete. Concretely, on 2026-10-11 Phase 3 was written as "delete `e2e-run.mjs` /
+`e2e-features.mjs`"; extracting their `log()` calls showed **~31 tests that existed nowhere else** (live
+playback, scroll containment, the `isMobile` gate), so they became `specs/playback.mjs`, `specs/scroll.mjs` and
+`specs/platform.mjs` *before* the `git rm`. Delete-only would have passed every gate at 0 FAIL while quietly
+removing a third of the suite.
 
 ### What NOT to delete
 
@@ -158,3 +167,55 @@ This rule is deliberately narrow. Do not delete:
   it saves.
 - Anything you are not certain about. If unsure whether something is deprecated, ask — a wrong deletion is far
   more expensive than a leftover file.
+
+## Permanent instruction: definition of done
+
+Work in this repo is **not** done when the code compiles. It is done when all of the following are true, and
+the report you give the user must state each one with its actual number rather than "should be fine".
+
+### Run these, in this order
+
+| # | Gate | Command | Passes when |
+|---|---|---|---|
+| 1 | Backup | `.\backup-project.ps1` | `VERIFY OK` and the file count matches the source |
+| 2 | Lint | `npx eslint .` | **0 errors.** 3 warnings (`convertFileSrc`, `_`, `ev`) are the accepted baseline — do not chase them |
+| 3 | Build | `npx vite build` | completes |
+| 4 | Coverage | `node e2e/check-coverage.mjs` | `OK — manifest, code and platform wiring agree`, exit 0 |
+| 5 | Web E2E | `e2e\e2e-full.ps1 -Phase web -Suite full` | **0 FAIL** |
+| 6 | Windows E2E | `e2e\e2e-full.ps1 -Phase win -Suite full` | **0 FAIL** |
+| 7 | Android E2E | `e2e\e2e-android.ps1 -Suite mobile` | **0 FAIL** |
+
+Gates 4–7 are the ones that catch things gates 2–3 cannot. Budget roughly 3 min / 4 min / 5 min with warm
+`node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK.
+
+### Read the exit code correctly, or you will "fix" a non-bug
+`report.mjs` maps `fail>0 → 2`, `warn>0 → 1`, else `0`. **Suites G5 (the file-reference guard's negative
+localStorage case) legitimately WARNs on both Tauri phases**, because under Tauri an upload is a physical file
+in the app's uploads dir rather than a `sound_file_*` localStorage key. So:
+
+- **Windows and Android exiting `1` is the expected healthy baseline.** `0 FAIL` is the signal; the exit code
+  alone is not a regression.
+- Only the **web** phase is expected to exit `0`.
+- Never "fix" this by downgrading the WARN to a silent skip. A quietly dropped test rots unnoticed — that is
+  the entire reason it is a WARN.
+
+### Coverage you add must be registered, or it does not exist
+After adding, renaming or deleting a test, run `node e2e/check-coverage.mjs --update` and **review the id
+diff** before committing. The checker is what stops a spec from silently running on one platform only, and
+what catches a test that exists in the code but in no inventory.
+
+### The user-visible bar
+E2E green is not the whole bar for a **user-facing** feature. Move/copy and per-sound volume both shipped only
+after the user **hand-tested the built app**; say so explicitly in the report, and never imply a hand-test that
+did not happen. Tests that only touch internal state (a refactor, a pure function, harness work) do not need
+one — say that too, rather than leaving it ambiguous.
+
+### Reporting
+Give the per-gate PASS/FAIL/WARN counts and the exit code for each. If a gate could not run (no emulator, no
+device, no build), **say which and why** — never quietly report the ones that did run as if they were all of
+them.
+
+### Before you stop
+- `.\backup-project.ps1` again, so the backup matches the final state rather than the pre-change one.
+- `PROJECT_STATE.md` updated and the claim **released** — see the release protocol above.
+- If you changed a plan, record **why the plan changed**, not just the new plan.
