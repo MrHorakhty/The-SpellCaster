@@ -35,14 +35,14 @@ export const scroll = {
       const mk = (i) => ({ id:'r'+i, name:'Scroll '+i, type:'Generic', icon:'', loop:false, randomPlay:false,
         files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}], color:'#7cc113', duration:0, fadeIn:0, fadeOut:0 });
       const sounds = Array.from({length:60}, (_,i) => mk(i+1));
-      localStorage.setItem('ttrpg_characters', JSON.stringify([{ id:'c1', name:'Human Paladin', sounds }]));
-      localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-      localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-      localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-      localStorage.setItem('ttrpg_data_version', '3');
-      localStorage.removeItem('backgroundSettings');
-      localStorage.removeItem('boxSize');
-      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{ id:'c1', name:'Human Paladin', sounds }]));
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      localStorage.removeItem(window.__pk('backgroundSettings'));
+      localStorage.removeItem(window.__pk('boxSize'));
+      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('profile:'+window.__pid()+':sound_file_')) localStorage.removeItem(k);}
       return 'seeded';
     })()`;
 

@@ -50,7 +50,7 @@ export const sliders = {
       log('SLIDER', 'B2: grid collapses to 1 column at 1.8', cols === 1 ? 'PASS' : 'FAIL', 'cols=' + cols);
     }
 
-    const boxSizePersisted = await evalJs(`localStorage.getItem('boxSize')`);
+    const boxSizePersisted = await evalJs(`localStorage.getItem(window.__pk('boxSize'))`);
     log('SLIDER', 'B3: boxSize persisted', boxSizePersisted === '1.8' ? 'PASS' : 'FAIL', boxSizePersisted);
 
     // Reload -> box-size preserved
@@ -58,7 +58,7 @@ export const sliders = {
     await evalJs(PAGE_HELPERS);
     const afterReload = await evalJs(`(() => {
       const size = [...document.querySelectorAll('input[type=range]')].find(s => s.min === '0.5');
-      return { size: size?.value, bs: localStorage.getItem('boxSize') };
+      return { size: size?.value, bs: localStorage.getItem(window.__pk('boxSize')) };
     })()`);
     log('SLIDER', 'B4: box-size survives reload', afterReload?.size === '1.8' || afterReload?.bs === '1.8' ? 'PASS' : 'FAIL', JSON.stringify(afterReload));
 

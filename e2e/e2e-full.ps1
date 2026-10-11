@@ -212,6 +212,23 @@ if ($Phase -in @('all', 'win')) {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'
     $tauriProc = $null
     $lsBackup = $null
+    $upBackup = $null
+
+    # Snapshot uploads BEFORE the app is launched, not after. The app can move a
+    # file the moment it resolves one, and a snapshot taken after launch could
+    # already be the post-migration state - i.e. a "restore" that restores the
+    # damage. This is a plain filesystem copy and needs no CDP.
+    $upBackup = Join-Path $tmp "uploads-backup-$(Get-Date -f yyyyMMdd-HHmmss)"
+    "`t[SNAP] saving app uploads -> $upBackup" | Add-Content $Script:TestLog
+    & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save-uploads $upBackup 2>&1 | Add-Content $Script:TestLog
+    if ($LASTEXITCODE -ne 0) {
+        # Fail loudly rather than run unprotected: a phase that can MOVE the
+        # user's audio must not proceed on the assumption it can be undone.
+        "`t[SNAP] FATAL: could not snapshot app uploads (exit $LASTEXITCODE) - refusing to run against real data." | Add-Content $Script:TestLog
+        Write-Host "ABORT: could not snapshot app uploads - refusing to run a phase that can move your real audio." -ForegroundColor Red
+        $results.Add("ABORT: uploads snapshot failed; phase B not run") | Out-Null
+        return
+    }
 
     try {
         "`tLaunching tauri dev (WEBVIEW2 debug :9224) ..." | Add-Content $Script:TestLog
@@ -236,11 +253,12 @@ if ($Phase -in @('all', 'win')) {
         Start-Sleep -Seconds 2
         Assert-NotTimedOut
 
-        # Crash-safe data guard. This phase runs against the user's REAL desktop app
-        # data. The suite snapshots/restores localStorage itself, but only if it
-        # survives; a crashed or killed run would otherwise leave the E2E seed in the
-        # app. So the runner takes its own snapshot and restores it from the finally
-        # block below (mirrors e2e-android.ps1).
+        # Crash-safe data guard, part 2: localStorage. (uploads/ was snapshotted above,
+        # before the app launched, and is restored at the very end of the finally
+        # block once the app is dead.) The suite snapshots/restores localStorage
+        # itself, but only if it survives; a crashed or killed run would otherwise
+        # leave the E2E seed in the app. So the runner takes its own snapshot and
+        # restores it from the finally block below (mirrors e2e-android.ps1).
         $lsBackup = Join-Path $tmp "ls-backup-$(Get-Date -f yyyyMMdd-HHmmss).json"
         $env:CDP_PORT = '9224'
         $env:LABEL    = 'SNAP'
@@ -294,6 +312,24 @@ if ($Phase -in @('all', 'win')) {
         Remove-Orphans
         Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
         Remove-Item Env:\TAURI_DEV_HOST -ErrorAction SilentlyContinue
+
+        # uploads LAST, and only once the app is dead: while it is running it can
+        # still be writing, and restoring underneath it would be undone.
+        if ($upBackup) {
+            "`t[B-CLEANUP] restoring app uploads from $upBackup ..." | Add-Content $Script:TestLog
+            & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') restore-uploads $upBackup 2>&1 | Add-Content $Script:TestLog
+            $upRestoreCode = $LASTEXITCODE
+            if ($upRestoreCode -eq 0) {
+                Write-Host "App uploads restored." -ForegroundColor Green
+            } else {
+                "`t[B-CLEANUP] UPLOADS RESTORE FAILED (exit $upRestoreCode)." | Add-Content $Script:TestLog
+                "`t[B-CLEANUP] Recover with: node e2e-snapshot.mjs restore-uploads $upBackup" | Add-Content $Script:TestLog
+                Write-Host "WARNING: uploads restore failed (exit $upRestoreCode)." -ForegroundColor Red
+                Write-Host "  Your audio files may not be back where the app expects them." -ForegroundColor Red
+                Write-Host "  Snapshot kept at: $upBackup" -ForegroundColor Red
+                $results.Add("WARNING: uploads restore failed (exit $upRestoreCode) - snapshot at $upBackup") | Out-Null
+            }
+        }
     }
 }
 

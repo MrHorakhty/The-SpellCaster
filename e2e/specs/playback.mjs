@@ -33,7 +33,7 @@ export const playback = {
     // One character, one looping sound on a real bundled asset with a 1s fade.
     // No `volume` field, so it starts at 100% and the master is the only lever.
     const seed = `(() => {
-      localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
         id:'c1', name:'Human Paladin', sounds:[
           { id:'pb_main', name:'Playback Probe', type:'Test', icon:'',
             files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
@@ -41,11 +41,11 @@ export const playback = {
             brightness:1 }
         ]
       }]));
-      localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-      localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-      localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-      localStorage.setItem('ttrpg_data_version', '3');
-      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('profile:'+window.__pid()+':sound_file_')) localStorage.removeItem(k);}
       return 'seeded';
     })()`;
 
@@ -252,7 +252,7 @@ export const playback = {
     await sleep(1000);
     await driver.exitEditMode();
     const z12 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
       const s = c[0]?.sounds?.find(x => x.id === 'pb_main');
       return { loop: s?.loop, fadeIn: s?.fadeIn, written: window.__pbSetField ? undefined : 'NO_SETTER' };
     })()`);

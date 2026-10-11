@@ -1,4 +1,5 @@
-// e2e-snapshot.mjs - crash-safe localStorage snapshot/restore for the E2E harness.
+// e2e-snapshot.mjs - crash-safe localStorage AND uploads snapshot/restore for the
+// E2E harness.
 //
 // The suites already snapshot localStorage at start and restore it at the end
 // (SAVE_RESTORE=1), but that restore only runs if the suite survives: when a run
@@ -6,23 +7,125 @@
 // script is called by the runner instead, so the snapshot is taken before the suite
 // starts and restored from the runner's finally block regardless of how node exits.
 //
+// ⚠️ UPLOADS WERE MISSING HERE, AND THAT COST THE USER REAL DATA (2026-10-11).
+// localStorage was protected; the Tauri uploads/ directory was not. A Windows run
+// therefore wrote into the real install's audio folder - and when profiles landed,
+// the one-time uploads MIGRATION MOVED the user's 112 files into a profile
+// subdirectory, which their already-installed older app could not find. The claim
+// "test data never clobbers real characters/sounds" was true for localStorage and
+// false for uploads. `save-uploads` / `restore-uploads` close that gap.
+//
+// Note the installed app and the dev build share ONE AppData directory: Tauri
+// resolves AppData to %APPDATA%\<identifier> and both use the same identifier, so
+// a test run is writing into the real install's data, not a sandbox.
+//
 // Usage (CDP_PORT / LABEL env, same as the other suites):
-//   node e2e-snapshot.mjs save    <file>
-//   node e2e-snapshot.mjs restore <file>
+//   node e2e-snapshot.mjs save           <file>   # localStorage, via CDP
+//   node e2e-snapshot.mjs restore        <file>   # localStorage, via CDP
+//   node e2e-snapshot.mjs save-uploads   <dir>    # plain filesystem, NO CDP
+//   node e2e-snapshot.mjs restore-uploads <dir>   # plain filesystem, NO CDP
 //
 // Exit codes: 0 ok, 3 app/CDP unreachable, 4 bad usage or unusable snapshot.
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync, rmSync, cpSync, renameSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEBUG_PORT = process.env.CDP_PORT || 9225;
 const LABEL = process.env.LABEL || 'SNAP';
 const [mode, file] = process.argv.slice(2);
 
-if (!['save', 'restore'].includes(mode) || !file) {
+const log = (...a) => console.log(`[${LABEL}]`, ...a);
+
+const LS_MODES = ['save', 'restore'];
+const FS_MODES = ['save-uploads', 'restore-uploads'];
+
+if (![...LS_MODES, ...FS_MODES].includes(mode) || !file) {
   console.error(`[${LABEL}] usage: node e2e-snapshot.mjs save|restore <file>`);
+  console.error(`[${LABEL}]        or: node e2e-snapshot.mjs save-uploads|restore-uploads <dir>`);
   process.exit(4);
 }
 
-const log = (...a) => console.log(`[${LABEL}]`, ...a);
+// --- filesystem modes: uploads/ -------------------------------------------
+//
+// These deliberately run BEFORE any CDP connection. The uploads directory is an
+// ordinary folder, and it has to be restorable when the app is already dead -
+// which is exactly when a crashed run needs it most.
+if (FS_MODES.includes(mode)) {
+  // Derived from tauri.conf.json rather than hard-coded, so a bundle identifier
+  // change cannot silently point the snapshot at the wrong folder.
+  let identifier;
+  try {
+    identifier = JSON.parse(readFileSync(join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')).identifier;
+  } catch (err) {
+    console.error(`[${LABEL}] FAILED: could not read the bundle identifier: ${err.message}`);
+    process.exit(4);
+  }
+  const appData = process.env.APPDATA || process.env.HOME;
+  const uploads = join(appData, identifier, 'uploads');
+
+  if (mode === 'save-uploads') {
+    if (!existsSync(uploads)) {
+      log(`no uploads directory at ${uploads} - nothing to protect`);
+      process.exit(0);
+    }
+    try {
+      rmSync(file, { recursive: true, force: true });
+      mkdirSync(dirname(file), { recursive: true });
+      cpSync(uploads, file, { recursive: true });
+      const n = countFiles(file);
+      log(`saved ${n} upload file(s) -> ${file}`);
+      process.exit(0);
+    } catch (err) {
+      console.error(`[${LABEL}] FAILED: could not snapshot uploads: ${err.message}`);
+      process.exit(4);
+    }
+  }
+
+  // restore-uploads
+  if (!existsSync(file)) {
+    console.error(`[${LABEL}] FAILED: uploads snapshot ${file} does not exist - live files left untouched.`);
+    process.exit(4);
+  }
+  if (countFiles(file) === 0) {
+    console.error(`[${LABEL}] FAILED: uploads snapshot is empty - live files left untouched.`);
+    process.exit(4);
+  }
+  // Put the live folder aside first so a failure can put it back, rather than
+  // deleting the user's audio and discovering the copy was bad afterwards.
+  const aside = `${uploads}.__restore_backup`;
+  try {
+    rmSync(aside, { recursive: true, force: true });
+    if (existsSync(uploads)) renameSync(uploads, aside);
+  } catch (err) {
+    console.error(`[${LABEL}] FAILED: could not set the live uploads aside: ${err.message}`);
+    process.exit(4);
+  }
+  try {
+    cpSync(file, uploads, { recursive: true });
+  } catch (err) {
+    try { if (existsSync(aside)) renameSync(aside, uploads); } catch { /* reported below */ }
+    console.error(`[${LABEL}] FAILED: could not restore uploads (${err.message}); the previous folder was put back.`);
+    process.exit(4);
+  }
+  rmSync(aside, { recursive: true, force: true });
+  log(`restored ${countFiles(uploads)} upload file(s) from ${file}`);
+  process.exit(0);
+}
+
+function countFiles(dir) {
+  let total = 0;
+  const walk = d => {
+    let entries;
+    try { entries = readdirSync(d); } catch { return; }
+    for (const e of entries) {
+      const p = join(d, e);
+      try { if (statSync(p).isDirectory()) walk(p); else total++; } catch { /* racing delete */ }
+    }
+  };
+  walk(dir);
+  return total;
+}
 
 async function connect() {
   const res = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);

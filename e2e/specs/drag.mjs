@@ -28,7 +28,7 @@ export const dragReorder = {
         files: [{ name: name.toLowerCase().replace(/\\s+/g, '_') + '.mp3', displayName: name + '.mp3' }],
         color, duration: 0, randomPlay: false, loop: false
       }, opts || {});
-      localStorage.setItem('ttrpg_characters', JSON.stringify([
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([
         { id: 'c1', name: 'Human Paladin', sounds: [
           snd('x1', 'Smite', '#ff0000', { loop: true }),
           snd('x2', 'Shield Bash', '#3b82f6'),
@@ -36,16 +36,16 @@ export const dragReorder = {
           snd('x4', 'Divine Light', '#a855f7')
         ] }
       ]));
-      localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-      localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-      localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-      localStorage.setItem('ttrpg_data_version', '3');
-      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('sound_file_')) localStorage.removeItem(k); }
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('profile:'+window.__pid()+':sound_file_')) localStorage.removeItem(k); }
       return 'seeded';
     })()`;
 
     const order = `(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters') || '[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
       const pal = c.find(x => x.name === 'Human Paladin');
       return pal?.sounds?.map(s => s.name) || [];
     })()`;

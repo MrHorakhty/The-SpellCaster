@@ -55,7 +55,7 @@ export const soundIntoGroup = {
     }
 
     const grpSoundAdded = await evalJs(`(() => {
-      const g = JSON.parse(localStorage.getItem('ttrpg_groups') || '[]').find(x => x.name === 'Tavern Pack');
+      const g = JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]').find(x => x.name === 'Tavern Pack');
       const cat = g?.categories?.find(c => c.category === 'Ambience');
       return cat?.sounds?.some(s => s.name === 'Tavern Echo');
     })()`);

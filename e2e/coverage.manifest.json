@@ -254,7 +254,7 @@
       "spec": "PROFILE_SYNC_SPEC.md",
       "status": "planned",
       "coveredBy": [],
-      "note": "NOT IMPLEMENTED. Implementation is unauthorised - the user wants to review the design first. Do not write app code for it unasked."
+      "note": "AUTHORISED 2026-10-11. Step 1 of 8 SHIPPED and covered by specs/profiles.mjs (Suite F, F1-F12): storage adapter + profile index + first-run migration + a proven full-remount switch. `coveredBy` stays EMPTY on purpose - the checker rejects a `planned` feature that claims coverage, because the feature is not finished. Flip this to `shipped` with Suite F listed once the bundle format and export/import (spec steps 3-6) exist; that is what forces the round-trip tests to be written."
     },
     {
       "name": "Keyboard hotkeys",
@@ -1127,6 +1127,36 @@
         "O9"
       ],
       "note": "must run LAST - it is the only spec that rewrites the board into a different shape"
+    },
+    {
+      "key": "F",
+      "cat": "PROFILE",
+      "title": "Profiles - storage, migration, switch",
+      "file": "specs/profiles.mjs",
+      "export": "profiles",
+      "covers": "first-run adoption of pre-profile data, per-profile key scoping, A -> B -> A byte-identity, the edit-immediately-after-switch path, DATA_VERSION skew migrating instead of resetting, and scoped deletion",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^F\\d",
+      "ids": [
+        "F1",
+        "F10",
+        "F11",
+        "F12",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6a",
+        "F6b",
+        "F7",
+        "F8",
+        "F9"
+      ],
+      "note": "step 1 of PROFILE_SYNC_SPEC.md. Clears storage and creates/deletes profiles, so it runs ahead of refcount (G) and reset (O), which both re-seed for themselves"
     }
   ]
 }

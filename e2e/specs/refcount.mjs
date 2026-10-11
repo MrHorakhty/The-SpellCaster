@@ -49,7 +49,7 @@ const MC_HELPERS = `(() => {
 })()`;
 
 const GUARD_SEED = `(() => {
-  localStorage.setItem('ttrpg_characters', JSON.stringify([{
+  localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
     id:'c1', name:'Human Paladin', sounds:[{
       id:'guard_s1', name:'Guard Test', type:'Test', icon:'',
       files:[{name:'guard_test.mp3', displayName:'Guard Test.mp3', storedName:'guard_test.mp3'}],
@@ -57,17 +57,18 @@ const GUARD_SEED = `(() => {
       brightness:1, glowEnabled:false, glowProminence:0.5
     }]
   }]));
-  localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-  localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-  localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-  localStorage.setItem('ttrpg_data_version', '3');
-  // Create the actual key the app would have written, so the guard has something to protect.
-  localStorage.setItem('sound_file_guard_test.mp3', 'data:text/plain;base64,Z3VhcmRfZGF0YQ==');
+  localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+  localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+  localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+  localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+  // Create the actual key the app would have written, so the guard has something
+  // to protect. Web audio is profile-scoped like every other key.
+  localStorage.setItem(window.__pk('sound_file_guard_test.mp3'), 'data:text/plain;base64,Z3VhcmRfZGF0YQ==');
   return 'seeded';
 })()`;
 
 const ORPHAN_SEED = `(() => {
-  localStorage.setItem('ttrpg_characters', JSON.stringify([{
+  localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
     id:'c3', name:'Lone Character', sounds:[{
       id:'neg_s1', name:'Orphan Test', type:'Test', icon:'',
       files:[{name:'orphan_test.mp3', displayName:'Orphan Test.mp3', storedName:'orphan_test.mp3'}],
@@ -75,10 +76,10 @@ const ORPHAN_SEED = `(() => {
       brightness:1, glowEnabled:false, glowProminence:0.5
     }]
   }]));
-  localStorage.setItem('sound_file_orphan_test.mp3', 'data:text/plain;base64,b3JwaGFuX2RhdGE=');
-  localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-  localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-  localStorage.setItem('ttrpg_data_version', '3');
+  localStorage.setItem(window.__pk('sound_file_orphan_test.mp3'), 'data:text/plain;base64,b3JwaGFuX2RhdGE=');
+  localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+  localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+  localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
   return 'seeded';
 })()`;
 
@@ -95,9 +96,9 @@ export const refcount = {
 
     // A copy needs a second character to land in.
     await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters') || '[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
       c.push({ id:'c2', name:'Elf Sorcerer', sounds:[] });
-      localStorage.setItem('ttrpg_characters', JSON.stringify(c));
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify(c));
       return 'added';
     })()`);
     await reload();
@@ -112,13 +113,13 @@ export const refcount = {
     await sleep(700);
 
     const guardAfterCopy = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem('ttrpg_characters') || '[]');
+      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       const orig = l.find(c => c.name === 'Human Paladin')?.sounds?.find(s => s.name === 'Guard Test');
       return {
         copyExists: !!copy,
         sharedFile: !!copy && !!orig && copy.files?.[0]?.storedName === orig.files?.[0]?.storedName,
-        fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3')
+        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_guard_test.mp3'))
       };
     })()`);
     log('GUARD', 'G1: copy shares storedName', guardAfterCopy?.sharedFile ? 'PASS' : 'FAIL',
@@ -131,12 +132,12 @@ export const refcount = {
     await ctx.deleteCharacter('Human Paladin');
 
     const guardAfterDelete = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem('ttrpg_characters') || '[]');
+      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       return {
         paladinGone: !l.find(c => c.name === 'Human Paladin'),
         copyExists: !!copy,
-        fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3'),
+        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_guard_test.mp3')),
         copyFile: copy?.files?.[0]?.storedName
       };
     })()`);
@@ -153,8 +154,8 @@ export const refcount = {
       await driver.enterEditMode();
       await ctx.deleteCharacter('Lone Character');
       const guardNegative = await evalJs(`(() => ({
-        fileKeyExists: !!localStorage.getItem('sound_file_orphan_test.mp3'),
-        chars: JSON.parse(localStorage.getItem('ttrpg_characters') || '[]').length
+        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_orphan_test.mp3')),
+        chars: JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]').length
       }))()`);
       log('GUARD', 'G5: unreferenced file IS removed',
         guardNegative?.fileKeyExists === false && guardNegative?.chars === 0 ? 'PASS' : 'FAIL', JSON.stringify(guardNegative));

@@ -56,21 +56,21 @@ export const resetDefaults = {
     const seed = `(() => {
       const snd = (id, name) => ({ id, name, type:'Test', icon:'', files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
         color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1 });
-      localStorage.setItem('ttrpg_characters', JSON.stringify([
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([
         { id:'char_2', name:'Renamed Paladin', icon:'PaladinIcon.png', sounds:[ snd('s_6','Shield Bash'), snd('mine_1','My Custom Spell') ] },
         { id:'zz_custom', name:'My Hero', icon:'', sounds:[ snd('mine_2','Only Mine') ] }
       ]));
-      localStorage.setItem('ttrpg_environment', JSON.stringify([
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([
         { id:'', category:'Renamed Category', icon:'', sounds:[ snd('env_5','Wind Howl'), snd('mine_3','My Ambience') ] }
       ]));
-      localStorage.setItem('ttrpg_groups', JSON.stringify([
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([
         { id:'g1', name:'Untouched Group', mode:'environment', categories:[{ id:'gc1', category:'Untouched Category', sounds:[ snd('mine_4','Mine In A Group') ] }], characters:[] }
       ]));
-      localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-      localStorage.setItem('ttrpg_data_version', '3');
-      localStorage.removeItem('backgroundSettings');
-      localStorage.removeItem('boxSize');
-      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      localStorage.removeItem(window.__pk('backgroundSettings'));
+      localStorage.removeItem(window.__pk('boxSize'));
+      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('profile:'+window.__pid()+':sound_file_')) localStorage.removeItem(k);}
       return 'seeded';
     })()`;
 
@@ -101,11 +101,11 @@ export const resetDefaults = {
     })()`;
 
     const stored = `(() => ({
-      characters: JSON.parse(localStorage.getItem('ttrpg_characters') || '[]'),
-      environment: JSON.parse(localStorage.getItem('ttrpg_environment') || '[]'),
-      groups: JSON.parse(localStorage.getItem('ttrpg_groups') || '[]'),
-      version: localStorage.getItem('ttrpg_data_version'),
-      oldKeys: Object.keys(localStorage).filter(k => k.endsWith('_old'))
+      characters: JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'),
+      environment: JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment')) || '[]'),
+      groups: JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]'),
+      version: localStorage.getItem(window.__pk('ttrpg_data_version')),
+      oldKeys: window.__bareKeys().filter(k => k.endsWith('_old'))
     }))()`;
 
     await evalJs(seed);

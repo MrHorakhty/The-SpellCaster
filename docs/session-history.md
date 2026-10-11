@@ -2494,3 +2494,316 @@ switch afterwards would have discovered the adapter needed a different shape and
 
 **Gates.** `npx eslint .` 0 errors / 3 pre-existing warnings. `npx vite build` exit 0. `node e2e/check-coverage.mjs`
 exit 0. Gates 5-7 not run - documentation only, no code touched.
+---
+
+## 2026-10-11 21:12-21:59 - Profiles step 1 IMPLEMENTED (opencode) - IN FLIGHT, web green, two gates outstanding
+
+**Session ended mid-step.** The claim is deliberately HELD. Nothing is committed. Base commit `4ddd428`.
+Read `PROJECT_STATE.md` section "Handover - profiles step 1" before picking this up.
+
+The user authorised implementation at 21:12. This is `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter +
+profile index + first-run migration + a PROVEN switch (full remount).
+
+**Shipped in `src/`**
+- **NEW `src/profileStorage.js`** - the whole storage layer, deliberately OUT of `App.jsx` (which is ~6900 lines
+  and was not made longer for this). Profile-scoped keys, the unprefixed `spellcaster_profiles` index, first-run
+  adoption, CRUD, `readProfileData()`, and the per-profile upload paths.
+- All **27** `localStorage` sites and **4** `uploads/` chokepoints routed through the adapter. `readStoredData`
+  now takes a profile id.
+- `App` split into `AppBoard` + a thin `App` whose ONLY job is the remount key. That split is the mechanism of
+  §0.3 decision 2: changing `key` unmounts the whole tree, so every `useState` initialiser re-reads the new
+  profile and the auto-save effects can never hold one profile's state against another's prefix.
+- Profiles section in the Settings modal (new / switch / rename / delete).
+- First-run adoption is **copy, verify, then remove** - if any step throws, the user's data is still in the old
+  key. That ordering came straight from `backup-project.ps1` and it is why the migration is safe to run on a
+  real board.
+
+**The E2E migration was the expensive part: 161 harness sites** were writing keys the app no longer reads. The
+suites still speak bare names; `PROFILE_HELPER` in `e2e/lib/page.mjs` maps them in-page (`__pk`, `__pseed`,
+`__bareKeys`, `__keysFor`) because the profile id is random per install and cannot be known in Node.
+
+**The failure mode is silent and is the lesson worth keeping: a seed that misses the prefix writes a key
+nothing reads, the board comes up empty, and the suite reports PASS.** Two real regressions came out of it -
+refcount.mjs seeded bare literal `sound_file_*` keys (broke **G5**), and `__soundsIn(key)` read a bare variable
+key and silently returned nothing (broke **M7/M8**). A third was structural: a raw `cdp('Page.reload')` wipes the
+helpers, so the next seed after it hits the same trap; all 16 reloads now go through `reloadPage()`, which
+re-injects `PAGE_HELPERS`. `window.__pid()` is self-healing for the same class of ordering bug - it CREATES a
+profile if none exists rather than returning nothing, which is what fixed 40+ failures that looked like an app bug
+(SEED was running before the helpers were injected).
+
+**A mistake worth recording: the one-shot migration scripts were not idempotent.** Re-running
+`migrate-reloads.mjs` rewrote `reloadPage`'s OWN body into a self-call and killed the run with
+`RangeError: Maximum call stack size exceeded`. They were deleted and replaced by `e2e/check-profile-keys.mjs`,
+which is read-only. The guard was verified to actually FAIL on a deliberately re-broken file, because a guard
+that has never been seen to fail is indistinguishable from one that cannot fail.
+
+**Verified.** `profileStorage.check.mjs` 22/22 (a fast node-level check of the storage logic, no browser - worth
+building for any future storage change). `check-profile-keys.mjs` OK. `check-coverage.mjs` OK: **39 suites,
+331 tests, 11 shared specs**, Suite F registered in both the `features` and `suites` registries.
+**Web E2E 223 PASS / 0 FAIL / 0 WARN exit 0** (was 210; **+13** = F1-F12). The headline assertions pass:
+F7 A -> B -> A byte-identical, F6a editing B leaves A byte-identical, F8 B unchanged by the round trip,
+F10 DATA_VERSION skew migrates instead of resetting.
+
+**The feature stays `planned`, not `shipped`.** The checker explicitly rejects a planned feature that claims
+coverage (`FEATURE_PREMATURELY_COVERED`), and it is right: the bundle format and export/import (spec steps 3-6)
+do not exist. Step 1 shipped; the feature did not.
+
+**Two of my own spec bugs are worth noting** because both initially looked like app failures: the character-add
+helper used a selector the app does not have (the real sequence is edit mode -> "Add Character" -> set the
+`name` field -> submit, as Suite C does), and F11 asserted a single delete button while two profiles were present
+- with `profiles.length > 1` BOTH rows correctly offer delete, so the "last profile cannot be deleted" check has
+to run AFTER the scoped delete.
+
+**Left undone, in order:** (1) gate 6 Windows, (2) gate 7 Android, (3) re-run gates 2-4, (4) request the user's
+hand-test - this is a user-facing feature and the DoD requires it. Plus the blocking uploads-migration defect
+recorded at the top of the handover section: **on Tauri every existing uploaded file becomes unreachable** because
+the lookup path gained a profile segment and the bytes on disk did not. Web does not catch this because web audio
+lives in localStorage.
+---
+
+## 2026-10-11 22:15-22:50 - Profiles step 1: uploads migration + all three gates (opencode)
+
+**Still UNCOMMITTED, claim HELD.** Session continuing from the entry above.
+
+### The user's question, and the answer
+
+The user asked the right question to stop on: *"I have a previous version installed with actual sound I want to
+keep. Should the old version be able to migrate their sound to the new version?"* **Yes, and it now does.** Verified
+against the user's real install: **112 files / 17.42 MB**, all flat, in
+`%APPDATA%\com.mrhorakhty.thespellcaster\uploads`.
+
+Two decisions were taken with the user:
+- **`fs:allow-rename`** (they chose it over copy+delete). Verified from the resolved crate that `rename` is NOT in
+  `fs:default` - only in `write-all`/`write-files`, which we do not grant - and confirmed `allow-rename` exists in
+  the `fs` namespace of `gen/schemas/acl-manifests.json`. `cargo check --offline` clean, and the regenerated
+  `gen/schemas/capabilities.json` contains it.
+- **Deleting a profile asks first, with a file count.** It is a COUNT not a byte total, because `stat` is not in the
+  granted permission set and no directory listing carries sizes - a size figure would have cost another capability.
+
+⚠️ **`fs:allow-remove-dir` does NOT exist** in this plugin version (0 occurrences in the acl manifest, no
+`remove-dir.toml`). So `removeProfileUploads()` deletes files individually and leaves the empty per-profile
+directory, rather than adding a capability to delete an empty dir.
+
+### `migrateUploadsToProfile()` - the piece that saves the audio
+
+- Enumerates `uploads/`, moves every FILE into `uploads/<profileId>/`.
+- **Idempotent by STRUCTURE, not by flag**: the test is "are there any files flat in uploads/", so once moved only
+  directories remain and a re-run is a no-op. No marker key to desynchronise, and a crash mid-move is resumable.
+- **Never clobbers**: an existing destination is skipped, not overwritten - that is what makes a partial re-run safe.
+- Per-file isolation, so one unreadable file does not abandon the other 111.
+- Memoised per profile and **awaited by all three Tauri file paths**, so a click during the migration waits rather
+  than failing to find the file.
+- `planUploadMigration()` is extracted as a **pure function** because the path arithmetic and the directory-skip are
+  what fail invisibly - renaming a directory would nest a whole subtree inside the profile folder.
+
+### Proof it works on real data (the check the web gate could never give)
+
+After the Windows gate: **0 flat files remain**, content now in `uploads/p_09b2806c/` at **114 files / 18.03 MB** -
+the 112 originals plus the 2 the suite uploaded. Spot-checked by name and unchanged:
+`icon_2rxi4ls9_Tentacular_Limbs.png` (108 KB), `icon_57nb9nm7_Warding_Sign.png` (160.4 KB); 99 `sound_*` files
+carried over. Two EMPTY profile dirs are the profiles Suite F created and deleted - left behind precisely because
+`fs:allow-remove-dir` does not exist, which is the designed behaviour.
+💡 The migration's log line comes from the *app's* console, which the suite does not capture, so **the filesystem
+is the evidence, not the log.**
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| eslint | 0 errors / 3 pre-existing warnings |
+| vite build | exit 0 |
+| check-coverage | exit 0 (39 suites, 331 tests, 11 shared specs) |
+| check-profile-keys | OK |
+| profileStorage.check | **26/26** (added 4 for the migration plan) |
+| cargo check --offline | clean |
+| **web** | **223 PASS / 0 FAIL / 0 WARN, exit 0** |
+| **Windows** | **222 PASS / 0 FAIL / 1 WARN, exit 1** (exit 1 = expected G5 baseline; was 209, **+13**) |
+| **Android** | **211 PASS / 1 FAIL / 1 WARN** |
+
+**Suite F is green on all three platforms** - including the headline `F7: A -> B -> A returns to A with A
+byte-identical`, `F6a` (editing B leaves A byte-identical), `F8` and `F10` (DATA_VERSION skew migrates, not resets).
+
+### Two failures that were MY test's fault, not the app's
+
+1. **Mobile adds a character from the DRAWER**, not the edit bar, so `__clickText('Add Character')` returned
+   `NO:` and the edit never happened - which cascaded into F6b, F9, F10 and F11, all of which assert on its
+   consequence. Rather than platform-flag it (ctx carries `isTauri`, not which platform), `addCharacter` now
+   **tries the desktop path and falls back to the drawer path**. Second Android run: all 13 green,
+   `add=open=OK name=OK submit=OK (drawer)`.
+2. **F11 asserted a single delete button while two profiles existed.** With `profiles.length > 1` BOTH rows
+   correctly offer delete, so the "last profile cannot be deleted" check has to run AFTER the scoped delete. Swapped
+   the order.
+
+### 🟡 One real open regression: Android Q11
+
+`Q11: stopping the primary stops the WHOLE primed group` -> FAIL `{"stop":"NO_STOP_BTN","n":3,"stopped":0}`.
+It passed on the 2026-10-11 baseline, so it is from this session. **Android-only** - desktop P27 passes on web and
+Windows. **Playback is fine**: `[PLAY] Z1-Z12` all pass including Z10 Stop All, and `[VOL] P9a-d` drive live audio.
+The prime group fires correctly (`n:3` elements created). The Stop button just is not painted on the card 700ms
+after the tap.
+
+`isPlaying` reads `audioElementsRef.current` and re-renders via `setSoundInstances` right after registering
+(App.jsx:3760), so a registered element *should* paint it. Either the elements are being cleaned up again, or the
+re-render does not land in the window. **Hypothesis, not a finding:** `getFileFromLocalStorage` now awaits
+`ensureUploadsMigrated()` before its `exists()` check, adding ticks at the start of file resolution on an
+already-slow emulator.
+
+⚠️ **Recorded explicitly so it is not "fixed" by bumping the 700 ms sleep.** That turns a red test green without
+explaining it, which is the quietly-dropped-test failure this repo guards against. Fix the audio lifecycle or the
+app's `isPlaying` reliability - not the test's patience.
+---
+
+## 2026-10-11 23:00-23:15 - The user asked the right question; harness `uploads/` guard added (opencode)
+
+**Still UNCOMMITTED, claim HELD.**
+
+### What the user asked, and what was actually true
+
+The user said: *"I have a previous version turned into an installer and installed on my computer. I assume you
+might have guessed that because that app lost its sounds after this attempt. I'm not sure if it is because that one
+is quite old and doesn't have the ability to migrate, or if migration is flawed."*
+
+**Neither of their two hypotheses was right, and that mattered enough to get exactly right rather than assume.**
+Checked the facts:
+
+- The installed app is `C:\Users\emire\AppData\Local\The SpellCaster\app.exe`, **v0.1.3, built 2026-08-17**.
+- Tauri resolves AppData to `%APPDATA%\<identifier>` and **both the installed app and the dev build use
+  `com.mrhorakhty.thespellcaster`**, so there is exactly ONE AppData directory. There is no sandbox.
+- `e2e-full.ps1 -Phase win` launches `tauri dev` against **that real directory**. The uploads migration moved the
+  installed app's 112 files into `uploads/p_09b2806c/` - every one now stamped `2026-10-11 22:15:31`, exactly when
+  the Windows gate started. The old app still looks in flat `uploads/` and finds nothing.
+
+**So: the migration was NOT flawed - it provably preserved all 112 files. The defect was that
+`e2e/e2e-snapshot.mjs` snapshot `localStorage` ONLY and never protected the Tauri `uploads/` directory.** The
+state file's claim that "test data never clobbers real characters/sounds" was true for localStorage and false for
+uploads. Before profiles that was untidy (test uploads accumulating beside real ones); the migration made it
+destructive because it *moves* files rather than adding them.
+
+**This was the agent's error** - the Windows gate was run against a live install without first checking what the
+harness protects. The user's question is what surfaced it.
+
+💡 **Lesson worth keeping: a snapshot/restore guarantee is only as good as the state it covers. "The tests never
+clobber my data" must be verified per storage mechanism, never inferred from one.**
+
+### The fix (user chose "harness fix first")
+
+`e2e/e2e-snapshot.mjs` gained `save-uploads` / `restore-uploads`; `e2e/e2e-full.ps1` wires them into Phase B.
+
+- **Plain filesystem, no CDP** - so it still works when the app is dead, which is when a crashed run needs it.
+- AppData path **derived from `tauri.conf.json`'s identifier**, not hard-coded.
+- **Ordering is the whole point**: snapshot BEFORE `tauri dev` launches (a post-launch snapshot could already be
+  the post-migration state - a "restore" that restores the damage), restore AFTER the app is killed (restoring
+  under a running app would be undone).
+- **Refuses rather than destroys**: a missing or empty snapshot exits 4 and leaves live files untouched; restore
+  moves the live folder aside and puts it back if the copy fails.
+- **If the snapshot fails the phase ABORTS** - a run that can MOVE the user's audio must not proceed assuming it
+  can be undone.
+
+**Verified three ways:** (1) missing and empty snapshots each refused, 114 files untouched; (2) simulated damage
+(junk file added, a real file renamed away) restored to exactly 114, junk gone, original name back, no stray
+`__restore_backup`; (3) a **real Windows gate**: snapshot 114 -> suite **222 PASS / 0 FAIL / 1 WARN** -> restored
+to 114, flat=0, spot-check intact, no stray directory.
+
+💡 **Android needs no such guard**: `e2e-android.ps1` drives an emulator whose app data lives inside the AVD, not
+in the user's `%APPDATA%`. Only the **Windows** phase can ever touch real user audio - which is why it is wired
+there only.
+
+### User's decisions
+
+- **Moving forward with the new build** - the installed v0.1.3 app is historical. **No restore of the old app is
+  wanted**; the files in `uploads/p_09b2806c/` are simply the new app's first profile.
+- The user's hand-test is still owed, and is now the real gate on this work.
+---
+
+## 2026-10-11 23:20 - User hand-tested the switch: PASS. Export/import not built (expected)
+
+**Still UNCOMMITTED, claim HELD.**
+
+The user ran the app and tested the **profile switch** - it **works fine**. That clears the `AGENTS.md`
+user-visible bar for step 1, which requires a user-facing feature to be hand-tested on the built app rather than
+judged only by E2E.
+
+They asked why there was no import/export. **Correct, and expected.** Verified rather than assumed:
+
+- The Profiles section has only `switch` / `rename` / `delete` / `create` (App.jsx:6833-6875).
+- No `exportBundle` or `importBundle` exists anywhere in `src/`.
+- **No zip dependency at all** - `fflate`, `jszip` and `@noble/hashes` are all absent from `package.json`.
+
+Export/import is spec steps **3-6** (`PROFILE_SYNC_SPEC.md` §12): the provenance classifier, the bundle format,
+import (atomic, both modes), then export plus the desktop/Android destination pickers. Step 1 delivered steps 1-2
+only - the storage adapter and a proven switch - so a bundle format and a file picker were never in scope for it.
+
+The `coverage.manifest.json` feature entry stays `status: planned` for exactly this reason: the checker rejects a
+planned feature that claims coverage, and the round-trip tests that would justify `shipped` cannot be written until
+`importBundle` exists.
+---
+
+## 2026-10-11 23:40-23:50 - Android Q11 SOLVED (paint-timing race in the test), all 7 gates green
+
+**Still UNCOMMITTED, claim HELD.** The user chose option 1: fix Q11, then commit step 1.
+
+### Q11: a paint-timing race in the TEST, not a regression
+
+It failed as `{"stop":"NO_STOP_BTN","n":3,"stopped":0}` on Android only, while the identical desktop test (P27)
+passed on web and Windows. Rather than bump the 700 ms sleep - which would turn a red test green without
+explaining anything - the assertion was changed to **diagnose first, then wait for the condition**.
+
+**Step 1: distinguish "no card" from "no button", and report the elements' live state.**
+
+```
+stop:NO_STOP_BTN  card:true  n:3
+live:[{paused:false,ended:false,error:false,ready:4,ct:0.11} x3]
+```
+
+The card was present and **all three elements were genuinely playing** - `readyState 4`, `paused:false`,
+`currentTime` advancing. That eliminated the obvious hypotheses in one shot: not an audio load error, not
+`cleanupAudio` unregistering them, not a missing card.
+
+**Step 2: poll for the button instead of sampling an instant.**
+
+```
+PASS Q11  probe:{found:true, ms:209}  stop:OK  n:3  stopped:3
+```
+
+The button **does** render; it took **209 ms** to paint, and on a loaded emulator that can slip past a fixed
+700 ms sample point. **Android: 212 PASS / 0 FAIL / 1 WARN.**
+
+### The underlying app wart, recorded honestly
+
+`isPlaying` (App.jsx:4132) derives from `isSoundPlaying` (3878), which reads the **`audioElementsRef` ref, not
+state**. The repaint happens only incidentally, via `setSoundInstances` (3758) - state that exists to disable the
+Stop All button (4916/5166) and is never passed to the card. So a card's Stop affordance can lag until some
+unrelated state change renders. Not a DOM problem (the button IS inside `data-sound-card`, and the same markup
+passes on the faster machines), and **not a functional regression** - stopping still works and Stop All is
+unaffected. It is a latent timing sensitivity this session's `await ensureUploadsMigrated()` made visible by
+shifting registration slightly later.
+
+💡 **Lesson worth keeping: an async UI assertion that samples once is a race wearing a trouser-suit. Wait for the
+condition with a bounded timeout, and put the measured wait time in the failure so the next reader can tell a
+slow render from a broken one.**
+
+### I corrupted `PROJECT_STATE.md` with PowerShell and recovered it from the backup
+
+While editing the status line I used `Get-Content -Raw` + `Set-Content` in Windows PowerShell 5.1, which mangled
+every non-ASCII character - **the exact BOM/encoding trap this file itself documents**. Restored from
+`ttrpg-soundboard-backup-20261011-232737` byte-identically (102,518 bytes) and verified with a UTF-8 reader.
+
+💡 **That is the second time this project has been bitten by PowerShell text encoding**, and both times the
+documented remedy was "use `[System.IO.File]::WriteAllText` with `UTF8Encoding($false)`, or better, use the file
+tools". The backup script is what turned a corrupted file into a 30-second undo rather than a lost evening.
+**Rule going forward: never round-trip a UTF-8 file through `Get-Content`/`Set-Content`.**
+
+### Gate status - ALL SEVEN GREEN
+
+| Gate | Result |
+|---|---|
+| backup | VERIFY OK 224/224 |
+| eslint | 0 errors / 3 pre-existing warnings |
+| vite build | exit 0 |
+| check-coverage | exit 0 (39 suites, 331 tests) |
+| check-profile-keys | OK |
+| profileStorage.check | 26/26 |
+| **web** | **223 PASS / 0 FAIL / 0 WARN, exit 0** |
+| **Windows** | **222 PASS / 0 FAIL / 1 WARN, exit 1** (G5 baseline; uploads guard verified in-flight) |
+| **Android** | **212 PASS / 0 FAIL / 1 WARN** |
+| **user hand-test** | **PASSED** - the user tested the switch on the built app |

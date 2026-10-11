@@ -19,7 +19,7 @@ export const volume = {
 
     // Same seed as the original suites: trimmed sound plus one with no field.
     const seed = `(() => {
-      localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
         id:'c1', name:'Human Paladin', sounds:[
           { id:'vol_half', name:'Half Volume', type:'Test', icon:'',
             files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
@@ -31,11 +31,11 @@ export const volume = {
             brightness:1 }
         ]
       }]));
-      localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-      localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-      localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-      localStorage.setItem('ttrpg_data_version', '3');
-      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('profile:'+window.__pid()+':sound_file_')) localStorage.removeItem(k);}
       return 'seeded';
     })()`;
 
@@ -181,7 +181,7 @@ export const volume = {
     const p10pre = await evalJs(`window.__commitVol('Half Volume', 0)`);
     await sleep(600);
     const p10stored = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
       return c[0]?.sounds?.map(s => [s.id, s.volume]);
     })()`);
     log('VOL','P10: commit wrote 0 to storage',p10pre==='0' && JSON.stringify(p10stored)?.includes('["vol_half",0]')?'PASS':'FAIL',`slider=${p10pre} stored=${JSON.stringify(p10stored)}`);
@@ -190,15 +190,15 @@ export const volume = {
     await evalJs(volHelpers);
 
     const p11 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
       const s = window.__volSlider('Half Volume');
       const none = window.__volSlider('No Field');
       return {
         stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
         slider: s?.value,
         noneSlider: none?.value,
-        version: localStorage.getItem('ttrpg_data_version'),
-        oldKeys: Object.keys(localStorage).filter(k=>k.endsWith('_old'))
+        version: localStorage.getItem(window.__pk('ttrpg_data_version')),
+        oldKeys: window.__bareKeys().filter(k=>k.endsWith('_old'))
       };
     })()`);
     log('VOL','P11: 0 SURVIVES reload (the || trap)',p11?.stored===0 && p11?.slider==='0'?'PASS':'FAIL',JSON.stringify(p11));
@@ -209,7 +209,7 @@ export const volume = {
     // existing sound objects, and the master volume stays session-only.
     // `ttrpg_themes` is in the expected set because the suites themselves still
     // seed it - the app has no such key (docs/session-history.md:979).
-    const p14 = await evalJs(`Object.keys(localStorage).filter(k => !k.startsWith('sound_file_')).sort()`);
+    const p14 = await evalJs(`window.__bareKeys()`);
     const unexpected = (p14||[]).filter(k => !KNOWN_KEYS.includes(k));
     const volumeKeys = (p14||[]).filter(k => /volume/i.test(k));
     log('VOL','P14a: no new localStorage key added',unexpected.length===0?'PASS':'FAIL',JSON.stringify(unexpected));
@@ -242,7 +242,7 @@ export const volume = {
     await sleep(1000);
     await driver.exitEditMode();
     const p16 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
       return {
         stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
         slider: window.__volSlider('Half Volume')?.value

@@ -16,6 +16,24 @@ import {
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { platform } from '@tauri-apps/plugin-os'
 import data from './data.json'
+import {
+    ensureProfileStore,
+    readProfileIndex,
+    createProfile,
+    renameProfile,
+    deleteProfile,
+    setActiveProfile,
+    subscribeProfileSwitch,
+    readProfileValue,
+    writeProfileValue,
+    removeProfileValue,
+    keysWithPrefix,
+    profileUploadPath,
+    readProfileData,
+    ensureUploadsMigrated,
+    profileUploadFileCount,
+    removeProfileUploads,
+} from './profileStorage.js'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
@@ -262,10 +280,12 @@ const mintId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36)
 // Version for persisted app data. Bump to force a reset to the bundled defaults.
 const DATA_VERSION = '3'
 
-// Read an array from localStorage only if it matches the current data version.
-// Stale or corrupt data is backed up and dropped in favour of the bundled defaults.
-// Normalizes each container to guarantee a valid `sounds` array (and sound `files`
-// arrays) so downstream `.flatMap`/`.map` calls never hit a null/undefined crash.
+// Read an array from the ACTIVE PROFILE's storage only if it matches the
+// current data version. Stale or corrupt data is repaired forward rather than
+// discarded - see readProfileData in ./profileStorage.js, which is where the
+// migrate-never-reset rule lives. Normalizes each container to guarantee a valid
+// `sounds` array (and sound `files` arrays) so downstream `.flatMap`/`.map`
+// calls never hit a null/undefined crash.
 const normalizeStoredData = (key, list) => {
     if (!Array.isArray(list)) {
         return list
@@ -314,26 +334,20 @@ const normalizeStoredData = (key, list) => {
     })
 }
 
-const readStoredData = (key, fallback) => {
+// Read a collection from the active profile. All persistence goes through here
+// (and through the value helpers in ./profileStorage.js) so no call site keeps a
+// hard-coded key - see PROFILE_SYNC_SPEC.md §4.2.
+//
+// The version-mismatch behaviour CHANGED with profiles. It used to reset a
+// mismatched key to the bundled defaults and rename the old value to
+// `<key>_old`; once every profile has its own `ttrpg_data_version` that same
+// branch would fire per profile, and the likeliest cause of skew is a bundle
+// imported from an older build - so it would wipe a board because of a version
+// number. It now repairs forward through normalizeStoredData and keeps the
+// data (§0.3 decision 3).
+const readStoredData = (profileId, key, fallback) => {
     try {
-        if (localStorage.getItem('ttrpg_data_version') !== DATA_VERSION) {
-            const stale = localStorage.getItem(key)
-            if (stale) {
-                localStorage.setItem(`${key}_old`, stale)
-            }
-            localStorage.removeItem(key)
-            localStorage.setItem('ttrpg_data_version', DATA_VERSION)
-            return normalizeStoredData(key, fallback)
-        }
-        const raw = localStorage.getItem(key)
-        if (raw === null) {
-            return normalizeStoredData(key, fallback)
-        }
-        const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed)) {
-            return normalizeStoredData(key, fallback)
-        }
-        return normalizeStoredData(key, parsed)
+        return readProfileData(profileId, key, fallback, normalizeStoredData, DATA_VERSION)
     } catch {
         return normalizeStoredData(key, fallback)
     }
@@ -762,19 +776,121 @@ const mapSoundContainers = (list, visit) => {
     return changed ? next : list
 }
 
-function App() {
+// The board itself. It is mounted under a changing `key` by App below, which is
+// what makes a profile switch a genuine remount rather than a state swap - see
+// the Profiles block inside this component and PROFILE_SYNC_SPEC.md §0.3.
+function AppBoard() {
     // Load from localStorage first, fallback to data.json if it's a first-time load
+    // Load from the active profile first, fallback to data.json on a first-time
+    // load. The three collections below are read from ONE profile id that is
+    // fixed for the lifetime of this mount - a profile switch remounts the app
+    // (see the Profiles section below), so it can never change underneath them.
+    const [activeProfileId] = useState(() => ensureProfileStore())
+
     const [characters, setCharacters] = useState(() => {
-        return readStoredData('ttrpg_characters', data.characters)
+        return readStoredData(ensureProfileStore(), 'ttrpg_characters', data.characters)
     })
 
     const [environmentSounds, setEnvironmentSounds] = useState(() => {
-        return readStoredData('ttrpg_environment', data.environmentSounds)
+        return readStoredData(ensureProfileStore(), 'ttrpg_environment', data.environmentSounds)
     })
 
     const [groups, setGroups] = useState(() => {
-        return readStoredData('ttrpg_groups', data.groups)
+        return readStoredData(ensureProfileStore(), 'ttrpg_groups', data.groups)
     })
+
+    // -----------------------------------------------------------------------
+    // Profiles
+    //
+    // Switching is a FULL REMOUNT (§0.3 decision 2), not a state swap. The
+    // remount is the safety property: it makes the new profile the first-load
+    // state, so the three undebounced auto-save effects can never run with one
+    // profile's data and another profile's key prefix. In-place swapping would
+    // need a `switchingRef` guard on all three effects and would still leave a
+    // window where they disagree.
+    //
+    // The remount itself is owned by the App shell (the `key` on <AppBoard/>),
+    // which subscribes here. This component only tracks the profile LIST for the
+    // UI, and refreshes it when the active profile changes.
+    // -----------------------------------------------------------------------
+    const [profileIndex, setProfileIndex] = useState(() => readProfileIndex())
+    const [newProfileName, setNewProfileName] = useState('')
+    const [profileNotice, setProfileNotice] = useState('')
+
+    useEffect(() => {
+        return subscribeProfileSwitch(() => setProfileIndex(readProfileIndex()))
+    }, [])
+
+    const refreshProfiles = () => setProfileIndex(readProfileIndex())
+
+    const handleSwitchProfile = (profileId) => {
+        if (profileId === activeProfileId) {
+            setProfileNotice('Already on that profile')
+            return
+        }
+        // Persist the current board BEFORE switching, so the profile we are
+        // leaving is fully written. The auto-save effects may not have run for
+        // a just-made edit.
+        try {
+            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
+            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
+            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
+        } catch (err) {
+            console.error('Failed to flush current profile before switching:', err)
+        }
+        setProfileNotice('')
+        setActiveProfile(profileId)
+    }
+
+    const handleCreateProfile = () => {
+        const name = newProfileName.trim()
+        const id = createProfile(name || 'New Profile')
+        if (!id) return
+        setNewProfileName('')
+        refreshProfiles()
+        handleSwitchProfile(id)
+    }
+
+    const handleRenameProfile = (profileId) => {
+        const current = profileIndex.profiles.find(p => p.id === profileId)
+        const next = window.prompt('Profile name', current?.name || '')
+        if (next === null) return
+        renameProfile(profileId, next)
+        refreshProfiles()
+    }
+
+    const handleDeleteProfile = async (profileId) => {
+        if (profileIndex.profiles.length <= 1) {
+            setProfileNotice('The last profile cannot be deleted')
+            return
+        }
+        const current = profileIndex.profiles.find(p => p.id === profileId)
+        const wasActive = profileId === activeProfileId
+
+        // Count the audio this would destroy BEFORE asking. Deleting uploaded
+        // audio is not undoable - there is no recycle bin on the user's disk -
+        // so the number goes in the prompt rather than being discovered after.
+        const files = await profileUploadFileCount(profileId)
+        const audioLine = files > 0
+            ? `\n\n${files} uploaded audio or icon file${files === 1 ? '' : 's'} will be permanently deleted.`
+            : ''
+        const confirmed = window.confirm(
+            `Delete "${current?.name || 'this profile'}"?${audioLine}\n\nIts board, characters, categories, groups and settings are removed. This cannot be undone.`
+        )
+        if (!confirmed) return
+
+        const nextId = deleteProfile(profileId)
+        if (!nextId) return
+
+        // Only this profile's directory, and only after the keys are gone.
+        const { removed } = await removeProfileUploads(profileId)
+        refreshProfiles()
+        // deleteProfile already moved the active pointer and notified listeners
+        // when it was the active one, which is what triggers the remount.
+        setProfileNotice(wasActive
+            ? `Profile deleted${removed ? ` (${removed} file${removed === 1 ? '' : 's'} removed)` : ''}`
+            : '')
+    }
     const isMobile = (() => {
         if (isTauri) {
             try { return platform() === 'android' || platform() === 'ios' } catch { return false }
@@ -1119,9 +1235,9 @@ function App() {
     })
     const backgroundSettingsRef = useRef(backgroundSettings)
 
-    // Box size state with localStorage persistence
+    // Box size state, persisted per profile
     const [boxSize, setBoxSize] = useState(() => {
-        const savedBoxSize = localStorage.getItem('boxSize')
+        const savedBoxSize = readProfileValue(activeProfileId, 'boxSize')
         const parsed = savedBoxSize ? parseFloat(savedBoxSize) : NaN
         return Number.isFinite(parsed) ? Math.min(2, Math.max(0.5, parsed)) : 1.0
     })
@@ -1138,15 +1254,17 @@ function App() {
 
     // Icons for the two built-in top-level collections (Characters / Environment),
     // stored as plain strings (emoji or Lucide name; '' = fallback User/Music).
-    const [charSectionIcon, setCharSectionIcon] = useState(() => localStorage.getItem('ttrpg_characters_icon') || '')
-    const [envSectionIcon, setEnvSectionIcon] = useState(() => localStorage.getItem('ttrpg_environment_icon') || '')
+    // Per profile: a section icon that leaked across profiles would look like a
+    // data bug rather than a sync bug, which is exactly why it is easy to miss.
+    const [charSectionIcon, setCharSectionIcon] = useState(() => readProfileValue(activeProfileId, 'ttrpg_characters_icon') || '')
+    const [envSectionIcon, setEnvSectionIcon] = useState(() => readProfileValue(activeProfileId, 'ttrpg_environment_icon') || '')
     const updateCharSectionIcon = (value) => {
         setCharSectionIcon(value)
-        localStorage.setItem('ttrpg_characters_icon', value)
+        writeProfileValue(activeProfileId, 'ttrpg_characters_icon', value)
     }
     const updateEnvSectionIcon = (value) => {
         setEnvSectionIcon(value)
-        localStorage.setItem('ttrpg_environment_icon', value)
+        writeProfileValue(activeProfileId, 'ttrpg_environment_icon', value)
     }
 
     const [volumeInput, setVolumeInput] = useState(() => Math.round(masterVolume * 100).toString())
@@ -1305,38 +1423,52 @@ function App() {
             try {
                 console.log('Starting localStorage file migration...')
                 let migratedCount = 0
-                
-                // Get all localStorage keys that start with 'sound_file_'
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i)
-                    if (key && key.startsWith('sound_file_')) {
-                        const fileName = key.replace('sound_file_', '')
-                        const fileDataUrl = localStorage.getItem(key)
-                        
-                        if (fileDataUrl) {
-                            try {
-                                // Convert data URL to blob
-                                const response = await fetch(fileDataUrl)
-                                const blob = await response.blob()
-                                
-                                // Convert blob to array buffer
-                                const arrayBuffer = await blob.arrayBuffer()
-                                const uint8Array = new Uint8Array(arrayBuffer)
-                                
-                                // Save to Tauri file system
-                                const { writeFile, createDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
-                                const storagePath = `${TAURI_STORAGE_DIR}/${fileName}`
-                                await createDir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData })
-                                await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
-                                
-                                console.log(`Migrated file: ${fileName}`)
-                                migratedCount++
-                                
-                                // Remove from localStorage
-                                localStorage.removeItem(key)
-                            } catch (error) {
-                                console.error(`Failed to migrate file ${fileName}:`, error)
+
+                // Only this profile's web audio, and only under its own prefix.
+                // The unprefixed `sound_file_*` keys were adopted into the
+                // default profile by ensureProfileStore(), so sweeping the bare
+                // prefix here would find nothing - and sweeping every profile
+                // would move another profile's bytes into this one's directory.
+                const scopedAudioPrefix = `profile:${activeProfileId}:sound_file_`
+                for (const key of keysWithPrefix(scopedAudioPrefix)) {
+                    const fileName = key.slice(scopedAudioPrefix.length)
+                    const fileDataUrl = localStorage.getItem(key)
+
+                    if (fileDataUrl) {
+                        try {
+                            // Convert data URL to blob
+                            const response = await fetch(fileDataUrl)
+                            const blob = await response.blob()
+
+                            // Convert blob to array buffer
+                            const arrayBuffer = await blob.arrayBuffer()
+                            const uint8Array = new Uint8Array(arrayBuffer)
+
+                            // Save to Tauri file system, under THIS profile's dir
+                            const { writeFile, createDir, mkdir, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                            const uploadDir = getTauriUploadDir()
+                            const storagePath = profileUploadPath(activeProfileId, fileName)
+                            const dirExists = await exists(uploadDir, { baseDir: BaseDirectory.AppData })
+                            if (!dirExists) {
+                                try {
+                                    if (mkdir) {
+                                        await mkdir(uploadDir, { baseDir: BaseDirectory.AppData, recursive: true })
+                                    } else {
+                                        await createDir(uploadDir, { baseDir: BaseDirectory.AppData, recursive: true })
+                                    }
+                                } catch (dirErr) {
+                                    console.warn('Directory creation note:', dirErr)
+                                }
                             }
+                            await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
+
+                            console.log(`Migrated file: ${fileName}`)
+                            migratedCount++
+
+                            // Remove from localStorage
+                            localStorage.removeItem(key)
+                        } catch (error) {
+                            console.error(`Failed to migrate file ${fileName}:`, error)
                         }
                     }
                 }
@@ -2601,40 +2733,54 @@ function App() {
         }
     }
 
-    const getTauriStoragePath = (fileName) => `${TAURI_STORAGE_DIR}/${fileName}`
+    // uploads/<profileId>/<fileName>. Every Tauri audio read, write and remove goes
+    // through here, so a per-profile prefix is a one-function change rather than
+    // an edit at every call site (PROFILE_SYNC_SPEC.md §0.2). Note the caller's
+    // `activeProfileId` is fixed for this mount - a switch remounts the app.
+    const getTauriStoragePath = (fileName) => profileUploadPath(activeProfileId, fileName)
+    const getTauriUploadDir = () => (activeProfileId ? `${TAURI_STORAGE_DIR}/${activeProfileId}` : TAURI_STORAGE_DIR)
+
+    const ensureUploadDir = async () => {
+        const { exists, mkdir, createDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+        const dir = getTauriUploadDir()
+        const dirExists = await exists(dir, { baseDir: BaseDirectory.AppData })
+        if (dirExists) return
+        try {
+            // Some versions of the plugin use mkdir, older ones use createDir
+            if (mkdir) {
+                await mkdir(dir, { baseDir: BaseDirectory.AppData, recursive: true })
+            } else {
+                await createDir(dir, { baseDir: BaseDirectory.AppData, recursive: true })
+            }
+        } catch (dirErr) {
+            console.warn('Directory creation note:', dirErr)
+        }
+    }
 
     const storeFileInLocalStorage = async (fileName, file) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
-                const { writeFile, exists, mkdir, createDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs')
                 const arrayBuffer = await file.arrayBuffer()
                 const uint8Array = new Uint8Array(arrayBuffer)
+                // Adopt any pre-profile uploads before writing. A brand-new file
+                // does not strictly need this, but sharing the await means one
+                // migration gate covers every Tauri file path.
+                await ensureUploadsMigrated(activeProfileId)
                 const storagePath = getTauriStoragePath(fileName)
 
                 // Safely check if directory exists before trying to create it
-                const dirExists = await exists(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData })
-                if (!dirExists) {
-                    try {
-                        // Some versions of the plugin use mkdir, older ones use createDir
-                        if (mkdir) {
-                            await mkdir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData, recursive: true })
-                        } else if (createDir) {
-                            await createDir(TAURI_STORAGE_DIR, { baseDir: BaseDirectory.AppData, recursive: true })
-                        }
-                    } catch (dirErr) {
-                        console.warn('Directory creation note:', dirErr)
-                    }
-                }
+                await ensureUploadDir()
 
                 await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
             } else {
-                // Web environment - fallback to localStorage
+                // Web environment - fallback to localStorage, under this profile
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader()
                     reader.onload = (e) => {
                         try {
-                            localStorage.setItem(`sound_file_${fileName}`, e.target.result)
+                            writeProfileValue(activeProfileId, `sound_file_${fileName}`, e.target.result)
                             setSaveError(null)
                             resolve()
                         } catch (err) {
@@ -2659,6 +2805,12 @@ function App() {
             if (isTauri) {
                 // Tauri environment - use file system
                 const { exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                // The one-time uploads migration must finish before we go
+                // looking for the file: without it a user who already had audio
+                // keeps a board whose files are all unreachable, because the
+                // path below now carries a profile segment the bytes on disk do
+                // not. Idempotent and structural - see profileStorage.js.
+                await ensureUploadsMigrated(activeProfileId)
                 const storagePath = getTauriStoragePath(fileName)
                 const fileExists = await exists(storagePath, { baseDir: BaseDirectory.AppData })
 
@@ -2673,8 +2825,8 @@ function App() {
                     return convertFileSrc(absolutePath)
                 }
             } else {
-                // Web environment - fallback to localStorage
-                const fileDataUrl = localStorage.getItem(`sound_file_${fileName}`)
+                // Web environment - fallback to localStorage, this profile's copy
+                const fileDataUrl = readProfileValue(activeProfileId, `sound_file_${fileName}`)
                 if (fileDataUrl) {
                     return fileDataUrl
                 }
@@ -2947,7 +3099,7 @@ function App() {
     }
 
     const openSettingsModal = () => {
-        const savedSettings = localStorage.getItem('backgroundSettings')
+        const savedSettings = readProfileValue(activeProfileId, 'backgroundSettings')
         if (savedSettings) {
             const settings = safeParse(savedSettings, {})
             backgroundSettingsRef.current = settings
@@ -2977,7 +3129,7 @@ function App() {
         setBackgroundSettings(newSettings)
         applyBackgroundSettings(newSettings)
         try {
-            localStorage.setItem('backgroundSettings', JSON.stringify(newSettings))
+            writeProfileValue(activeProfileId, 'backgroundSettings', JSON.stringify(newSettings))
         } catch (err) {
             console.error('Failed to save background settings:', err)
         }
@@ -2986,7 +3138,7 @@ function App() {
     const handleBoxSizeChange = (newSize) => {
         setBoxSize(newSize)
         try {
-            localStorage.setItem('boxSize', newSize.toString())
+            writeProfileValue(activeProfileId, 'boxSize', newSize.toString())
         } catch (err) {
             console.error('Failed to save box size:', err)
         }
@@ -3206,7 +3358,7 @@ function App() {
                 setBackgroundSettings(updatedSettings)
                 applyBackgroundSettings(updatedSettings)
                 try {
-                    localStorage.setItem('backgroundSettings', JSON.stringify(updatedSettings))
+                    writeProfileValue(activeProfileId, 'backgroundSettings', JSON.stringify(updatedSettings))
                 } catch (err) {
                     console.error('Failed to save background settings:', err)
                 }
@@ -3220,7 +3372,7 @@ function App() {
                 backgroundSettingsRef.current = errorSettings
                 setBackgroundSettings(errorSettings)
                 try {
-                    localStorage.setItem('backgroundSettings', JSON.stringify(errorSettings))
+                    writeProfileValue(activeProfileId, 'backgroundSettings', JSON.stringify(errorSettings))
                 } catch (err) {
                     console.error('Failed to save background settings:', err)
                 }
@@ -3526,14 +3678,15 @@ function App() {
             if (isTauri) {
                 // Tauri environment - use file system
                 const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                await ensureUploadsMigrated(activeProfileId)
                 const storagePath = getTauriStoragePath(fileName)
                 const fileExists = await exists(storagePath, { baseDir: BaseDirectory.AppData })
                 if (fileExists) {
                     await remove(storagePath, { baseDir: BaseDirectory.AppData })
                 }
             } else {
-                // Web environment - fallback to localStorage
-                localStorage.removeItem(`sound_file_${fileName}`)
+                // Web environment - fallback to localStorage, this profile's copy
+                removeProfileValue(activeProfileId, `sound_file_${fileName}`)
             }
             revokeObjectUrl(fileName)
         } catch (error) {
@@ -3918,10 +4071,14 @@ function App() {
         setSaveError(describeSaveFailure(scope, err))
     }
 
-    // Auto-save Characters to localStorage whenever they change
+    // Auto-save Characters to localStorage whenever they change.
+    // These three effects are undebounced and stringify the whole slice, and they
+    // are also the reason a profile switch REMOUNTS rather than swapping state:
+    // `activeProfileId` is fixed for this mount, so a write can never land in
+    // another profile's namespace (§0.3 decision 2, §11 risk 10).
     useEffect(() => {
         try {
-            localStorage.setItem('ttrpg_characters', JSON.stringify(characters))
+            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your characters and their sounds', err)
@@ -3931,7 +4088,7 @@ function App() {
     // Auto-save Environment Sounds to localStorage whenever they change
     useEffect(() => {
         try {
-            localStorage.setItem('ttrpg_environment', JSON.stringify(environmentSounds))
+            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your environment sounds', err)
@@ -3941,7 +4098,7 @@ function App() {
     // Auto-save Groups to localStorage whenever they change
     useEffect(() => {
         try {
-            localStorage.setItem('ttrpg_groups', JSON.stringify(groups))
+            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your groups', err)
@@ -3961,7 +4118,7 @@ function App() {
     }, [characters, environmentSounds, groups, activeCharacterId, activeEnvironmentId, activeGroupId])
 
     useEffect(() => {
-        const savedSettings = localStorage.getItem('backgroundSettings')
+        const savedSettings = readProfileValue(activeProfileId, 'backgroundSettings')
         if (savedSettings) {
             const settings = safeParse(savedSettings, {})
             backgroundSettingsRef.current = settings
@@ -6645,6 +6802,92 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     </button>
                                 </div>
 
+                                {/* Profiles. A section of Settings rather than a seventh modal - the Settings
+                                    modal is already a bottom sheet on mobile and a centered dialog on
+                                    desktop (PROFILE_SYNC_SPEC.md §9.2). Export/import arrives in a later
+                                    step; this is the profile list and the switch itself. */}
+                                <div className="pt-4 border-t border-dark-700" data-profiles-section>
+                                    <h3 className="text-lg font-medium mb-2">Profiles</h3>
+                                    <p className="text-xs text-slate-400 mb-3">
+                                        Each profile keeps its own characters, categories, groups, settings and uploaded
+                                        audio. Switching reloads the board — it is quick, and nothing carries over.
+                                    </p>
+
+                                    <ul className="space-y-2 mb-3" data-profile-list>
+                                        {profileIndex.profiles.map(profile => {
+                                            const isActive = profile.id === activeProfileId
+                                            return (
+                                                <li
+                                                    key={profile.id}
+                                                    data-profile-row={profile.id}
+                                                    data-profile-active={isActive ? 'true' : 'false'}
+                                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isActive ? 'border-lime-600 bg-dark-700' : 'border-dark-600 bg-dark-800'}`}
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm text-slate-200 truncate">{profile.name}</div>
+                                                        {isActive && <div className="text-xs text-lime-500">Active</div>}
+                                                    </div>
+                                                    {!isActive && (
+                                                        <button
+                                                            onClick={() => handleSwitchProfile(profile.id)}
+                                                            data-profile-switch={profile.id}
+                                                            className="px-3 py-1 text-xs font-medium rounded bg-lime-600 hover:bg-lime-700 text-white transition-colors"
+                                                        >
+                                                            Switch
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleRenameProfile(profile.id)}
+                                                        data-profile-rename={profile.id}
+                                                        aria-label={`Rename ${profile.name}`}
+                                                        className="p-1.5 rounded hover:bg-dark-600 text-slate-400 hover:text-slate-200 transition-colors"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                    {profileIndex.profiles.length > 1 && (
+                                                        <button
+                                                            onClick={() => handleDeleteProfile(profile.id)}
+                                                            data-profile-delete={profile.id}
+                                                            aria-label={`Delete ${profile.name}`}
+                                                            className="p-1.5 rounded hover:bg-dark-600 text-slate-400 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
+
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newProfileName}
+                                            onChange={(e) => setNewProfileName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleCreateProfile() }}
+                                            placeholder="New profile name"
+                                            aria-label="New profile name"
+                                            data-profile-new-name
+                                            className="flex-1 px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-slate-200 text-sm focus:border-lime-600 focus:outline-none"
+                                        />
+                                        <button
+                                            onClick={handleCreateProfile}
+                                            data-profile-create
+                                            className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors font-medium flex items-center space-x-2"
+                                        >
+                                            <Plus size={16} />
+                                            <span>New</span>
+                                        </button>
+                                    </div>
+
+                                    {profileNotice && (
+                                        <p data-profile-notice className="text-xs text-slate-400 mt-2">{profileNotice}</p>
+                                    )}
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Priming is not saved — it lasts for one trigger in this session.
+                                    </p>
+                                </div>
+
                                 {/* Restore Defaults */}
                                 <div className="pt-4 border-t border-dark-700">
                                     <h3 className="text-lg font-medium mb-2">Restore Defaults</h3>
@@ -6764,6 +7007,27 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
             )}
         </div>
     )
+}
+
+// The outer shell. Its only job is to own the remount key: when the active
+// profile changes, the whole board is unmounted and mounted again, so every
+// `useState` initialiser re-runs and reads the NEW profile's storage. That is
+// the whole safety argument for switching by remount - there is no window in
+// which the auto-save effects hold one profile's state while writing another's
+// keys.
+//
+// Deliberately not a router or a re-read: a remount is blunt, and blunt is
+// correct here. If this ever needs to become an in-place switch, the price is a
+// `switchingRef` guard on all three auto-save effects (App.jsx, the
+// ttrpg_characters/environment/groups effects).
+function App() {
+    const [remountKey, setRemountKey] = useState(0)
+
+    useEffect(() => {
+        return subscribeProfileSwitch(() => setRemountKey(k => k + 1))
+    }, [])
+
+    return <AppBoard key={remountKey} />
 }
 
 export default App
