@@ -1,13 +1,15 @@
 # Profiles + Sync — Planning Spec
 
-> **Status**: **Revised 2026-10-06** (docs only). Both platform unknowns are now **closed**: Android spiked
+> **Status**: **Revised 2026-10-11** (docs only). Both platform unknowns remain **closed**: Android spiked
 > 2026-10-04, **desktop spiked 2026-10-06** — a user-picked path *is* writable after a one-command runtime scope
 > grant, no blanket fs scope needed (§10). The 2026-10-04 revision that fixed a wrong `fs:default`/`read_dir`
 > claim was itself wrong; §3 and §10 are corrected below. The parked 2026-09-27 decision is lifted for *design
 > work*; **implementation is still not authorised** — do not write app code until the user gives the go-ahead.
-> All code references were re-verified against `src/App.jsx` at 6240 lines; see §0 for what changed.
-> **Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06
-> **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), and the move/copy feature (shipped as `f7f316e`)
+> **Every code reference in this spec was re-verified against `src/App.jsx` at 6769 lines on 2026-10-11**, not
+> inherited from the 6240-line draft. See §0 for what changed, and §0.1 for the **three design facts that did not
+> exist when the previous revision was written** (per-sound volume, priming, and the E2E harness refactor).
+> **Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06, 2026-10-11
+> **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), the move/copy feature (shipped as `f7f316e`), per-sound volume (shipped 2026-10-06), and sound priming (shipped 2026-10-08).
 
 ---
 
@@ -18,7 +20,7 @@ move facts, not decisions. Nothing in §1, §2, §5, §6 or §8 needed to change
 
 | # | Change | Sections touched |
 |---|---|---|
-| 1 | Every `src/App.jsx` line number moved — the file was 5751 lines when this was written, it is **6240** now | §3, §7, §8, §9.2, §10 |
+| 1 | Every `src/App.jsx` line number moved — the file was 5751 lines when this was written, it is **6240** now, and **6769** as of the 2026-10-11 refresh | §3, §7, §8, §9.2, §10 |
 | 2 | **`localStorage` call sites went 23 → 27** (13 `setItem` / 11 `getItem` / 3 `removeItem`), and two keys were added that this spec never knew about | §4.2 |
 | 3 | The code also **enumerates** `localStorage.length` / `localStorage.key(i)` to sweep `sound_file_*`. A storage adapter that only wraps get/set/remove is **not enough** | §4.2, §12 step 1 |
 | 4 | **Restore Defaults shipped** (`bde7483`) — §9.2's "Reset to starter sounds" is existing behaviour that only needs profile-scoping | §9.2, §13 |
@@ -27,10 +29,51 @@ move facts, not decisions. Nothing in §1, §2, §5, §6 or §8 needed to change
 | 7 | **§10's open fs question is answered** — `fs:default` does **not** grant directory listing, and the permission is `fs:allow-read-dir` (**singular** — this spec had it wrong twice; see §10) | §10 |
 | 8 | ✅ **The Android SAF spike was run on 2026-10-04 and it PASSES** — `dialog.save()` returns a `content://` URI and `plugin-fs` writes/reads it byte-identically. §7 and §10 record what it proved | §7, §10 |
 | 9 | ✅ **The desktop spike was run on 2026-10-06 and it PASSES too.** A user-picked path **is** writable; it needs **one** of two fixes, and the narrow one is a 5-line Rust command. It also **falsified a fact this spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save`), and **found a silent-corruption trap** (a plain `Array` payload is stringified). **There are now no unverified platform unknowns left in this spec.** | §3, §7, §10, §11, §12, §13 |
+| 10 | ✅ **2026-10-11 refresh — every line number re-verified against the 6769-line file**, and the two features shipped since revision 2 are folded in: **per-sound volume** (`volume` is now a sound field the bundle must carry) and **priming** (explicitly *not* profile content). The `uploads/` chokepoint count is corrected **10 → 4 real ones** (§0.2), the `settings` block gains `volume`, and §13/§14 are rewritten for the refactored E2E harness and the coverage gate | §3, §4.2, §5.2, §7, §9.2, §11, §12, §13, §14 |
 
 **Status: both platform unknowns are now closed** (Android 2026-10-04, desktop 2026-10-06). What remains before
 implementation is a **design decision**, not a spike: pick the desktop route in §10 (recommend the runtime grant)
 and review the whole spec.
+
+### 0.1 Three things that did not exist at the last revision
+
+These are the parts of the 2026-10-11 refresh that are more than line-number churn. Each one changes what the
+bundle has to carry or how the tests have to be written, so each is called out where it applies.
+
+1. **Per-sound volume shipped** (2026-10-06). `volume` is an optional per-sound field, a **trim on top of**
+   master, defaulting to `1`. It lives inside each sound object in `ttrpg_characters` / `ttrpg_environment` /
+   `ttrpg_groups`, so it is carried by `data.json` automatically (§5.2) — **no schema change and no new
+   `localStorage` key** (asserted by `specs/volume.mjs` `P14a`/`P14b`, which is why the §4.2 census below is
+   still exactly 27). The one thing to watch: the **new-sound save path is an explicit allowlist**, not a spread,
+   so an export/import implementation that rebuilds a sound by hand must carry `volume` too or it will be
+   silently dropped on write-back (§5.2).
+2. **Sound priming shipped** (2026-10-08). Priming is **one-shot, session-only, and has no `localStorage` key at
+   all** — the absence is deliberate. So it is **not profile content** and must not appear in `manifest.json`,
+   `data.json` or the bundle. A "prime a sound on device A, hear it on device B" expectation would be a bug
+   report, not a missing feature; note it in the README when this ships (§13).
+3. **The E2E harness was refactored** (2026-10-10/11) into shared specs plus a machine-checked coverage gate.
+   §14 previously described a world with a standalone `e2e/e2e-profiles.mjs` and a `-Suite profiles` switch;
+   **neither exists any more** and the old advice would produce a suite that cannot be wired. §14 is rewritten.
+
+### 0.2 The `uploads/` path count is 4, not 10 — and that is good news
+
+The previous revision claimed "`uploads/` paths are built in **10 places**" and warned that a per-profile prefix
+changes 10 sites. **Re-counted 2026-10-11: that figure was counting *lines that mention the constant*, not
+distinct code paths.** There are **4 real chokepoints**, and 3 of them are single functions:
+
+| Chokepoint | Line | What it does |
+|---|---|---|
+| `TAURI_STORAGE_DIR` | App.jsx:22 | the constant itself |
+| `getTauriStoragePath(fileName)` | App.jsx:2604 | builds `uploads/<fileName>` — **the single read/write path builder** |
+| `storeFileInLocalStorage(fileName, file)` | App.jsx:2606 | the one write path (Tauri `writeFile`, web `sound_file_*`) |
+| the web→Tauri migration sweep | App.jsx:1300-1345 | the one-time sweep; walks `sound_file_*` and re-writes each into `uploads/` |
+
+`getTauriStoragePath` is called from exactly **three** places (App.jsx:2613, 2662, 3529) — read, write and
+remove. So adding a profile segment is, in the common case, **a change to one function**, not ten edits, and the
+§11 risk-1 severity comes down accordingly. ⚠️ **This is a count, not a licence to skip a site.** `getFileFromLocalStorage`
+also branches to `appDataDir`/`join` (App.jsx:2667-2669) and resolves by **absolute path** rather than through
+`getTauriStoragePath`, so the profile prefix must be threaded through there too. Re-verify before relying on
+either number — the previous revision's census had already gone stale twice.
 
 ---
 
@@ -67,33 +110,38 @@ The guiding rule: **sync the tedious thing, not the trivial thing.** Rebuilding 
 
 ## 3. Key facts that shape the design
 
-**Re-verified 2026-10-04** against `src/App.jsx` at 6240 lines. Line numbers in earlier drafts of this
-table were from the 5751-line file and were all wrong.
+**Re-verified 2026-10-11** against `src/App.jsx` at **6769 lines**. Line numbers in earlier drafts of this
+table were from the 5751-line file and were all wrong; the 2026-10-06 pass corrected them against the
+6240-line file, and the two features shipped since have moved them again. **Treat every `App.jsx:NNNN` in this
+spec as "roughly right, verify before you rely on it"** — the *structure* is what this table is for.
 
 | Fact | Detail | Consequence |
 |---|---|---|
 | **Default sounds ship with the app** | 71 files / 29 MB in `public/assets`, referenced by filename only | They are already identical on every install. **They never enter a bundle.** |
 | **Only uploads need syncing** | `TAURI_STORAGE_DIR = 'uploads'` (App.jsx:22) under `BaseDirectory.AppData` | Bundles stay small |
-| **Custom sound icons are also uploads** | `handleIconUpload` → `icon: storedName` + `iconDisplayName` (App.jsx:2287-2293) | A bundle needs an `icons/` folder too — easy to miss |
-| **Two different sound-file shapes coexist** | character/group sounds use `files: [{…}]`; legacy environment sounds use `file: "Name.mp3"` (see `src/data.json`, and the playback fallback at App.jsx:3275 in `playSound`) | The exporter must walk **both**, and `files[]` entries are themselves heterogeneous (`name` / `storedName` / `displayName` / `url`) |
-| ✅ **Provenance is a structural fact, not a guess** | a **bundled** reference has **no `storedName`** — `src/data.json` ships `{"name":"Caustic_Blast_Acid_1.mp3"}` and nothing else. An **uploaded** one always has `storedName` set to `sound_<rand>_<safeName>`, and its `name` is *also* rewritten to the storedName with the human name kept in `displayName` (App.jsx:2404-2425) | **The exporter classifies by `storedName` presence.** Do not infer from filenames, and do not add a write-time provenance flag (the old §11 risk 2) — the data already says which is which. Icons classify the same way: bundled icons are plain filenames (`Caustic_Blast_Acid.png`), custom icons always carry the `icon_<rand>_<name>` shape (App.jsx:1953-1956). |
+| **Custom sound icons are also uploads** | `handleIconUpload` → `icon: storedName` + `iconDisplayName` (App.jsx:2572-2580) | A bundle needs an `icons/` folder too — easy to miss |
+| **Two different sound-file shapes coexist** | character/group sounds use `files: [{…}]`; legacy environment sounds use `file: "Name.mp3"` (see `src/data.json`, and the playback fallback at App.jsx:3565 in `playSound`) | The exporter must walk **both**, and `files[]` entries are themselves heterogeneous (`name` / `storedName` / `displayName` / `url`) |
+| ✅ **Provenance is a structural fact, not a guess** | a **bundled** reference has **no `storedName`** — `src/data.json` ships `{"name":"Caustic_Blast_Acid_1.mp3"}` and nothing else. An **uploaded** one always has `storedName` set to `sound_<rand>_<safeName>`, and its `name` is *also* rewritten to the storedName with the human name kept in `displayName` (App.jsx:2692-2716). Confirmed 2026-10-11: `src/data.json` contains **zero** `"volume"` keys and its sound entries are exactly `{id,name,type,icon,files[],randomPlay,color,duration,loop,fadeIn,fadeOut}` | **The exporter classifies by `storedName` presence.** Do not infer from filenames, and do not add a write-time provenance flag (the old §11 risk 2) — the data already says which is which. Icons classify the same way: bundled icons are plain filenames (`Caustic_Blast_Acid.png`), custom icons always carry the `icon_<rand>_<name>` shape (App.jsx:2543). |
 | ✅ **Shipped sounds are also identifiable by id** | `mergeShippedDefaults` builds `allShippedSoundIds` from `src/data.json` (App.jsx:355) | A second, independent provenance signal, and the one Restore Defaults already trusts. Useful as a cross-check in E2E. |
-| **A `storedName` can now be shared by two sounds** | move/copy's copy **shares** the source's reference by design; `isFileReferencedElsewhere` (App.jsx:1967) exists because of it | Export **must** dedupe by content hash — two references, one blob (§5). Deleting a profile must not assume one owner. |
-| **`isFileReferencedElsewhere` scans only in-memory state** | it walks `allSoundContainers()` (App.jsx:1812) over the *current* React state | With profiles, "the current state" is **one profile**. Cross-profile sharing cannot happen through the UI today, so per-profile `uploads/<id>/` dirs stay correct — but say so in a comment before anyone "simplifies" it. |
-| **Custom background image is an inline data URL** | `backgroundSettings.imagePreview`, up to 5 MB base64, written straight into localStorage (App.jsx:2913, applied at 2861-2885) | **Deliberately NOT synced** — it is a per-device display preference, and re-picking one image is far cheaper than rebuilding a library of sounds. It stays exactly where it is today. Export must **strip** it (§7) so a 5 MB blob never rides along inside `data.json` |
-| **No timestamps exist anywhere** | 0 hits for `updatedAt` / `createdAt` / `deletedAt` in `src/App.jsx` and `src/data.json` | Last-write-wins is impossible today. Add timestamps + tombstones **now** — it is the prerequisite for A/C later |
-| **Env data key is singular** | `ttrpg_environment`, not `ttrpg_environments` (App.jsx:3584) | A latent bug that has fooled test harnesses before; be careful in any new code |
-| **`localStorage` access is 27 call sites and includes enumeration** | 13 `setItem` / 11 `getItem` / 3 `removeItem`, plus `localStorage.length` + `localStorage.key(i)` in the `sound_file_*` sweep (App.jsx:1207-1211) and 4 `ttrpg_*_icon` writes (App.jsx:1057-1065) | The "single storage adapter" of §4.2 must own **enumeration and prefix matching**, not just get/set/remove. This spec's earlier "23 call sites" figure was already stale. |
-| **`uploads/` paths are built in 10 places** | `TAURI_STORAGE_DIR` (App.jsx:22) and `getTauriStoragePath` (App.jsx:2316), referenced at 1225-1235, 2325-2342, 2374-2385, 3241 | A per-profile `uploads/<profileId>/` prefix changes **10 path sites** on top of the 27 storage sites. Both sets must route through the adapter. |
+| 🆕 **A sound carries an optional `volume` trim** | shipped 2026-10-06. `normalizeSoundVolume` (App.jsx:705) is the single definition of "absent === 100%", used in **both** save paths (App.jsx:1709 hydrate, 1776/1876 save). `src/data.json` has **no** `volume` key — bundled sounds are always 100% | **It is content, so it syncs** — a per-sound level is not a device preference. It rides inside the sound object, so `data.json` carries it for free (§5.2). ⚠️ **The new-sound save path is an explicit allowlist, not a spread** (App.jsx:1774-1776 says so in a comment), so any code that *rebuilds* a sound by hand must carry `volume` or it is silently dropped. Use `normalizeSoundVolume`, never `?? 1` — `0` is a legitimate level |
+| 🆕 **Priming is deliberately not profile content** | shipped 2026-10-08. `primedRef` (App.jsx:1507) is the authority; **there is no `localStorage` key and none should be added** — the absence is asserted by `P31a` | **Do not put priming in the bundle.** It is one-shot and session-only by decision (2026-10-06). A user who primes on device A and expects it on device B has misunderstood, so say so in the README |
+| **A `storedName` can now be shared by two sounds** | move/copy's copy **shares** the source's reference by design; `isFileReferencedElsewhere` (App.jsx:2255) exists because of it | Export **must** dedupe by content hash — two references, one blob (§5). Deleting a profile must not assume one owner. |
+| **`isFileReferencedElsewhere` scans only in-memory state** | it walks `allSoundContainers()` (App.jsx:2087) over the *current* React state | With profiles, "the current state" is **one profile**. Cross-profile sharing cannot happen through the UI today, so per-profile `uploads/<id>/` dirs stay correct — but say so in a comment before anyone "simplifies" it. |
+| **Custom background image is an inline data URL** | `backgroundSettings.imagePreview`, up to 5 MB base64, written straight into localStorage (App.jsx:3201, applied 3149-3173) | **Deliberately NOT synced** — it is a per-device display preference, and re-picking one image is far cheaper than rebuilding a library of sounds. It stays exactly where it is today. Export must **strip** it (§7) so a 5 MB blob never rides along inside `data.json` |
+| **No timestamps exist anywhere** | 0 hits for `updatedAt` / `createdAt` / `deletedAt` in `src/App.jsx` and `src/data.json` — re-checked 2026-10-11, still true | Last-write-wins is impossible today. Add timestamps + tombstones **now** — it is the prerequisite for A/C later |
+| **Env data key is singular** | `ttrpg_environment`, not `ttrpg_environments` (written at App.jsx:3934) | A latent bug that has fooled test harnesses before; be careful in any new code |
+| **`localStorage` access is 27 call sites and includes enumeration** | 13 `setItem` / 11 `getItem` / 3 `removeItem`, plus `localStorage.length` + `localStorage.key(i)` in the `sound_file_*` sweep (App.jsx:1310-1311) and 4 `ttrpg_*_icon` writes (App.jsx:1141-1149). **Re-counted 2026-10-11: still exactly 27 + 2** — per-sound volume and priming both added zero keys, which is asserted by `P14a`/`P14b` and `P31a` | The "single storage adapter" of §4.2 must own **enumeration and prefix matching**, not just get/set/remove. This spec's earlier "23 call sites" figure was already stale once. |
+| 🆕 **The three auto-save effects write the whole slice, undebounced** | `ttrpg_characters` (App.jsx:3922-3929) → `ttrpg_environment` (3932-3939) → `ttrpg_groups` (3942-3949). Each is `JSON.stringify(<entire slice>)` into localStorage on every state change | ⚠️ **This is the hard part of a profile switch and it is new.** See §11 risk 10 — a switch that changes the prefix but not the state will have the *old* profile's data written into the *new* profile's keys by these three effects. There is no write choke point and no transaction |
+| 🆕 **`uploads/` paths are built in 4 chokepoints, not 10** | `TAURI_STORAGE_DIR` (App.jsx:22), `getTauriStoragePath` (App.jsx:2604), `storeFileInLocalStorage` (App.jsx:2606), and the migration sweep (App.jsx:1300-1345). `getTauriStoragePath` has exactly 3 callers: 2613 (write), 2662 (read), 3529 (remove). ⚠️ but `getFileFromLocalStorage` also builds an absolute path via `appDataDir`/`join` (App.jsx:2667-2669) and **bypasses `getTauriStoragePath` entirely** | The previous "10 path sites" figure counted lines mentioning the constant. Prefix `getTauriStoragePath` and the write helper and the per-profile dir mostly follows — but **do not skip the absolute-path branch in `getFileFromLocalStorage`** |
 | **fs scope is AppData-only** | `src-tauri/capabilities/default.json` grants `fs:default`, `fs:allow-appdata-*`, `fs:allow-exists`, `fs:allow-read-file`, `fs:allow-write-file`, `fs:allow-mkdir`, `fs:allow-remove` | Anything outside the app directories is denied — **for reads as well as writes** (proven: `exists()` on a Desktop path is refused too, §10) |
 | ❌→✅ **CORRECTED 2026-10-06: `fs:default` *does* include `read_dir`** | earlier drafts of this spec claimed it did not. It does: `fs:default` → `read-app-specific-dirs-recursive` → `allow-read-dir` **+ `scope-app-recursive`**. Verified in the resolved crate (`tauri-plugin-fs-2.5.2/permissions/default.toml`) and **empirically**: `readDir('uploads', AppData)` listed **90 entries** and the AppData root listed `uploads`, with **no capability change at all** | **`fs:allow-read-dir` is NOT needed.** Building a manifest by enumerating `uploads/` works today. (The plural-vs-singular warning below is still right about the *name*, but the permission is not needed either way — drop that row from §10.) |
 | ✅ **On desktop the picker returns a plain path string, and cancel resolves `null`** | driven on Windows 2026-10-06: the save dialog is a real `#32770` that honours the `title` option; accepting it resolved a `string` (`"C:\Users\emire\Documents\spellcaster-picked.spellcaster"`), cancelling resolved `null` (`desktop.rs save_file` → `Option<FilePath>`) | **Not** a `file://` URL, **not** an object, and **not** a rejection — this is the opposite of Android, which rejects with *"File picker cancelled"*. One `try/catch` + a null check covers both platforms |
-| ⚠️ **On desktop, a plain `Array` byte payload is silently stringified** | `write_file` receives its data as the fetch body (`scripts/process-ipc-message-fn.js` returns `{contentType: 'application/octet-stream', data: message}` for arrays) — but `fetch` coerces an `Array` body to `toString()`. Measured: a 4100-byte payload landed as **12297 bytes** of `80,75,3,4,65,65,…`. A `Uint8Array` is a `BufferSource`, is sent raw, and round-tripped byte-identically | **Always pass a `Uint8Array`/`ArrayBuffer`, never `Array.from(bytes)`.** `App.jsx` already does (`new Uint8Array(arrayBuffer)` at App.jsx:1221 and 2324). 💡 This is also why the Android spike round-tripped perfectly while desktop did not: Android uses `postMessage` IPC, which preserves the array, whereas desktop uses the custom-protocol `fetch` (`canUseCustomProtocol = osName !== 'android'`) |
+| ⚠️ **On desktop, a plain `Array` byte payload is silently stringified** | `write_file` receives its data as the fetch body (`scripts/process-ipc-message-fn.js` returns `{contentType: 'application/octet-stream', data: message}` for arrays) — but `fetch` coerces an `Array` body to `toString()`. Measured: a 4100-byte payload landed as **12297 bytes** of `80,75,3,4,65,65,…`. A `Uint8Array` is a `BufferSource`, is sent raw, and round-tripped byte-identically | **Always pass a `Uint8Array`/`ArrayBuffer`, never `Array.from(bytes)`.** `App.jsx` already does (`new Uint8Array(arrayBuffer)` at App.jsx:1324 and 2612). 💡 This is also why the Android spike round-tripped perfectly while desktop did not: Android uses `postMessage` IPC, which preserves the array, whereas desktop uses the custom-protocol `fetch` (`canUseCustomProtocol = osName !== 'android'`) |
 | ✅ **The dialog plugin needs its own capability entries** | with the plugin registered but no `dialog:*` permission, the call fails with *"Permissions associated with this command: dialog:allow-save, dialog:default"* — **not** "Plugin not found", which is the separate mobile failure | `capabilities/default.json` must gain `dialog:allow-save` + `dialog:allow-open` (or `dialog:default`). §10's table previously listed only the plugin registration and would have shipped broken |
 | **Android cannot write outside AppData by path** | a raw write to `/storage/emulated/0/Download/…` is refused with *"forbidden path … maybe it is not allowed on the fs scope"* | The §7 `BaseDirectory.Download` fallback is **dead on Android**. Export must go through the SAF `content://` URI — which works (§7). |
 | **On Android, `plugin-fs` accepts a `content://` URI as `path`** | `commands.rs` `#[cfg(mobile)] resolve_file` → `android.rs` `resolve_content_uri` → Kotlin `FsPlugin.getFileDescriptor` → `contentResolver.openAssetFileDescriptor` → raw fd → `std::fs::File`. Verified end to end, §7 | No scope change is needed on Android for the export destination — the URL branch skips the scope check entirely. This is the single most important fact for §7. |
 | **Resolved fs plugin is 2.5.2** | `Cargo.toml` declares `tauri-plugin-fs = "2.5.1"`; semver resolves to **2.5.2** in the lockfile | Check the resolved version's permission names before adding any — the permission set is versioned. |
-| **`tauri-plugin-dialog` is registered nowhere** | `main.rs:7` has fs, `lib.rs:4-5` has fs + os, `lib.rs:8` has log. No dialog | It must be added to **both** entry points — see §10. |
+| **`tauri-plugin-dialog` is registered nowhere** | `main.rs:7` has fs, `lib.rs:4-5` has fs + os, `lib.rs:8-9` has log. No dialog (re-confirmed 2026-10-11) | It must be added to **both** entry points — see §10. |
 
 ---
 
@@ -138,26 +186,32 @@ this spec was written. They are per-board UI state and must be namespaced like e
 | `ttrpg_characters_icon` | `profile:p_a1b2c3:ttrpg_characters_icon` |
 | `ttrpg_environment_icon` | `profile:p_a1b2c3:ttrpg_environment_icon` |
 
-(Read at App.jsx:1057-1058, written at 1061-1065. A profile whose section icon leaked across profiles would
+(Read at App.jsx:1141-1142, written at 1145 and 1149. A profile whose section icon leaked across profiles would
 look like a data bug, not a sync bug, so it is easy to miss in review.)
 
-`localStorageMigrationCompleted` (App.jsx:1197-1242) is **not** namespaced: it records that the one-time
+`localStorageMigrationCompleted` (App.jsx:1300-1345) is **not** namespaced: it records that the one-time
 web→Tauri audio sweep has run, which is a property of the *device*, not of a profile. Leave it global and say
 so in a comment.
 
 A **single storage adapter** owns this mapping. All **27** existing `localStorage.*` call sites (13 `setItem`,
 11 `getItem`, 3 `removeItem`) go through it — no call site keeps a hard-coded key. On top of that:
 
-- **Enumeration is part of the adapter's job.** `migrateLocalStorageFiles` walks every key with
-  `localStorage.length` / `localStorage.key(i)` looking for `sound_file_*` (App.jsx:1207-1211). A
+- **Enumeration is part of the adapter's job.** The migration sweep walks every key with
+  `localStorage.length` / `localStorage.key(i)` looking for `sound_file_*` (App.jsx:1310-1311). A
   get/set/remove-only wrapper leaves that loop reading and deleting the *global* namespace. The adapter needs
   `keysWithPrefix(prefix)` / `removeAllWithPrefix(prefix)`.
-- **`uploads/` paths are a second front.** `TAURI_STORAGE_DIR` (App.jsx:22) and `getTauriStoragePath`
-  (App.jsx:2316) are referenced at 1225-1235, 2325-2342, 2374-2385 and 3241 — **10 path sites** that must all
-  gain the profile segment. Do the localStorage keys without these and Tauri profiles will share audio.
+- **`uploads/` paths are a second front, and there are 4 chokepoints — see §0.2.** `getTauriStoragePath`
+  (App.jsx:2604) is the single path builder with exactly 3 callers, and `storeFileInLocalStorage`
+  (App.jsx:2606) is the single write path. Do the localStorage keys without these and Tauri profiles will
+  share audio. ⚠️ **`getFileFromLocalStorage` builds an absolute path via `appDataDir`/`join`
+  (App.jsx:2667-2669) and bypasses `getTauriStoragePath`** — that is the site a "one-line change" misses.
 - **Per-profile `uploads/` dirs are safe** even though a copy can share a `storedName`
   (`isFileReferencedElsewhere` only scans the active profile's in-memory state — see §3), but leave a comment
   saying so, or a future "simplification" will introduce cross-profile byte loss.
+- 🆕 **The adapter must also know the active profile before any effect runs.** The three auto-save effects
+  (App.jsx:3922-3949) fire on state change and stringify the entire slice; if the adapter reads
+  `activeProfileId` at write time, a switch must set state *and* prefix atomically or the two disagree. See
+  §11 risk 10 — this is the one genuinely new design problem in the refactor.
 
 ### 4.3 Timestamps (new, additive) — **optional in v1, recommended**
 
@@ -209,7 +263,7 @@ A **plain, unencrypted zip**. No `background/` folder — see §6.
 - `formatVersion` is the **bundle** version, independent of `DATA_VERSION` (the in-app data schema version). Bump it only for breaking layout changes.
 - `files[].path` is **content-addressed** (`sha256` prefix + original extension). Two profiles containing the same upload dedupe to one entry, and blobs can never conflict.
 - ⚠️ **Dedupe is now mandatory, not an optimisation.** Since move/copy shipped, two sounds in one profile can legitimately name the **same `storedName`** (`f7f316e`), so the reference count and the blob count are no longer 1:1. Hash-then-dedupe (§7 step 4) is what keeps that correct — keying blobs by `storedName` instead would emit the same bytes twice under two names.
-- `originalName` preserves the human-readable filename for restore/inspection. On import, the app may keep the content-addressed name as `storedName` and show `originalName` as `displayName` — matching the existing `files[]` entry shape (App.jsx:2419-2424 writes exactly `{name, storedName, url, displayName}`).
+- `originalName` preserves the human-readable filename for restore/inspection. On import, the app may keep the content-addressed name as `storedName` and show `originalName` as `displayName` — matching the existing `files[]` entry shape (App.jsx:2698-2699 writes `{name: storedName, displayName: file.name, url: storedName}`; the hydrate path reads the same four fields at App.jsx:1677-1679).
 
 ### 5.2 `data.json`
 
@@ -226,6 +280,20 @@ Same shape as `src/data.json` (top-level `characters`, `environmentSounds`, `gro
 
 The `background` block carries only the **colour/theme** choice. The custom background **image is intentionally absent** — it is re-picked per device. On import, `background.imagePreview` stays `null`; the app falls back to the theme colour until the user picks an image. The existing inline-`imagePreview` code path is untouched by this feature.
 
+**Two sound-level fields need a sentence each, because both are easy to lose and neither is a device preference:**
+
+- 🆕 **`volume` (per-sound trim, shipped 2026-10-06) syncs.** It lives inside each sound object, so it is
+  carried by `characters` / `environmentSounds` / `groups` with no schema change. Absent means `1`; use
+  `normalizeSoundVolume` (App.jsx:705) to coerce, never `?? 1` — `0` is a legitimate level. ⚠️ `src/data.json`
+  has **no** `volume` key at all (bundled sounds are always 100%), so a bundle of an untouched profile contains
+  zero `volume` keys and that is correct, not a bug.
+- **Priming does not sync, and never appears in the bundle.** It is one-shot and session-only by decision, with
+  no `localStorage` key (§0.1). Nothing in `manifest.json` or `data.json` should mention it.
+
+`data.json` in `src/` is the **shipped defaults**, not a profile export. Do not use it as the schema template
+without stripping the two things it deliberately omits: `volume` (always 100% for bundled sounds) and any
+`imagePreview`.
+
 ---
 
 ## 6. Two things deliberately left out
@@ -241,10 +309,10 @@ The one consequence to keep in mind: audio a user adds may be material they have
 ## 7. Export pipeline
 
 1. Read the active profile through the storage adapter.
-2. Walk **both** sound-file shapes (`files[]` and legacy `file`) and both `files[]` entry variants, plus every custom icon (`sound.icon` that is an upload, not a bundled asset). Walk **all five container shapes** via `allSoundContainers()` (App.jsx:1812) — including the vestigial `groups[].sounds`. A sound in the wrong shape is a sound that silently does not get exported.
+2. Walk **both** sound-file shapes (`files[]` and legacy `file`) and both `files[]` entry variants, plus every custom icon (`sound.icon` that is an upload, not a bundled asset). Walk **all five container shapes** via `allSoundContainers()` (App.jsx:2087) — including the vestigial `groups[].sounds`. A sound in the wrong shape is a sound that silently does not get exported.
 3. Classify each reference as **bundled** or **uploaded**. ✅ **This is now a structural test, not a heuristic: a reference with no `storedName` is bundled, one with a `storedName` is an upload** (§3). Do **not** add the write-time provenance flag the old draft of this spec asked for — the data already distinguishes them, and a new flag would be a second source of truth to keep in sync. Keep the classification in one helper (`isUploadedReference`) so the icon path and the audio path cannot disagree.
 4. Hash each upload, dedupe by hash (**not** by `storedName` — see §5), stream into the zip.
-5. Write `manifest.json` and `data.json` — **with `background.imagePreview` forced to `null`**, so a 5 MB base64 blob is never serialised into the bundle.
+5. Write `manifest.json` and `data.json` — **with `background.imagePreview` forced to `null`**, so a 5 MB base64 blob is never serialised into the bundle. Sound objects go across **verbatim** (so `volume` rides along, §5.2); do not rebuild them field by field, because the new-sound save path is an explicit allowlist and anything not on it is dropped silently.
 6. Stream the zip to the chosen path — as a **`Uint8Array`**, after the desktop scope grant (§10).
 7. Show a progress dialog; allow cancel.
 
@@ -301,7 +369,7 @@ Implementation consequences:
 2. Parse `manifest.json`. **Refuse cleanly** if `formatVersion` is newer than this build supports, with a message naming both versions.
 3. Verify every `files[].sha256`. Any mismatch → abort, report the file, write nothing.
 4. Write payloads into a **temp** dir `uploads/.import-<stamp>/`.
-5. Run `data.json` through `normalizeStoredData` (App.jsx:269) — the existing forward-migration entry point — and through `normalizeHex` (App.jsx:2710).
+5. Run `data.json` through `normalizeStoredData` (App.jsx:269) — the existing forward-migration entry point — and through `normalizeHex` (App.jsx:2998). ⚠️ `normalizeStoredData` is the **group-aware** path and returns `sounds: []` for the vestigial `groups[].sounds` (App.jsx:306), folding any legacy array into a `Default` category — so a bundle whose `groups[].sounds` was populated will come back reshaped. That is existing behaviour, not a bundle bug, but it means export→import is **not** byte-identical for that one vestigial array (§13 says the same about testing it).
 6. **Atomically swap** the temp dir into `uploads/<targetProfileId>/`, then commit the namespaced keys.
 7. Report per file: imported / skipped (already present) / failed.
 
@@ -335,18 +403,25 @@ Reachable from the header settings gear, mobile rail, and the desktop sidebar. F
 
 ### 9.2 Export / Import — inside the existing Settings modal
 
-The Settings modal (App.jsx:5952-5953, opened by `openSettingsModal` at App.jsx:2661) is already a bottom
-sheet on mobile and a centered dialog on desktop — reuse that pattern for a "Profiles & Sync" section rather
-than adding a seventh modal:
+The Settings modal (App.jsx:6481, opened by `openSettingsModal` at App.jsx:2949, triggered from the header gear at
+App.jsx:4766 and the mobile rail at App.jsx:5031) is already a bottom sheet on mobile and a centered dialog on
+desktop — reuse that pattern for a "Profiles & Sync" section rather than adding a seventh modal:
 
 - **Export profile…** → name, optional "include audio" checkbox, destination picker. No passphrase field (§6).
 - **Import profile…** → source picker, then the mode choice, then a progress + per-file report.
-- **Reset to starter sounds** → ⚠️ **this already shipped** as `bde7483`: `restoreDefaults` (App.jsx:2671,
-  button at 6169) backed by `mergeShippedDefaults` (App.jsx:349). It is **not new work** — it needs to become
-  profile-scoped (operate on the active profile, and stop merging into whatever the previous profile left
-  behind). Note it deliberately never deletes user content and is idempotent; **keep both properties** when
-  you scope it, because they are what make the button safe to press twice.
+- **Reset to starter sounds** → ⚠️ **this already shipped** as `bde7483`: `restoreDefaults` (App.jsx:2959,
+  button at App.jsx:6698) backed by `mergeShippedDefaults` (App.jsx:349). It is **not new work** — it needs to
+  become profile-scoped (operate on the active profile, and stop merging into whatever the previous profile left
+  behind). Note it deliberately never deletes user content and is idempotent; **keep both properties** when you
+  scope it, because they are what make the button safe to press twice. 💡 Two traps it already pins, which
+  matter twice over once profiles exist: **environment categories have no `id`** — `category` IS the key
+  (App.jsx:344, 370-373) — so a renamed default category is re-matched by falling back to a stored entry that
+  still carries one of that default's sound ids; and a sound is user content only if its id appears in **no**
+  default's sound list (App.jsx:355), so a shipped sound the user dragged into another character is restored
+  home rather than duplicated. Both are asserted by `specs/reset.mjs` (`O7`, `O5`) — **reuse that spec as the
+  fixture reference rather than re-deriving the rules.**
 - A one-line note: *an exported profile is an ordinary, unencrypted zip containing the audio you added; you are responsible for sharing it lawfully.*
+- A second one-line note: *priming is not saved or exported — it lasts for one trigger in this session.*
 
 ### 9.3 Testability requirement
 
@@ -356,9 +431,11 @@ than adding a seventh modal:
 
 ## 10. Required plugin / capability changes
 
-**Re-verified 2026-10-04; Android half *executed* 2026-10-04; desktop half *executed* 2026-10-06.** Both spikes
+**Re-verified 2026-10-11**; Android half *executed* 2026-10-04; desktop half *executed* 2026-10-06. Both spikes
 needed the dialog plugin — **those spike edits were reverted afterwards** (at the user's request), so nothing
-below is in the tree yet. `cargo check` was clean before, during and after.
+below is in the tree yet. `cargo check` was clean before, during and after. **Re-confirmed 2026-10-11:** `main.rs:7`
+still registers fs only, `lib.rs:4-5` still registers fs + os, `lib.rs:8-9` log, and `dialog` appears **zero**
+times in `Cargo.toml` or `capabilities/default.json`.
 
 | Change | Where | Why |
 |---|---|---|
@@ -456,10 +533,11 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 ## 11. Risks
 
 1. **The storage refactor can destroy existing user data.** This is the only high-severity item, and it got
-   *bigger* since the first draft: 27 `localStorage` call sites, not 23, plus 10 `uploads/` path sites, plus
-   prefix enumeration (§4.2). Do it as its own commit, snapshot `ttrpg_*` keys to `ttrpg_*_old` first (reuse
-   the existing pattern at App.jsx:319-325), and test the migration against a copy of real data before
-   shipping.
+   *bigger* since the first draft: 27 `localStorage` call sites, not 23, plus prefix enumeration (§4.2). Do it as
+   its own commit, snapshot `ttrpg_*` keys to `ttrpg_*_old` first (reuse the existing pattern at App.jsx:319-325),
+   and test the migration against a copy of real data before shipping. 💡 The *`uploads/`* half is **much smaller
+   than the previous revision claimed** — 4 chokepoints rather than 10 sites (§0.2) — so most of the risk here is
+   the localStorage keys, not the file paths.
 2. ~~**Bundled-vs-uploaded misclassification**~~ — ✅ **resolved by the code, see §3.** A reference with no
    `storedName` is bundled. What replaces the risk is smaller: an exporter that walks only four of the five
    container shapes would still silently drop sounds. Keep the E2E assertion on bundle size for a known seed
@@ -483,8 +561,8 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 7. **NEW — a profile switch is a state reload.** Today the app reads storage once at mount
    (`readStoredData` at App.jsx:317, first-load fallback at 683). Switching profiles means tearing down and
    rebuilding `characters` / `environmentSounds` / `groups` / `boxSize` / `backgroundSettings` / section icons
-   in one go, plus revoking cached object URLs (`getObjectUrlForBlob` cache, App.jsx:2298) or the previous
-   profile's blobs leak for the session. Design the switch as an explicit reload path rather than three
+   in one go, plus revoking cached object URLs (`objectUrlCache` at App.jsx:846, populated 2587-2600) or the
+   previous profile's blobs leak for the session. Design the switch as an explicit reload path rather than three
    setters, and decide early whether it is a full remount.
 8. **NEW — a byte payload can be silently corrupted and it looks like success.** Desktop IPC sends the
    `write_file` body through `fetch`, and an `Array` body is coerced to a comma-joined string: the write
@@ -493,6 +571,25 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 9. **CLOSED — desktop picker-path write.** ✅ spiked 2026-10-06 (§10). Not a risk any more: the runtime grant
    works and is narrow. The only way to get this wrong now is to reach for the `fs:scope: ["**"]` shortcut,
    which works too and hands the frontend write access to the whole filesystem. Prefer the grant.
+10. 🆕 **NEW — the auto-save effects will write the wrong profile's data.** This is the one design problem the
+    previous revision could not have seen, and it is **the hardest part of a profile switch.** The three
+    auto-save effects (App.jsx:3922-3949) `JSON.stringify` the *entire* slice into localStorage on every state
+    change, undebounced, with **no write choke point and no transaction**. A switch that sets `activeProfileId`
+    and then calls three setters will, in the gap, have the **old** profile's `characters` written into the
+    **new** profile's keys — because the effects fire on the state change, and the prefix they read has already
+    moved. The failure is silent and corrupts the profile the user just switched *to*.
+    Mitigation options, in order of preference: (a) **key the effects on the profile id** so they re-run once
+    the state is loaded, and make the write a no-op while a switch is in flight; (b) a `switchingRef` guard the
+    three effects consult; (c) **full remount**, which is the crudest but sidesteps the interleaving entirely.
+    Whatever is chosen, §13 must assert **A → B → A leaves both profiles byte-identical to before**, because
+    nothing else in the app will catch this.
+11. 🆕 **NEW — `DATA_VERSION` interacts with namespacing.** `readStoredData` (App.jsx:319-325) resets a key to
+    defaults when `ttrpg_data_version` does not match, renaming the old value to `<key>_old`. Once that key is
+    `profile:<id>:ttrpg_data_version`, **the reset fires per profile** — so a profile created by an older build,
+    or one imported from an older bundle, silently loses its board to the same mechanism. Decide explicitly
+    whether a profile with a missing/older `data_version` is reset or migrated, and note that **an imported
+    bundle carries its own `dataVersion`** (§5.1), which is the one case where resetting would be most
+    surprising. **Never bump `DATA_VERSION` casually** — it resets every profile at once.
 
 ---
 
@@ -504,18 +601,25 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    `allow_file` grant, byte-identical. **No platform unknowns remain.** What is left is the §10 design choice
    (grant vs `**`) — take the grant — and the user's review of this spec.
 1. **Storage adapter + profile refactor + first-run migration.** Alone, in its own commit. Nothing else starts
-   until existing users are proven safe. Scope per §4.2: **27** `localStorage` sites, **10** `uploads/` path
-   sites, prefix enumeration, and the two `ttrpg_*_icon` keys. `localStorageMigrationCompleted` stays global.
+   until existing users are proven safe. Scope per §4.2: **27** `localStorage` sites, **4** `uploads/`
+   chokepoints (§0.2 — not 10), prefix enumeration, and the two `ttrpg_*_icon` keys.
+   `localStorageMigrationCompleted` stays global. ⚠️ **Settle §11 risk 10 (the auto-save write race) *in this
+   step*, not later** — it is decided by how the adapter reads the active profile, so it is cheapest to get
+   right before anything is built on top. ⚠️ And decide §11 risk 11 (`DATA_VERSION` per profile) here too.
 2. **Timestamps + tombstones** — *optional*, see §4.3. Cut this step for minimum v1; nothing else depends on it any more.
 3. **Provenance classifier** (`isUploadedReference`) — ✅ a *structural* test now (§3), not a flag. Tiny, but do
    it before the bundle format so §13's bundle-size assertion has something to test.
-4. **Bundle format** — `manifest.json` / `data.json` schema + zip read/write.
+4. **Bundle format** — `manifest.json` / `data.json` schema + zip read/write. Carry sound objects **verbatim**
+   so `volume` and any future sound field ride along without a schema edit (§5.2).
 5. **Import** (atomic, both v1 modes) — before export, so a bundle is provably readable before we can produce one.
 6. **Export + destination pickers** (desktop runtime grant + Android SAF; web excluded in v1). The picker
    contract is platform-asymmetric: **desktop resolves a path string or `null`, Android resolves a `content://`
    URI or rejects** — one `try`/`catch` plus a null check covers both.
 7. **UI** — profiles modal, Settings section, progress + report. Profile-scoped Restore Defaults (§9.2).
-8. **E2E suite** + docs (README testing section).
+8. **E2E shared spec** `e2e/specs/profiles.mjs` + **manifest registration** + docs (README testing section).
+   ⚠️ This is not "add a file" any more — see §14. **Register the feature as `planned` in
+   `e2e/coverage.manifest.json` when you *start*, not when you finish**: flipping `planned` → `shipped` is
+   what forces the tests to exist, and the checker fails a `shipped` feature with no covering suite.
 
 ---
 
@@ -541,7 +645,22 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [ ] Migration: a localStorage snapshot from the current release upgrades to a default profile with no data loss.
 - [ ] **The two `ttrpg_*_icon` keys and `boxSize` follow the profile**, and `localStorageMigrationCompleted` does **not** get a profile prefix (a prefixed one would re-run the one-time audio sweep).
 - [ ] **Profile switch is clean:** switch A → B → A with different boards and different section icons; no bleed-through, and no stale blob URLs (a sound from A must not play after switching to B).
-- [ ] **Restore Defaults stays idempotent and non-destructive** after being profile-scoped: press it twice on a profile with user sounds, and nothing user-created is lost (§9.2).
+- [ ] 🆕 **A profile switch does not corrupt either profile (the auto-save race, §11 risk 10).** Give A and B
+      *different* characters, switch A → B → A, and assert both profiles are **byte-identical to their
+      pre-switch snapshot**. ⚠️ This is the assertion that catches the silent write of A's data into B's keys —
+      nothing else in the app will. Include the **rapid** case (switch twice inside one tick) and the
+      **switch-then-edit** case (edit immediately after landing on B, then reload).
+- [ ] 🆕 **`DATA_VERSION` is handled deliberately per profile (§11 risk 11).** A profile whose
+      `ttrpg_data_version` is missing or older does **not** silently reset to starter sounds; and an imported
+      bundle whose `dataVersion` differs from this build produces a clear message, not a wiped board. Assert
+      both, and assert `localStorageMigrationCompleted` still does **not** acquire a profile prefix.
+- [ ] 🆕 **A sound's `volume` trim survives the round trip**, including `0` (a muted sound) and an absent value
+      (which must come back as "no key" or `1`, not as a lost field). Use `normalizeSoundVolume`, and assert
+      against the **new-sound** save path specifically — it is an explicit allowlist, so that is where a
+      forgotten field disappears.
+- [ ] 🆕 **No priming state in the bundle.** `manifest.json` and `data.json` contain no primed-sound list, and
+      no new `localStorage` key appears (the absence is the assertion — cf. `P31a`).
+- [ ] **Restore Defaults stays idempotent and non-destructive** after being profile-scoped: press it twice on a profile with user sounds, and nothing user-created is lost (§9.2). It must also act on the **active profile only** — restoring in B must not touch A.
 - [ ] **No `fs:scope: ["**"]` and no blanket write scope ships.** Assert it in review: `capabilities/default.json`
       contains no `fs:scope` entry with a wildcard, and the only fs paths the frontend can write are the app
       directories plus the single file the user just picked.
@@ -568,8 +687,14 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [ ] The web build is **unchanged** — no export/import controls, and its existing behaviour intact.
 - [ ] Two profiles side by side have fully independent data, settings and audio.
 - [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds; `cargo check` clean.
-- [ ] E2E: new `e2e/e2e-profiles.mjs` (seed → export → wipe → import → deep compare) passes on web **and** Android, wired into `e2e-full.ps1`.
-- [ ] README documents export/import and states plainly that there is no account and no data leaves the device.
+- [ ] 🆕 **`node e2e/check-coverage.mjs` is green**, and the `Profile sync and export/import` feature entry in
+      `e2e/coverage.manifest.json` has flipped from `planned` to `shipped` **with a non-empty `coveredBy`**.
+      A `shipped` feature with no covering suite **fails the gate** — that is the point of the registry.
+- [ ] E2E: `e2e/specs/profiles.mjs` (seed → export → wipe → import → deep compare) runs from **both**
+      entrypoints, and is green on web, Windows and Android. See §14 — a shared spec wired to one entrypoint
+      fails the same gate.
+- [ ] README documents export/import and states plainly that there is no account and no data leaves the device —
+      including the priming-is-not-synced note (§9.2).
 
 ### Deferred to a later release (not v1)
 
@@ -582,19 +707,85 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 
 ## 14. E2E notes
 
-- New suite `e2e/e2e-profiles.mjs`, same env contract as the existing suites (`CDP_PORT`, `LABEL`, `EXPECT_TAURI`, `SAVE_RESTORE`).
-- **Do not drive the native file dialog.** `DOM.setFileInputFiles` terminates the Android WebView renderer and kills the app — that is the root cause already documented for `e2e-mobile.mjs`. Because §9.3 makes import take bytes directly, the suite can call `importBundle` in-page and never touch the picker.
-- Add export/import to the harness's localStorage snapshot protection so a crashed run cannot eat a real profile.
-  ⚠️ After the refactor the snapshot must cover **prefixed** keys too — a key-by-key list captured from the
-  current release will silently miss `profile:*` and `spellcaster_profiles`, and the first crashed run would
-  then leave a half-namespaced board. Snapshot by prefix scan, not by a hard-coded list.
-- Wire `-Suite profiles` into `e2e-full.ps1`; the Windows phase still lacks the crash-safe snapshot that the Android phase has.
-- Reuse the existing ID sequences rather than inventing a range: `EDIT` is at `E5`, `SOUND` is at `J8`, and
-  move/copy took `M1-M22` + `G1-G5`. Continue from `P1`. Sound cards are `div role="button"`, so query
-  `[data-sound-card]`, never `button`.
-- Existing `SEED` (e2e-full.mjs:102-115) is a good starting point and is probably enough: `Human Paladin`
-  (3 sounds), `Elf Sorcerer`, environment categories, `Tavern Pack` (mode `environment`, one category with a
-  sound) and `Hero Pack` (mode `characters`, one character). Add seeding only for what a profile test
-  genuinely needs. Note the seeded sound carries `files:[{name, displayName}]` with **no `storedName`** — i.e.
-  it classifies as bundled under §3, so a provenance test needs an *uploaded* fixture too (the upload path
-  writes real bytes through `storeFileInLocalStorage`).
+> ⚠️ **This section was rewritten 2026-10-11. The harness was refactored on 2026-10-10/11 and most of the
+> previous advice is now wrong** — it described a standalone `e2e/e2e-profiles.mjs` suite and a
+> `-Suite profiles` switch. **Neither exists.** Following the old text produces a suite that cannot be wired and
+> coverage that is invisible to the gate. What replaced them is below.
+
+### 14.0 The current harness, in one paragraph
+
+Two thin **entrypoints** — `e2e/e2e-full.mjs` (web + Windows) and `e2e/e2e-mobile.mjs` (Android) — over a shared
+library `e2e/lib/` (`cdp.mjs`, `report.mjs`, `page.mjs`, `driver.mjs`, `spec-runner.mjs`) and a set of
+**shared specs** in `e2e/specs/*.mjs`. A spec in `specs/` is *shared* only if **both** entrypoints import it
+**and** pass it to `runSpecs(ctx, …)`; each spec owns its own seed and helpers and is driven through the ctx
+object. Anything platform-specific belongs inline in its entrypoint. There are currently **10 shared specs**
+(volume, indicators, sliders, soundintogroup, drag, refcount, platform, scroll, playback, reset) and the inline
+suites. 38 suites / 318 tests as of 2026-10-11.
+
+### 14.1 What to build: `e2e/specs/profiles.mjs`, not `e2e/e2e-profiles.mjs`
+
+- **File:** `e2e/specs/profiles.mjs`, exporting one async spec function and following the existing pattern
+  (see `specs/reset.mjs` for the closest shape: it seeds, reloads, and asserts a merge contract).
+- **Wire it into BOTH entrypoints** — import it in `e2e-full.mjs` and `e2e-mobile.mjs` and add it to their
+  `runSpecs(ctx, [...])` blocks. ⚠️ **A spec wired into only one entrypoint fails
+  `node e2e/check-coverage.mjs` with `SPEC_NOT_SHARED`** — this is enforced, not advisory.
+- ⚠️ **There is no `-Suite profiles` switch.** `-Suite` is a `ValidateSet('full','mobile')` in both
+  `e2e-full.ps1` and `e2e-android.ps1`; `run` and `features` were retired 2026-10-11. Adding a third value means
+  editing two `ValidateSet` declarations and a runner branch — **not worth it for one feature.** Bolt the spec
+  into the existing `full` / `mobile` runs.
+
+### 14.2 Register it, or it does not exist
+
+`node e2e/check-coverage.mjs` is a **static** gate (no browser, no CDP) that reads `e2e/coverage.manifest.json`
+and the code. Two registries, and this feature touches both:
+
+- **`features`** — the entry already exists: `{"name": "Profile sync and export/import", "status": "planned",
+  "coveredBy": []}`. **Flip it to `shipped` and fill `coveredBy`** with `<file>::<key>` refs
+  (`specs/profiles.mjs::<key>`). A `shipped` feature with an empty `coveredBy` **fails the gate**; a `planned`
+  one that *claims* coverage also fails (it would mean the spec shipped without being updated). 💡 **Register as
+  `planned` when you start** — the moment the question "will this be tested?" should be asked.
+- **`suites`** — add a block by hand: `key`, `cat` (a **new** category, e.g. `PROFILE` — an unclaimed category
+  fails `UNCATEGORISED_SUITE`), `title`, `file`, `export` (the exported symbol name — without it the checker
+  cannot verify wiring and fails `NO_EXPORT_NAME`), `covers`, `platforms: ["web","win","android"]`, and
+  `idPattern`.
+- Then run `node e2e/check-coverage.mjs --update` to generate the `ids` list, and **review the diff**.
+
+### 14.3 Test ids — the previous advice ("continue from `P1`") is taken
+
+`P1`–`P16` are per-sound volume and `P17`–`P34` are priming, both shipped and both registered. Also taken:
+`S E A J C K G T D M V L Q U B H X Y W R Z O` and the mobile `N`. **Free prefixes include `F` and `I`** —
+verified free on 2026-10-11 — so use something like `F1`, `F2`, … (or `I1`, …). ⚠️ `idPattern` must match the
+prefix you choose and must not overlap another suite's; the checker fails an overlap with `AMBIGUOUS_ID`.
+
+### 14.4 Test-mechanics notes that will bite
+
+- **Do not drive the native file dialog.** `DOM.setFileInputFiles` terminates the Android WebView renderer and
+  kills the app (the root cause already documented for `e2e-mobile.mjs`). Because §9.3 makes import take bytes
+  directly, the spec can call `importBundle` in-page and never touch the picker — which is also the only way to
+  test on Android at all.
+- **Snapshot protection must cover prefixed keys.** The runner's `e2e/e2e-snapshot.mjs` already dumps *every*
+  `localStorage` key by enumerating `localStorage.length`/`key(i)` and restores with a `localStorage.clear()`
+  followed by re-`setItem`, so `profile:*` and `spellcaster_profiles` are covered without a code change. ✅
+  **Verified 2026-10-11 — this worry from the previous revision is already handled.** Do not "fix" it. (One
+  consequence to note: the restore path **clears** storage, so a snapshot taken before profiles exist and
+  restored after them would drop the profile keys — in practice not an issue, since both are written by the same
+  build.)
+- **Two `localStorage` helpers do not survive a reload.** `window.__setInput` is injected by `PAGE_HELPERS` at
+  entrypoint start, so a spec that reloads and then calls it gets `undefined`; `evalJs` swallows the exception and
+  the assertion fails later with a misleading value. A profile spec **reloads constantly** (that is the point),
+  so define its **own** post-reload helpers — as `volume.mjs.__setRange` and `playback.mjs.__pbSetField` do.
+- **Seed shape:** `SEED` now lives in `e2e/lib/page.mjs` (exported, shared by both entrypoints) rather than
+  inline in `e2e-full.mjs` as the previous revision said. It is probably enough (`Human Paladin` with 3 sounds,
+  `Elf Sorcerer`, environment categories, `Tavern Pack`, `Hero Pack`), **but its seeded sounds carry
+  `files:[{name, displayName}]` with no `storedName`** — so they classify as *bundled* under §3 and contribute
+  nothing to a provenance assertion. A bundle-size test needs an **uploaded** fixture (real bytes through
+  `storeFileInLocalStorage`).
+- **Do not assert on the seeded `groups[].sounds`.** `normalizeStoredData`'s group branch returns `sounds: []`
+  and folds a legacy array into a `Default` category, so that vestigial array is wiped on every read (§13 says the
+  same thing for the export test).
+- **Suite order:** the shared block in each entrypoint is ordered, and `platform.mjs` (W) leads because every
+  other spec seeds and reloads on top of it. A profile spec rewrites the board wholesale, so it belongs **late**
+  in the block — but **before `refcount.mjs` (G) and `reset.mjs` (O)**, which re-seed after themselves. `O`
+  must stay last of all.
+- 💡 **A desktop "NO_CARD"/empty-section failure may be a view problem, not a missing element** — `e2e-full.mjs`
+  suites **D** and **M** are not self-contained and read the board earlier suites leave behind.

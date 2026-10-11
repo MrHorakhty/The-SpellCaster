@@ -1,6 +1,13 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-11 13:12) — **Phase 3 complete; everything committed and pushed, 0 ahead / 0 behind**
+🔓 UNCLAIMED — last holder: opencode (2026-10-11 20:56) — **`PROFILE_SYNC_SPEC.md` docs refreshed; docs only, nothing committed or pushed**
+**Docs session, 2026-10-11 20:49.** `PROFILE_SYNC_SPEC.md` re-verified against `src/App.jsx` @ **6769** lines and
+refreshed: all line numbers, plus **three substantive changes** — (a) the **`uploads/` count is 4 chokepoints, not
+10** (`getTauriStoragePath` App.jsx:2604 has exactly 3 callers), (b) **two new design risks** — the auto-save write
+race on a profile switch, and `DATA_VERSION` resetting *per profile* once namespaced, and (c) **§14 rewritten**
+because the E2E harness was refactored (no `e2e-profiles.mjs`, no `-Suite profiles`). Volume and priming folded in.
+**Still docs only — no app code written, implementation remains unauthorised.** Gates 2–4 green (eslint 0/3,
+vite build ok, check-coverage exit 0).
 **Phase 3 is CLOSED. Everything below is committed and pushed; `origin/mobile-support` is 0 ahead / 0 behind.**
 Phase 3a added the machine-checked coverage gate (`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`).
 Phase 3c was rescoped by its own audit: "delete `e2e-run.mjs` / `e2e-features.mjs`" turned out to hide **~31

@@ -2407,3 +2407,54 @@ the only copy that is both complete and independent.
 hand" became "can be cleared entirely once pushed", with the two rules that survive untouched: back up before
 any change, and re-take one at the end of a work session so the folder you have matches the final commit.
 Between sessions, no folder is needed at all.
+---
+
+## 2026-10-11 20:49 - `PROFILE_SYNC_SPEC.md` documentation refresh (opencode)
+
+**Docs only. No app code written; profile implementation remains unauthorised.**
+
+The spec's last revision was 2026-10-06, written against `src/App.jsx` at 6240 lines. The file is now 6769, and
+two features have shipped since. Every code reference was re-verified against the current tree and the spec
+updated. What was found beyond line-number churn:
+
+**1. The `uploads/` "10 path sites" figure was wrong - it is 4 chokepoints.** The old claim counted *lines
+mentioning the constant*, not distinct code paths. `getTauriStoragePath` (App.jsx:2604) is the single path
+builder with exactly 3 callers (write 2613, read 2662, remove 3529), plus `storeFileInLocalStorage` (2606) and
+the migration sweep (1300-1345). So prefixing a profile segment is largely a one-function change, and the
+uploads half of the storage refactor is **smaller** than the spec claimed. The localStorage half is unchanged and
+still the bigger risk: the census was **re-counted and is still exactly 27 call sites (13 setItem / 11 getItem /
+3 removeItem) + 2 enumeration lines**, because per-sound volume and priming both deliberately added zero keys.
+Caveat recorded in the spec: `getFileFromLocalStorage` builds an absolute path via `appDataDir`/`join`
+(2667-2669) and **bypasses `getTauriStoragePath`** - the site a "one-line change" would miss.
+
+**2. Two new design risks the previous revision could not have seen.**
+- **The auto-save write race.** The three auto-save effects (App.jsx:3922-3949) `JSON.stringify` an entire
+  slice into localStorage on every state change, undebounced, with no write choke point and no transaction. A
+  profile switch that sets `activeProfileId` then calls three setters will, in the gap, write the **old**
+  profile's data into the **new** profile's keys - silently, corrupting the profile the user just switched to.
+  Three mitigations are listed with a preference order; the real answer is "settle this in step 1, because the
+  adapter's design is what decides it".
+- **`DATA_VERSION` becomes per-profile.** `readStoredData` (319-325) resets a key to defaults when
+  `ttrpg_data_version` mismatches, renaming the old value to `<key>_old`. Once that key is
+  `profile:<id>:ttrpg_data_version`, the reset fires **per profile** - including for an imported bundle
+  carrying an older `dataVersion`, which is the most surprising place for it to fire.
+
+**3. The E2E section was describing a harness that no longer exists.** The harness was refactored 2026-10-10/11
+into shared specs (`e2e/specs/`) plus the coverage gate. The old advice - create `e2e/e2e-profiles.mjs`, wire
+`-Suite profiles` into `e2e-full.ps1`, continue test ids from `P1` - would produce a suite that cannot be wired
+and coverage the gate cannot see. Rewritten: build `e2e/specs/profiles.mjs`, wire it into **both** entrypoints
+(`SPEC_NOT_SHARED` is enforced), register it in **both** manifest registries (the `features` entry already exists
+as `planned`; flipping it to `shipped` is what forces the tests to exist), and use a free id prefix - `P1-P34`
+are taken by volume and priming; `F` and `I` are free. One old worry turned out to be **already handled**:
+`e2e/e2e-snapshot.mjs` enumerates every `localStorage` key rather than using a hard-coded list, so `profile:*`
+keys are covered without a change.
+
+**Two features folded in.** **Per-sound volume** (`volume`, shipped 2026-10-06) is content, so it syncs - it rides
+inside the sound object and needs no schema change, but the new-sound save path is an explicit allowlist, so any
+code that rebuilds a sound by hand drops it silently. **Priming** (shipped 2026-10-08) is one-shot and
+session-only with no `localStorage` key, so it must **not** appear in the bundle at all.
+
+**Gates.** `npx eslint .` 0 errors / 3 pre-existing warnings. `npx vite build` exit 0.
+`node e2e/check-coverage.mjs` exit 0 - "OK, manifest, code and platform wiring agree" (38 suites, 318 tests,
+23/23 shipped features covered). Gates 5-7 (the three E2E phases) **were not run**: the change is documentation
+only, no code was touched, and the state file is explicit that a docs-only change does not need a hand-test.
