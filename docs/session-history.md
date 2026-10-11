@@ -2133,3 +2133,42 @@ nonzero exits being the pre-existing G5 skip.
   when verifying what a commit actually contains.
 
 Phase 3b (the AGENTS.md definition-of-done) is the only remaining item. Claim held by opencode.
+## SESSION 2026-10-11 (close) - PHASE 3b, PUSH, BACKUP PRUNE, CLAIM RELEASED
+
+**Phase 3 complete. Everything committed AND pushed: `dc9c276..7455c3b`, 0 ahead / 0 behind.**
+
+- **Phase 3b** - added the **definition of done** to `AGENTS.md` (`7455c3b`). Seven gates in order: backup ->
+  eslint -> vite build -> `check-coverage.mjs` -> web E2E -> Windows E2E -> Android E2E. The repo previously had
+  rules for backing up, keeping state current and retiring dead parts, but nothing saying when work is FINISHED
+  - which is why Phase 2 and Phase 3 both ended at "0 FAIL on the gate that happened to run". Four points it
+  calls out explicitly: Windows/Android **exiting 1 is the healthy baseline** (G5), 0 FAIL is the signal; new
+  coverage must be registered via `check-coverage.mjs --update`; a user-facing feature needs a hand-test of the
+  built app; and a gate that could not run must be named, not silently omitted.
+- **Push** succeeded first try, no auth or proxy trouble, consistent with 2026-10-04 / 10-06. Note PowerShell
+  surfaces git's stderr as a `NativeCommandError` record - the push still worked, and `git rev-list --count
+  origin/mobile-support..HEAD` returning `0` is the real confirmation.
+- **Backup prune** (at the user's request): **10 folders / ~355 MB -> 2 folders / ~79 MB**. Deleted 8 older
+  backups, ~315 MB reclaimed.
+  - Before deleting, **every file in all 8 was diffed against the repo and `git ls-files`.** The only files not
+    in the working tree were the three retired suites (`e2e-run.mjs`, `e2e-features.mjs`, `e2e-features.ps1`),
+    and those are recoverable from `dc9c276:e2e/...` - verified with `git cat-file -e`, and `dc9c276` is on
+    `origin/mobile-support`. So the prune provably lost nothing.
+  - Kept `20261011-120800` (matches `7455c3b` exactly) and `20261011-120701`.
+- 🔍 **NOT deleted, and the user should decide: the four logs on the Windows Desktop** (`emu-out.log`,
+  `emu-err.log`, `tauri-dev-stdout.log`, `tauri-dev-stderr.log`, dated **2026-08-31**, ~30 KB). The user
+  referred to them as "backups"; **they are not backups.** `tauri-dev-stderr.log` holds the smoking gun for the
+  ProtonVPN incident this file records in prose - *"Info Using 10.2.0.2 to access the development server /
+  Info Replacing devUrl host with 10.2.0.2"*. The harness stopped writing there long ago (every redirect now
+  goes to `%TEMP%\opencode\`), so they are one-off debris from a manual launch - but they are the **primary
+  source** for a documented gotcha, which is exactly what AGENTS.md's "only record of a hard-won gotcha" clause
+  protects. Left in place and recorded in Known environment facts.
+
+### Final gate state (unchanged since the commit)
+
+| Phase | Result | Exit |
+|---|---|---|
+| Web | 200 / 0 / 0 | 0 |
+| Windows | 199 / 0 / 1 (G5) | 1 |
+| Android | 189 / 0 / 1 (G5) | 1 |
+
+Working tree clean. Claim **released** (UNCLAIMED). `stash@{0}` (2026-08-11) still parked, still the user's call.

@@ -1,19 +1,14 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-11 — working on: Phase 3 (coverage manifest/checker ✅, port-then-retire legacy suites ✅, AGENTS.md DoD — remaining)
-**Phase 3 is nearly closed: the E2E harness now has a machine-checked coverage manifest, and the two legacy
-suites are gone — but only after everything unique in them was ported into shared specs.** The plan had been
-"delete `e2e-run.mjs` / `e2e-features.mjs`"; auditing them first showed **~31 tests that existed nowhere
-else**, so Phase 3c became port-first. Three new shared specs, each run from *both* entrypoints:
-`e2e/specs/platform.mjs` (**W1–W6**, the `isMobile` gate), `e2e/specs/scroll.mjs` (**R1–R10**, scroll
-containment), `e2e/specs/playback.mjs` (**Z1–Z12**, live playback — fade ramp, live master, loop rewind,
-Stop All, and the `loop`/`fadeIn` modal round-trip). Then `git rm`'d `e2e/e2e-run.mjs`, `e2e/e2e-features.mjs`,
-`e2e/e2e-features.ps1`, blocked them in `.gitignore`, and narrowed `-Suite` to `full|mobile` via `ValidateSet`.
-**New `e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`** (36 suites, 305 ids) fail if the inventory
-drifts from the code, if a shared spec is imported but never run, if one runs on only one entrypoint, or if a
-retired file returns. Gates: **web 200/0/0 exit 0 · Windows 199/0/1 exit 1 (pre-existing G5) · Android
-189/0/1 exit 1 (same G5). 0 FAIL on all three.** **All committed as `23bf458`** (2026-10-11 12:03) — priming + the harness refactor + Phase 3 in one commit.
-**Not pushed yet.** Phase 3b (AGENTS.md definition-of-done) is the only remainder.
+🔓 UNCLAIMED — last holder: opencode (2026-10-11 12:15) — **Phase 3 complete, all work committed AND pushed**
+**Phase 3 is CLOSED and pushed as `dc9c276..7455c3b`.** Phase 3a added the machine-checked coverage gate
+(`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json` — 36 suites, 305 ids). Phase 3c was rescoped by its own
+audit: "delete `e2e-run.mjs` / `e2e-features.mjs`" turned out to hide **~31 tests that existed nowhere else**, so
+it became port-first — `specs/platform.mjs` (**W1–W6**), `specs/scroll.mjs` (**R1–R10**),
+`specs/playback.mjs` (**Z1–Z12**), all three run from *both* entrypoints — and only then the `git rm`, the
+`.gitignore` blocks and the `-Suite` `ValidateSet`. Phase 3b added the **definition of done** to `AGENTS.md`.
+**Gates: web 200/0/0 exit 0 · Windows 199/0/1 exit 1 · Android 189/0/1 exit 1 — 0 FAIL on all three.**
+Commits: `23bf458` (priming + harness refactor + Phase 3a/3c), `8a2d900` (state record), `7455c3b` (DoD).
 Previous (Phase 2, opencode, claimed 2026-10-10 22:10, released 23:12): **closed the mobile coverage gaps** by moving five
 more suites out of the entrypoints and into shared specs run from *both* platforms. New:
 `e2e/specs/indicators.mjs` (U1–U7), `sliders.mjs` (B1–B4 box-size), `soundintogroup.mjs` (H1–H2),
@@ -75,7 +70,8 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-11** (Phase 3 — coverage manifest/checker, legacy suites ported then retired; all three gates 0 FAIL)
+Last updated: **2026-10-11** (Phase 3 complete — coverage gate, legacy suites ported then retired, AGENTS.md
+definition-of-done; committed and pushed `7455c3b`; all three gates 0 FAIL)
 
 ---
 
@@ -100,9 +96,9 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, **in sync with `origin/mobile-support`** (0 ahead / 0 behind as of 2026-10-08
-  22:0x). ✅ **Per-sound volume committed as `10fe6e2` and pushed** — `c96193c..10fe6e2`.
-  ✅ **Push works, no auth prompt or proxy trouble** — consistent with 2026-10-04 and 2026-10-06.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, verified
+  2026-10-11 12:10 after `git push` succeeded as `dc9c276..7455c3b`). ✅ Push works, no auth prompt or proxy
+  trouble — consistent with 2026-10-04, 2026-10-06 and 2026-10-11.
 - ✅ **Priming and the whole harness refactor are COMMITTED as `23bf458`** (2026-10-11 12:03), 30 files, after
   the Phase 3 coverage gate and the port-then-retire. **⚠️ Still not pushed.** Commit contents: `src/App.jsx`,
   `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `e2e/e2e-full.ps1`, `e2e/e2e-android.ps1`, `README.md`,
@@ -368,6 +364,14 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   JBR (21), `JAVA_HOME` points there. AVDs: `Pixel_7`, `Pixel_Tablet`, `Small_Phone`.
 - ProtonVPN's `10.2.0.2` interface previously collided with the emulator host mapping and baked the wrong
   dev-server host.
+- 💡 **The raw logs of that incident are still on the Desktop and are NOT junk** — `~/Desktop/emu-out.log`,
+  `emu-err.log`, `tauri-dev-stdout.log`, `tauri-dev-stderr.log`, all dated **2026-08-31**, ~30 KB total.
+  `tauri-dev-stderr.log` contains the actual smoking gun (*"Info Using 10.2.0.2 to access the development
+  server / Info Replacing devUrl host with 10.2.0.2"*). They are the **primary source** for a gotcha this file
+  records in prose. The harness no longer writes there — every redirect now goes to `$tmp` = `%TEMP%\opencode\`
+  (`e2e-android.ps1:152-153`, `e2e-full.ps1:165-221`) — so these are one-off debris from a manual launch. **Left
+  in place 2026-10-11 pending the user's decision**, because the user referred to them as "backups" and they
+  are not: they are incident evidence. If they are deleted, the finding survives only in this line.
 
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything
@@ -380,11 +384,15 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: **`ttrpg-soundboard-backup-20261011-120339`** (219/219 verified, 39.5 MB) — taken **after** commit
-`23bf458`, so it is the first backup holding the priming work, the harness refactor **and** Phase 3.
-Previous: **`ttrpg-soundboard-backup-20261011-102658`** (217/217 verified, 39.5 MB) — taken **before** the Phase 3
-coverage-manifest and port-then-retire work, per the "back up before any change" rule. That one is the rollback
-point for this session.
+Latest: **`ttrpg-soundboard-backup-20261011-120800`** (219/219 verified, 39.5 MB) — taken **after** the push, so it
+is the only backup matching `7455c3b` exactly. Also kept: **`ttrpg-soundboard-backup-20261011-120701`**
+(219/219, 39.5 MB), taken just before the AGENTS.md edit.
+🗑️ **Pruned 2026-10-11 at the user's request: 8 older backups deleted, ~315 MB reclaimed** (10 folders / ~355 MB
+→ 2 folders / ~79 MB). Before deleting, every file in all 8 was checked against the repo and `git ls-files`;
+the only files not present in the working tree were the three retired suites, and those are recoverable from
+`dc9c276:e2e/e2e-run.mjs` etc. — `dc9c276` is on `origin/mobile-support`, verified with `git cat-file -e`.
+Previous (all now deleted): `20261011-120339`, `20261011-102658`, `20261010-221101`, `20261010-214021`,
+`20261010-212155`, `20261010-211224`, `20261010-205141`, `20261008-205212`.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the
@@ -444,9 +452,17 @@ Three properties worth remembering:
 ### Standing rules in `AGENTS.md`
 - **Back up before any change** — `.\backup-project.ps1` (copy + verify + auto-repair).
 - **Delete deprecated parts** — retired files get `git rm`'d *and* a `.gitignore` entry *and* a line in
-  this file's Retired files section. Explicit "what NOT to delete" list: parked items, the only record
-  of a decision, working harnesses, anything uncertain. See `AGENTS.md` for the full criteria.
+  this file's Retired files section. ⚠️ **A retired TEST file is a different act from a retired doc**: it loses
+  passing coverage that nothing will ever report, so **port the unique coverage first, then delete**. The
+  2026-10-11 Phase 3c audit found ~31 tests living only in the two legacy suites; delete-only would have passed
+  every gate at 0 FAIL while quietly gutting a third of the suite.
 - **Keep `PROJECT_STATE.md` up to date** — claim, edit in place, release.
+- **Definition of done** (added 2026-10-11, `7455c3b`) — the **seven gates in order**: backup → `npx eslint .`
+  (0 errors) → `npx vite build` → `node e2e/check-coverage.mjs` → web E2E → Windows E2E → Android E2E. ⚠️ It
+  spells out that **Windows and Android exiting `1` is the healthy baseline** (the G5 file-reference WARN), that
+  **0 FAIL is the signal and the exit code is not**, that new coverage must be registered with
+  `check-coverage.mjs --update`, that a **user-facing** feature needs the user to hand-test the built app, and
+  that a gate which could not run must be named rather than quietly omitted.
 
 ### Planning specs in the repo root
 **Three specs were written 2026-10-06** for features the user queued; each is meant to be picked up **one per
@@ -635,8 +651,8 @@ cancels, edit mode does not prime, a tap fires the primed set and consumes it, t
   machine-checked coverage gate (`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`), and retired the two
   legacy suites **by porting first**: `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, each run
   from both entrypoints. Gates **web 200/0/0 exit 0 · Windows 199/0/1 exit 1 · Android 189/0/1 exit 1** — 0 FAIL on
-  all three, the two nonzero exits both being the pre-existing G5 skip. ✅ **Committed as `23bf458`**
-  (2026-10-11 12:03), 30 files. **Not pushed yet.**
+  all three, the two nonzero exits both being the pre-existing G5 skip. ✅ **Committed as `23bf458`** (2026-10-11
+  12:03), 30 files, and ✅ **pushed as `dc9c276..7455c3b`** (0 ahead / 0 behind, verified after push).
   💡 **The lesson worth keeping: "delete the legacy suites" was wrong as written, and the audit is what caught
   it.** ~31 tests lived only in those two files. Any future retirement should start by diffing what a file
   uniquely covers — `check-coverage.mjs --update` on a manifest built while they still exist would have surfaced
