@@ -298,13 +298,20 @@ End-to-end suites drive the real app over the Chrome DevTools Protocol and are r
 
 - `e2e/e2e-full.ps1` - Desktop and web phases
 - `e2e/e2e-android.ps1` - Android emulator/device phase
+- `e2e/check-coverage.mjs` - Static coverage check, no browser needed (`node e2e/check-coverage.mjs`)
 - `kill-ports.bat` - Frees the ports and stray processes the suites use (run it first if a run fails to start)
+
+There are two entrypoints, `e2e/e2e-full.mjs` (web + Windows) and `e2e/e2e-mobile.mjs` (Android). Both run the same shared specs from `e2e/specs/`, so most assertions are literally the same code on both platforms; only the gestures differ (a CDP mouse click vs `Input.dispatchTouchEvent`).
 
 Both the desktop and Android runners snapshot `localStorage` before the suite and restore it afterwards, even if the app or the run crashes, so test data never overwrites your real characters and sounds.
 
-Run a single phase with `-Phase web`, `-Phase win` or `-Phase android` (default is `all`). Pass `-Suite full|mobile|run|features` to pick the suite the phase runs.
+Run a single phase with `-Phase web`, `-Phase win` or `-Phase android` (default is `all`). Pass `-Suite full|mobile` to pick the suite the phase runs.
+
+`e2e/coverage.manifest.json` is the inventory of every suite and test id. `node e2e/check-coverage.mjs` fails if it drifts from the code, if a shared spec stops running on one of the two entrypoints, or if a retired file comes back. After adding or renaming a test, run `node e2e/check-coverage.mjs --update` to re-sync the id lists and review the diff.
 
 > Do not create a file named `e2e/e2e-all.ps1`. It was the original combined runner and antivirus software on this machine permanently blocks that exact filename at the filesystem level. `e2e-full.ps1` (web + Windows, delegates Android) and `e2e-android.ps1` replaced it; `.gitignore` blocks the old name from coming back.
+
+> The earlier `e2e-run.mjs`, `e2e-features.mjs` and `e2e-features.ps1` were retired on 2026-10-11, after everything unique in them was ported into shared specs. They are blocked in `.gitignore`; add a spec under `e2e/specs/` instead.
 
 ### Git Backup Scripts
 

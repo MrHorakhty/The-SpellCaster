@@ -6,9 +6,10 @@
 > ✅ RESOLVED / ✅ CORRECTION with the reason.
 > **Verified**: `npx eslint .` → 0 errors (3 pre-existing warnings); `npx vite build` green;
 > **web E2E 147 PASS / 0 FAIL / 0 WARN**; **Windows E2E 146 PASS / 0 FAIL / 1 WARN** (the WARN is the
-> pre-existing G5 skip); **Android 85 PASS / 0 FAIL / 0 WARN / exit 0** (2026-10-06 23:03) plus a real
-> screenshot confirming the row's layout. Suite **P** (`P1`-`P16`) in `e2e/e2e-full.mjs`. ⚠️ Suite P is **not**
-> ported to `e2e-mobile.mjs`, so the Android run proves no regression rather than volume working there.
+> pre-existing G5 skip); **Android 126 PASS / 0 FAIL / 0 WARN / exit 0** (2026-10-10) plus a real
+> screenshot confirming the row's layout. Suite **P** (`P1`-`P16`) in `e2e/e2e-full.mjs`, **now mirrored**
+> on Android as Suite P in `e2e-mobile.mjs` (touch; P9's trusted gesture is a real `Input.dispatchTouchEvent`
+> tap, and `P11` asserts the trim survives a WebView reload).
 > **Decisions**: the level is a **trim**, not an absolute (§2), the UI is a **live slider on the sound card**
 > (§2b), and — decided while building — the card control sits **outside** the `role="button"` card (§2b.4).
 > **Line numbers below were verified against the 6240-line `src/App.jsx` on 2026-10-06 and have since drifted**
@@ -329,7 +330,7 @@ Automated — Suite P, `e2e/e2e-full.mjs`. `P1`-`P16` are the shipped IDs; the *
       session-only.
 - [x] `npx eslint .` → 0 errors; `npx vite build` succeeds.
 - [x] E2E: web **147 PASS / 0 FAIL / 0 WARN**; Windows **146 PASS / 0 FAIL / 1 WARN** (pre-existing G5 skip);
-      Android **85 PASS / 0 FAIL / 0 WARN**.
+      Android **126 PASS / 0 FAIL / 0 WARN** (2026-10-10, after Suite P was ported to `e2e-mobile.mjs`).
 
 Not covered by automation — **still open**:
 
@@ -340,9 +341,11 @@ Not covered by automation — **still open**:
 - [ ] **A sound mid-fade-out whose slider moves does not snap its level.** Same reason.
 - [ ] **Looping keeps the level on every iteration** — P9 covers the master change against a looping sound, but
       not an actual loop boundary crossing.
-- [ ] ⚠️ **Suite P is not ported to `e2e-mobile.mjs`.** The Android phase passes (85/85) and a screenshot confirms
-      the layout, so this is a coverage gap rather than a known problem — but nothing automated asserts the slider
-      on a real touch device. Same gap move/copy has.
+- [x] ✅ **Suite P is now ported to `e2e-mobile.mjs`** (2026-10-10). The Android phase runs the full `P1`-`P16`
+      set against the touch build — **Android 126 PASS / 0 FAIL / 0 WARN**. P9's trusted gesture is a real
+      `Input.dispatchTouchEvent` tap (a synthetic `element.click()` is not a user gesture, so autoplay is refused
+      and the fresh element would not stay registered for the live rescale). ⚠️ It is the **emulator** touch
+      pipeline, not a physical device. Move/copy still has the same mobile-suite gap.
 - [ ] 💡 **Design opinion wanted on how loud the control looks.** A screenshot of a four-card board on a Pixel-class
       emulator shows four full-width blue bars. That is the direct consequence of "always visible, live slider on
       every card" (hover-reveal is unusable on touch), and §2b.3 flagged "a wall of visual noise" as the risk.

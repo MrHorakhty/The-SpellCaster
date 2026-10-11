@@ -1,282 +1,262 @@
-# Sound Priming — Planning Spec
+# Sound Priming — **Build Record** (shipped 2026-10-08)
 
-> **Status**: **New spec, 2026-10-06; decision folded in the same day.** Design only — **implementation is not
-> authorised.** No app code has been written. Line numbers verified against `src/App.jsx` at **6240 lines** on
-> 2026-10-06; re-verify before editing.
-> ✅ **DECIDED by the user: priming is ONE-SHOT and is explicitly NOT profile content.** Nothing is persisted —
-> **do not add a `localStorage` key** for it. That means this feature has **no interaction with the profile
-> refactor** and can be built at any point in the sequence. Saved named layers (Model B) are **rejected**; §6
-> records why, so it is not re-opened.
-> **Created**: 2026-10-06
-> **Related**: `HOTKEYS_SPEC.md` (a hotkey must fire the primed set too — §5), `PER_SOUND_VOLUME_SPEC.md`
-> (⚠️ its card slider and this feature's card gesture compete for the same element — §3),
-> `PROFILE_SYNC_SPEC.md`.
-> ⚠️ **Recommended order: any time, but build it AFTER `PER_SOUND_VOLUME_SPEC.md` (2026-10-06).** It is the
-> cheapest of the three features and the only one with zero persistence work. Volume went first and settled the
-> sound card: the volume slider is a sibling of the card, **not** a descendant, so the nesting/ARIA problem is
-> already solved and priming needs no `stopPropagation` on the slider — §3's "hold/drag on the slider" warning is
-> moot as built. What priming still owns: the hold timer, `contextmenu` suppression, and the double-fire trap.
+> **Status: SHIPPED — E2E-verified, not yet hand-tested.** This file is no longer a plan; the design lives in
+> `src/App.jsx`. Implementation is in `src/App.jsx` at **~6770 lines** (the line numbers below are current as of
+> 2026-10-08; they drift — re-verify before editing).
+> **Built**: 2026-10-08 (opencode session, claim held).
+> **Verified**: `npx eslint .` 0 errors (3 pre-existing warnings) · `npx vite build` OK ·
+> **web E2E 172 PASS / 0 FAIL / 0 WARN** · **Windows E2E 171 PASS / 0 FAIL / 1 WARN** (pre-existing `G5` skip,
+> Tauri has no localStorage seed). **Android not run** (no device/emulator attached) — see §8 Open gaps.
+> **Related**: `HOTKEYS_SPEC.md` (§5 — a hotkey must fire the primed set through the same chokepoint),
+> `PER_SOUND_VOLUME_SPEC.md` (the card slider is a sibling, so the hold/drag conflict is moot as built).
 
 ---
 
-## 0. What the user asked for
+## 1. What was built
 
-"Ability to Prime a Sound — primed ones will activate alongside the active sound when it plays, for example
-priming fireball and frostbite and then clicking lay on hands will play all three. Priming can be done with a
-right click on desktop and by holding on the phone."
+Right-click (desktop) / press-and-hold (mobile) a sound card to **prime** it. Primed sounds fire **alongside the
+next sound you play**, then the whole set is consumed. It is **one-shot and session-only**: nothing is written to
+`localStorage`, and it is deliberately **not** profile content.
 
-Desired gestures: **right-click** (desktop), **press-and-hold** (mobile).
-
----
-
-## 1. ✅ DECIDED 2026-10-06: **one-shot, and explicitly NOT profile content**
-
-The user confirmed priming is **one-shot**: prime Fireball + Frostbite, trigger Lay on Hands, all three play, and
-the primed set is **consumed**. They also confirmed explicitly that it is **not** profile content.
-
-That collapses this spec to **Model A only**, permanently. Nothing here is stored, nothing travels in a bundle,
-and there is **no interaction with the `PROFILE_SYNC_SPEC.md` storage refactor at all** — so this feature can be
-built **at any point in the sequence**, before or after profiles.
-
-| | **Model A — one-shot priming (CHOSEN)** | **Model B — saved layers (REJECTED)** |
-|---|---|---|
-| Lifetime | until the next trigger, then cleared | saved, named, reusable |
-| Storage | **none** — React state | new persisted structure, new `localStorage` key |
-| Travels in a profile? | ❌ **must not** (confirmed) | would have |
-| Cost | small | large: schema, UI, delete semantics, references |
-| Status | ✅ **this is the spec** | ❌ **out of scope — do not build it, do not re-open it** |
-
-Model B is kept in §6 only as a record of *why* it was rejected, so a later session does not re-litigate it.
-
-💡 Because priming is one-shot and per-session, it is the **cheapest of the three features** and has no
-persistence work at all. If you want a quick win, this is it.
-
-**Everything below is the chosen design.**
+Everything from the original §0–§6 design landed, with the corrections in §5 below.
 
 ---
 
-## 2. Design (one-shot)
+## 2. The implementation, by concern
 
-### State
+### State (App.jsx ~1495–1606)
 
-A `Set` of sound ids in component state, next to the other UI state:
+- `primedSoundIds` (`Set` in state) drives the UI; **`primedRef` is the authority** — see §3, the real bug.
+- `firedPrimeIds` + `primeFlashTimerRef` drive the "just fired" flash.
+- `primeHoldRef` holds the armed press-and-hold; `suppressNextClickRef` swallows the click a hold's release
+  produces.
+- `isPrimed(id)`, `togglePrime(id)` (toggles; returns early in `editMode`), `clearAllPrimes()`,
+  `flashFiredPrimes(ids)`, `armPrimeHold(id, event)`, `cancelPrimeHold()`.
+- A single unmount effect clears the flash timer and the hold timer.
 
-```js
-const [primedSoundIds, setPrimedSoundIds] = useState(() => new Set())
-```
+Module constants next to `normalizeSoundVolume` (App.jsx ~710–719): `PRIME_HOLD_MS = 500`,
+`PRIME_MOVE_CANCEL_PX = 10`, `PRIME_FLASH_MS = 2000`.
 
-⚠️ `Set` in state needs a new array/object identity to re-render — `setPrimedSoundIds(prev => new Set([...prev, id]))`,
-never mutate in place.
+### The gestures (App.jsx ~4119, ~4096, ~4106, plus `armPrimeHold` call first in `onPointerDown`)
 
-Use **sound ids**, not container references. Ids are minted once and never regenerated (`mintId('sound')`,
-App.jsx:260) so they are stable for the session. Unlike a hotkey binding (which must survive renames and profile
-switches), a primed set is deliberately short-lived, so a reference-with-a-display-snapshot is overkill here.
+- **Right-click** → `onContextMenu`: always `preventDefault()` (cards are `div role="button"`; without it the
+  WebView2/browser menu opens over the app), then return early if `editMode || e.pointerType === 'touch'`, else
+  `togglePrime(sound.id)`. The **`pointerType === 'touch'` guard is load-bearing** — a long press also raises
+  `contextmenu`, so without it the hold primes and then the menu event *un-primes* it.
+- **Press-and-hold** → `armPrimeHold` is the first thing in the card's `onPointerDown` (so it runs before the
+  edit-mode drag). It **only arms on `event.button === 0`** — a right-click is a `pointerdown` with button 2 *and*
+  a `contextmenu`, and arming on both would toggle twice, which (being a toggle) un-primes and reads as "priming
+  is broken". On arm it clears `suppressNextClickRef`, then:
+  - cancels if the pointer moves more than `PRIME_MOVE_CANCEL_PX` (10px) from the start;
+  - cancels on `pointerup` / `pointercancel`;
+  - after `PRIME_HOLD_MS` (500ms) sets `suppressNextClickRef = true` and toggles the prime.
+  - The move/up/cancel listeners are on **`document`**, not the card, so dragging off still cancels and the card's
+    own handlers stay untouched.
+- **Click** → `onClick`: returns in `editMode`; if `suppressNextClickRef` is set (a hold already primed), clears
+  it and returns without playing; otherwise `playWithPrimes(sound)`. **Keyboard** (`Enter`/`Space`) routes through
+  `playWithPrimes` too. `user-select: none` + `-webkit-touch-callout: none` are on the card so the long press
+  does not raise the OS text callout.
 
-### Triggering — ⚠️ capture and clear synchronously, because `playSound` is async
-
-One-shot changes the mechanics: the primed set must be **read and emptied before any awaiting happens**, not
-cleared afterwards. Otherwise a second trigger fired while the first is still playing would pick up the same
-primed sounds and play them twice.
+### One trigger chokepoint (App.jsx ~3793 `stopTrigger`, ~3808 `playWithPrimes`)
 
 ```js
 const playWithPrimes = async (sound) => {
-    const ids = primedSoundIds          // capture the current set
-    setPrimedSoundIds(new Set())         // consume it SYNCHRONOUSLY, before any await
-    await playSound(sound)               // 3256 — the real player, unchanged
+    if (editMode) return
+    const ids = Array.from(primedRef.current)   // read the AUTHORITATIVE ref...
+    primedRef.current = new Set()               // ...and consume it SYNCHRONOUSLY,
+    setPrimedSoundIds(new Set())                //    before the first await
+    const primeGroupId = ids.length > 0 ? mintId('primegroup') : null
+    playSound(sound, { primeGroupId })
+    flashFiredPrimes(ids.filter(id => id !== sound.id && soundById.has(id)))
     for (const id of ids) {
-        if (id === sound.id) continue
-        const primed = findSoundById(id) // needs a lookup — see §4
-        if (primed) await playSound(primed)
+        if (id === sound.id) continue           // priming A then playing A must not double it
+        const primed = soundById.get(id)
+        if (!primed) continue                   // deleted since primed - skip, don't break the primary
+        playSound(primed, { primeGroupId }).catch(() => {})   // not awaited: fired alongside
     }
 }
 ```
 
-Clearing first also makes the UI honest: the primed indicators vanish the instant the user triggers, which is
-exactly what one-shot should look like.
+- `soundById` is a `useMemo` Map built from **`allSoundContainers()`** (App.jsx ~2140), so a prime resolves from
+  **all five** container shapes — the four real ones plus the vestigial `groups[].sounds`. Do not hand-roll a
+  four-shape walker (see the data-model gotcha in `PROJECT_STATE.md`).
+- **Stop semantics = stop the whole group.** Every element started by one trigger is stamped with the same
+  `audio._primeGroup = options.primeGroupId` (App.jsx ~3598). The card's stop button calls `stopTrigger(sound)`,
+  which stops every element sharing that `_primeGroup`; if the sound has no group (played on its own) it falls
+  back to `stopSound(sound)`. `stopAllSounds` is unaffected.
+- `playSound` already tolerated everything priming throws at it, for free: it no-ops in `editMode`, calls
+  `enableAudio()` itself, and gives each instance its own `audioInstanceKey`, so three concurrent sounds need no
+  new machinery.
 
-Route **every** trigger through this one function: card click, hotkey, anything added later. One chokepoint means
-one place to test.
+### Visuals (App.jsx ~4214 badge, ~4231 overlay; header buttons ~4748 desktop, ~4994 mobile)
 
-⚠️ `playSound` is already tolerant of the things priming will throw at it, which is convenient:
-
-- it early-returns in `editMode` (App.jsx:3257) — so priming does nothing in edit mode, for free;
-- it calls `enableAudio()` itself if audio is off (3259-3261) — so firing three sounds enables audio once and
-  harmlessly twice more;
-- each call creates its own `Audio` and registers it under its own `audioInstanceKey` (3303), so three concurrent
-  sounds need no new machinery.
-
-### Decisions to make before coding
-
-- **Does a primed sound that is itself triggered re-fire the set?** The `id === sound.id` skip above says no.
-  Without it, priming A and then playing A plays A twice.
-- **Stop semantics** — the big one. `playSound` has no return value and registers instances in
-  `audioElementsRef`; `stopSound` (3472), `stopSoundInstances(soundId)` (3464) and `stopAllSounds()` (3476) all
-  exist. If pressing a card played three sounds, does pressing it again stop **all three** or just the primary?
-  **Recommend: stop all three** — the user thinks of it as one action. `stopAllSounds` is unaffected.
-- **Can a looping sound be primed?** Priming a loop means *every* trigger starts another loop instance, which
-  compounds. **Recommend: allow it but surface the loop badge on the primed card** so it is not a surprise. If
-  loops are common in this app (they are — environment sounds default to `loop`, App.jsx:1502), consider
-  refusing to prime a looping sound in v1.
-- **Does `randomPlay` matter?** A primed sound with several files picks a **new random variant on every
-  trigger** (App.jsx:3268). For a primed ambience that is probably right; for a primed one-shot with variants it
-  may be surprising. Note it, don't fight it.
-- **A primed sound with no resolvable file** — skip it silently rather than failing the primary trigger.
-- **Interaction with per-sound volume** (`PER_SOUND_VOLUME_SPEC.md`): a sound trimmed to 0% is primed and plays
-  silently. Harmless — do not special-case it.
-
-### Visual state
-
-A card needs an unmistakable "primed" look (this is a performance tool; ambiguity costs a fumble mid-session).
-Add a small badge/indicator rather than only a border tint, and keep it distinguishable from **edit mode**, which
-already changes card appearance.
-
-Because priming is **one-shot**, the indicator disappearing on trigger *is* the feedback — consider a brief
-"fired" flash on the consumed cards so the user can see what actually played, rather than having to remember.
-Worth a "clear all primed" affordance too: with one-shot, mis-primes are likely, and the fix should not require
-un-priming each one by hand.
+- **Primed badge**: `[data-prime-badge]`, amber `Zap` + "Primed", **top-left** (bottom-right is the loop badge,
+  top-right the multi-file badge, bottom-left the stop button, and top-left only carries the delete button in edit
+  mode, where priming is off anyway).
+- **Tint overlay**: `[data-prime-overlay]`, a **separate element**, not a ring class on the card — the card
+  already carries lime rings for playing and drag-over, and two ring-colour classes on one element resolve by
+  stylesheet order, not class-attribute order. Amber border when primed, a paler amber at 60% opacity for the
+  fired flash. The card also carries `data-primed` / `data-fired` and `aria-pressed`.
+- **Clear-all button** appears in both the mobile and desktop headers only while `primedSoundIds.size > 0`, with a
+  live count (`Clear N primed sound(s)`), because mis-primes are likely and un-priming card-by-card is a bad
+  mid-session recovery.
+- **Fired flash is 2000ms, not 1200ms** (see §3).
 
 ---
 
-## 3. The gestures (right-click / press-and-hold)
+## 3. ⚠️ Real problems found while building — do not regress these
 
-### Verified current state: **there is none**
-
-A full scan of `App.jsx` found **no** `onContextMenu`, no `contextmenu` listener, no long-press helper, and no
-`onTouchStart`. The only pointer handler is `onPointerDown` at App.jsx:3643 (drag-and-drop). So this is
-greenfield — nothing to collide with, and no in-repo precedent to copy.
-
-### Desktop right-click
-
-```jsx
-onContextMenu={(e) => { e.preventDefault(); togglePrime(sound) }}
-```
-
-⚠️ `preventDefault()` is required — without it the WebView2/browser menu opens over the app. Sound cards are
-**`<div role="button">`, not `<button>`**, so there is no native behaviour to suppress; the menu appears unless
-you prevent it.
-
-### Mobile press-and-hold
-
-- ~**450-500 ms** timer on `pointerdown`; cancel on `pointerup`, `pointercancel`, or **movement beyond ~10 px**
-  (otherwise a scroll starts a prime).
-- ⚠️ A long press on mobile also raises the OS text-selection callout. Cards need `user-select: none` and
-  `-webkit-touch-callout: none` (check whether cards already have it).
-- ⚠️ `touch-action` and the existing drag handler at 3643 must be checked so the hold does not start a drag.
-- Prefer **Pointer Events** for both, so one code path covers mouse and touch — but note that a right-click
-  arrives as `pointerdown` with `button === 2` *and* as `contextmenu`; handle `contextmenu` for the menu
-  suppression and let the timer handle touch only, or a right-click will also arm the hold timer.
-
-### ⚠️ Three ways this can go wrong, all worth a test
-
-1. **Double-fire**: right-click arms the hold timer *and* fires `contextmenu`, priming twice or toggling twice
-   (which would un-prime). Toggle semantics make a double-fire actively harmful — it looks like priming is
-   broken. Assert single-toggle explicitly.
-2. **Priming in edit mode**: harmless (play does nothing anyway) but confusing. Recommend hiding the affordance
-   in edit mode, consistent with the card's play button.
-3. ⚠️ **The card is about to get a second gesture** — `PER_SOUND_VOLUME_SPEC.md` §2b puts a **live volume slider
-   on every sound card**, decided 2026-10-06. Both features now compete for the same element:
-   - **Hold/drag on the slider must adjust volume, not prime.** Prime on the card *body* only, and make the
-     slider `stopPropagation` its pointer events (that spec requires the same thing to stop the card from
-     playing, §2b.1) — one `stopPropagation` serves both features.
-   - **Right-click on the slider** should probably not prime either, for the same reason.
-   - Whoever builds second should re-read the other's card section. These two specs touch the same component and
-     will conflict in review if both are implemented without this in mind.
+1. **Stale-closure double-consume (the one genuine bug).** `playWithPrimes` originally read the primed set from
+   **state**. Two triggers in the same tick (a fast double-click, or click + hotkey) both captured the *same*
+   pre-consume closure value, so the primes played **twice** — caught by E2E `P25`. Fixed by making **`primedRef`
+   the authority**: read and clear the ref synchronously, before any `await`. React state now only drives the
+   re-render. **Lesson: for one-shot consumption, the ref is the source of truth, not state.**
+2. **A long press *also* fires `contextmenu`.** Without the `e.pointerType === 'touch'` guard, a touch hold primed
+   on the timer and then the menu event un-primed it. Desktop right-click is unaffected (its `pointerType` is
+   `mouse`, and it never arms the hold because button 2 is rejected).
+3. **A hold's release produces a click that would also play the sound.** `suppressNextClickRef` swallows exactly
+   that one click. It is **reset at the start of every new press**, so a leftover flag from an earlier hold cannot
+   swallow an unrelated click.
+4. **`PRIME_FLASH_MS` was too short at 1200ms.** The flash is the *only* record of what fired (the primed set is
+   already gone), so it has to stay up long enough to read; 1.2s was not. Raised to 2000ms. It also happened to sit
+   exactly on the E2E `P23d` assertion boundary. Re-triggering **replaces** the flash rather than stacking, so it
+   cannot go stale.
+5. **The stop button is `isPlaying`-gated** (`{isPlaying && …}`, App.jsx ~4246) and lives *inside* the card, so
+   it is a `<button>` inside the `div role="button"`. It calls `e.stopPropagation()` then `stopTrigger(sound)`.
 
 ---
 
-## 4. Finding a sound by id
+## 4. E2E coverage — Suite Q, ids **P17–P34**
 
-The one genuinely new piece of machinery. `playSound` takes a **sound object**, so the primed set of ids must be
-resolved back to objects at trigger time.
+Ids continue the **P** series. ⚠️ **`P1`–`P16` were already taken by per-sound volume** — the original spec said
+"continue from P1", but volume landed first, so priming starts at **P17**. Suite Q lives in
+`e2e/e2e-full.mjs` (inserted before Suite G), driven by `dispatchMouseEvent` (right-click).
 
-⚠️ **Remember there are FIVE container shapes, not four** — `characters[].sounds`, `environmentSounds[].sounds`,
-`groups[].categories[].sounds`, `groups[].characters[].sounds`, plus the vestigial `groups[].sounds` that
-`addGroup` allocates and nothing writes to. A hand-rolled lookup that walks four will silently miss sounds.
-**Use `allSoundContainers()` (App.jsx:1812)** — it is the one walker that gets it right, and it is already used
-by move/copy and the reference-count guard. Build the id→sound map from its output.
+| Test | Assertion |
+|---|---|
+| P17 | right-click primes; badge + overlay + `aria-pressed` all present |
+| P18 | right-click does **not** arm the hold timer (no double-toggle) |
+| P19 | second right-click un-primes |
+| P20 | press-and-hold primes **without playing** |
+| P21 | hold + move 40px does **not** prime |
+| P22 | edit mode primes by neither gesture |
+| P23 / b / c / d | 2 primes + trigger plays all 3 and **one shared `_primeGroup`**; the set is **consumed**; consumed cards flash as fired |
+| P24 | the next trigger plays only itself — no residue |
+| P25 | rapid double trigger does not double the primes (the stale-closure guard) |
+| P26 | playing a primed sound does not double it |
+| P27 | stopping the primary stops the **whole** primed group |
+| P28 | an unresolvable prime does not break the primary |
+| P29a/b/c | no clear button when nothing is primed; it appears with the live count; clearing empties + hides it |
+| P30 | `contextmenu` default is prevented |
+| P31a | **no new `localStorage` key** for priming |
+| P31b | primed state does not survive a reload |
+| P32 | primes + fires from an **environment category** |
+| P33 | primes + fires from a **group category** |
+| P34 | primes + fires from a **group character** |
 
-Cheapest correct approach: one `useMemo` over the three slices producing a `Map<id, sound>`, rebuilt when they
-change. Do not resolve inside the click handler by walking state each time.
+⚠️ The vestigial `groups[].sounds` **cannot** be tested by seeding + reload: `normalizeStoredData`'s group branch
+returns `sounds: []` and folds a legacy array into a `Default` category. `P32`–`P34` cover the shapes that
+survive a reload; the five-shape walker itself is `allSoundContainers()`, already regression-guarded by move/copy.
 
----
+### 4b. Mobile mirror — Suite Q in `e2e-mobile.mjs` (**Q1–Q14**, added 2026-10-10)
 
-## 5. Interaction with hotkeys (`HOTKEYS_SPEC.md`)
+Touch has no right-click, so the desktop suite's mouse-driven gestures do **not** exercise the path a phone
+uses. `e2e-mobile.mjs` now drives priming with **`Input.dispatchTouchEvent`** (the item §7 had left open),
+navigating with the mobile drawer rather than desktop tabs. Same fixture ids as Suite Q on desktop, so a
+failure can be compared across platforms:
 
-**A hotkey must fire the primed set too.** Route both through the same `playWithPrimes` chokepoint (§2). Two
-triggers with different semantics is the thing to avoid here.
+| Test | Assertion |
+|---|---|
+| Q1 / Q2 | touch press-and-hold primes (badge + overlay + `aria-pressed`) and does **not** also play |
+| Q3 | the primed card stays primed (a late `contextmenu` must not un-prime it) |
+| Q4 | hold + 40px move does **not** prime |
+| Q5 | edit mode does not prime by touch |
+| Q6 / b / c / d | 2 touch primes + a tap play all 3, one shared `_primeGroup`, set **consumed**, cards flash as fired |
+| Q7 | rapid double trigger does not double the primes (stale-closure guard) |
+| Q8a/b/c | clear-all button lifecycle (absent → live count → clears + hides) |
+| Q9 | no new `localStorage` key |
+| Q10 | primed state does not survive a reload |
+| Q11 | stopping the primary stops the whole primed group |
+| Q12 / Q13 / Q14 | primes + fires from an environment category / group category / group character |
 
----
-
-## 6. Model B — **rejected, recorded so it is not re-opened**
-
-The user confirmed on 2026-10-06 that priming is **one-shot and not profile content**, so saved named layers are
-out of scope. Kept here only as the reasoning:
-
-- A saved layer would be a **new persisted structure** (e.g. `spellcaster_prime_layers`), i.e. a **new
-  `localStorage` key** — which would make `PROFILE_SYNC_SPEC.md` §3/§4.2 (the 27-site / 10-path / 2-icon-key
-  census) stale on the spot, and those numbers have already gone stale twice.
-- It would have been content, and would have belonged *before* profiles so it rode the bundle.
-- Its references would need the same dangling-reference policy as `HOTKEYS_SPEC.md` §4, because a layer outlives
-  the sounds it points at.
-
-**None of that applies any more.** Do not build Model B, and do not add a `localStorage` key for priming — that
-absence is a deliberate design decision, not an oversight.
-
----
-
-## 7. E2E notes
-
-- **Desktop right-click is testable**: `Input.dispatchMouseEvent` with `button: 'right'` / `clickCount: 1` and
-  `buttons: 2`. Assert the card toggles **once** (the double-fire trap in §3).
-- **Press-and-hold is testable on both**: `Input.dispatchMouseEvent` pointer-down, wait > the hold threshold,
-  pointer-up. On the mobile suite, prefer `Input.dispatchTouchEvent`; `dispatchMouseEvent` may not exercise the
-  touch path that real phones use — test at least one real hold on a device.
-- Assert the negatives: a press-and-hold that **moves** more than the threshold must **not** prime; a scroll
-  across a card must not prime; a hold in edit mode must not prime.
-- Sound cards are `div role="button"` — query `[data-sound-card]`, never `button`.
-- **Card identity across containers matters here.** Priming is by sound id, so seed sounds in *different*
-  container shapes and confirm each primes; that is the regression guard for the five-shape walker (§4).
-- New IDs: **continue from `P1`** — coordinate with the other two queued specs, and whichever lands first should
-  record the chosen continuation point in its own file.
-- The Windows phase runs against real user data; a priming test must not leave a primed set behind (it is
-  session state, so a reload clears it — but snapshot/restore still applies to anything you assert on disk).
-
----
-
-## 8. Verification checklist
-
-- [ ] Priming Fireball + Frostbite, then clicking Lay on Hands, plays **all three**.
-- [ ] **The primed set is consumed:** triggering a second sound afterwards plays only that sound — no residue.
-- [ ] Triggering twice quickly does **not** double-fire the primed sounds (the capture-and-clear-before-await
-      ordering, §2).
-- [ ] A primed sound plays exactly **once** per trigger, and pressing a primed sound does not double-fire.
-- [ ] Un-priming (second gesture) removes it; the indicator disappears.
-- [ ] Right-click toggles **once** — no double-fire from the hold timer (§3).
-- [ ] Press-and-hold primes on mobile; **moving/scrolling cancels it**; it does not fire in edit mode.
-- [ ] The native context menu never appears on a card.
-- [ ] Press-and-hold does not raise the OS text-selection callout, and does not start a drag.
-- [ ] **Every container shape works**: a primed sound in a character, an environment category, a group category,
-      and a group character. ⚠️ **the vestigial `groups[].sounds` cannot be tested this way** —
-      `normalizeStoredData`'s group branch returns `sounds: []` and folds any legacy array into a `Default`
-      category, so **that array is wiped on every read**. Seeding it by hand and reloading proves nothing; assert
-      the `Default`-category fold instead (which is the path that actually survives a reload), or assert
-      in-session without a reload.
-- [ ] Stopping a multi-primed trigger stops **all** the sounds it started, and `stopAllSounds` is unaffected.
-- [ ] A primed sound whose file is missing does not break the primary trigger.
-- [ ] Primed state does **not** survive a reload and does **not** appear in any exported bundle.
-- [ ] **No `localStorage` key was added for priming** (§6 — the absence is deliberate).
-- [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds.
-- [ ] E2E: web + Windows pass; mobile suite gains at least one real press-and-hold test.
+⚠️ It is the **emulator's** touch pipeline, not a physical device. ⚠️ A long-press `contextmenu` on a real
+device may or may not fire; `Q3` covers the observable consequence (no un-prime) rather than synthesising the
+event.
 
 ---
 
-## 9. Deferred / out of scope
+## 5. Corrections to the original spec
 
-- ❌ **Saved named layers (Model B)** — **rejected by the user 2026-10-06**; priming is one-shot and not profile
-  content. Do not build. §6 has the reasoning.
-- Priming **whole containers** ("prime this entire character") rather than individual sounds.
-- Timing offsets ("fireball 0 ms, frostbite 250 ms") — a sequencing feature, much bigger than priming, and
-  one-shot priming does not need it.
-- Primed sounds surviving a trigger (that is sticky priming, which is **not** what was asked for).
-- Priming from the **hotkey picker** — a hotkey fires the primed set (§5) but you cannot prime *from* a hotkey.
-- Undo for a mis-prime (the "clear all" affordance in §2 is the v1 answer).
+| Original claim | Reality as built |
+|---|---|
+| §7 "continue from `P1`" | `P1`–`P16` were taken by volume; priming is **P17**. |
+| §2 pseudo-code resolved each id with a per-call `findSoundById` | Built as one `soundById` `useMemo` Map over `allSoundContainers()`. |
+| §2/§8 "capture and clear before await" | Correct, and the reason it must be a **ref** — state alone still double-fired (see §3.1). |
+| §3 "~450–500ms hold" | Built at **500ms**; move-cancel at **10px** as specified. |
+| §3 "hide the affordance in edit mode" | Both gestures early-return in `editMode`; the mutation helper `togglePrime` also guards. |
+| §2 "hold on the slider" conflict | **Moot as built** — the volume slider is a *sibling* of the card (settled by per-sound volume), so it neither primes nor plays. |
+| §2 "consider refusing to prime a looping sound" | **Allowed, no special-casing.** The card's existing loop badge still shows; `randomPlay` also gets a fresh variant per trigger, left alone. |
+| §3 "right-click toggles once" / double-fire trap | Guarded by the `button !== 0` check in `armPrimeHold`; asserted by `P18`. |
+
+---
+
+## 6. Harness / test-fixture traps met this session (they cost real time)
+
+These are **test** problems, recorded because they will recur:
+
+1. **Headed Edge drops injected input while the window is occluded.** A background/minimized Edge window receives
+   **no DOM events at all** from `Input.dispatchMouseEvent`, and `document.hasFocus()` still returns `true`, so it
+   looks like the app ignoring clicks. Fix in `e2e-full.mjs`: `cdpInput()` calls `Page.bringToFront` before every
+   mouse event (44 call sites). **Headless is unaffected** — Phase A passed either way.
+2. **`element.click()` is not a user gesture.** web refuses autoplay, `play()` rejects, and `cleanupAudio` removes
+   the element from `audioElementsRef` — after which a liveness assertion reads 0 for the wrong reason. Use
+   `Input.dispatchMouseEvent` for anything playback-dependent.
+3. **The shared seed clip (`Longbow_4.mp3`) is under a second long.** A non-looping trigger fires `ended` →
+   `cleanupAudio` and unregisters before a later stop assertion, so `P27` uses **dedicated `loop: true`** sounds
+   (`p27_a/b/c`) that never end on their own.
+4. **Desktop has no "Groups" tab.** Each group is a tab of its own (`selectGroup`, App.jsx ~5562). Group tab
+   buttons also **prefix the group's initial letter** when it has no icon, so their text reads `"TTavern Pack"` —
+   `__pick()` matches on an exact text, then a **suffix**, then a title.
+5. The Windows phase runs against real user data; both runners snapshot/restore `localStorage` around the suite,
+   so a priming test cannot leave anything behind (and priming is session state anyway).
+
+---
+
+## 7. Verification checklist (original §8, as resolved)
+
+- [x] Prime Fireball + Frostbite, then Lay on Hands — all three play (**P23**).
+- [x] The primed set is consumed — no residue (**P23c**, **P24**).
+- [x] Rapid double trigger does not double-fire (capture-and-clear-before-await, via the ref) — **P25**.
+- [x] A primed sound plays once per trigger; pressing a primed sound does not double it — **P26**.
+- [x] Un-priming (second gesture) removes it — **P19**.
+- [x] Right-click toggles once — no double-fire from the hold timer — **P18**.
+- [x] Press-and-hold primes; moving/scrolling cancels it; it does not fire in edit mode — **P20**, **P21**, **P22**.
+- [x] The native context menu never appears on a card — **P30**.
+- [x] Every reload-surviving container shape works — **P32** (environment category), **P33** (group category),
+      **P34** (group character). See §4 re the vestigial `groups[].sounds`.
+- [x] Stopping a multi-primed trigger stops all the sounds it started; `stopAllSounds` unaffected — **P27**.
+- [x] A primed sound that does not resolve does not break the primary — **P28**.
+- [x] Primed state does not survive a reload — **P31b**.
+- [x] No `localStorage` key was added for priming — **P31a**.
+- [x] `npx eslint .` 0 errors; `npx vite build` succeeds.
+- [x] E2E web (172) + Windows (171, 1 pre-existing warn) pass.
+- [x] ✅ **A real press-and-hold on a device** (`Input.dispatchTouchEvent`, not `dispatchMouseEvent`) — **done
+      2026-10-10**: `e2e-mobile.mjs` Suite Q (**Q1–Q14**) drives the touch hold on the Pixel_7 emulator. Android
+      **105 PASS / 0 FAIL / 0 WARN**. See §4b.
+
+---
+
+## 8. Open gaps / deferred
+
+- ✅ **Android touch hold is now covered** (2026-10-10): `e2e-mobile.mjs` Suite Q drives priming with
+  `Input.dispatchTouchEvent` (hold, hold+move-cancel, edit-mode, consumption, clear, reload persistence, and the
+  three reload-surviving container shapes). Android **105 PASS / 0 FAIL / 0 WARN**. ⚠️ It is the emulator's
+  WebView touch pipeline, **not a physical device**, and `dispatchMouseEvent` still would not exercise it.
+  ⚠️ move/copy and per-sound volume remain **unported** to the mobile suite (same gap).
+- ✅ **Hand-tested by the user** (2026-10-10): "from the brief test it seems to be working fine".
+- ❌ **Saved named layers (Model B)** — rejected by the user 2026-10-06; priming is one-shot and not profile
+  content. **Do not build, and do not add a `localStorage` key** — the absence is deliberate and asserted.
+- Priming **whole containers**, timing offsets, sticky priming, priming *from* a hotkey picker, and undo for a
+  mis-prime are all still out of scope; the clear-all button is the v1 answer for mis-primes.
+- `HOTKEYS_SPEC.md` §5: when hotkeys are built, a hotkey **must** fire the primed set through `playWithPrimes` —
+  two triggers with different semantics is the thing to avoid.

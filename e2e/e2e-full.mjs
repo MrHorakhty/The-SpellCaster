@@ -3,10 +3,38 @@
 // (playback/fade/volume/loop). This file covers: sound-card UI indicators,
 // edit-mode per-card controls, sound add/edit/delete, character/category/group CRUD,
 // drag-to-reorder, settings/themes/image, split-view CRUD, empty states, keyboard.
+//
+// Ten suites are SHARED specs in ./specs, run from here AND from e2e-mobile.mjs:
+//   volume         P1-P16   per-sound volume + persistence
+//   indicators     U1-U7    card indicators
+//   sliders        B1-B4    box-size slider + reload persistence
+//   soundIntoGroup H1-H2    adding a sound into a group category
+//   dragReorder    X1-X2    drag-to-reorder
+//   refcount       G1-G5    file-reference guard on container deletion
+//   platformGate   W1-W6    the isMobile gate picks the right chrome
+//   scroll         R1-R10   single-view scroll containment
+//   playback       Z1-Z10   live playback: fade, live master, loop, Stop All
+// Shared CDP/report/seed/page plumbing lives in ./lib, the platform divergence
+// (gestures, edit-mode toggle, navigation, file upload) is absorbed by
+// ./lib/driver.mjs and the ctx helpers below.
 // Env: CDP_PORT, LABEL, SAVE_RESTORE ('1'), EXPECT_TAURI ('1')
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { connect, sleep } from './lib/cdp.mjs';
+import { createReport } from './lib/report.mjs';
+import { CAPTURE_LS, INSTRUMENT_AUDIO, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
+import { makeDriver } from './lib/driver.mjs';
+import { runSpecs } from './lib/spec-runner.mjs';
+import { volume } from './specs/volume.mjs';
+import { indicators } from './specs/indicators.mjs';
+import { sliders } from './specs/sliders.mjs';
+import { soundIntoGroup } from './specs/soundintogroup.mjs';
+import { dragReorder } from './specs/drag.mjs';
+import { refcount } from './specs/refcount.mjs';
+import { platformGate } from './specs/platform.mjs';
+import { scroll } from './specs/scroll.mjs';
+import { playback } from './specs/playback.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9333;
 const LABEL = process.env.LABEL || 'FULL';
@@ -35,112 +63,31 @@ const PNG = join(dirname(fileURLToPath(import.meta.url)), '_e2e_pixel.png');
   writeFileSync(WAV, buf);
 })();
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-let seq = 0;
-const pending = new Map();
-
 async function main() {
-  let page;
-  for (let i = 0; i < 120; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json`);
-      const targets = await res.json();
-      page = targets?.find(t => t.type === 'page' && (t.url || '').startsWith('http'));
-      if (page) break;
-    } catch (e) {}
-    await sleep(500);
-  }
-  if (!page) { console.error(`[${LABEL}] NO APP PAGE on :${DEBUG_PORT}`); process.exit(1); }
-  console.log(`[${LABEL}] page: ${page.url}`);
+  const { cdp, cdpInput, evalJs, close } = await connect({ port: DEBUG_PORT, label: LABEL, fatalExit: 3 });
+  const driver = makeDriver({ platform: 'desktop', cdp, cdpInput, evalJs, sleep });
 
-  const ws = new WebSocket(page.webSocketDebuggerUrl);
-  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
-  ws.onmessage = ev => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-  };
-  const cdp = (method, params = {}) => new Promise(resolve => {
-    const id = ++seq;
-    pending.set(id, resolve);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-  const evalJs = async (expression) => {
-    const r = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (r.result?.exceptionDetails) return { __error: r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text };
-    return r.result?.result?.value;
-  };
-
-  await cdp('Runtime.enable');
-  await cdp('Page.enable');
-  await cdp('DOM.enable');
-
-  const allResults = [];
-  let pass = 0, fail = 0, warn = 0;
-  const log = (cat, name, status, detail) => {
-    const line = `[${cat}] ${status} ${name}: ${detail || ''}`;
-    allResults.push(line);
-    console.log(line);
-    if (status === 'PASS') pass++; else if (status === 'FAIL') fail++; else warn++;
-  };
-  const run = async (cat, name, fn) => {
-    const res = await fn();
-    if (res && res.__error) log(cat, name, 'FAIL', res.__error);
-    return res;
-  };
+  const report = createReport(LABEL, 'FULL E2E SUMMARY');
+  const { log, run } = report;
 
   let capturedLS = null;
   if (SAVE_RESTORE) {
-    const cap = await evalJs(`(() => { const o = {}; for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); o[k]=localStorage.getItem(k);} return JSON.stringify(o); })()`);
+    const cap = await evalJs(CAPTURE_LS);
     if (cap && cap.length < 3000000) { capturedLS = JSON.parse(cap); console.log(`[${LABEL}] captured ${Object.keys(capturedLS).length} localStorage keys`); }
     else console.log(`[${LABEL}] WARNING: localStorage capture too large / failed (${(cap||'').length}b) — no restore`);
   }
 
   // Seed: small, deterministic, rich fixtures
-  await evalJs(`(() => {
-    const snd = (id,name,type,color,opts) => ({ id, name, type, icon:'Icon.png', files:[{name:name.toLowerCase().replace(/\\s+/g,'_')+'.mp3', displayName:name+'.mp3'}], color, duration:0, randomPlay:false, ...opts });
-    localStorage.setItem('ttrpg_characters', JSON.stringify([
-      { id:'c1', name:'Human Paladin', sounds:[
-        snd('s1','Smite','Holy','#ff0000',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:true, glowProminence:0.7, files:[{name:'smite.mp3',displayName:'Smite.mp3'}]}),
-        snd('s2','Shield Bash','Melee','#3b82f6',{loop:false, randomPlay:true, files:[{name:'shield1.mp3',displayName:'Shield1.mp3'},{name:'shield2.mp3',displayName:'Shield2.mp3'}]}),
-        snd('s3','Healing Light','Magic','#22c55e',{loop:true, fadeIn:1.5, files:[{name:'heal.mp3',displayName:'Heal.mp3'}]})
-      ]},
-      { id:'c2', name:'Elf Sorcerer', sounds:[] }
-    ]));
-    localStorage.setItem('ttrpg_environment', JSON.stringify([
-      { id:'e1', category:'Dungeon', sounds:[snd('e1s1','Dripping','Ambient','#84cc16',{loop:true, files:[{name:'drip.mp3',displayName:'Drip.mp3'}]})] },
-      { id:'e2', category:'Forest', sounds:[] }
-    ]));
-    localStorage.setItem('ttrpg_groups', JSON.stringify([
-      { id:'g1', name:'Tavern Pack', mode:'environment', categories:[{id:'gc1', category:'Ambience', sounds:[snd('gs1','Tavern Song','Music','#d97706',{loop:true, files:[{name:'tavern.mp3',displayName:'Tavern.mp3'}]})]}], characters:[] },
-      { id:'g2', name:'Hero Pack', mode:'characters', categories:[], characters:[{id:'gch1', name:'Fighter', sounds:[]}] }
-    ]));
-    localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-    localStorage.setItem('ttrpg_data_version', '3');
-    localStorage.removeItem('backgroundSettings');
-    localStorage.removeItem('boxSize');
-    for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
-    return 'seeded';
-  })();`);
+  await evalJs(SEED);
   console.log(`[${LABEL}] SEED applied`);
   await cdp('Page.reload', { ignoreCache: true });
   await sleep(3500);
 
   // Instrument playback for any audio checks in this suite
-  await run('PLAY', 'D0: instrument audio', () => evalJs(`(() => {
-    window.__e2eAudio = [];
-    const op = HTMLMediaElement.prototype.play;
-    HTMLMediaElement.prototype.play = function(...a){ window.__e2eAudio.push(this); return op.apply(this, a); };
-    return 'instrumented';
-  })()`));
+  await run('PLAY', 'D0: instrument audio', () => evalJs(INSTRUMENT_AUDIO));
 
   // Set up page-level helpers
-  await run('NAV', 'helpers', () => evalJs(`(() => {
-    window.__clickText = (t) => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===t); if(!b) return 'NO:'+t; b.click(); return 'OK'; };
-    window.__findText = (t) => [...document.querySelectorAll('button')].find(x=>x.textContent.trim()===t);
-    window.__setInput = (name, val) => { const el=document.querySelector('input[name="'+name+'"]'); if(!el) return 'NO:'+name; const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; s.call(el, val); el.dispatchEvent(new Event('input',{bubbles:true})); return 'OK'; };
-    window.__uploadFile = (sel, path) => (async () => { const doc=await (globalThis.__cdp||{}).eval?null:null; return 'need cdp'; })();
-    return 'ok';
-  })()`));
+  await run('NAV', 'helpers', () => evalJs(PAGE_HELPERS));
 
   // Helper: upload WAV via CDP
   async function uploadWav() {
@@ -155,13 +102,7 @@ async function main() {
 
   // Helper: submit modal (bg-lime-600 submit button with given text)
   async function submitModal(btnText) {
-    return evalJs(`(() => {
-      const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='${btnText}' && x.type==='submit' && /bg-lime-600/.test(x.className));
-      if(!b) return 'NO_SUBMIT:${btnText}';
-      if(b.disabled) return 'DISABLED';
-      b.click();
-      return 'OK';
-    })()`);
+    return evalJs(submitModalExpr(btnText));
   }
 
   // Helper: click toggle button (e.g. glow)
@@ -180,13 +121,58 @@ async function main() {
 
   // Helper: click Edit Mode toggle (desktop sidebar button)
   async function toggleEditMode(on) {
-    const state = await evalJs(`!!document.querySelector('button[title="Toggle Edit Mode"]')?.className?.match(/lime|lime-600|bg-lime/)`);
-    if (state === on) return;
-    await evalJs(`document.querySelector('button[title="Toggle Edit Mode"]')?.click()`);
-    await sleep(400);
+    if (on) await driver.enterEditMode(); else await driver.exitEditMode();
   }
 
   async function waitForReload(ms = 3500) { await sleep(ms); }
+
+  // Context handed to shared specs (e2e/specs/*). reload() re-seeds the DOM:
+  // the page wipes window helpers on every load, so specs re-inject what they
+  // need themselves. The navigation/action helpers absorb the desktop layout:
+  // the sidebar shows every container at once, so "go to a board" is a click on
+  // a sidebar leaf and there is no drawer to open.
+  const ctx = {
+    label: LABEL,
+    log, run,
+    evalJs,
+    sleep,
+    driver,
+    isTauri: EXPECT_TAURI,
+    submitModal: (t) => evalJs(submitModalExpr(t)),
+    upload: () => uploadWav(),
+    closeDrawer: async () => {},
+    navigateTo: async (text) => {
+      const r = await evalJs(`(() => {
+        const bs = [...document.querySelectorAll('button')];
+        const b = bs.find(x => x.textContent.trim() === '${text}') || bs.find(x => x.textContent.trim().endsWith('${text}') && !x.title);
+        if (!b) return 'NO_BUTTON:${text}';
+        b.click(); return 'OK';
+      })()`);
+      await sleep(400);
+      return r;
+    },
+    clickModalOpener: async (label) => evalJs(`(() => {
+      const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '${label}');
+      if (!b) return 'NO_BUTTON:${label}';
+      b.click(); return 'OK';
+    })()`),
+    deleteCharacter: async (name) => {
+      const r = await evalJs(`(() => {
+        const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '${name}');
+        if (!b) return 'NO_BUTTON:${name}';
+        const container = b.closest('[class*="bg-dark-800"]');
+        if (!container) return 'NO_CONTAINER';
+        const del = container.querySelector('button[title*="Delete Character"], button[title*="Delete character"]');
+        if (!del) return 'NO_DELETE_BUTTON';
+        del.click(); return 'OK';
+      })()`);
+      await sleep(500);
+      await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
+      await sleep(1000);
+      return r;
+    },
+    reload: async () => { await cdp('Page.reload', { ignoreCache: true }); await sleep(3500); }
+  };
 
   // ================================================================
   //  S: STRUCTURE / SEED INTEGRITY
@@ -216,34 +202,11 @@ async function main() {
   if (suiteS?.__error) log('SEED','Suite S','FAIL',suiteS.__error); else for (const r of suiteS) log(r.cat,r.n,r.s,r.d);
 
   // ================================================================
-  //  U: SOUND CARD UI INDICATORS
+  //  U: CARD INDICATORS (moved to the shared-spec block below)
   // ================================================================
-  console.log(`\n[${LABEL}] === SUITE U: CARD INDICATORS ===`);
-  const suiteU = await evalJs(`(() => {
-    const r = [];
-    const log = (cat,n,s,d) => r.push({cat,n,s,d:d||''});
-    const cards = [...document.querySelectorAll('[data-sound-card]')];
-    const smite = cards.find(c => c.textContent.includes('Smite'));
-    const shield = cards.find(c => c.textContent.includes('Shield Bash'));
-    log('INDICATOR','U1: Smite card found',smite?'PASS':'FAIL');
-    log('INDICATOR','U2: Shield Bash card found',shield?'PASS':'FAIL');
-    if(smite) {
-      const loopIcon = smite.querySelector('button[title="Looping enabled"], [title="Looping enabled"]');
-      log('INDICATOR','U3: Smite loop icon title',loopIcon?'PASS':'FAIL',loopIcon?.getAttribute('title'));
-      const glow = smite.style.boxShadow && smite.style.boxShadow !== 'none' && smite.style.boxShadow !== '';
-      log('INDICATOR','U4: Smite glow boxShadow',glow?'PASS':'FAIL',smite.style.boxShadow?.slice(0,40));
-    }
-    if(shield) {
-      const shuffle = shield.querySelector('[title*="files available"]');
-      log('INDICATOR','U5: Shield multi-file icon',!!shuffle?'PASS':'FAIL',shuffle?.getAttribute('title'));
-    }
-    const cardsWithRole = cards.filter(c => c.getAttribute('role') === 'button');
-    log('INDICATOR','U6: all cards role=button',cardsWithRole.length === cards.length ? 'PASS' : 'FAIL', cardsWithRole.length+'/'+cards.length);
-    const loopIconCount = cards.filter(c => c.querySelector('[title="Looping enabled"]')).length;
-    log('INDICATOR','U7: loop icons count (2 expected)', loopIconCount === 2 ? 'PASS' : 'FAIL', 'count='+loopIconCount);
-    return r;
-  })()`);
-  if (suiteU?.__error) log('INDICATOR','Suite U','FAIL',suiteU.__error); else for (const r of suiteU) log(r.cat,r.n,r.s,r.d);
+  // Suite M below is NOT self-contained - it reads the board the inline suites
+  // leave behind - so every shared spec (each of which seeds and reloads) runs
+  // after it, together, at the end. See the block after Suite Y.
 
   // ================================================================
   //  E: EDIT MODE + PER-CARD CONTROLS
@@ -598,109 +561,9 @@ async function main() {
   // ================================================================
   //  H: ADD SOUND INTO GROUP (real upload to existing Tavern Pack)
   // ================================================================
-  console.log(`\n[${LABEL}] === SUITE H: SOUND INTO GROUP ===`);
-  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('Tavern Pack') && !b.title)?.click()`);
-  await sleep(400);
-  await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Ambience')?.click()`);
-  await sleep(400);
-  await toggleEditMode(true);
-  const grpAddSoundOpen = await evalJs(`window.__clickText('Add Sound')`);
-  await sleep(700);
-  if (grpAddSoundOpen === 'OK') {
-    await evalJs(`window.__setInput('name','Tavern Echo')`);
-    const grpUp = await uploadWav();
-    log('GRP','H1: WAV uploaded to group',grpUp?'PASS':'FAIL');
-    await sleep(700);
-    await submitModal('Add Sound');
-    await sleep(1200);
-  }
-  const grpSoundAdded = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]').find(x=>x.name==='Tavern Pack');
-    const cat=g?.categories?.find(c=>c.category==='Ambience');
-    return cat?.sounds?.some(s=>s.name==='Tavern Echo');
-  })()`);
-  log('GRP','H2: group sound persisted',grpSoundAdded===true?'PASS':'FAIL');
-  await toggleEditMode(false);
-
-  // ================================================================
-  //  X: DRAG-TO-REORDER (pointer events on sound cards)
-  // ================================================================
-  console.log(`\n[${LABEL}] === SUITE X: DRAG REORDER ===`);
-  // Reload to return to the default Paladin view (earlier suites may have
-  // navigated into groups/split), then re-enter edit mode.
-  await cdp('Page.reload', { ignoreCache: true });
-  await waitForReload();
-  await toggleEditMode(true);
-  const orderBefore = await evalJs(`(() => {
-    const chars = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    const pal = chars.find(c=>c.name==='Human Paladin');
-    return pal?.sounds?.map(s=>s.name) || [];
-  })()`);
-  log('DRAG','X1: order before drag',orderBefore?.length===4?'PASS':'FAIL',JSON.stringify(orderBefore));
-  // Move the last card to the first position
-  const dragCoords = await evalJs(`(() => {
-    const cards = [...document.querySelectorAll('[data-sound-card]')];
-    if (cards.length < 2) return 'NO_CARDS:'+cards.length;
-    const src = cards[cards.length-1]?.getBoundingClientRect();
-    const tgt = cards[0]?.getBoundingClientRect();
-    if (!src || !tgt) return 'NO_RECTS';
-    return { sx: Math.round(src.x + src.width/2), sy: Math.round(src.y + src.height/2), tx: Math.round(tgt.x + tgt.width/2), ty: Math.round(tgt.y + tgt.height/2) };
-  })()`);
-  if (dragCoords?.sx) {
-    // Simulate drag: mousePressed → mouseMoved (5 steps) → mouseReleased
-    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: dragCoords.sx, y: dragCoords.sy, button: 'left', clickCount: 1 });
-    await sleep(50);
-    const steps = 5;
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      const mx = Math.round(dragCoords.sx + (dragCoords.tx - dragCoords.sx) * t);
-      const my = Math.round(dragCoords.sy + (dragCoords.ty - dragCoords.sy) * t);
-      await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mx, y: my, button: 'left' });
-      await sleep(30);
-    }
-    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragCoords.tx, y: dragCoords.ty, button: 'left', clickCount: 0 });
-    await sleep(500);
-    const orderAfter = await evalJs(`(() => {
-      const chars = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-      const pal = chars.find(c=>c.name==='Human Paladin');
-      return pal?.sounds?.map(s=>s.name) || [];
-    })()`);
-    const reordered = orderAfter?.[0] === 'Divine Light' || JSON.stringify(orderAfter) !== JSON.stringify(orderBefore);
-    log('DRAG','X2: order changed',reordered?'PASS':'FAIL','before='+JSON.stringify(orderBefore)+' after='+JSON.stringify(orderAfter));
-  } else {
-    log('DRAG','X2: drag skipped',String(dragCoords));
-  }
-  await toggleEditMode(false);
-
-  // ================================================================
-  //  B: BOX-SIZE + VOLUME + PERSISTENCE ACROSS RELOAD
-  // ================================================================
-  console.log(`\n[${LABEL}] === SUITE B: SLIDERS & PERSISTENCE ===`);
-  const sliderSet = await evalJs(`(() => {
-    const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
-    const size = [...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0.5');
-    const vol = [...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0');
-    if(size) { nativeSet.call(size,'1.8'); size.dispatchEvent(new Event('input',{bubbles:true})); size.dispatchEvent(new Event('change',{bubbles:true})); }
-    return { sizeOk: size?.value === '1.8', volExists: !!vol };
-  })()`);
-  log('SLIDER','B1: box-size set to 1.8',sliderSet?.sizeOk?'PASS':'FAIL',JSON.stringify(sliderSet));
-  const boxWidth = await evalJs(`Math.round(document.querySelector('[data-sound-card]')?.getBoundingClientRect().width || 0)`);
-  log('SLIDER','B2: card width ~252px',boxWidth >= 248 && boxWidth <= 260 ? 'PASS' : 'FAIL',boxWidth+'px');
-  const boxSizePersisted = await evalJs(`localStorage.getItem('boxSize')`);
-  log('SLIDER','B3: boxSize persisted',boxSizePersisted==='1.8'?'PASS':'FAIL',boxSizePersisted);
-
-  // Reload → box-size preserved
-  await cdp('Page.reload', { ignoreCache: true });
-  await waitForReload();
-  const afterReload = await evalJs(`(() => {
-    const size = [...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0.5');
-    return { size: size?.value, bs: localStorage.getItem('boxSize') };
-  })()`);
-  log('SLIDER','B4: box-size survives reload',afterReload?.size==='1.8'||afterReload?.bs==='1.8'?'PASS':'FAIL',JSON.stringify(afterReload));
-
-  // Reset box-size back to 1.0
-  await evalJs(`(() => { const s=[...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0.5'); if(s){ const n=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; n.call(s,'1'); s.dispatchEvent(new Event('input',{bubbles:true})); s.dispatchEvent(new Event('change',{bubbles:true})); }})()`);
-  await sleep(200);
+  //  H / X / B: shared specs - moved to the shared-spec block after Suite Y.
+  //  Suite M below depends on the board the inline suites leave behind, and each
+  //  of these specs seeds + reloads, so running them here would reset its input.
 
   // ================================================================
   //  T: THEMES + SETTINGS + IMAGE + ABOUT
@@ -805,6 +668,13 @@ async function main() {
   // ================================================================
   //  D: DELETE SOUND + CANCEL PATH
   // ================================================================
+  // Suite G (groups CRUD) and Suite T (settings) can leave the app navigated off
+  // the character board. Suites D and M below drive the per-card delete and the
+  // move/copy picker, which only exist on a sound board - so reset the view to
+  // the default Human Paladin board first. The reload re-renders from
+  // localStorage, so the fixture those suites read is untouched.
+  await cdp('Page.reload', { ignoreCache: true });
+  await waitForReload();
   console.log(`\n[${LABEL}] === SUITE D: DELETE SOUND + CANCEL ===`);
   await toggleEditMode(true);
   // Cancel path: try deleting Shield Bash, then Cancel
@@ -1265,64 +1135,96 @@ async function main() {
   log('A11Y','Y3: Enter keydown no crash',!kb?.err?'PASS':'FAIL',kb?.err);
 
   // ================================================================
-  //  P: PER-SOUND VOLUME
+  //  SHARED SPECS: W / R / U / H / X / B (also run from e2e-mobile.mjs)
   // ================================================================
-  // Seeds one sound with an explicit 0.5 trim and one with NO `volume` field at
-  // all (absent === 100%), because the two interesting failures are "the trim is
-  // ignored" and "`|| 1` revived a deliberately muted sound".
-  // Both are loop:true and point at a REAL bundled asset, on purpose. An earlier
-  // version used a hand-written data: WAV of a few milliseconds of silence: it
-  // reported no usable duration, so the loop never engaged, `ended` fired
-  // immediately and cleanupAudio unregistered the element - at which point
-  // updateMasterVolume no longer rescales it and the live-rescale assertions
-  // below silently passed or failed for the wrong reason. A real multi-second mp3
-  // with loop:true stays registered, so that path is genuinely exercised.
-  // No `storedName` => classified as bundled and resolved from /assets.
-  console.log(`\n[${LABEL}] === SUITE P: PER-SOUND VOLUME ===`);
+  // These run together, after every inline suite, because Suite M is the one
+  // order-dependent suite in this file (it reads the board the inline suites
+  // leave behind) and each shared spec starts by seeding + reloading its own
+  // fixture. The P/Q specs below and the refcount spec after them are all
+  // self-contained, so this block does not disturb them.
+  //
+  // W (platform gate) leads deliberately: it asserts the app is at rest — no
+  // drawer open, the right navigation chrome for this phase — and every other
+  // spec in this block seeds and reloads on top of it.
+  await runSpecs(ctx, [platformGate]);
+  // R seeds 60 sounds and reloads. It is here rather than early precisely
+  // because that seed would destroy the board the inline suites still need.
+  await runSpecs(ctx, [scroll]);
+  await runSpecs(ctx, [indicators]);
+  await runSpecs(ctx, [soundIntoGroup]);
+  await runSpecs(ctx, [dragReorder]);
+  await runSpecs(ctx, [sliders]);
+
+  // ================================================================
+  //  P: PER-SOUND VOLUME (shared spec - see e2e/specs/volume.mjs)
+  // ================================================================
+  await runSpecs(ctx, [volume]);
+  // ================================================================
+  //  Q: SOUND PRIMING
+  // ================================================================
+  // Ids continue the P series at P17 (P1-P16 were per-sound volume).
+  console.log(`\n[${LABEL}] === SUITE Q: SOUND PRIMING (P17+) ===`);
+  // One-shot priming: nothing is persisted, so this re-seeds and reloads, and
+  // every assertion below is made against freshly-primed state.
   await evalJs(`(() => {
+    const mk = (id,name,extra) => Object.assign({
+      id, name, type:'Test', icon:'',
+      files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
+      color:'#ff0000', duration:5, fadeIn:0, fadeOut:0, loop:false, randomPlay:false,
+      brightness:1
+    }, extra||{});
     localStorage.setItem('ttrpg_characters', JSON.stringify([{
       id:'c1', name:'Human Paladin', sounds:[
-        { id:'vol_half', name:'Half Volume', type:'Test', icon:'',
-          files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
-          color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:true, randomPlay:false,
-          brightness:1, volume:0.5 },
-        { id:'vol_none', name:'No Field', type:'Test', icon:'',
-          files:[{name:'Frostbite_3.mp3', displayName:'Frostbite_3.mp3'}],
-          color:'#00ff00', duration:0, fadeIn:0, fadeOut:0, loop:true, randomPlay:false,
-          brightness:1 }
+        mk('p_fire','Fireball'),
+        mk('p_frost','Frostbite'),
+        mk('p_lay','Lay on Hands'),
+        mk('p_cure','Cure Wounds'),
+        // P27 only: these loop, so they never fire 'ended' on their own. The
+        // shared seed clip is well under a second long, so a non-looping trigger
+        // unregistered itself before the stop assertion could run - the button
+        // was gone for timing reasons, not because stopping was broken.
+        mk('p27_a','Stop Test A',{ loop:true }),
+        mk('p27_b','Stop Test B',{ loop:true }),
+        mk('p27_c','Stop Test C',{ loop:true }),
+        // A reference that resolves to nothing. Priming it must not break the
+        // primary trigger (the "primed sound with no resolvable file" case).
+        mk('p_broken','Broken Ref',{ files:[{name:'gone.mp3', displayName:'Gone.mp3', storedName:'nonexistent_zzz.mp3'}] })
       ]
     }]));
-    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
+    localStorage.setItem('ttrpg_environment', JSON.stringify([
+      { id:'e1', category:'Dungeon', sounds:[ mk('pe_trig','Echo Trigger'), mk('pe_prime','Dungeon Prime') ] },
+      { id:'e2', category:'Forest', sounds:[] }
+    ]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([
+      { id:'g1', name:'Tavern Pack', mode:'environment',
+        categories:[{id:'gc1', category:'Ambience', sounds:[ mk('pg_trig','Hearth'), mk('pg_prime','Tavern Prime') ]}],
+        characters:[] },
+      { id:'g2', name:'Hero Pack', mode:'characters', categories:[],
+        characters:[{id:'gch1', name:'Fighter', sounds:[ mk('pch_trig','Sword Draw'), mk('pch_prime','Battle Cry') ]}] }
+    ]));
     localStorage.setItem('ttrpg_data_version', '3');
-    // No sound_file_* keys: both sounds are bundled assets resolved from /assets.
+    for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
     return 'seeded';
   })()`);
   await cdp('Page.reload', { ignoreCache: true });
   await sleep(3000);
 
-  // Helpers are re-installed after every reload, since the page wipes them.
-  const installVolHelpers = `(() => {
-    // React tracks the range's value on the DOM node, so setting .value directly
-    // is not seen; go through the native setter and fire a bubbling input event.
-    window.__setRange = (el, v) => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      setter.call(el, String(v));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+  const installPrimeHelpers = `(() => {
+    window.__card = (id) => document.querySelector('[data-sound-card][data-sound-id="' + id + '"]');
+    window.__cardCoords = (id) => {
+      const c = window.__card(id);
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+      // Coords are cached by several tests and reused after other cards have
+      // been measured, so never scroll here - a scroll would invalidate every
+      // cached pair. Just report a card that is not actually in the viewport,
+      // because CDP input is viewport-relative and would silently miss it.
+      return { x, y, offscreen: (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) };
     };
-    window.__volSlider = (name) => {
-      const card = [...document.querySelectorAll('[data-sound-card]')].find(c => c.textContent.includes(name));
-      if (!card) return null;
-      return document.querySelector('[data-sound-volume="' + card.dataset.soundId + '"]');
-    };
-    window.__commitVol = (name, v) => {
-      const s = window.__volSlider(name);
-      if (!s) return 'NO_SLIDER';
-      window.__setRange(s, v);
-      s.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-      return s.value;
-    };
-    // Capture every Audio the app constructs so playback internals are assertable.
+    window.__primedIds = () => [...document.querySelectorAll('[data-sound-card][data-primed]')].map(c => c.dataset.soundId);
+    window.__firedIds = () => [...document.querySelectorAll('[data-sound-card][data-fired]')].map(c => c.dataset.soundId);
+    window.__audios = window.__audios || [];
     window.__hookAudio = () => {
       if (window.__origAudio) return 'already';
       window.__audios = [];
@@ -1331,457 +1233,368 @@ async function main() {
       window.Audio.prototype = window.__origAudio.prototype;
       return 'hooked';
     };
-    window.__playCard = (id) => {
-      const c = document.querySelector('[data-sound-card][data-sound-id="' + id + '"]');
-      if (!c) return 'NO_CARD';
-      c.click();
-      return 'OK';
+    // Audios created since marker __n.
+    window.__since = (n) => (window.__audios||[]).slice(n);
+    window.__mark = () => (window.__audios||[]).length;
+    window.__idsOf = (els) => els.map(e => e._soundId);
+    window.__clearBtn = () => {
+      const b = [...document.querySelectorAll('button')].find(x => (x.title||'').startsWith('Clear '));
+      return b ? b.title : 'NO_BTN';
     };
+    window.__playCard = (id) => { const c = window.__card(id); if (!c) return 'NO_CARD'; c.click(); return 'OK'; };
+    // Click a control by its visible text, falling back to its title. Note there
+    // is NO 'Groups' tab on desktop: every group is a tab of its own
+    // (App.jsx:5559) and clicking it calls selectGroup. Those buttons also
+    // prefix the group's initial letter when the group has no icon, so their
+    // text reads "TTavern Pack" - match on a suffix too.
+    window.__pick = (name) => {
+      const all = [...document.querySelectorAll('button')];
+      const byText = all.find(x => x.textContent.trim() === name);
+      if (byText) { byText.click(); return 'OK_TEXT'; }
+      const bySuffix = all.find(x => x.textContent.trim().endsWith(name));
+      if (bySuffix) { bySuffix.click(); return 'OK_SUFFIX:' + bySuffix.textContent.trim(); }
+      const byTitle = all.find(x => x.title === name);
+      if (byTitle) { byTitle.click(); return 'OK_TITLE'; }
+      return 'NO_ITEM:' + name + ' | have: ' + JSON.stringify(
+        all.filter(x => x.textContent.trim().length > 0 && x.textContent.trim().length < 20)
+           .map(x => x.textContent.trim()).slice(0, 25));
+    };
+    // Report every visible control name - used when navigation fails, so the
+    // failure message tells you what the page actually offered.
+    window.__pickList = () => JSON.stringify([...document.querySelectorAll('button')]
+      .map(x => x.title || x.textContent.trim())
+      .filter(t => t && t.length > 0 && t.length < 24).slice(0, 40));
     return 'ok';
   })()`;
-  await evalJs(installVolHelpers);
-
-  // P1-P3: the control exists on every card, sits OUTSIDE the role="button" card
-  // (so dragging it cannot play the sound and it is not a nested interactive
-  // control inside a button role), and defaults to 100% when the field is absent.
-  const p1 = await evalJs(`(() => {
-    const cards = [...document.querySelectorAll('[data-sound-card]')];
-    const sliders = [...document.querySelectorAll('[data-sound-volume]')];
-    return {
-      cards: cards.length,
-      sliders: sliders.length,
-      nested: sliders.filter(s => s.closest('[data-sound-card]')).length,
-      outside: sliders.length > 0 && sliders.every(s => !s.closest('[data-sound-card]')),
-      values: sliders.map(s => s.value),
-      aria: sliders.map(s => s.getAttribute('aria-label'))
-    };
-  })()`);
-  log('VOL','P1: every card exposes a volume slider',p1?.cards>0 && p1?.sliders===p1?.cards?'PASS':'FAIL',JSON.stringify(p1));
-  log('VOL','P2: slider is outside the role=button card',p1?.outside && p1?.nested===0?'PASS':'FAIL',`nested=${p1?.nested}`);
-  log('VOL','P3: absent volume field reads 100%',p1?.values?.includes('1')?'PASS':'FAIL',JSON.stringify(p1?.values));
-  log('VOL','P4: slider carries an aria-label',p1?.aria?.every(a=>!!a)?'PASS':'FAIL',JSON.stringify(p1?.aria));
-
-  // P5-P7: playback. Master starts at 1, so a 0.5 trim must yield 0.5.
+  await evalJs(installPrimeHelpers);
   await evalJs(`window.__hookAudio()`);
-  await evalJs(`window.__playCard('vol_half')`);
-  await sleep(1200);
-  const p5 = await evalJs(`(() => {
-    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
-    const a = els[els.length-1];
-    return a ? { trim:a._soundVolume, base:a._baseVolume, vol:a.volume } : null;
-  })()`);
-  log('VOL','P5: element records the sound own trim',p5?.trim===0.5?'PASS':'FAIL',JSON.stringify(p5));
-  log('VOL','P6: level is master x trim (1 x 0.5)',p5?.base===0.5 && p5?.vol===0.5?'PASS':'FAIL',JSON.stringify(p5));
 
-  // P7: a sound with no field at all plays at 100%.
-  await evalJs(`window.__playCard('vol_none')`);
-  await sleep(1000);
-  const p7 = await evalJs(`(() => {
-    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_none');
-    const a = els[els.length-1];
-    return a ? { trim:a._soundVolume, base:a._baseVolume, vol:a.volume } : null;
-  })()`);
-  log('VOL','P7: sound with no field plays at 100%',p7?.trim===1 && p7?.base===1?'PASS':'FAIL',JSON.stringify(p7));
-
-  // P8: master x trim is the audible product - master 0.4 with a 0.5 trim = 0.2.
-  await evalJs(`(() => {
-    const m = document.querySelector('input[type=range][title^="Volume:"]');
-    if (!m) return 'NO_MASTER';
-    window.__setRange(m, 0.4);
-    return 'OK';
-  })()`);
-  await sleep(400);
-  await evalJs(`window.__playCard('vol_half')`);
-  await sleep(1000);
-  const p8 = await evalJs(`(() => {
-    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
-    const a = els[els.length-1];
-    return a ? { base:a._baseVolume, vol:a.volume, trim:a._soundVolume } : null;
-  })()`);
-  log('VOL','P8: master 0.4 x trim 0.5 = 0.2',p8?.base===0.2 && p8?.vol===0.2?'PASS':'FAIL',JSON.stringify(p8));
-
-  // P9: the master path multiplies by each element's OWN trim, and keeps
-  // _baseVolume in step. Self-contained on purpose: it creates one fresh element
-  // and walks it through two master values. Only REGISTERED elements get
-  // rescaled, so the two-step below is self-discriminating - a fresh element
-  // created at master 1 starts at 0.5, so seeing it drop to 0.2 proves it was
-  // still registered when the master changed. The seeded sounds loop, so it is.
-  // The click is a real CDP mouse event, not element.click(): a synthetic click
-  // is not a user gesture, so autoplay is refused and play() rejects.
-  const halfCoords = await evalJs(`(() => {
-    const c = document.querySelector('[data-sound-card][data-sound-id="vol_half"]');
-    if (!c) return null;
-    const r = c.getBoundingClientRect();
-    return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
-  })()`);
-  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 1); return 'OK'; })()`);
+  // P17: right-click primes, exactly once. CDP Input events are trusted, so this
+  // is the real gesture (pointerdown with button 2 AND the contextmenu the
+  // browser synthesises) rather than two hand-rolled events.
+  const fireCoords = await evalJs(`window.__cardCoords('p_fire')`);
+  log('PRIME','P17-setup: card located',fireCoords?'PASS':'FAIL',JSON.stringify(fireCoords));
+  if (fireCoords) {
+    await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+    await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  }
   await sleep(300);
-  const before9 = await evalJs(`(() => {
-    window.__n9 = (window.__audios||[]).filter(x => x._soundId === 'vol_half').length;
-    return { n: window.__n9 };
-  })()`);
-  log('VOL','P9-setup: trusted click path available',halfCoords && before9?.n>=0?'PASS':'FAIL',JSON.stringify({coords:halfCoords,prior:before9}));
-  if (halfCoords) {
-    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: halfCoords.x, y: halfCoords.y, button: 'left', clickCount: 1 });
-    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: halfCoords.x, y: halfCoords.y, button: 'left', clickCount: 1 });
-  }
-  await sleep(250);
-  const fresh = await evalJs(`(() => {
-    const els = (window.__audios||[]).filter(x => x._soundId === 'vol_half');
-    if (els.length <= window.__n9) return null;
-    window.__p9el = els[els.length-1];
-    return { base: window.__p9el._baseVolume, vol: window.__p9el.volume, trim: window.__p9el._soundVolume };
-  })()`);
-  log('VOL','P9a: fresh element starts at master 1 x trim 0.5',fresh?.base===0.5 && fresh?.vol===0.5?'PASS':'FAIL',JSON.stringify(fresh));
-
-  // Master down to 0.4 -> the live element must become 0.2 (and _baseVolume too,
-  // because playSound reads it back at loop re-entry).
-  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 0.4); return 'OK'; })()`);
-  await sleep(250);
-  const p9down = await evalJs(`window.__p9el ? { base: window.__p9el._baseVolume, vol: window.__p9el.volume } : null`);
-  log('VOL','P9b: master 0.4 rescales the live element to 0.2',Math.abs((p9down?.vol ?? 0) - 0.2) < 0.001?'PASS':'FAIL',JSON.stringify(p9down));
-
-  // Back to 1 -> 0.5 again. A stale _baseVolume would leave the loop re-entry
-  // fading this sound to the level it started at.
-  await evalJs(`(() => { const m = document.querySelector('input[type=range][title^="Volume:"]'); window.__setRange(m, 1); return 'OK'; })()`);
-  await sleep(250);
-  const p9up = await evalJs(`window.__p9el ? { base: window.__p9el._baseVolume, vol: window.__p9el.volume } : null`);
-  log('VOL','P9c: master back to 1 restores 0.5',Math.abs((p9up?.vol ?? 0) - 0.5) < 0.001?'PASS':'FAIL',JSON.stringify(p9up));
-  log('VOL','P9d: _baseVolume tracks the master change (loop re-entry)',Math.abs((p9up?.base ?? 0) - 0.5) < 0.001?'PASS':'FAIL',JSON.stringify(p9up));
-
-  // P10-P12: persistence. 0 is the regression guard for the `||` trap: a muted
-  // sound must still be muted after the save/reload cycle.
-  const p10pre = await evalJs(`window.__commitVol('Half Volume', 0)`);
-  await sleep(600);
-  const p10stored = await evalJs(`(() => {
-    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    return c[0]?.sounds?.map(s => [s.id, s.volume]);
-  })()`);
-  log('VOL','P10: commit wrote 0 to storage',p10pre==='0' && JSON.stringify(p10stored)?.includes('["vol_half",0]')?'PASS':'FAIL',`slider=${p10pre} stored=${JSON.stringify(p10stored)}`);
-
-  await cdp('Page.reload', { ignoreCache: true });
-  await sleep(3000);
-  await evalJs(installVolHelpers);
-
-  const p11 = await evalJs(`(() => {
-    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    const s = window.__volSlider('Half Volume');
-    const none = window.__volSlider('No Field');
-    return {
-      stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
-      slider: s?.value,
-      noneSlider: none?.value,
-      version: localStorage.getItem('ttrpg_data_version'),
-      oldKeys: Object.keys(localStorage).filter(k=>k.endsWith('_old'))
-    };
-  })()`);
-  log('VOL','P11: 0 SURVIVES reload (the || trap)',p11?.stored===0 && p11?.slider==='0'?'PASS':'FAIL',JSON.stringify(p11));
-  log('VOL','P12: untouched sound still reads 100% after reload',p11?.noneSlider==='1'?'PASS':'FAIL',p11?.noneSlider);
-  log('VOL','P13: DATA_VERSION still 3, no *_old keys',p11?.version==='3' && p11?.oldKeys?.length===0?'PASS':'FAIL',JSON.stringify({v:p11?.version,old:p11?.oldKeys}));
-
-  // P14: the feature added no storage key. The sound's level rides INSIDE the
-  // existing sound objects, and the master volume stays session-only.
-  // `ttrpg_themes` is in the expected set because the suites themselves still
-  // seed it - the app has no such key (docs/session-history.md:979).
-  const p14 = await evalJs(`Object.keys(localStorage).filter(k => !k.startsWith('sound_file_')).sort()`);
-  const knownKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted'];
-  const unexpected = (p14||[]).filter(k => !knownKeys.includes(k));
-  const volumeKeys = (p14||[]).filter(k => /volume/i.test(k));
-  log('VOL','P14a: no new localStorage key added',unexpected.length===0?'PASS':'FAIL',JSON.stringify(unexpected));
-  log('VOL','P14b: no key holds volume (it rides the sound object)',volumeKeys.length===0?'PASS':'FAIL',JSON.stringify(volumeKeys));
-
-  // P15: the modal reads the same field, and writing it there updates the card.
-  await toggleEditMode(true);
-  await evalJs(`(() => {
-    const c=document.querySelector('[data-sound-card][data-sound-id="vol_half"]');
-    const b=c.parentElement?.querySelector('button[title="Edit Sound"]');
-    if (b) b.click();
-    return 'OK';
-  })()`);
-  await sleep(800);
-  const p15 = await evalJs(`(() => ({
-    range: document.querySelector('#soundVolumeRange')?.value,
-    number: document.querySelector('#soundVolumeNumber')?.value
+  const p17 = await evalJs(`(() => ({
+    primed: window.__primedIds(),
+    badge: !!document.querySelector('[data-prime-badge="p_fire"]'),
+    overlay: !!document.querySelector('[data-prime-overlay="p_fire"]'),
+    aria: window.__card('p_fire')?.getAttribute('aria-pressed')
   }))()`);
-  log('VOL','P15: modal slider mirrors the persisted level',p15?.range==='0' && p15?.number==='0'?'PASS':'FAIL',JSON.stringify(p15));
+  log('PRIME','P17: right-click primes, badge + overlay + aria-pressed',JSON.stringify(p17?.primed)==='["p_fire"]' && p17?.badge && p17?.overlay && p17?.aria==='true'?'PASS':'FAIL',JSON.stringify(p17));
 
-  await evalJs(`(() => {
-    const el = document.querySelector('#soundVolumeRange');
-    if (!el) return 'NO_RANGE';
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(el, '0.5');
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    return 'OK';
-  })()`);
-  await submitModal('Save Changes');
-  await sleep(1000);
-  await toggleEditMode(false);
-  const p16 = await evalJs(`(() => {
-    const c = JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    return {
-      stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
-      slider: window.__volSlider('Half Volume')?.value
-    };
-  })()`);
-  log('VOL','P16: modal write persists and the card slider follows',p16?.stored===0.5 && p16?.slider==='0.5'?'PASS':'FAIL',JSON.stringify(p16));
+  // P18: the double-fire trap. A right-click ALSO arrives as pointerdown, so if
+  // the hold timer had armed it would fire 500ms later and toggle the card back
+  // OFF. Priming is a toggle, so a double-fire looks exactly like "broken".
+  // Waiting past the threshold is the whole assertion.
+  await sleep(800);
+  const p18 = await evalJs(`window.__primedIds()`);
+  log('PRIME','P18: hold timer NOT armed by right-click (no double-toggle)',JSON.stringify(p18)==='["p_fire"]'?'PASS':'FAIL',JSON.stringify(p18));
 
-  // ================================================================
-  //  G: GUARD — shared file survives container deletion
-  // ================================================================
-  // This test is standalone: it re-seeds data with a known storedName, copies
-  // the sound, deletes the source container, and asserts the file key still
-  // exists. It runs last so its reload doesn't disturb other suites.
-  console.log(`\n[${LABEL}] === SUITE G: FILE REFCOUNT GUARD ===`);
-  await evalJs(`(() => {
-    // Seed: Human Paladin with one sound that has a known storedName
-    localStorage.setItem('ttrpg_characters', JSON.stringify([{
-      id:'c1', name:'Human Paladin', sounds:[{
-        id:'guard_s1', name:'Guard Test', type:'Test', icon:'',
-        // Use a simple storedName we can track
-        files:[{name:'guard_test.mp3', displayName:'Guard Test.mp3', storedName:'guard_test.mp3'}],
-        color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false,
-        brightness:1, glowEnabled:false, glowProminence:0.5
-      }]
-    }]));
-    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-    localStorage.setItem('ttrpg_data_version', '3');
-    // Create the actual file in localStorage so the app can play it
-    localStorage.setItem('sound_file_guard_test.mp3', 'data:text/plain;base64,Z3VhcmRfZGF0YQ==');
-    return 'seeded';
-  })()`);
-  await cdp('Page.reload', { ignoreCache: true });
-  await sleep(3000);
+  // P19: right-click again un-primes. Toggle semantics, asserted from the primed
+  // set rather than the badge, so the two cannot pass for each other.
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(300);
+  const p19 = await evalJs(`(() => ({ primed: window.__primedIds(), badge: !!document.querySelector('[data-prime-badge]') }))()`);
+  log('PRIME','P19: second right-click un-primes',p19?.primed?.length===0 && !p19?.badge?'PASS':'FAIL',JSON.stringify(p19));
 
-  // Install the picker helpers again
-  await evalJs(`(() => {
-    window.__mcOpen = (cardName) => {
-      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
-      if(!c) return 'NO_CARD';
-      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcRow = (section, name) => {
-      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
-      const sec=secs.find(p => p.textContent.trim()===section);
-      if(!sec) return null;
-      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
-      return rows.find(r => {
-        const span=r.querySelector('span');
-        return span && span.firstChild && span.firstChild.textContent.trim()===name;
-      }) || null;
-    };
-    window.__mcClick = (section, name, verb) => {
-      const row=window.__mcRow(section,name);
-      if(!row) return 'NO_ROW';
-      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcModalOpen = () => {
-      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
-      return !!m && !!m.closest('div[class*="fixed"]');
-    };
-    return 'ok';
-  })()`);
+  // P20: press-and-hold primes AND does not play. The release after the timer
+  // fires produces a click, which must be swallowed or a hold would prime the
+  // card and start the sound. Held well past the 500ms threshold: a hidden
+  // page throttles setTimeout to ~1s, so a tight 750ms hold never gets there
+  // and the test would fail for a harness reason rather than an app reason.
+  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.title||'').startsWith('Clear ')); if(b) b.click(); return 'OK'; })()`);
+  await sleep(250);
+  const layCoords = await evalJs(`window.__cardCoords('p_lay')`);
+  const mark20 = await evalJs(`window.__mark()`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: layCoords.x, y: layCoords.y, button: 'left', clickCount: 1, buttons: 1 });
+  await sleep(1600);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: layCoords.x, y: layCoords.y, button: 'left', clickCount: 1, buttons: 0 });
+  await sleep(400);
+  const p20 = await evalJs(`(() => ({
+    primed: window.__primedIds(),
+    played: window.__idsOf(window.__since(${mark20}))
+  }))()`);
+  log('PRIME','P20: press-and-hold primes without playing',JSON.stringify(p20?.primed)==='["p_lay"]' && (p20?.played||[]).length===0?'PASS':'FAIL',JSON.stringify(p20));
 
-  // Copy the sound to Elf Sorcerer (need to add Elf Sorcerer first)
-  await evalJs(`(() => {
-    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    c.push({id:'c2', name:'Elf Sorcerer', sounds:[]});
-    localStorage.setItem('ttrpg_characters', JSON.stringify(c));
-    return 'added';
-  })()`);
-  await cdp('Page.reload', { ignoreCache: true });
-  await sleep(3000);
+  // P21: a press that MOVES is a scroll or a drag, not a prime. Movement is
+  // measured against the press origin, so 40px is well past the 10px cancel.
+  // Cleared first so the assertion is about THIS gesture and cannot be swayed
+  // by whatever the previous test left primed.
+  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.title||'').startsWith('Clear ')); if(b) b.click(); return 'OK'; })()`);
+  await sleep(250);
+  const cureCoords = await evalJs(`window.__cardCoords('p_cure')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: cureCoords.x, y: cureCoords.y, button: 'left', clickCount: 1, buttons: 1 });
+  await sleep(300);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cureCoords.x + 40, y: cureCoords.y + 40, button: 'left', buttons: 1 });
+  await sleep(1400);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cureCoords.x + 40, y: cureCoords.y + 40, button: 'left', clickCount: 1, buttons: 0 });
+  await sleep(300);
+  const p21 = await evalJs(`window.__primedIds()`);
+  log('PRIME','P21: hold + 40px move does NOT prime',p21?.length===0?'PASS':'FAIL',JSON.stringify(p21));
 
-  // Re-define helpers after every reload (reloads wipe page globals)
-  await evalJs(`(() => {
-    window.__mcOpen = (cardName) => {
-      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
-      if(!c) return 'NO_CARD';
-      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcRow = (section, name) => {
-      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
-      const sec=secs.find(p => p.textContent.trim()===section);
-      if(!sec) return null;
-      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
-      return rows.find(r => {
-        const span=r.querySelector('span');
-        return span && span.firstChild && span.firstChild.textContent.trim()===name;
-      }) || null;
-    };
-    window.__mcClick = (section, name, verb) => {
-      const row=window.__mcRow(section,name);
-      if(!row) return 'NO_ROW';
-      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcModalOpen = () => {
-      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
-      return !!m && !!m.closest('div[class*="fixed"]');
-    };
-    return 'ok';
-  })()`);
-  // Re-install picker helpers after reload wipes page globals
-  await evalJs(`(() => {
-    window.__mcOpen = (cardName) => {
-      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
-      if(!c) return 'NO_CARD';
-      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcRow = (section, name) => {
-      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
-      const sec=secs.find(p => p.textContent.trim()===section);
-      if(!sec) return null;
-      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
-      return rows.find(r => {
-        const span=r.querySelector('span');
-        return span && span.firstChild && span.firstChild.textContent.trim()===name;
-      }) || null;
-    };
-    window.__mcClick = (section, name, verb) => {
-      const row=window.__mcRow(section,name);
-      if(!row) return 'NO_ROW';
-      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
-      if(!b) return 'NO_BTN';
-      b.click(); return 'OK';
-    };
-    window.__mcModalOpen = () => {
-      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
-      return !!m && !!m.closest('div[class*="fixed"]');
-    };
-    return 'ok';
-  })()`);
+  // P22: no priming in edit mode. The affordance is hidden there and togglePrime
+  // refuses, so neither path can prime even if the gesture lands.
   await toggleEditMode(true);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: cureCoords.x, y: cureCoords.y, button: 'left', clickCount: 1, buttons: 1 });
+  await sleep(1600);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cureCoords.x, y: cureCoords.y, button: 'left', clickCount: 1, buttons: 0 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: cureCoords.x, y: cureCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cureCoords.x, y: cureCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(400);
+  const p22 = await evalJs(`window.__primedIds()`);
+  log('PRIME','P22: edit mode does not prime (hold or right-click)',p22?.length===0?'PASS':'FAIL',JSON.stringify(p22));
+  await toggleEditMode(false);
 
-  // G1: Copy Guard Test -> Elf Sorcerer
-  const gOpen = await evalJs(`(() => {
-    const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes('Guard Test'));
-    if(!c) return 'NO_CARD';
-    const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
-    if(!b) return 'NO_BTN';
+  // P23: THE feature. Two primes + a trigger = three sounds, and all three
+  // carry the same _primeGroup token so the card's stop button can act on them
+  // as one action (P27 asserts that).
+  await evalJs(`window.__clearBtn()`);
+  await sleep(200);
+  const primedFire = await evalJs(`window.__cardCoords('p_fire')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: primedFire.x, y: primedFire.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: primedFire.x, y: primedFire.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(200);
+  const frostCoords = await evalJs(`window.__cardCoords('p_frost')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: frostCoords.x, y: frostCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: frostCoords.x, y: frostCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(300);
+  const mark23 = await evalJs(`window.__mark()`);
+  // Trigger through a real trusted click, for the same autoplay reason P9 notes.
+  const layCoords2 = await evalJs(`window.__cardCoords('p_lay')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: layCoords2.x, y: layCoords2.y, button: 'left', clickCount: 1, buttons: 1 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: layCoords2.x, y: layCoords2.y, button: 'left', clickCount: 1, buttons: 0 });
+  await sleep(1200);
+  const p23 = await evalJs(`(() => {
+    const els = window.__since(${mark23});
+    const ids = els.map(e => e._soundId);
+    const groups = els.map(e => e._primeGroup);
+    return {
+      ids: ids.slice().sort(),
+      count: ids.length,
+      sameGroup: groups.length===3 && groups[0] && groups.every(g => g === groups[0]),
+      primedAfter: window.__primedIds(),
+      fired: window.__firedIds()
+    };
+  })()`);
+  log('PRIME','P23: 2 primes + trigger plays all 3',JSON.stringify(p23?.ids)==='["p_fire","p_frost","p_lay"]'?'PASS':'FAIL',JSON.stringify(p23));
+  log('PRIME','P23b: all 3 share one _primeGroup token',p23?.sameGroup?'PASS':'FAIL',JSON.stringify(p23?.sameGroup));
+  log('PRIME','P23c: primed set is CONSUMED (gone after the trigger)',p23?.primedAfter?.length===0?'PASS':'FAIL',JSON.stringify(p23?.primedAfter));
+  log('PRIME','P23d: consumed cards flash as fired',JSON.stringify(p23?.fired?.sort())==='["p_fire","p_frost"]'?'PASS':'FAIL',JSON.stringify(p23?.fired));
+
+  // P24: no residue. A second trigger plays only itself.
+  const mark24 = await evalJs(`window.__mark()`);
+  await evalJs(`window.__playCard('p_cure')`);
+  await sleep(900);
+  const p24 = await evalJs(`window.__idsOf(window.__since(${mark24}))`);
+  log('PRIME','P24: next trigger plays only itself (no residue)',JSON.stringify(p24)==='["p_cure"]'?'PASS':'FAIL',JSON.stringify(p24));
+
+  // P25: two triggers in quick succession must not hand the same primed set to
+  // both. The capture-and-clear is synchronous; if it were not, the second
+  // trigger would replay the primes.
+  await evalJs(`window.__clearBtn()`);
+  await sleep(150);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(150);
+  const mark25 = await evalJs(`window.__mark()`);
+  await evalJs(`(() => { window.__playCard('p_lay'); window.__playCard('p_cure'); return 'OK'; })()`);
+  await sleep(1000);
+  const p25 = await evalJs(`(() => {
+    const ids = window.__idsOf(window.__since(${mark25}));
+    const count = id => ids.filter(x => x === id).length;
+    return { fire: count('p_fire'), frost: count('p_frost'), lay: count('p_lay'), cure: count('p_cure'), total: ids.length };
+  })()`);
+  log('PRIME','P25: rapid double trigger does not double the primes',p25?.fire===1 && p25?.frost===0 && p25?.lay===1 && p25?.cure===1 && p25?.total===3?'PASS':'FAIL',JSON.stringify(p25));
+
+  // P26: priming a sound and then playing THAT sound must not play it twice.
+  await evalJs(`window.__clearBtn()`);
+  await sleep(150);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(200);
+  const mark26 = await evalJs(`window.__mark()`);
+  await evalJs(`window.__playCard('p_fire')`);
+  await sleep(800);
+  const p26 = await evalJs(`(() => {
+    const ids = window.__idsOf(window.__since(${mark26}));
+    return { total: ids.length, fire: ids.filter(x=>x==='p_fire').length };
+  })()`);
+  log('PRIME','P26: playing a primed sound does not double it',p26?.total===1 && p26?.fire===1?'PASS':'FAIL',JSON.stringify(p26));
+
+  // P27: stopping the primary stops the whole primed group. One card is one
+  // action to the user even when it made three sounds. Uses the looping sounds
+  // so none of them can end and unregister before the stop button is clicked.
+  await evalJs(`window.__clearBtn()`);
+  await sleep(150);
+  const a27 = await evalJs(`window.__cardCoords('p27_a')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: a27.x, y: a27.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: a27.x, y: a27.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(150);
+  const b27 = await evalJs(`window.__cardCoords('p27_b')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: b27.x, y: b27.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: b27.x, y: b27.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(200);
+  const mark27 = await evalJs(`window.__mark()`);
+  // Trusted CDP click, not element.click(): a synthetic click is not a user
+  // gesture, so web refuses autoplay, play() rejects and cleanupAudio removes
+  // the element from audioElementsRef - after which there is nothing to stop
+  // and this assertion would read 0 stopped for the wrong reason.
+  const c27 = await evalJs(`window.__cardCoords('p27_c')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: c27.x, y: c27.y, button: 'left', clickCount: 1, buttons: 1 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: c27.x, y: c27.y, button: 'left', clickCount: 1, buttons: 0 });
+  await sleep(600);
+  const stopRes = await evalJs(`(() => {
+    const c = window.__card('p27_c');
+    const b = c && c.querySelector('button[title="Stop Sound"]');
+    if (!b) return 'NO_STOP_BTN';
     b.click(); return 'OK';
   })()`);
   await sleep(400);
-  const gClick = await evalJs(`(() => {
-    const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
-    const sec=secs.find(p => p.textContent.trim()==='Characters');
- if(!sec) return 'NO_SEC';
-    const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
-    const row=rows.find(r => { const span=r.querySelector('span'); return span && span.firstChild && span.firstChild.textContent.trim()==='Elf Sorcerer'; });
-    if(!row) return 'NO_ROW';
-    const b=row.querySelector('button[title="Copy to Elf Sorcerer"]');
-    if(!b) return 'NO_BTN';
-    b.click(); return 'OK';
+  const p27 = await evalJs(`(() => {
+    const els = window.__since(${mark27});
+    return { stop: ${JSON.stringify(stopRes)}, n: els.length, stopped: els.filter(e => e.stopped === true).length };
   })()`);
-  await sleep(700);
+  log('PRIME','P27: stopping the primary stops the WHOLE primed group',p27?.stop==='OK' && p27?.n===3 && p27?.stopped===3?'PASS':'FAIL',JSON.stringify(p27));
 
-  // G2: Verify copy exists and shares the storedName
-  const guardAfterCopy = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    const copy=l.find(c=>c.name==='Elf Sorcerer')?.sounds?.find(s=>s.name==='Guard Test (copy)');
-    const orig=l.find(c=>c.name==='Human Paladin')?.sounds?.find(s=>s.name==='Guard Test');
-    return {
-      copyExists: !!copy,
-      sharedFile: !!copy && !!orig && copy.files?.[0]?.storedName === orig.files?.[0]?.storedName,
-      fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3')
-    };
+  // P28: a prime that cannot resolve its file is skipped, and the primary still
+  // plays. The broken sound is primed via its own right-click first.
+  await evalJs(`window.__clearBtn()`);
+  await sleep(150);
+  const brokenCoords = await evalJs(`window.__cardCoords('p_broken')`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: brokenCoords.x, y: brokenCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: brokenCoords.x, y: brokenCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(250);
+  const mark28 = await evalJs(`window.__mark()`);
+  await evalJs(`window.__playCard('p_cure')`);
+  await sleep(900);
+  const p28 = await evalJs(`(() => {
+    const ids = window.__idsOf(window.__since(${mark28}));
+    return { ids, primed: window.__primedIds() };
   })()`);
-  log('GUARD','G1: copy shares storedName',guardAfterCopy?.sharedFile?'PASS':'FAIL','open='+(gOpen?.__error || gOpen)+' click='+(gClick?.__error || gClick)+' '+JSON.stringify(guardAfterCopy));
-  log('GUARD','G2: file key exists after copy',guardAfterCopy?.fileKeyExists?'PASS':'FAIL','');
+  log('PRIME','P28: unresolvable prime does not break the primary',(p28?.ids||[]).includes('p_cure') && (p28?.ids||[]).includes('p_broken') && p28?.primed?.length===0?'PASS':'FAIL',JSON.stringify(p28));
 
-  // G3: Delete Human Paladin (the container holding the original)
-  await evalJs(`(() => {
-    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Human Paladin');
-    if(b) { const container=b.closest('[class*="bg-dark-800"]'); if(container) { const del=container.querySelector('button[title*="Delete Character"], button[title*="Delete character"]'); if(del) del.click(); } }
-    return 'attempted';
-  })()`);
-  await sleep(500);
-  // Confirm the delete
-  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
-  await sleep(1000);
+  // P29: the clear-all affordance tracks the primed set: absent when empty,
+  // showing the live count when something is primed, absent again once cleared.
+  const p29Before = await evalJs(`window.__clearBtn()`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(250);
+  const p29a = await evalJs(`({ btn: window.__clearBtn(), primed: window.__primedIds() })`);
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: frostCoords.x, y: frostCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: frostCoords.x, y: frostCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(250);
+  const p29b = await evalJs(`window.__clearBtn()`);
+  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.title||'').startsWith('Clear ')); if(b) b.click(); return 'OK'; })()`);
+  await sleep(300);
+  const p29c = await evalJs(`(() => ({ primed: window.__primedIds(), btn: window.__clearBtn() }))()`);
+  log('PRIME','P29a: no clear button while nothing is primed',p29Before==='NO_BTN'?'PASS':'FAIL',p29Before);
+  log('PRIME','P29b: button appears with the live count',/Clear 1 primed/.test(p29a?.btn||'') && /Clear 2 primed/.test(p29b||'')?'PASS':'FAIL',JSON.stringify({a:p29a?.btn,b:p29b}));
+  log('PRIME','P29c: clear empties the primed set and hides itself',p29c?.primed?.length===0 && p29c?.btn==='NO_BTN'?'PASS':'FAIL',JSON.stringify(p29c));
 
-  // G4: Assert the file key STILL EXISTS and the copy still plays
-  const guardAfterDelete = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
-    const copy=l.find(c=>c.name==='Elf Sorcerer')?.sounds?.find(s=>s.name==='Guard Test (copy)');
-    return {
-      paladinGone: !l.find(c=>c.name==='Human Paladin'),
-      copyExists: !!copy,
-      fileKeyExists: !!localStorage.getItem('sound_file_guard_test.mp3'),
-      copyFile: copy?.files?.[0]?.storedName
-    };
+  // P30: the native menu never appears on a card. Cards are div role="button",
+  // so nothing suppresses the context menu but our own handler.
+  const p30 = await evalJs(`(() => {
+    const c = window.__card('p_fire');
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 });
+    c.dispatchEvent(ev);
+    return { prevented: ev.defaultPrevented };
   })()`);
-  log('GUARD','G3: source character deleted',guardAfterDelete?.paladinGone?'PASS':'FAIL','');
-  log('GUARD','G4: copy still has file key after container delete',guardAfterDelete?.fileKeyExists&&guardAfterDelete?.copyExists?'PASS':'FAIL',JSON.stringify(guardAfterDelete));
+  log('PRIME','P30: contextmenu default is prevented',p30?.prevented===true?'PASS':'FAIL',JSON.stringify(p30));
 
-  if (!EXPECT_TAURI) {
-    // G5: Negative test — a file referenced ONLY by the deleted container IS removed
-    await evalJs(`(() => {
-    localStorage.setItem('ttrpg_characters', JSON.stringify([{
-      id:'c3', name:'Lone Character', sounds:[{
-        id:'neg_s1', name:'Orphan Test', type:'Test', icon:'',
-        files:[{name:'orphan_test.mp3', displayName:'Orphan Test.mp3', storedName:'orphan_test.mp3'}],
-        color:'#0000ff', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false,
-        brightness:1, glowEnabled:false, glowProminence:0.5
-      }]
-    }]));
-    localStorage.setItem('sound_file_orphan_test.mp3', 'data:text/plain;base64,b3JwaGFuX2RhdGE=');
-    localStorage.setItem('ttrpg_environment', JSON.stringify([]));
-    localStorage.setItem('ttrpg_groups', JSON.stringify([]));
-    localStorage.setItem('ttrpg_data_version', '3');
-    return 'seeded';
-  })()`);
+  // P31: primed state is session-only. Nothing is persisted, so a reload clears
+  // it - and the deliberate absence of a localStorage key is asserted here too.
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 2 });
+  await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
+  await sleep(250);
+  const keysBefore = await evalJs(`Object.keys(localStorage).filter(k => !k.startsWith('sound_file_')).sort()`);
+  const knownPrimeKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted'];
+  const primeKeys = (keysBefore||[]).filter(k => !knownPrimeKeys.includes(k));
+  log('PRIME','P31a: no new localStorage key for priming',primeKeys.length===0?'PASS':'FAIL',JSON.stringify(primeKeys));
+
   await cdp('Page.reload', { ignoreCache: true });
   await sleep(3000);
+  await evalJs(installPrimeHelpers);
+  const p31b = await evalJs(`({ primed: window.__primedIds(), badges: document.querySelectorAll('[data-prime-badge]').length, btn: window.__clearBtn() })`);
+  log('PRIME','P31b: primed state does NOT survive a reload',p31b?.primed?.length===0 && p31b?.badges===0 && p31b?.btn==='NO_BTN'?'PASS':'FAIL',JSON.stringify(p31b));
 
-  await toggleEditMode(true);
+  // P32-P34: the container-shape walker. soundById is built from
+  // allSoundContainers(), so a prime resolves from any of the shapes. This is
+  // the regression guard for the four-shape assumption; the vestigial
+  // groups[].sounds is NOT testable this way (normalizeStoredData wipes it) and
+  // is covered by the Default-category note in the spec.
+  // Clicks its way through `path` (tab button first, then the category or
+  // member), asserting every card after the navigation so a miss reports what
+  // the page actually offered instead of an opaque failure.
+  const shapeCase = async (cat, path, primeId, trigId) => {
+    await evalJs(`window.__clearBtn()`);
+    for (const step of path) {
+      const r = await evalJs(`window.__pick('${step}')`);
+      await sleep(500);
+      if (String(r).startsWith('NO_ITEM')) return `${cat}: ${r}`;
+    }
+    const has = await evalJs(`!!window.__card('${primeId}')`);
+    if (!has) return `${cat}: card ${primeId} not rendered; buttons=${await evalJs('window.__pickList()')}`;
+    const c = await evalJs(`window.__cardCoords('${primeId}')`);
+    await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: c.x, y: c.y, button: 'right', clickCount: 1, buttons: 2 });
+    await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: c.x, y: c.y, button: 'right', clickCount: 1, buttons: 0 });
+    await sleep(300);
+    const primed = await evalJs(`window.__primedIds()`);
+    if (JSON.stringify(primed) !== JSON.stringify([primeId])) return `${cat}: primed=${JSON.stringify(primed)}`;
+    const mark = await evalJs(`window.__mark()`);
+    await evalJs(`window.__playCard('${trigId}')`);
+    await sleep(1000);
+    const ids = await evalJs(`window.__idsOf(window.__since(${mark}))`);
+    const ok = (ids||[]).includes(trigId) && (ids||[]).includes(primeId);
+    await evalJs(`window.__clearBtn()`);
+    return ok ? null : `${cat}: fired=${JSON.stringify(ids)}`;
+  };
 
-  // Delete Lone Character
-  await evalJs(`(() => {
-    const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Lone Character');
-    if(b) { const container=b.closest('[class*="bg-dark-800"]'); if(container) { const del=container.querySelector('button[title*="Delete Character"], button[title*="Delete character"]'); if(del) del.click(); } }
-    return 'attempted';
-  })()`);
-  await sleep(500);
-  await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
-  await sleep(1000);
+  await evalJs(`window.__hookAudio()`);
+  let shapeErr = await shapeCase('P32 env', ['Environment', 'Dungeon'], 'pe_prime', 'pe_trig');
+  log('PRIME','P32: primes and fires from an environment category',shapeErr?'FAIL':'PASS',shapeErr || 'ok');
+  shapeErr = await shapeCase('P33 groupcat', ['Tavern Pack', 'Ambience'], 'pg_prime', 'pg_trig');
+  log('PRIME','P33: primes and fires from a group category',shapeErr?'FAIL':'PASS',shapeErr || 'ok');
+  shapeErr = await shapeCase('P34 groupchar', ['Hero Pack', 'Fighter'], 'pch_prime', 'pch_trig');
+  log('PRIME','P34: primes and fires from a group character',shapeErr?'FAIL':'PASS',shapeErr || 'ok');
 
-  const guardNegative = await evalJs(`(() => {
-    return {
-      fileKeyExists: !!localStorage.getItem('sound_file_orphan_test.mp3'),
-      chars: JSON.parse(localStorage.getItem('ttrpg_characters')||'[]').length
-    };
-  })()`);
-  log('GUARD','G5: unreferenced file IS removed',guardNegative?.fileKeyExists===false&&guardNegative?.chars===0?'PASS':'FAIL',JSON.stringify(guardNegative));
-  } else {
-    log('GUARD','G5: skipped on Windows', 'WARN', 'Tauri uses physical uploads dir; localStorage seed not applicable');
-  }
+  // ================================================================
+  //  Z: LIVE PLAYBACK (shared spec - see e2e/specs/playback.mjs)
+  // ================================================================
+  // Last of the shared specs, just before refcount: it leaves the master volume
+  // wherever Z7 put it (50%) and needs a quiet page for the fade sampling, so it
+  // must not run in the middle of the block. refcount re-seeds after it.
+  await runSpecs(ctx, [playback]);
+
+  // ================================================================
+  //  G: FILE REFCOUNT GUARD (shared spec - see e2e/specs/refcount.mjs)
+  // ================================================================
+  // Standalone by construction: the spec re-seeds a known storedName, copies the
+  // sound, deletes the source container and asserts the file key survives. It runs
+  // last so its reloads cannot disturb other suites.
+  await runSpecs(ctx, [refcount]);
 
   // ================================================================
   //  Summary + Restore
   // ================================================================
   if (SAVE_RESTORE && capturedLS) {
-    const rr = await evalJs(`(() => { const o = ${JSON.stringify(capturedLS)}; localStorage.clear(); for (const k in o) localStorage.setItem(k, o[k]); return 'restored'; })()`);
+    const rr = await evalJs(restoreLs(capturedLS));
     console.log(`[${LABEL}] localStorage restore:`, rr);
     await cdp('Page.reload', { ignoreCache: true });
     await sleep(3000);
   }
 
   console.log('\n==============================');
-  console.log(`[${LABEL}] FULL E2E SUMMARY: PASS=${pass}  FAIL=${fail}  WARN=${warn}  TOTAL=${pass+fail+warn}`);
+  report.summary();
   console.log('==============================');
 
-  ws.close();
-  process.exit(fail > 0 ? 2 : (warn > 0 ? 1 : 0));
+  close();
+  process.exit(report.exitCode());
 }
 
 main().catch(e => { console.error('FATAL:', e); process.exit(1); });

@@ -1,136 +1,72 @@
 // Mobile E2E suite — tests mobile-specific UI of The SpellCaster.
 // Covers: rail navigation, drawer open/close, drawer tab switching, sound grid
 // rendering, edit mode via grid button, add/edit/delete sound via drawer,
-// character CRUD via drawer, group CRUD via drawer, empty states, settings.
+// character CRUD via drawer, group CRUD via drawer, empty states, settings,
+// sound priming via touch press-and-hold (Suite Q, Input.dispatchTouchEvent),
+// and move/copy into every container shape (Suite M).
+//
+// Nine suites are SHARED specs in ./specs, run from here AND from e2e-full.mjs:
+//   volume         P1-P16   per-sound volume + persistence
+//   indicators     U1-U7    card indicators (replaces the old inline Suite R)
+//   sliders        B1-B4    box-size slider + reload persistence
+//   soundIntoGroup H1-H2    adding a sound into a group category (drawer nav)
+//   dragReorder    X1-X2    drag-to-reorder via a real touch drag
+//   refcount       G1-G5    file-reference guard on container deletion
+//   platformGate   W1-W6    the isMobile gate picks the right chrome
+//   scroll         R1-R10   single-view scroll containment
+//   playback       Z1-Z10   live playback: fade, live master, loop, Stop All
+// Shared CDP/report/seed/page plumbing lives in ./lib, the platform divergence
+// (gestures, edit-mode toggle, drawer navigation, file upload) is absorbed by
+// ./lib/driver.mjs and the ctx helpers below.
 // Env: CDP_PORT, LABEL, SAVE_RESTORE ('1'), EXPECT_TAURI ('1')
 // Note: the uploaded WAV is generated in-page (see uploadWav) - this suite never
-// touches e2e_silence.wav on disk, which the desktop suites (e2e-full/e2e-features)
-// still need for CDP DOM.setFileInputFiles.
+// touches e2e_silence.wav on disk, which the desktop suite (e2e-full) still
+// needs for CDP DOM.setFileInputFiles.
+import { connect, sleep } from './lib/cdp.mjs';
+import { createReport } from './lib/report.mjs';
+import { CAPTURE_LS, INSTRUMENT_AUDIO, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
+import { makeDriver } from './lib/driver.mjs';
+import { runSpecs } from './lib/spec-runner.mjs';
+import { volume } from './specs/volume.mjs';
+import { indicators } from './specs/indicators.mjs';
+import { sliders } from './specs/sliders.mjs';
+import { soundIntoGroup } from './specs/soundintogroup.mjs';
+import { dragReorder } from './specs/drag.mjs';
+import { refcount } from './specs/refcount.mjs';
+import { platformGate } from './specs/platform.mjs';
+import { scroll } from './specs/scroll.mjs';
+import { playback } from './specs/playback.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9224;
 const LABEL = process.env.LABEL || 'MOBILE';
 const SAVE_RESTORE = process.env.SAVE_RESTORE === '1';
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-let seq = 0;
-const pending = new Map();
+const EXPECT_TAURI = process.env.EXPECT_TAURI === '1';
 
 async function main() {
-  let page;
-  for (let i = 0; i < 120; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json`);
-      const targets = await res.json();
-      page = targets?.find(t => t.type === 'page' && (t.url || '').startsWith('http'));
-      if (page) break;
-    } catch (e) {}
-    await sleep(500);
-  }
-  if (!page) { console.error(`[${LABEL}] NO APP PAGE on :${DEBUG_PORT}`); process.exit(1); }
-  console.log(`[${LABEL}] page: ${page.url}`);
+  const { cdp, cdpInput, evalJs, close } = await connect({ port: DEBUG_PORT, label: LABEL, fatalExit: 3 });
+  const driver = makeDriver({ platform: 'mobile', cdp, cdpInput, evalJs, sleep });
 
-  const ws = new WebSocket(page.webSocketDebuggerUrl);
-  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
-  ws.onmessage = ev => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-  };
-  // If the app dies (e.g. the Android WebView kills the whole app when its renderer is
-  // terminated) the socket closes with requests still in flight: every pending promise
-  // never settles, the event loop drains and node exits 0 SILENTLY, so the log looks
-  // truncated while the runner reports success. Fail loudly instead.
-  let closingIntentionally = false;
-  ws.onclose = () => {
-    if (closingIntentionally) return;
-    console.error(`[${LABEL}] FATAL: CDP socket closed with ${pending.size} unanswered request(s) - the app most likely died. Exit 3.`);
-    process.exit(3);
-  };
-  ws.onerror = (e) => {
-    if (closingIntentionally) return;
-    console.error(`[${LABEL}] FATAL: CDP socket error (${(e && e.message) || 'unknown'}). Exit 3.`);
-    process.exit(3);
-  };
-  const cdp = (method, params = {}) => new Promise(resolve => {
-    const id = ++seq;
-    pending.set(id, resolve);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-  const evalJs = async (expression) => {
-    const r = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (r.result?.exceptionDetails) return { __error: r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text };
-    return r.result?.result?.value;
-  };
-
-  await cdp('Runtime.enable');
-  await cdp('Page.enable');
-  await cdp('DOM.enable');
-
-  const allResults = [];
-  let pass = 0, fail = 0, warn = 0;
-  const log = (cat, name, status, detail) => {
-    const line = `[${cat}] ${status} ${name}: ${detail || ''}`;
-    allResults.push(line);
-    console.log(line);
-    if (status === 'PASS') pass++; else if (status === 'FAIL') fail++; else warn++;
-  };
-  const run = async (cat, name, fn) => {
-    const res = await fn();
-    if (res && res.__error) log(cat, name, 'FAIL', res.__error);
-    return res;
-  };
+  const report = createReport(LABEL, 'MOBILE E2E SUMMARY');
+  const { log, run } = report;
 
   let capturedLS = null;
   if (SAVE_RESTORE) {
-    const cap = await evalJs(`(() => { const o = {}; for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); o[k]=localStorage.getItem(k);} return JSON.stringify(o); })()`);
+    const cap = await evalJs(CAPTURE_LS);
     if (cap && cap.length < 3000000) { capturedLS = JSON.parse(cap); console.log(`[${LABEL}] captured ${Object.keys(capturedLS).length} localStorage keys`); }
     else console.log(`[${LABEL}] WARNING: localStorage capture too large / failed (${(cap||'').length}b) -- no restore`);
   }
 
   // Seed: same as e2e-full.mjs
-  await evalJs(`(() => {
-    const snd = (id,name,type,color,opts) => ({ id, name, type, icon:'Icon.png', files:[{name:name.toLowerCase().replace(/\\s+/g,'_')+'.mp3', displayName:name+'.mp3'}], color, duration:0, randomPlay:false, ...opts });
-    localStorage.setItem('ttrpg_characters', JSON.stringify([
-      { id:'c1', name:'Human Paladin', sounds:[
-        snd('s1','Smite','Holy','#ff0000',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:true, glowProminence:0.7, files:[{name:'smite.mp3',displayName:'Smite.mp3'}]}),
-        snd('s2','Shield Bash','Melee','#3b82f6',{loop:false, randomPlay:true, files:[{name:'shield1.mp3',displayName:'Shield1.mp3'},{name:'shield2.mp3',displayName:'Shield2.mp3'}]}),
-        snd('s3','Healing Light','Magic','#22c55e',{loop:true, fadeIn:1.5, files:[{name:'heal.mp3',displayName:'Heal.mp3'}]})
-      ]},
-      { id:'c2', name:'Elf Sorcerer', sounds:[] }
-    ]));
-    localStorage.setItem('ttrpg_environment', JSON.stringify([
-      { id:'e1', category:'Dungeon', sounds:[snd('e1s1','Dripping','Ambient','#84cc16',{loop:true, files:[{name:'drip.mp3',displayName:'Drip.mp3'}]})] },
-      { id:'e2', category:'Forest', sounds:[] }
-    ]));
-    localStorage.setItem('ttrpg_groups', JSON.stringify([
-      { id:'g1', name:'Tavern Pack', mode:'environment', categories:[{id:'gc1', category:'Ambience', sounds:[snd('gs1','Tavern Song','Music','#d97706',{loop:true, files:[{name:'tavern.mp3',displayName:'Tavern.mp3'}]})]}], characters:[] },
-      { id:'g2', name:'Hero Pack', mode:'characters', categories:[], characters:[{id:'gch1', name:'Fighter', sounds:[]}] }
-    ]));
-    localStorage.setItem('ttrpg_themes', JSON.stringify([]));
-    localStorage.setItem('ttrpg_data_version', '3');
-    localStorage.removeItem('backgroundSettings');
-    localStorage.removeItem('boxSize');
-    for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
-    return 'seeded';
-  })();`);
+  await evalJs(SEED);
   console.log(`[${LABEL}] SEED applied`);
   await cdp('Page.reload', { ignoreCache: true });
   await sleep(3500);
 
   // Instrument playback
-  await run('PLAY', 'D0: instrument audio', () => evalJs(`(() => {
-    window.__e2eAudio = [];
-    const op = HTMLMediaElement.prototype.play;
-    HTMLMediaElement.prototype.play = function(...a){ window.__e2eAudio.push(this); return op.apply(this, a); };
-    return 'instrumented';
-  })()`));
+  await run('PLAY', 'D0: instrument audio', () => evalJs(INSTRUMENT_AUDIO));
 
   // Set up page-level helpers
-  await run('NAV', 'helpers', () => evalJs(`(() => {
-    window.__clickText = (t) => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===t); if(!b) return 'NO:'+t; b.click(); return 'OK'; };
-    window.__findText = (t) => [...document.querySelectorAll('button')].find(x=>x.textContent.trim()===t);
-    window.__setInput = (name, val) => { const el=document.querySelector('input[name="'+name+'"]'); if(!el) return 'NO:'+name; const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; s.call(el, val); el.dispatchEvent(new Event('input',{bubbles:true})); return 'OK'; };
-    return 'ok';
-  })()`));
+  await run('NAV', 'helpers', () => evalJs(PAGE_HELPERS));
 
   // Helper: upload WAV. NOTE: do NOT use CDP DOM.setFileInputFiles here - the Android
   // WebView rejects it as a bad IPC message ("Terminating renderer for bad IPC message,
@@ -157,13 +93,7 @@ async function main() {
 
   // Helper: submit modal (bg-lime-600 submit button)
   async function submitModal(btnText) {
-    return evalJs(`(() => {
-      const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='${btnText}' && x.type==='submit' && /bg-lime-600/.test(x.className));
-      if(!b) return 'NO_SUBMIT:${btnText}';
-      if(b.disabled) return 'DISABLED';
-      b.click();
-      return 'OK';
-    })()`);
+    return evalJs(submitModalExpr(btnText));
   }
 
   // Helper: open drawer
@@ -180,14 +110,67 @@ async function main() {
 
   // Helper: toggle mobile edit mode via the grid-header button
   async function toggleMobileEditMode(on) {
-    const state = await evalJs(`!!document.querySelector('button[title="Exit Edit Mode"]')`);
-    if (state === on) return;
-    const btn = on ? 'Enter Edit Mode' : 'Exit Edit Mode';
-    await evalJs(`document.querySelector('button[title="${btn}"]')?.click()`);
-    await sleep(400);
+    if (on) await driver.enterEditMode(); else await driver.exitEditMode();
   }
 
   async function waitForReload(ms = 3500) { await sleep(ms); }
+
+  // Context handed to shared specs (e2e/specs/*). reload() re-seeds the DOM:
+  // the page wipes window helpers on every load, so specs re-inject what they
+  // need themselves. Everything that navigates or opens a modal goes THROUGH the
+  // drawer here - there is no sidebar, so a spec cannot click a leaf directly.
+  const ctx = {
+    label: LABEL,
+    log, run,
+    evalJs,
+    sleep,
+    driver,
+    isTauri: EXPECT_TAURI,
+    submitModal: (t) => evalJs(submitModalExpr(t)),
+    upload: () => uploadWav(),
+    closeDrawer,
+    openDrawer,
+    navigateTo: async (text) => {
+      await openDrawer();
+      const r = await evalJs(`(() => {
+        const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+        if (!d) return 'NO_DRAWER';
+        const bs = [...d.querySelectorAll('button')];
+        const b = bs.find(x => x.textContent.trim() === '${text}') || bs.find(x => x.textContent.trim().endsWith('${text}'));
+        if (!b) return 'NO_BUTTON:${text}';
+        b.click(); return 'OK';
+      })()`);
+      await sleep(400);
+      await closeDrawer();
+      return r;
+    },
+    clickModalOpener: async (label) => {
+      await openDrawer();
+      return evalJs(`(() => {
+        const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+        if (!d) return 'NO_DRAWER';
+        const b = [...d.querySelectorAll('button')].find(x => x.textContent.trim() === '${label}');
+        if (!b) return 'NO_BUTTON:${label}';
+        b.click(); return 'OK';
+      })()`);
+    },
+    deleteCharacter: async (name) => {
+      await openDrawer();
+      const r = await evalJs(`(() => {
+        const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+        if (!d) return 'NO_DRAWER';
+        const b = [...d.querySelectorAll('button[title^="Delete Character"]')].find(x => x.closest('div')?.textContent.includes('${name}'));
+        if (!b) return 'NO_DELETE_BUTTON';
+        b.click(); return 'OK';
+      })()`);
+      await sleep(500);
+      await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
+      await sleep(1000);
+      await closeDrawer();
+      return r;
+    },
+    reload: async () => { await cdp('Page.reload', { ignoreCache: true }); await sleep(3500); }
+  };
 
   // ================================================================
   //  S: SEED INTEGRITY
@@ -282,27 +265,12 @@ async function main() {
   log('DRAWER','N6: backdrop closes drawer',drawerGone?'PASS':'FAIL');
 
   // ================================================================
-  //  R: SOUND GRID RENDERING
+  //  U: CARD INDICATORS (shared spec - see e2e/specs/indicators.mjs)
   // ================================================================
-  console.log(`\n[${LABEL}] === SUITE R: SOUND GRID ===`);
-  const suiteR = await evalJs(`(() => {
-    const r = [];
-    const log = (cat,n,s,d) => r.push({cat,n,s,d:d||''});
-    const cards = [...document.querySelectorAll('[data-sound-card]')];
-    log('GRID','R1: cards rendered',cards.length>=3?'PASS':'FAIL','count='+cards.length);
-    const smite = cards.find(c=>c.textContent.includes('Smite'));
-    log('GRID','R2: Smite card present',!!smite?'PASS':'FAIL');
-    const shield = cards.find(c=>c.textContent.includes('Shield Bash'));
-    log('GRID','R3: Shield Bash card present',!!shield?'PASS':'FAIL');
-    const loopIcon = smite?.querySelector('[title="Looping enabled"]');
-    log('GRID','R4: Smite loop icon',!!loopIcon?'PASS':'FAIL');
-    const glow = smite?.style.boxShadow && smite.style.boxShadow !== 'none' && smite.style.boxShadow !== '';
-    log('GRID','R5: Smite glow',!!glow?'PASS':'FAIL',smite?.style.boxShadow?.slice(0,30));
-    const allRoleBtn = cards.every(c=>c.getAttribute('role')==='button');
-    log('GRID','R6: all cards role=button',allRoleBtn?'PASS':'FAIL');
-    return r;
-  })()`);
-  if (suiteR?.__error) log('GRID','Suite R','FAIL',suiteR.__error); else for (const r of suiteR) log(r.cat,r.n,r.s,r.d);
+  // Replaces the old inline Suite R ("sound grid"): R1-R6 were U1, U2, U3, U4
+  // and U6 restated, and the shared spec adds the two checks the mobile suite
+  // never had - U5 (multi-file icon) and U7 (total loop-icon count).
+  await runSpecs(ctx, [indicators]);
 
   // ================================================================
   //  E: MOBILE EDIT MODE (via grid-header button)
@@ -908,22 +876,615 @@ async function main() {
   await toggleMobileEditMode(false);
 
   // ================================================================
+  //  W / R / B / H / X: shared specs (Suite R the old sound-grid suite was
+  //  folded into Suite U; the new Suite R is the shared scroll spec)
+  // ================================================================
+  // These run before Q (priming) and P (volume), each of which re-seeds, so a
+  // reload between them is safe. H navigates to a group category through the
+  // drawer and leaves the board there; X's self-contained seed+reload returns to
+  // the default Human Paladin board afterwards.
+  //
+  // W leads deliberately: it asserts the app is at rest — no drawer open, the
+  // rail rather than a sidebar — and every spec below seeds and reloads on it.
+  await runSpecs(ctx, [platformGate]);
+  // R seeds 60 sounds and reloads. 60 cards in a 2-column grid overflows a phone
+  // by a wide margin, so the scroll assertions are as real here as on desktop.
+  await runSpecs(ctx, [scroll]);
+  await runSpecs(ctx, [sliders]);
+  await runSpecs(ctx, [soundIntoGroup]);
+  await runSpecs(ctx, [dragReorder]);
+
+  // ================================================================
+  //  Q: SOUND PRIMING (touch)
+  // ================================================================
+  // The desktop suite (e2e-full.mjs Suite Q, P17-P34) drives priming with
+  // dispatchMouseEvent (right-click). Touch has no right-click: the ONLY gesture
+  // is press-and-hold, and it travels a different path (touch -> pointer), so it
+  // MUST be driven with Input.dispatchTouchEvent. This closes the checklist item
+  // SOUND_PRIMING_SPEC.md §7 left open: "a real press-and-hold on a device".
+  console.log(`\n[${LABEL}] === SUITE Q: SOUND PRIMING (touch) ===`);
+
+  // Priming is one-shot and session-only, so re-seed to a known board. Same
+  // fixture ids as e2e-full.mjs Suite Q, so a failure here can be compared
+  // against the desktop run.
+  const seedPrime = `(() => {
+    const mk = (id,name,extra) => Object.assign({
+      id, name, type:'Test', icon:'',
+      files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
+      color:'#ff0000', duration:5, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1
+    }, extra||{});
+    localStorage.setItem('ttrpg_characters', JSON.stringify([{
+      id:'c1', name:'Human Paladin', sounds:[
+        mk('p_fire','Fireball'), mk('p_frost','Frostbite'), mk('p_lay','Lay on Hands'), mk('p_cure','Cure Wounds'),
+        mk('p27_a','Stop Test A',{ loop:true }), mk('p27_b','Stop Test B',{ loop:true }), mk('p27_c','Stop Test C',{ loop:true }),
+        mk('p_broken','Broken Ref',{ files:[{name:'gone.mp3', displayName:'Gone.mp3', storedName:'nonexistent_zzz.mp3'}] })
+      ]
+    }]));
+    localStorage.setItem('ttrpg_environment', JSON.stringify([
+      { id:'e1', category:'Dungeon', sounds:[ mk('pe_trig','Echo Trigger'), mk('pe_prime','Dungeon Prime') ] },
+      { id:'e2', category:'Forest', sounds:[] }
+    ]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([
+      { id:'g1', name:'Tavern Pack', mode:'environment',
+        categories:[{id:'gc1', category:'Ambience', sounds:[ mk('pg_trig','Hearth'), mk('pg_prime','Tavern Prime') ]}], characters:[] },
+      { id:'g2', name:'Hero Pack', mode:'characters', categories:[],
+        characters:[{id:'gch1', name:'Fighter', sounds:[ mk('pch_trig','Sword Draw'), mk('pch_prime','Battle Cry') ]}] }
+    ]));
+    localStorage.setItem('ttrpg_data_version', '3');
+    for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+    return 'seeded';
+  })()`;
+
+  // Same helper surface as e2e-full.mjs Suite Q, so the assertions read alike.
+  // Re-injected after any reload (window state does not survive one).
+  const primeHelpers = `(() => {
+    window.__card = (id) => document.querySelector('[data-sound-card][data-sound-id="' + id + '"]');
+    window.__cardCoords = (id) => {
+      const c = window.__card(id);
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+      return { x, y, offscreen: (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) };
+    };
+    window.__primedIds = () => [...document.querySelectorAll('[data-sound-card][data-primed]')].map(c => c.dataset.soundId);
+    window.__firedIds = () => [...document.querySelectorAll('[data-sound-card][data-fired]')].map(c => c.dataset.soundId);
+    window.__audios = [];
+    window.__origAudio = window.Audio;
+    window.Audio = function(...a) { const el = new window.__origAudio(...a); window.__audios.push(el); return el; };
+    window.Audio.prototype = window.__origAudio.prototype;
+    window.__since = (n) => (window.__audios||[]).slice(n);
+    window.__mark = () => (window.__audios||[]).length;
+    window.__idsOf = (els) => els.map(e => e._soundId);
+    window.__clearBtn = () => { const b = [...document.querySelectorAll('button')].find(x => (x.title||'').startsWith('Clear ')); return b ? b.title : 'NO_BTN'; };
+    window.__playCard = (id) => { const c = window.__card(id); if (!c) return 'NO_CARD'; c.click(); return 'OK'; };
+    return 'ok';
+  })()`;
+
+  await evalJs(seedPrime);
+  await cdp('Page.reload', { ignoreCache: true });
+  await waitForReload();
+  await evalJs(primeHelpers);
+
+  const clearPrimed = async () => {
+    await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.title||'').startsWith('Clear ')); if(b) b.click(); return 'OK'; })()`);
+    await sleep(250);
+  };
+  // Scroll a card to the viewport centre and return FRESH coords. Mobile shows a
+  // 2-column grid, so a later card in the fixture can start off-screen; CDP input
+  // is viewport-relative and would silently miss it.
+  const centered = async (id) => {
+    await evalJs(`(() => { const c=window.__card('${id}'); if(c) c.scrollIntoView({ block:'center' }); return 'OK'; })()`);
+    await sleep(250);
+    return evalJs(`window.__cardCoords('${id}')`);
+  };
+
+  // The real touch gestures. A hold is touchStart -> wait past PRIME_HOLD_MS
+  // (500) -> touchEnd; a tap is a quick start/end that the browser turns into a
+  // click (a trusted user gesture, so autoplay is allowed).
+  const touchStart = (x,y) => cdp('Input.dispatchTouchEvent', { type:'touchStart', touchPoints:[{ x, y, id:1, radiusX:2, radiusY:2, force:1 }] });
+  const touchMovePt = (x,y) => cdp('Input.dispatchTouchEvent', { type:'touchMove', touchPoints:[{ x, y, id:1, radiusX:2, radiusY:2, force:1 }] });
+  const touchEnd = () => cdp('Input.dispatchTouchEvent', { type:'touchEnd', touchPoints:[] });
+  const hold = async (x,y,ms=900) => { await touchStart(x,y); await sleep(ms); await touchEnd(); };
+  const tap  = async (x,y) => { await touchStart(x,y); await sleep(60); await touchEnd(); };
+
+  // Q1: touch press-and-hold primes, and does NOT also play. The release after
+  // the timer fires produces a click, which must be swallowed or a hold would
+  // prime the card AND start the sound.
+  const qFire = await centered('p_fire');
+  log('PRIME','Q1-setup: card located', qFire && !qFire.offscreen ? 'PASS':'FAIL', JSON.stringify(qFire));
+  const markQ1 = await evalJs(`window.__mark()`);
+  await hold(qFire.x, qFire.y, 900);
+  await sleep(500);
+  const q1 = await evalJs(`(() => ({
+    primed: window.__primedIds(),
+    badge: !!document.querySelector('[data-prime-badge="p_fire"]'),
+    overlay: !!document.querySelector('[data-prime-overlay="p_fire"]'),
+    aria: window.__card('p_fire')?.getAttribute('aria-pressed'),
+    played: window.__idsOf(window.__since(${markQ1}))
+  }))()`);
+  log('PRIME','Q1: touch press-and-hold primes (badge+overlay+aria)',JSON.stringify(q1?.primed)==='["p_fire"]' && q1?.badge && q1?.overlay && q1?.aria==='true'?'PASS':'FAIL',JSON.stringify(q1));
+  log('PRIME','Q2: hold does NOT also play the sound',(q1?.played||[]).length===0?'PASS':'FAIL',JSON.stringify(q1?.played));
+
+  // Q3: the primed card stays primed. On a real device a long press can raise a
+  // contextmenu, which must not un-prime (toggling twice reads as "broken").
+  await sleep(1500);
+  const q3 = await evalJs(`({ primed: window.__primedIds(), badges: document.querySelectorAll('[data-prime-badge]').length })`);
+  log('PRIME','Q3: primed state holds (no late un-prime)',JSON.stringify(q3?.primed)==='["p_fire"]' && q3?.badges===1?'PASS':'FAIL',JSON.stringify(q3));
+
+  // Q4: a press that MOVES is a scroll, not a prime (40px >> the 10px cancel).
+  await clearPrimed();
+  const qCure = await centered('p_cure');
+  await touchStart(qCure.x, qCure.y);
+  await sleep(250);
+  await touchMovePt(qCure.x + 40, qCure.y + 40);
+  await sleep(900);
+  await touchEnd();
+  await sleep(300);
+  const q4 = await evalJs(`window.__primedIds()`);
+  log('PRIME','Q4: touch hold + 40px move does NOT prime',q4?.length===0?'PASS':'FAIL',JSON.stringify(q4));
+
+  // Q5: edit mode primes by neither gesture (touch included).
+  await toggleMobileEditMode(true);
+  const qCure2 = await centered('p_cure');
+  await hold(qCure2.x, qCure2.y, 900);
+  await sleep(300);
+  const q5 = await evalJs(`window.__primedIds()`);
+  log('PRIME','Q5: edit mode does not prime (touch)',q5?.length===0?'PASS':'FAIL',JSON.stringify(q5));
+  await toggleMobileEditMode(false);
+
+  // Q6: THE feature. Two touch primes + a tap trigger = three sounds sharing one
+  // _primeGroup token; the primed set is CONSUMED and the cards flash as fired.
+  await clearPrimed();
+  const qf6 = await centered('p_fire'); await hold(qf6.x, qf6.y, 900); await sleep(250);
+  const qfr6 = await centered('p_frost'); await hold(qfr6.x, qfr6.y, 900); await sleep(250);
+  const markQ6 = await evalJs(`window.__mark()`);
+  const ql6 = await centered('p_lay');
+  await tap(ql6.x, ql6.y);
+  await sleep(1200);
+  const q6 = await evalJs(`(() => {
+    const els = window.__since(${markQ6});
+    const ids = els.map(e => e._soundId);
+    const groups = els.map(e => e._primeGroup);
+    return {
+      ids: ids.slice().sort(),
+      sameGroup: groups.length===3 && groups[0] && groups.every(g => g === groups[0]),
+      primedAfter: window.__primedIds(),
+      fired: window.__firedIds()
+    };
+  })()`);
+  log('PRIME','Q6: 2 touch primes + tap plays all 3',JSON.stringify(q6?.ids)==='["p_fire","p_frost","p_lay"]'?'PASS':'FAIL',JSON.stringify(q6));
+  log('PRIME','Q6b: all 3 share one _primeGroup token',q6?.sameGroup?'PASS':'FAIL',JSON.stringify(q6?.sameGroup));
+  log('PRIME','Q6c: primed set is CONSUMED after the trigger',q6?.primedAfter?.length===0?'PASS':'FAIL',JSON.stringify(q6?.primedAfter));
+  log('PRIME','Q6d: consumed cards flash as fired',JSON.stringify(q6?.fired?.sort())==='["p_fire","p_frost"]'?'PASS':'FAIL',JSON.stringify(q6?.fired));
+
+  // Q7: the stale-closure guard. Two triggers in the same tick must not each
+  // replay the primed set (the capture-and-clear must be synchronous in a ref).
+  await clearPrimed();
+  const qf7 = await centered('p_fire'); await hold(qf7.x, qf7.y, 900); await sleep(200);
+  const markQ7 = await evalJs(`window.__mark()`);
+  await evalJs(`(() => { window.__playCard('p_lay'); window.__playCard('p_cure'); return 'OK'; })()`);
+  await sleep(1000);
+  const q7 = await evalJs(`(() => {
+    const ids = window.__idsOf(window.__since(${markQ7}));
+    const c = id => ids.filter(x => x === id).length;
+    return { fire:c('p_fire'), lay:c('p_lay'), cure:c('p_cure'), total:ids.length };
+  })()`);
+  log('PRIME','Q7: rapid double trigger does not double the primes',q7?.fire===1 && q7?.lay===1 && q7?.cure===1 && q7?.total===3?'PASS':'FAIL',JSON.stringify(q7));
+
+  // Q8: the clear-all affordance tracks the primed set.
+  await clearPrimed();
+  const q8before = await evalJs(`window.__clearBtn()`);
+  const qf8 = await centered('p_fire'); await hold(qf8.x, qf8.y, 900); await sleep(250);
+  const q8a = await evalJs(`({ btn: window.__clearBtn(), primed: window.__primedIds() })`);
+  const qfr8 = await centered('p_frost'); await hold(qfr8.x, qfr8.y, 900); await sleep(250);
+  const q8b = await evalJs(`window.__clearBtn()`);
+  await clearPrimed();
+  const q8c = await evalJs(`({ primed: window.__primedIds(), btn: window.__clearBtn() })`);
+  log('PRIME','Q8a: no clear button while nothing is primed',q8before==='NO_BTN'?'PASS':'FAIL',q8before);
+  log('PRIME','Q8b: button appears with the live count',/Clear 1 primed/.test(q8a?.btn||'') && /Clear 2 primed/.test(q8b||'')?'PASS':'FAIL',JSON.stringify({a:q8a?.btn,b:q8b}));
+  log('PRIME','Q8c: clear empties the primed set and hides itself',q8c?.primed?.length===0 && q8c?.btn==='NO_BTN'?'PASS':'FAIL',JSON.stringify(q8c));
+
+  // Q9: primed state is session-only. Nothing is persisted - the deliberate
+  // absence of a localStorage key is asserted here too.
+  const qf9 = await centered('p_fire'); await hold(qf9.x, qf9.y, 900); await sleep(250);
+  const qKeys = await evalJs(`Object.keys(localStorage).filter(k => !k.startsWith('sound_file_')).sort()`);
+  const knownPrimeKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted'];
+  const qExtraKeys = (qKeys||[]).filter(k => !knownPrimeKeys.includes(k));
+  log('PRIME','Q9: no new localStorage key for priming',qExtraKeys.length===0?'PASS':'FAIL',JSON.stringify(qExtraKeys));
+
+  await cdp('Page.reload', { ignoreCache: true });
+  await waitForReload();
+  await evalJs(primeHelpers);
+  const q10 = await evalJs(`({ primed: window.__primedIds(), badges: document.querySelectorAll('[data-prime-badge]').length, btn: window.__clearBtn() })`);
+  log('PRIME','Q10: primed state does NOT survive a reload',q10?.primed?.length===0 && q10?.badges===0 && q10?.btn==='NO_BTN'?'PASS':'FAIL',JSON.stringify(q10));
+
+  // Q11: stopping the primary stops the WHOLE primed group. Uses the looping
+  // fixture (the shared clip is under a second and would unregister via 'ended').
+  await clearPrimed();
+  const a11 = await centered('p27_a'); await hold(a11.x, a11.y, 900); await sleep(200);
+  const b11 = await centered('p27_b'); await hold(b11.x, b11.y, 900); await sleep(200);
+  const markQ11 = await evalJs(`window.__mark()`);
+  const c11 = await centered('p27_c');
+  await tap(c11.x, c11.y); await sleep(700);
+  const stopRes11 = await evalJs(`(() => {
+    const c = window.__card('p27_c');
+    const b = c && c.querySelector('button[title="Stop Sound"]');
+    if (!b) return 'NO_STOP_BTN';
+    b.click(); return 'OK';
+  })()`);
+  await sleep(400);
+  const q11 = await evalJs(`(() => {
+    const els = window.__since(${markQ11});
+    return { n: els.length, stopped: els.filter(e => e.stopped === true).length };
+  })()`);
+  log('PRIME','Q11: stopping the primary stops the WHOLE primed group',stopRes11==='OK' && q11?.n===3 && q11?.stopped===3?'PASS':'FAIL',JSON.stringify({stop:stopRes11,n:q11?.n,stopped:q11?.stopped}));
+
+  // Q12-Q14: the container-shape walker. soundById is built from
+  // allSoundContainers(), so a touch prime must resolve from every shape. Mobile
+  // navigates with the drawer, not tabs. Best-effort step clicks; a missing card
+  // reports what the drawer actually offered.
+  const drawerPick = async (text) => evalJs(`(() => {
+    const want = ${JSON.stringify(text)};
+    const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+    if (!d) return 'NO_DRAWER';
+    const all = [...d.querySelectorAll('button')];
+    const b = all.find(x => x.textContent.trim() === want)
+           || all.find(x => x.textContent.trim().endsWith(want))
+           || all.find(x => x.title === want);
+    if (!b) return 'NO_ITEM:' + want;
+    b.click(); return 'OK';
+  })()`);
+  const drawerList = () => evalJs(`(() => {
+    const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+    if (!d) return 'NO_DRAWER';
+    return JSON.stringify([...d.querySelectorAll('button')].map(x => x.title || x.textContent.trim()).filter(t => t && t.length < 24).slice(0, 30));
+  })()`);
+
+  const primeAndFire = async (label, steps, primeId, trigId) => {
+    await clearPrimed();
+    await openDrawer();
+    const opened = await evalJs(`!!document.querySelector('[role="dialog"][aria-label="Navigation"]')`);
+    const picks = [];
+    for (const s of steps) { picks.push(s + '=' + await drawerPick(s)); await sleep(450); }
+    const drawerNow = await drawerList();
+    const heading = await evalJs(`document.querySelector('h2')?.textContent?.trim() || ''`);
+    await closeDrawer();
+    await sleep(450);
+    const has = await evalJs(`!!window.__card('${primeId}')`);
+    if (!has) { log('PRIME', label, 'FAIL', `card ${primeId} not rendered; opened=${opened}; picks=${JSON.stringify(picks)}; heading=${JSON.stringify(heading)}; drawer=${drawerNow}`); return; }
+    const c = await centered(primeId);
+    await hold(c.x, c.y, 900); await sleep(250);
+    const primed = await evalJs(`window.__primedIds()`);
+    if (JSON.stringify(primed) !== JSON.stringify([primeId])) { log('PRIME', label, 'FAIL', `primed=${JSON.stringify(primed)}`); return; }
+    const mark = await evalJs(`window.__mark()`);
+    const t = await centered(trigId);
+    await tap(t.x, t.y); await sleep(1000);
+    const ids = await evalJs(`window.__idsOf(window.__since(${mark}))`);
+    const ok = (ids||[]).includes(trigId) && (ids||[]).includes(primeId);
+    await clearPrimed();
+    log('PRIME', label, ok ? 'PASS' : 'FAIL', ok ? 'ok' : `fired=${JSON.stringify(ids)}`);
+  };
+
+  await primeAndFire('Q12: primes + fires from an environment category', ['Environment','Dungeon'], 'pe_prime', 'pe_trig');
+  await primeAndFire('Q13: primes + fires from a group category', ['Tavern Pack','Ambience'], 'pg_prime', 'pg_trig');
+  await primeAndFire('Q14: primes + fires from a group character', ['Hero Pack','Fighter'], 'pch_prime', 'pch_trig');
+
+  // ================================================================
+  //  P: PER-SOUND VOLUME (shared spec - see e2e/specs/volume.mjs)
+  // ================================================================
+  // The assertions transfer verbatim from the desktop suite. The only platform
+  // difference is P9's "trusted gesture" tap, which the shared spec routes through
+  // the driver (desktop mouse event here, Input.dispatchTouchEvent on Android).
+  await runSpecs(ctx, [volume]);
+  // ================================================================
+  //  M: MOVE / COPY SOUND
+  // ================================================================
+  // Port of e2e-full.mjs Suite M (M1-M22). The picker is platform-independent DOM
+  // (a fixed overlay with section headers and row buttons), so the checks transfer
+  // verbatim. One navigation difference: the desktop suite switches the active
+  // character with a sidebar button to reach a sound it just moved; the mobile
+  // board is drawer-driven, so this seed keeps every SOURCE on the initially
+  // visible Human Paladin board and moves them OUT - exercising the same
+  // character -> character / group-category / group-character / environment
+  // transfers without any drawer round-trip.
+  console.log(`\n[${LABEL}] === SUITE M: MOVE / COPY SOUND ===`);
+
+  const seedMove = `(() => {
+    const mk = (id,name,opts) => Object.assign({
+      id, name, type:'Test', icon:'', file:'',
+      files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
+      color:'#ff0000', duration:0, randomPlay:false
+    }, opts||{});
+    localStorage.setItem('ttrpg_characters', JSON.stringify([
+      { id:'c1', name:'Human Paladin', sounds:[
+        mk('src_a','Alpha'), mk('src_b','Bravo',{ randomPlay:true, color:'#3b82f6' }),
+        mk('src_c','Charlie'), mk('src_d','Delta'), mk('src_e','Echo')
+      ]},
+      { id:'c2', name:'Elf Sorcerer', sounds:[] }
+    ]));
+    localStorage.setItem('ttrpg_environment', JSON.stringify([
+      { id:'e1', category:'Dungeon', sounds:[ mk('dun_a','Dungeon Drop') ] },
+      { id:'e2', category:'Forest', sounds:[] }
+    ]));
+    localStorage.setItem('ttrpg_groups', JSON.stringify([
+      { id:'g1', name:'Tavern Pack', mode:'environment',
+        categories:[{id:'gc1', category:'Ambience', sounds:[ mk('tav_a','Tavern Tune') ]}], characters:[] },
+      { id:'g2', name:'Hero Pack', mode:'characters', categories:[],
+        characters:[{id:'gch1', name:'Fighter', sounds:[]}] }
+    ]));
+    localStorage.setItem('ttrpg_themes', JSON.stringify([]));
+    localStorage.setItem('ttrpg_data_version', '3');
+    for (let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k.startsWith('sound_file_')) localStorage.removeItem(k);}
+    return 'seeded';
+  })()`;
+
+  // The picker helpers read localStorage directly (names/settings are the proof),
+  // matching e2e-full.mjs so a failure here is comparable to the desktop run.
+  const mcHelpers = `(() => {
+    window.__mcOpen = (cardName) => {
+      const c=[...document.querySelectorAll('[data-sound-card]')].find(c=>c.textContent.includes(cardName));
+      if(!c) return 'NO_CARD';
+      const b=c.parentElement?.querySelector('button[title="Move or Copy Sound"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcSections = () => [...document.querySelectorAll('p')]
+      .filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'))
+      .map(p => p.textContent.trim());
+    window.__mcRow = (section, name) => {
+      const secs=[...document.querySelectorAll('p')].filter(p => (p.className||'').includes('uppercase') && (p.className||'').includes('font-semibold'));
+      const sec=secs.find(p => p.textContent.trim()===section);
+      if(!sec) return null;
+      const rows=[...(sec.parentElement?.children||[])].filter(el => el.tagName==='DIV');
+      return rows.find(r => { const span=r.querySelector('span'); return span && span.firstChild && span.firstChild.textContent.trim()===name; }) || null;
+    };
+    window.__mcTitles = (section, name) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return null;
+      return [...row.querySelectorAll('button')].map(b=>b.getAttribute('title'));
+    };
+    window.__mcClick = (section, name, verb) => {
+      const row=window.__mcRow(section,name);
+      if(!row) return 'NO_ROW';
+      const b=row.querySelector('button[title="'+verb+' to '+name+'"]');
+      if(!b) return 'NO_BTN';
+      b.click(); return 'OK';
+    };
+    window.__mcModalOpen = () => {
+      const m=[...document.querySelectorAll('h2')].find(h=>h.textContent.trim()==='Move or Copy');
+      return !!m && !!m.closest('div[class*="fixed"]');
+    };
+    window.__soundsIn = (key, matchName) => {
+      const list=JSON.parse(localStorage.getItem(key)||'[]');
+      const out=[];
+      const walkChar=(c)=>out.push(...(c.sounds||[]).map(s=>({container:c.name||c.category, sound:s})));
+      const walkGroup=(g)=>{
+        (g.categories||[]).forEach(cat=>out.push(...(cat.sounds||[]).map(s=>({container:g.name+' / '+cat.category, sound:s}))));
+        (g.characters||[]).forEach(ch=>out.push(...(ch.sounds||[]).map(s=>({container:g.name+' / '+ch.name, sound:s}))));
+      };
+      if(key==='ttrpg_characters') list.forEach(walkChar);
+      else if(key==='ttrpg_environment') list.forEach(walkChar);
+      else list.forEach(walkGroup);
+      return out.filter(e => e.sound.name === matchName);
+    };
+    window.__countFileKeys = () => { let n=0; for(let i=0;i<localStorage.length;i++){ if((localStorage.key(i)||'').startsWith('sound_file_')) n++; } return n; };
+    return 'ok';
+  })()`;
+
+  await evalJs(seedMove);
+  await cdp('Page.reload', { ignoreCache: true });
+  await waitForReload();
+  await evalJs(mcHelpers);
+  await toggleMobileEditMode(true);
+
+  // M1: the button exists on every card, only in edit mode.
+  const mBtn = await evalJs(`(() => {
+    const cards=[...document.querySelectorAll('[data-sound-card]')];
+    const withBtn=cards.filter(c=>!!c.parentElement?.querySelector('button[title="Move or Copy Sound"]'));
+    return {cards:cards.length, withBtn:withBtn.length};
+  })()`);
+  log('MOVE','M1: Move/Copy button on all cards in edit mode',mBtn?.cards>0&&mBtn?.withBtn===mBtn?.cards?'PASS':'FAIL',mBtn?.withBtn+'/'+mBtn?.cards);
+
+  // M2: picker opens from a card.
+  const mOpen = await evalJs(`window.__mcOpen('Alpha')`);
+  await sleep(500);
+  const mPickerOpen = await evalJs(`window.__mcModalOpen()`);
+  log('MOVE','M2: card button opens picker',mOpen==='OK'&&mPickerOpen===true?'PASS':'FAIL','open='+mOpen+' modal='+mPickerOpen);
+
+  // M3: sections present, in sidebar order.
+  const mSections = await evalJs(`window.__mcSections()`);
+  log('MOVE','M3: sections Characters/groups/Environments',Array.isArray(mSections)&&mSections[0]==='Characters'&&mSections.includes('Tavern Pack')&&mSections.includes('Hero Pack')&&mSections[mSections.length-1]==='Environments'?'PASS':'FAIL',JSON.stringify(mSections));
+
+  // M4: current container offers Copy but not Move.
+  const mSelfTitles = await evalJs(`window.__mcTitles('Characters','Human Paladin')`);
+  log('MOVE','M4: current container has Copy, no Move',Array.isArray(mSelfTitles)&&!mSelfTitles.includes('Move to Human Paladin')&&mSelfTitles.includes('Copy to Human Paladin')?'PASS':'FAIL',JSON.stringify(mSelfTitles));
+
+  // M5: another container offers both, with distinct stable titles.
+  const mOtherTitles = await evalJs(`window.__mcTitles('Characters','Elf Sorcerer')`);
+  log('MOVE','M5: target row has Move + Copy titles',Array.isArray(mOtherTitles)&&mOtherTitles.includes('Move to Elf Sorcerer')&&mOtherTitles.includes('Copy to Elf Sorcerer')?'PASS':'FAIL',JSON.stringify(mOtherTitles));
+
+  // M6-M10: COPY character -> character (picker from M2 is still open).
+  const beforeCopy = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, soundFileKeys: window.__countFileKeys() };
+  })()`);
+  const mCopy = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
+  await sleep(700);
+  const afterCopy = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const src=window.__soundsIn('ttrpg_characters','Alpha');
+    const paladin=l.find(c=>c.name==='Human Paladin');
+    const elf=l.find(c=>c.name==='Elf Sorcerer');
+    const copy=elf?.sounds?.find(s=>s.name==='Alpha (copy)');
+    return {
+      paladin:paladin?.sounds?.length, elf:elf?.sounds?.length,
+      srcStillThere:paladin?.sounds?.some(s=>s.name==='Alpha'),
+      copyFound:!!copy,
+      idsDiffer: !!copy && !!src[0] && src[0].sound.id !== copy.id,
+      sharedFile: !!copy && !!src[0] && JSON.stringify(copy.files)===JSON.stringify(src[0].sound.files),
+      legacyKept: copy ? ('file' in copy) : false,
+      fileKeys: window.__countFileKeys()
+    };
+  })()`);
+  log('MOVE','M6: copy adds to target, source untouched',mCopy==='OK'&&afterCopy?.paladin===beforeCopy?.paladin&&afterCopy?.elf===beforeCopy?.elf+1&&afterCopy?.srcStillThere===true?'PASS':'FAIL',JSON.stringify({before:beforeCopy,after:afterCopy}));
+  log('MOVE','M7: copy id differs from source',afterCopy?.copyFound&&afterCopy?.idsDiffer?'PASS':'FAIL','copyFound='+afterCopy?.copyFound);
+  log('MOVE','M8: copy shares files[] verbatim',afterCopy?.sharedFile?'PASS':'FAIL','');
+  log('MOVE','M9: copy keeps legacy file field',afterCopy?.legacyKept?'PASS':'FAIL','');
+  log('MOVE','M10: copy wrote no new sound_file_* key',afterCopy?.fileKeys===beforeCopy?.soundFileKeys?'PASS':'FAIL','before='+beforeCopy?.soundFileKeys+' after='+afterCopy?.fileKeys);
+
+  // M11: second copy auto-suffixes "(copy 2)", scoped to the destination.
+  await evalJs(`window.__mcOpen('Alpha')`);
+  await sleep(400);
+  const mCopy2 = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
+  await sleep(700);
+  const names2 = await evalJs(`(() => { const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]'); return l.find(c=>c.name==='Elf Sorcerer')?.sounds?.map(s=>s.name); })()`);
+  log('MOVE','M11: second copy is "Alpha (copy 2)"',mCopy2==='OK'&&Array.isArray(names2)&&names2.includes('Alpha (copy 2)')?'PASS':'FAIL',JSON.stringify(names2));
+
+  // M12: same name in a DIFFERENT container is not suffixed globally.
+  await evalJs(`window.__mcOpen('Alpha')`);
+  await sleep(400);
+  const mCopyDungeon = await evalJs(`window.__mcClick('Environments','Dungeon','Copy')`);
+  await sleep(700);
+  const dungeonNames = await evalJs(`(() => { const l=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]'); return l.find(c=>c.category==='Dungeon')?.sounds?.map(s=>s.name); })()`);
+  log('MOVE','M12: copy elsewhere is "(copy)", not "(copy 3)"',mCopyDungeon==='OK'&&Array.isArray(dungeonNames)&&dungeonNames.includes('Alpha (copy)')?'PASS':'FAIL',JSON.stringify(dungeonNames));
+
+  // M13-M15: MOVE within the same slice preserves everything and is silent.
+  const beforeMove = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const s=l.find(c=>c.name==='Human Paladin')?.sounds?.find(x=>x.name==='Bravo');
+    window.__moveId=s?.id; window.__moveColor=s?.color; window.__moveFiles=JSON.stringify(s?.files);
+    return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, sound:s };
+  })()`);
+  await evalJs(`window.__mcOpen('Bravo')`);
+  await sleep(400);
+  const mMove = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Move')`);
+  await sleep(800);
+  const afterMove = await evalJs(`(() => {
+    const l=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    const paladin=l.find(c=>c.name==='Human Paladin');
+    const elf=l.find(c=>c.name==='Elf Sorcerer');
+    const moved=elf?.sounds?.find(s=>s.name==='Bravo');
+    return {
+      paladin:paladin?.sounds?.length, elf:elf?.sounds?.length,
+      goneFromSource:!paladin?.sounds?.some(s=>s.name==='Bravo'),
+      sameId: !!moved && moved.id === window.__moveId,
+      settingsKept: !!moved && moved.color===window.__moveColor && moved.randomPlay===true && JSON.stringify(moved.files)===window.__moveFiles,
+      anyDialog: !!document.querySelector('h2')?.textContent?.includes('Confirm Delete'),
+      pickerClosed: !window.__mcModalOpen()
+    };
+  })()`);
+  log('MOVE','M13: move relocates within slice',mMove==='OK'&&afterMove?.paladin===beforeMove?.paladin-1&&afterMove?.elf===beforeMove?.elf+1&&afterMove?.goneFromSource?'PASS':'FAIL',JSON.stringify({before:{p:beforeMove?.paladin,e:beforeMove?.elf},after:{p:afterMove?.paladin,e:afterMove?.elf}}));
+  log('MOVE','M14: move preserves id + settings + files',afterMove?.settingsKept?'PASS':'FAIL','');
+  log('MOVE','M15: move opens no dialog, picker closed',afterMove?.pickerClosed&&afterMove?.anyDialog===false?'PASS':'FAIL','pickerClosed='+afterMove?.pickerClosed);
+
+  // M16: cross-slice move from a character into a group category.
+  await evalJs(`window.__mcOpen('Charlie')`);
+  await sleep(400);
+  const mMoveGroup = await evalJs(`window.__mcClick('Tavern Pack','Ambience','Move')`);
+  await sleep(800);
+  const groupMoved = await evalJs(`(() => {
+    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Charlie'),
+      landedInGroup:!!g.find(x=>x.name==='Tavern Pack')?.categories?.find(cat=>cat.category==='Ambience')?.sounds?.some(s=>s.name==='Charlie')
+    };
+  })()`);
+  log('MOVE','M16: move from character into group category',mMoveGroup==='OK'&&groupMoved?.stillInChar===false&&groupMoved?.landedInGroup===true?'PASS':'FAIL',JSON.stringify(groupMoved));
+
+  // M17: cross-slice move from a character into an environment category.
+  await evalJs(`window.__mcOpen('Delta')`);
+  await sleep(400);
+  const mMoveEnv = await evalJs(`window.__mcClick('Environments','Dungeon','Move')`);
+  await sleep(800);
+  const envMoved = await evalJs(`(() => {
+    const e=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Delta'),
+      landedInEnv:!!e.find(x=>x.category==='Dungeon')?.sounds?.some(s=>s.name==='Delta')
+    };
+  })()`);
+  log('MOVE','M17: move from character into environment category',mMoveEnv==='OK'&&envMoved?.stillInChar===false&&envMoved?.landedInEnv===true?'PASS':'FAIL','click='+mMoveEnv+' env='+JSON.stringify(envMoved));
+
+  // M18: move into a group character (cross-slice).
+  await evalJs(`window.__mcOpen('Echo')`);
+  await sleep(400);
+  const mMoveGroupChar = await evalJs(`window.__mcClick('Hero Pack','Fighter','Move')`);
+  await sleep(800);
+  const groupCharMoved = await evalJs(`(() => {
+    const g=JSON.parse(localStorage.getItem('ttrpg_groups')||'[]');
+    const c=JSON.parse(localStorage.getItem('ttrpg_characters')||'[]');
+    return {
+      stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Echo'),
+      landedInGroupChar:!!g.find(x=>x.name==='Hero Pack')?.characters?.find(ch=>ch.name==='Fighter')?.sounds?.some(s=>s.name==='Echo')
+    };
+  })()`);
+  log('MOVE','M18: move into a group character (cross-slice)',mMoveGroupChar==='OK'&&groupCharMoved?.stillInChar===false&&groupCharMoved?.landedInGroupChar===true?'PASS':'FAIL',JSON.stringify(groupCharMoved));
+
+  // M19: an empty destination is still offered and accepts a copy.
+  await evalJs(`window.__mcOpen('Alpha')`);
+  await sleep(400);
+  const forestRow = await evalJs(`window.__mcTitles('Environments','Forest')`);
+  const mCopyForest = await evalJs(`window.__mcClick('Environments','Forest','Copy')`);
+  await sleep(700);
+  const forestHas = await evalJs(`(() => { const l=JSON.parse(localStorage.getItem('ttrpg_environment')||'[]'); return l.find(c=>c.category==='Forest')?.sounds?.map(s=>s.name); })()`);
+  log('MOVE','M19: empty destination listed and accepts copy',Array.isArray(forestRow)&&forestRow.includes('Copy to Forest')&&Array.isArray(forestHas)&&forestHas.length===1?'PASS':'FAIL',JSON.stringify({row:forestRow,sounds:forestHas}));
+
+  // M20: Esc closes the picker (capture phase, so it does not also close the drawer).
+  await evalJs(`window.__mcOpen('Alpha')`);
+  await sleep(400);
+  await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+  await sleep(400);
+  const escClosed = await evalJs(`!window.__mcModalOpen()`);
+  log('MOVE','M20: Esc closes picker',escClosed===true?'PASS':'FAIL','');
+
+  // M21: data version untouched, no *_old keys (no data reset).
+  const ver = await evalJs(`(() => { let old=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; if(k.endsWith('_old')) old.push(k); } return { v:localStorage.getItem('ttrpg_data_version'), old }; })()`);
+  log('MOVE','M21: DATA_VERSION still 3, no *_old keys',ver?.v==='3'&&ver?.old?.length===0?'PASS':'FAIL',JSON.stringify(ver));
+
+  // M22: button absent outside edit mode.
+  await toggleMobileEditMode(false);
+  await sleep(400);
+  const noEditBtns = await evalJs(`document.querySelectorAll('button[title="Move or Copy Sound"]').length`);
+  log('MOVE','M22: button hidden outside edit mode',noEditBtns===0?'PASS':'FAIL','count='+noEditBtns);
+
+  // ================================================================
+  //  Z: LIVE PLAYBACK (shared spec - see e2e/specs/playback.mjs)
+  // ================================================================
+  // Port of the live-playback suite that used to live only in e2e-features.mjs.
+  // Z1's trigger is a real Input.dispatchTouchEvent tap through driver.trustedTap
+  // — a synthetic click is not a user gesture, so autoplay is refused and play()
+  // rejects, which would leave every later assertion reading a dead element.
+  // Last of the shared specs so the fade sampling is not competing with other
+  // suites; refcount re-seeds after it.
+  await runSpecs(ctx, [playback]);
+
+  // ================================================================
+  //  G: FILE REFCOUNT GUARD (shared spec - see e2e/specs/refcount.mjs)
+  // ================================================================
+  // Standalone and last: re-seeds a known storedName, copies the sound, deletes
+  // the source container and asserts the file key survives. G5 is the negative
+  // localStorage case, which is not applicable under Tauri and logs a WARN -
+  // Android reports 1 WARN / exit 1 exactly like the Windows phase.
+  await runSpecs(ctx, [refcount]);
+
+  // ================================================================
   //  Summary + Restore
   // ================================================================
   if (SAVE_RESTORE && capturedLS) {
-    const rr = await evalJs(`(() => { const o = ${JSON.stringify(capturedLS)}; localStorage.clear(); for (const k in o) localStorage.setItem(k, o[k]); return 'restored'; })()`);
+    const rr = await evalJs(restoreLs(capturedLS));
     console.log(`[${LABEL}] localStorage restore:`, rr);
     await cdp('Page.reload', { ignoreCache: true });
     await sleep(3000);
   }
 
   console.log('\n==============================');
-  console.log(`[${LABEL}] MOBILE E2E SUMMARY: PASS=${pass}  FAIL=${fail}  WARN=${warn}  TOTAL=${pass+fail+warn}`);
+  report.summary();
   console.log('==============================');
 
-  closingIntentionally = true;
-  ws.close();
-  process.exit(fail > 0 ? 2 : (warn > 0 ? 1 : 0));
+  close();
+  process.exit(report.exitCode());
 }
 
 main().catch(e => { console.error('FATAL:', e); process.exit(1); });

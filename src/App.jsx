@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 /* global __APP_VERSION__ */
 import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
@@ -706,6 +706,17 @@ const normalizeSoundVolume = (value) => {
     const num = Number(value)
     return Number.isFinite(num) ? Math.min(1, Math.max(0, num)) : 1
 }
+
+// Sound priming. A press longer than PRIME_HOLD_MS toggles the card's primed
+// state; moving the pointer further than PRIME_MOVE_CANCEL_PX cancels it, so a
+// scroll or a drag never primes by accident.
+const PRIME_HOLD_MS = 500
+const PRIME_MOVE_CANCEL_PX = 10
+// How long the consumed cards keep their "fired" flash. Priming is one-shot, so
+// the flash is the only feedback about what actually played - it has to stay up
+// long enough for a GM to glance at the board and read it, which 1.2s was not.
+// Re-triggering replaces it rather than stacking, so nothing goes stale.
+const PRIME_FLASH_MS = 2000
 
 // Keys that hold either sounds (patched) or further containers (recurse into).
 // Together these cover all FIVE container shapes: characters[].sounds,
@@ -1480,6 +1491,120 @@ function App() {
         updateSoundVolume(soundId, level)
     }
 
+    // ---------------------------------------------------------------------
+    //  Sound priming
+    //
+    //  One-shot and session-only by design: nothing is persisted, so there is
+    //  deliberately no localStorage key for it. A primed sound fires alongside
+    //  the next trigger you play, then the whole set is consumed.
+    // ---------------------------------------------------------------------
+    const [primedSoundIds, setPrimedSoundIds] = useState(() => new Set())
+    // The primed set is ALSO held in a ref, and the ref is the authority.
+    // Reading it from state alone is not enough: a trigger captures the set
+    // before any awaiting, and two triggers in the same tick (a fast double
+    // click, or a click plus a hotkey) would both see the same closure value
+    // and play the primes twice. State exists only to trigger the re-render.
+    const primedRef = useRef(new Set())
+    // Sounds that were consumed by the last trigger. Because the primed set is
+    // gone by the time they play, this flash is the only record of what fired.
+    const [firedPrimeIds, setFiredPrimeIds] = useState([])
+    const primeFlashTimerRef = useRef(null)
+    // The currently armed press-and-hold, if any.
+    const primeHoldRef = useRef(null)
+    // Set when a hold has already primed, so the click its release produces is
+    // swallowed instead of also playing the sound.
+    const suppressNextClickRef = useRef(false)
+
+    useEffect(() => {
+        return () => {
+            if (primeFlashTimerRef.current) clearTimeout(primeFlashTimerRef.current)
+            if (primeHoldRef.current?.timer) clearTimeout(primeHoldRef.current.timer)
+        }
+    }, [])
+
+    const isPrimed = (soundId) => primedSoundIds.has(soundId)
+
+    // Priming is a toggle, so the second gesture un-primes. A Set needs a new
+    // identity to re-render - never mutate it in place.
+    const togglePrime = (soundId) => {
+        if (editMode) return
+        const next = new Set(primedRef.current)
+        if (next.has(soundId)) {
+            next.delete(soundId)
+        } else {
+            next.add(soundId)
+        }
+        primedRef.current = next
+        setPrimedSoundIds(next)
+    }
+
+    // One-shot priming makes mis-primes likely, and un-priming them one card at
+    // a time is a bad way to recover mid-session.
+    const clearAllPrimes = () => {
+        primedRef.current = new Set()
+        setPrimedSoundIds(new Set())
+    }
+
+    const flashFiredPrimes = (ids) => {
+        if (!ids || ids.length === 0) return
+        if (primeFlashTimerRef.current) clearTimeout(primeFlashTimerRef.current)
+        setFiredPrimeIds(ids)
+        primeFlashTimerRef.current = setTimeout(() => setFiredPrimeIds([]), PRIME_FLASH_MS)
+    }
+
+    const cancelPrimeHold = () => {
+        const entry = primeHoldRef.current
+        if (!entry) return
+        if (entry.timer) clearTimeout(entry.timer)
+        if (entry.detach) entry.detach()
+        primeHoldRef.current = null
+    }
+
+    // Arms the press-and-hold used on touch (and on desktop, for consistency).
+    // The move/end listeners go on the document rather than the card so that
+    // dragging off the card still cancels, and so the card's own pointer
+    // handlers stay untouched by this feature.
+    const armPrimeHold = (soundId, event) => {
+        if (editMode) return
+        // Only the primary button arms the hold. A right-click arrives as a
+        // pointerdown with button 2 AND as a contextmenu; arming on both would
+        // toggle twice, and because priming is a toggle that un-primes - which
+        // reads as "priming is broken".
+        if (event.button !== 0) return
+        cancelPrimeHold()
+        // A new press is new intent, so click suppression left over from an
+        // earlier hold must not swallow this press's click.
+        suppressNextClickRef.current = false
+
+        const entry = { soundId, startX: event.clientX, startY: event.clientY, timer: null }
+
+        const moveHandler = (ev) => {
+            const dx = ev.clientX - entry.startX
+            const dy = ev.clientY - entry.startY
+            if (Math.abs(dx) > PRIME_MOVE_CANCEL_PX || Math.abs(dy) > PRIME_MOVE_CANCEL_PX) {
+                cancelPrimeHold()
+            }
+        }
+        const endHandler = () => cancelPrimeHold()
+        entry.detach = () => {
+            document.removeEventListener('pointermove', moveHandler)
+            document.removeEventListener('pointerup', endHandler)
+            document.removeEventListener('pointercancel', endHandler)
+        }
+
+        entry.timer = setTimeout(() => {
+            cancelPrimeHold()
+            // Releasing now produces a click; it must not play the sound.
+            suppressNextClickRef.current = true
+            togglePrime(soundId)
+        }, PRIME_HOLD_MS)
+
+        primeHoldRef.current = entry
+        document.addEventListener('pointermove', moveHandler)
+        document.addEventListener('pointerup', endHandler)
+        document.addEventListener('pointercancel', endHandler)
+    }
+
     const toggleFullscreen = async () => {
         if (isTauri) {
             try {
@@ -2008,6 +2133,19 @@ function App() {
         })
         return containers
     }
+
+    // id -> sound, for resolving the primed set back to objects when it fires.
+    // Built from allSoundContainers() so all FIVE container shapes are covered;
+    // a hand-rolled walker over the four "real" ones silently misses sounds.
+    const soundById = useMemo(() => {
+        const map = new Map()
+        allSoundContainers().forEach(container => {
+            container.sounds.forEach(sound => {
+                if (sound && sound.id && !map.has(sound.id)) map.set(sound.id, sound)
+            })
+        })
+        return map
+    }, [characters, environmentSounds, groups])
 
     const findContainerByRef = (ref) =>
         allSoundContainers().find(container => sameContainer(container, ref)) || null
@@ -3403,7 +3541,7 @@ function App() {
         }
     }
 
-    const playSound = async (sound) => {
+    const playSound = async (sound, options = {}) => {
         if (editMode) return
 
         if (!audioEnabled) {
@@ -3457,6 +3595,9 @@ function App() {
         audio._soundId = soundKey
         audio._soundVolume = soundVolume
         audio._baseVolume = baseVolume
+        // Sounds started together by one primed trigger share a token, so the
+        // card's stop button can stop the whole group rather than one of them.
+        audio._primeGroup = options.primeGroupId || null
 
         const audioInstanceKey = `${soundKey}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         audioElementsRef.current.set(audioInstanceKey, audio)
@@ -3645,6 +3786,51 @@ function App() {
         })
     }
 
+    // Stop one trigger. If this sound was started as part of a primed group, the
+    // whole group stops - one card is one action to the user, even when it made
+    // three sounds. A sound playing on its own still stops just its own
+    // instances, and stopAllSounds is unaffected either way.
+    const stopTrigger = (sound) => {
+        const entries = Array.from(audioElementsRef.current.entries())
+        const own = entries.filter(([, audio]) => audio._soundId === sound.id)
+        const groupId = own.map(([, audio]) => audio._primeGroup).find(Boolean)
+        if (!groupId) {
+            stopSound(sound)
+            return
+        }
+        entries
+            .filter(([, audio]) => audio._primeGroup === groupId)
+            .forEach(([instanceKey, audio]) => stopAudioInstance(instanceKey, audio))
+    }
+
+    // The single trigger chokepoint. Card click, keyboard and any future hotkey
+    // all come through here, so priming has exactly one place to test.
+    const playWithPrimes = async (sound) => {
+        if (editMode) return
+        // Read AND clear the authoritative ref synchronously, before the first
+        // await. Reading from state instead would let a second trigger fired in
+        // the same tick read the pre-consume value and replay the primes. The
+        // badges vanish immediately too, which is what one-shot should look like.
+        const ids = Array.from(primedRef.current)
+        primedRef.current = new Set()
+        setPrimedSoundIds(new Set())
+
+        const primeGroupId = ids.length > 0 ? mintId('primegroup') : null
+        playSound(sound, { primeGroupId })
+        flashFiredPrimes(ids.filter(id => id !== sound.id && soundById.has(id)))
+
+        for (const id of ids) {
+            // Priming a sound and then playing that sound must not double it.
+            if (id === sound.id) continue
+            const primed = soundById.get(id)
+            // A primed sound that has since been deleted, or whose file cannot be
+            // resolved, is skipped rather than allowed to break the primary
+            // trigger. Not awaited: the primes are meant to fire alongside.
+            if (!primed) continue
+            playSound(primed, { primeGroupId }).catch(() => {})
+        }
+    }
+
     useEffect(() => {
         if (tabType === 'characters' && characters.length > 0 && !activeTab) {
             setActiveTab(characters[0].id)
@@ -3796,6 +3982,8 @@ function App() {
             ? cardVolumeDraft.level
             : normalizeSoundVolume(sound.volume)
         const cardVolumePercent = Math.round(cardVolume * 100)
+const isPrimedCard = !editMode && isPrimed(sound.id)
+const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
         return (
             <div
@@ -3810,11 +3998,18 @@ function App() {
                     <div
                         data-sound-card
                         data-sound-id={sound.id}
+                        data-primed={isPrimedCard ? 'true' : undefined}
+                        data-fired={wasFired ? 'true' : undefined}
                         role="button"
                         tabIndex={editMode ? -1 : 0}
                         aria-disabled={editMode}
+                        aria-pressed={isPrimedCard}
                         draggable={false}
                         onPointerDown={(e) => {
+                            // Armed first so press-and-hold primes; it is a no-op
+                            // in edit mode, so the drag branch below still owns
+                            // that case outright.
+                            armPrimeHold(sound.id, e)
                             if (!editMode || e.button !== 0) return
                             e.preventDefault()
                             try {
@@ -3899,14 +4094,32 @@ function App() {
                             window.addEventListener('blur', onDocBlur)
                         }}
                         onClick={() => {
-                            if (!editMode) playSound(sound)
+                            if (editMode) return
+                            // A hold that already primed must not also play: the
+                            // release produces this click.
+                            if (suppressNextClickRef.current) {
+                                suppressNextClickRef.current = false
+                                return
+                            }
+                            playWithPrimes(sound)
                         }}
                         onKeyDown={(e) => {
                             if (editMode) return
                             if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault()
-                                playSound(sound)
+                                playWithPrimes(sound)
                             }
+                        }}
+                        // Desktop priming gesture. preventDefault() is required
+                        // either way: these cards are div role="button", not
+                        // <button>, so there is no native behaviour to suppress
+                        // and the WebView2/browser menu opens over the app.
+                        // Touch is excluded because the long-press has already
+                        // primed by then, and toggling twice would un-prime.
+                        onContextMenu={(e) => {
+                            e.preventDefault()
+                            if (editMode || e.pointerType === 'touch') return
+                            togglePrime(sound.id)
                         }}
                         className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying && !editMode ? 'ring-2 ring-lime-500' : ''
                             } ${isDragTarget ? 'ring-2 ring-lime-500 border-lime-400' : ''
@@ -3917,6 +4130,11 @@ function App() {
                             padding: `${8 * boxSize}px`,
                             borderRadius: '12px',
                             touchAction: editMode ? 'none' : undefined,
+                            // A long press on touch would otherwise raise the OS
+                            // text-selection callout, and text selection is never
+                            // wanted on a button-like card.
+                            userSelect: 'none',
+                            WebkitTouchCallout: 'none',
                             ...getGlowEffectStyle(sound)
                         }}
                     >
@@ -3993,12 +4211,43 @@ function App() {
                                 />
                             )}
 
+                            {/* Primed indicator. Top-left is the one free corner:
+                                bottom-right is the loop badge, top-right the
+                                multi-file badge and bottom-left the stop button,
+                                and top-left only carries the delete button in
+                                edit mode - where priming is disabled anyway. */}
+                            {isPrimedCard && (
+                                <span
+                                    data-prime-badge={sound.id}
+                                    className="absolute top-1 left-1 z-10 flex items-center rounded-full bg-amber-500 text-dark-900 font-semibold px-1.5 py-0.5 pointer-events-none"
+                                    style={{ fontSize: `${9 * boxSize}px` }}
+                                    title="Primed: plays alongside the next sound you play"
+                                >
+                                    <Zap size={10 * boxSize} className="shrink-0 mr-0.5" />
+                                    Primed
+                                </span>
+                            )}
+
+                            {/* Primed / just-fired tint. A separate overlay element
+                                rather than a ring class on the card: the card
+                                already carries lime rings for playing and
+                                drag-over, and two ring-colour classes on one
+                                element resolve by stylesheet order, not by the
+                                order they appear in the class attribute. */}
+                            {(isPrimedCard || wasFired) && (
+                                <div
+                                    data-prime-overlay={sound.id}
+                                    aria-hidden="true"
+                                    className={`absolute inset-0 rounded-xl border-2 pointer-events-none ${isPrimedCard ? 'border-amber-400' : 'border-amber-200 opacity-60'}`}
+                                />
+                            )}
+
                             {/* Stop Button */}
                             {isPlaying && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation()
-                                        stopSound(sound)
+                                        stopTrigger(sound)
                                     }}
                                     className="absolute bottom-2 left-2 p-1 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10"
                                     title="Stop Sound"
@@ -4494,6 +4743,17 @@ function App() {
                                 <h1 className="text-2xl font-fantaisie tracking-wider whitespace-nowrap">The SpellCaster</h1>
                             </div>
                             <div className="flex items-center gap-1">
+                                {/* Priming is one-shot, so mis-primes are likely and
+                                    un-priming one card at a time is a poor way out. */}
+                                {primedSoundIds.size > 0 && (
+                                    <button
+                                        onClick={clearAllPrimes}
+                                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                                        title={`Clear ${primedSoundIds.size} primed sound(s)`}
+                                    >
+                                        <RotateCcw size={18} />
+                                    </button>
+                                )}
                                 <button
                                     onClick={stopAllSounds}
                                     disabled={Object.keys(soundInstances).length === 0}
@@ -4730,6 +4990,18 @@ function App() {
                                     <span className="text-sm text-slate-400 ml-1">%</span>
                                 </div>
                             </div>
+
+                            {/* Clear Primed Sounds Button */}
+                            {primedSoundIds.size > 0 && (
+                                <button
+                                    onClick={clearAllPrimes}
+                                    className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-2"
+                                    title={`Clear ${primedSoundIds.size} primed sound(s)`}
+                                >
+                                    <RotateCcw size={20} />
+                                    <span className="text-sm tabular-nums">{primedSoundIds.size}</span>
+                                </button>
+                            )}
 
                             {/* Stop All Sounds Button */}
                             <button

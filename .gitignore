@@ -298,7 +298,7 @@ src-tauri/gen/android/app/.cxx/
 
 # ========== E2E harness artifacts ==========
 # Upload fixtures written next to the suites on every run (e2e-full.mjs /
-# e2e-features.mjs / e2e-mobile.mjs regenerate them at startup).
+# e2e-mobile.mjs regenerate them at startup).
 e2e/_e2e_pixel.png
 
 # Do NOT recreate e2e/e2e-all.ps1 - Bitdefender permanently hard-blocks that exact
@@ -307,6 +307,17 @@ e2e/_e2e_pixel.png
 e2e/e2e-all.ps1
 e2e/e2e-all.ps1.new
 e2e/_avtest*.txt
+
+# Retired 2026-10-11. The legacy pre-refactor suites, superseded by the two
+# entrypoints plus the shared specs in e2e/specs/. They were NOT deleted on
+# sight: everything unique in them was ported into shared specs first
+# (playback.mjs Z1-Z12 live playback, scroll.mjs R1-R10 scroll containment,
+# platform.mjs W1-W6 the isMobile gate). Do not bring them back - a duplicate
+# suite that is not in e2e/coverage.manifest.json is invisible to the checker
+# and will rot. Add a shared spec instead; node e2e/check-coverage.mjs enforces it.
+e2e/e2e-run.mjs
+e2e/e2e-features.mjs
+e2e/e2e-features.ps1
 
 # Both specs below shipped and were deleted at the user's request on 2026-10-04;
 # their designs are finalised in PROJECT_STATE.md. Block them from coming back.

@@ -8,7 +8,18 @@
 #
 # E2E TEST POLICY: When asked to run E2E, only execute and report results.
 # Do NOT modify app code or harness code - wait for user instructions.
-param([string]$Phase = 'all', [string]$Suite = 'full')
+#
+# -Suite used to offer run|features as well. Those two suites (e2e-run.mjs,
+# e2e-features.mjs) were retired 2026-10-11: everything unique in them was
+# ported into shared specs first (playback.mjs Z1-Z12, scroll.mjs R1-R10,
+# platform.mjs W1-W6). The ValidateSet makes a stale -Suite value fail loudly
+# here instead of turning into "e2e-run.mjs not found" three phases later.
+param(
+    [ValidateSet('all', 'web', 'win', 'android')]
+    [string]$Phase = 'all',
+    [ValidateSet('full', 'mobile')]
+    [string]$Suite = 'full'
+)
 $ErrorActionPreference = 'Continue'
 $Script:TestLog = Join-Path $env:TEMP "opencode\e2e-run-$(Get-Date -f yyyyMMdd-HHmmss).log"
 $Script:EdgeProfile = Join-Path $env:TEMP 'opencode\e2e-web-profile'

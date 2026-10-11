@@ -5,6 +5,11 @@
 # E2E TEST POLICY: When asked to run E2E, only execute and report results.
 # Do NOT modify app code or harness code - wait for user instructions.
 param(
+    # 'full' is accepted for compatibility with e2e-full.ps1's -Phase android
+    # delegation, which forwards its own -Suite through; the Android phase only
+    # has the mobile suite. 'run' and 'features' were removed 2026-10-11 when
+    # those suites were retired (see e2e-full.ps1 and PROJECT_STATE.md).
+    [ValidateSet('mobile', 'full')]
     [string]$Suite = 'mobile',
     [string]$TestLog,
     [datetime]$TestStartTime

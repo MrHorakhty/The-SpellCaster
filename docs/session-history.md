@@ -1710,3 +1710,401 @@ New E2E ids must start at **P17** (P1-P16 are taken by Suite P).
 **Handover**: released the claim 23:20. Volume done and uncommitted; next is priming (`P17`+ ids).
 `docs/session-history.md` itself has a **pre-existing leading BOM** (present in the 22:47 backup, not introduced
 by the 23:05 append) - harmless, left alone.
+
+
+---
+
+## 2026-10-08 session - one-shot sound priming shipped (E2E only, uncommitted)
+
+Claim held by opencode 2026-10-08 20:52 -> released 2026-10-09 03:46. Implemented `SOUND_PRIMING_SPEC.md`.
+
+**What shipped.** Right-click (desktop) / press-and-hold (mobile) primes a card; primed sounds fire alongside
+the next trigger, then the set is consumed. One-shot, session-only, no localStorage key. `src/App.jsx` is 6769
+lines. Key pieces: `primedSoundIds` + `primedRef` state (~1495-1606), `PRIME_HOLD_MS=500` /
+`PRIME_MOVE_CANCEL_PX=10` / `PRIME_FLASH_MS=2000` (~710), `soundById` useMemo over `allSoundContainers()` (~2140),
+`stopTrigger` / `playWithPrimes` (~3793/3808), gestures on the card (~4096-4123), badge + overlay (~4214-4243),
+Clear buttons in both headers (~4748/4994).
+
+**The one real bug.** `playWithPrimes` first read the primed set from STATE, so two triggers in the same tick
+both saw the pre-consume value and the primes played twice (E2E P25). Fixed by making `primedRef` the authority:
+read and clear the ref synchronously, before any await. Lesson: one-shot consumption needs a ref, not state.
+
+**Gesture traps (all guarded).** A long press ALSO raises contextmenu, so the `pointerType === 'touch'` early
+return is load-bearing. A right-click is pointerdown(button 2) AND contextmenu, so arming the hold on both
+toggles twice and un-primes - hence `armPrimeHold` only arms on button 0. A hold's release produces a click that
+would also play, so `suppressNextClickRef` swallows exactly that one and resets on every new press.
+`PRIME_FLASH_MS` was raised 1200 -> 2000 ms: the flash is the only record of what fired, 1.2s was too short to
+read, and it sat exactly on the P23d assertion boundary.
+
+**Verification.** `npx eslint .` 0 errors (3 pre-existing warnings); `npx vite build` OK. Web E2E `e2e-full.mjs`
+172 PASS / 0 FAIL / 0 WARN (Suite Q, ids P17-P34, 25 new), green BOTH headed and via `e2e-full.ps1 -Phase web`
+(headless). Windows `e2e-full.ps1 -Phase win` 171 PASS / 0 FAIL / 1 pre-existing G5 WARN (exit 1 is the documented
+warn exit, not a failure). Android NOT run - `adb devices` empty; `e2e-mobile.mjs` has no priming tests anyway, so
+a real touch press-and-hold is the one unverified path.
+
+**Harness/tests.** Added `cdpInput()` to `e2e-full.mjs`: headed Edge silently drops injected input while its
+window is occluded and `document.hasFocus()` still reads true, so every mouse event now calls `Page.bringToFront`
+first (44 sites; headless unaffected). `__pick()` matches text, then suffix, then title, because desktop has no
+"Groups" tab (each group is its own tab, text "TTavern Pack" from the initial-letter fallback). P27 uses dedicated
+`loop:true` seed sounds because the shared clip is under a second and unregisters via `ended` before a stop
+assertion can run.
+
+**Handover.** Nothing committed or pushed. Working tree: `src/App.jsx`, `e2e/e2e-full.mjs`, `SOUND_PRIMING_SPEC.md`
+(build record), `PROJECT_STATE.md`, plus the EOL-only `src-tauri/Cargo.toml` non-diff. Pre-change backup
+`ttrpg-soundboard-backup-20261008-205212` (206/206 verified) is the rollback point; no post-change backup was
+taken. Next: hand-test priming on the built app, then `HOTKEYS_SPEC.md` (recommended after profiles).
+
+## 2026-10-10 20:44-20:46 - opencode - Android E2E for sound priming; priming hand-tested
+
+**What happened.** The user reported they had **hand-tested priming on the built app** and it works ("from the
+brief test it seems to be working fine"), closing the last outstanding hand-test gap for the feature (the same bar
+move/copy and per-sound volume cleared). The user then asked for the **Android E2E run** that had been skipped on
+2026-10-08 (no device attached then).
+
+**Run.** `e2e/e2e-android.ps1 -Suite mobile` standalone, no device attached so the runner booted the `Pixel_7`
+AVD itself. Build via `npm run tauri android dev` (detached), WebView CDP forwarded to `tcp:9225`, suite
+`e2e-mobile.mjs`. Runner snapshotted app storage before and restored it after (crash-safe guard) - both succeeded.
+Result: **85 PASS / 0 FAIL / 0 WARN / exit 0**, identical to the 2026-10-06 run (after per-sound volume), so this
+is a clean **no-regression** result.
+
+**Caveat (unchanged from the spec).** `e2e-mobile.mjs` contains **no priming tests** (nor volume tests) - both
+suites live only in `e2e/e2e-full.mjs`. So a green Android run does **not** prove priming works on Android; it
+only shows the mobile build still passes its existing 85 checks. A **real touch press-and-hold** (the `pointerType
+=== 'touch'` path, `PRIME_HOLD_MS=500`, move-cancel, click suppression) is the one still-unverified path on a real
+device. Listed in `SOUND_PRIMING_SPEC.md` §7/§8.
+
+**State.** No code or harness changes this session (E2E policy: execute and report only). Priming remains
+**uncommitted and unpushed**. `PROJECT_STATE.md` updated in place; claim taken and released within the session.
+
+**Handover.** Working tree unchanged from 2026-10-08: `src/App.jsx`, `e2e/e2e-full.mjs`, `SOUND_PRIMING_SPEC.md`
+(build record), `PROJECT_STATE.md`, plus the EOL-only `src-tauri/Cargo.toml` non-diff. The rollback point is still
+the pre-change backup `ttrpg-soundboard-backup-20261008-205212` (206/206 verified); **no backup was taken this
+session** (no changes made). Next queued feature: `HOTKEYS_SPEC.md` (recommended **after** profiles).
+
+## 2026-10-10 20:52-21:0x — opencode — Priming ported to the mobile (touch) suite; Android 105 PASS
+
+**What happened.** Two requests in one session. (1) Confirmed priming is **implemented** on the built app (the
+user had hand-tested it); what was actually missing was Android **coverage**. (2) After running the Android phase
+once to confirm no regression (**85 PASS / 0 FAIL / 0 WARN / exit 0**), ported the desktop priming suite into
+`e2e/e2e-mobile.mjs` as **Suite Q (Q1–Q14)** and re-ran: **105 PASS / 0 FAIL / 0 WARN / exit 0**.
+
+**What was ported.** Touch has no right-click, so the mobile tests drive the real touch path with
+**`Input.dispatchTouchEvent`** (via CDP `Input`), not `dispatchMouseEvent`: Q1 press-and-hold primes (badge +
+overlay + `aria-pressed`) and does not also play; Q2/Q3 no late un-prime; Q4 hold+40px move cancels; Q5 edit mode
+never primes; Q6/b/c/d two primes + tap fire all three through one `_primeGroup`, the set is consumed and the
+cards flash as fired; Q7 rapid double-trigger does not double; Q8a/b/c clear-button lifecycle; Q9 no new
+`localStorage` key; Q10 no reload persistence; Q11 stopping the primary stops the whole group; Q12/Q13/Q14 fire
+from an environment category / group category / group character, navigating via the mobile drawer. Same fixture
+ids as the desktop `P17`–`P34`, so a cross-platform failure is directly comparable.
+
+**Bug found while writing it (harness only, not app).** `drawerPick` embedded the search text as a bare
+identifier inside an `evalJs` template string, so the page threw `ReferenceError: text is not defined`; the
+helper's error object stringified to `[object Object]` and the drawer click silently no-op'd, failing Q12–Q14.
+Fixed by interpolating `JSON.stringify(text)`. App code was untouched.
+
+**Verification.** `node --check` + `npx eslint .` clean (0 errors, 3 pre-existing warnings). Android
+**105 PASS / 0 FAIL / 0 WARN / exit 0** (Pixel_7 emulator, 2026-10-10 21:04). Web/Windows phases not re-run
+(only `e2e-mobile.mjs` changed).
+
+**State / handover.** Nothing committed or pushed. Working tree: `src/App.jsx`, `e2e/e2e-full.mjs`,
+`e2e/e2e-mobile.mjs` (Suite Q), `SOUND_PRIMING_SPEC.md` (build record; §4b added, §7 item closed, §8 updated),
+`PROJECT_STATE.md`, plus the EOL-only `src-tauri/Cargo.toml` non-diff. Rollback point:
+`ttrpg-soundboard-backup-20261010-205141` (206/206 verified, 39.4 MB), taken before the harness edits. Remaining
+mobile-suite gap: per-sound volume (Suite P) is still desktop-only; move/copy (M/G) likewise. Next queued
+feature: `HOTKEYS_SPEC.md` (recommended after profiles).
+
+## 2026-10-10 21:08-21:17 — opencode — Per-sound volume ported to the mobile (touch) suite; Android 126 PASS
+
+**What happened.** Followed up the priming port by porting **per-sound volume** (the gap `PROJECT_STATE.md` and
+`PER_SOUND_VOLUME_SPEC.md` §8 tracked) into `e2e-mobile.mjs` as **Suite P (P1–P16)** — a verbatim mirror of the
+desktop suite. Backup taken first: `ttrpg-soundboard-backup-20261010-211224` (206/206, 39.4 MB).
+
+**What transferred unchanged.** The slider is platform-independent UI, so P1–P8 and P10–P16 are the same DOM /
+storage / modal assertions: every card exposes `[data-sound-volume]`, the control sits **outside** the
+`role="button"` card, absent `volume` reads 100%, playback records `_soundVolume`/`_baseVolume`/`volume`, master
+× trim is the audible product, 0 survives a reload (the `||` trap), `DATA_VERSION` stays 3, no new
+`localStorage` key, and the edit modal's `#soundVolumeRange` mirrors/writes the same field.
+
+**The one real platform difference — P9.** The desktop suite drives P9 with a CDP **mouse** event because a
+synthetic `element.click()` is not a user gesture: autoplay is refused, the fresh element is torn down, and the
+live master-rescale never touches it (the assertion would pass/fail for the wrong reason). The mobile port uses a
+**real `Input.dispatchTouchEvent` tap** instead — a genuine trusted gesture, so playback starts and the element
+stays registered. P9a–P9d then prove master 0.4 rescales the live element to 0.2 and back to 0.5, with
+`_baseVolume` in step. The master slider is selected by `title^="Volume:"` picking the visible one (the mobile
+header renders, the desktop header does not).
+
+**Result.** Android **126 PASS / 0 FAIL / 0 WARN / exit 0** (Pixel_7 emulator, 2026-10-10 21:15) — 85 base + 20
+(Q) + 21 (P). `node --check` + `npx eslint .` clean (0 errors, 3 pre-existing warnings). Web/Windows phases not
+re-run (only `e2e-mobile.mjs` changed).
+
+**State / handover.** Nothing committed or pushed. Working tree: `src/App.jsx`, `e2e/e2e-full.mjs`,
+`e2e/e2e-mobile.mjs` (Suite Q + Suite P), `SOUND_PRIMING_SPEC.md`, `PER_SOUND_VOLUME_SPEC.md` (status + §8
+updated), `PROJECT_STATE.md`, plus the EOL-only `src-tauri/Cargo.toml` non-diff. Rollback point:
+`ttrpg-soundboard-backup-20261010-211224` (206/206 verified). Remaining mobile-suite gap: **move/copy** only.
+Next queued feature: `HOTKEYS_SPEC.md` (recommended after profiles).
+
+## 2026-10-10 21:20-21:41 — opencode — Move/copy ported to the mobile suite; Android 148 PASS
+
+**What happened.** Closed the last of the three queued mobile-coverage gaps by porting **move/copy** (desktop
+`e2e-full.mjs` Suite M, M1–M22) into `e2e-mobile.mjs` as **Suite M (M1–M22)**. Backup first:
+`ttrpg-soundboard-backup-20261010-212155` (206/206 verified, 39.4 MB).
+
+**Correction to the earlier handover.** The priming/volume blocks called the remaining gap "move/copy (M/G)".
+That was wrong: desktop Suite **G** is **GROUPS CRUD**, which the mobile suite already covers (mobile Suite G).
+It is **not** the file-refcount guard. So move/copy (M) was the only gap — now closed. Remaining *un-ported*
+mobile checks are the un-requested ones: drag reorder (X), sound-into-group (H), sliders/persistence (B),
+keyboard (Y, partial) and card indicators (U, partial).
+
+**What transferred unchanged.** The picker is platform-independent DOM (a `fixed` overlay, `h2 "Move or Copy"`,
+`uppercase font-semibold` section headers, per-row `title="Move to <label>"` / `"Copy to <label>"` buttons), so
+M1–M22 are the desktop assertions verbatim, driven by `.click()` rather than touch. They prove: the button shows
+on every card only in edit mode; sections render as Characters → groups → Environments; the current container
+offers **Copy only** (move there is a no-op); copy shares `files[]` and the legacy `file` field verbatim, mints a
+new id, writes no new `sound_file_*` key; `nextCopyName` suffixes `Name (copy)` / `(copy 2)` **scoped to the
+destination** (a same-named copy in another container is not `(copy 3)`); a move relocates the same object,
+preserving id/colour/`randomPlay`/`files`, silently (no dialog, picker auto-closes); and Esc closes the picker
+(the capture-phase handler stops it reaching the drawer).
+
+**One navigation difference.** The desktop suite switches the active character with a sidebar button to reach a
+sound it just moved; the mobile board is drawer-driven. Rather than add drawer round-trips, the mobile fixture
+keeps **every source sound on the initially-visible Human Paladin board** (Alpha/Bravo/Charlie/Delta/Echo) and
+moves them **out** — same character → character / group-category / group-character / environment transfers, no
+navigation. Seeded sounds carry `file: ''` so M9 ("copy keeps the legacy file field") stays meaningful.
+
+**Result.** Android **148 PASS / 0 FAIL / 0 WARN / exit 0** (Pixel_7 emulator, 2026-10-10 21:30) — 85 base + 20
+(Q) + 21 (P) + 22 (M). `node --check` + `npx eslint .` clean (0 errors, 3 pre-existing warnings). Web/Windows
+phases not re-run (only `e2e-mobile.mjs` changed).
+
+**State / handover.** Nothing committed or pushed. Working tree: `src/App.jsx`, `e2e/e2e-full.mjs`,
+`e2e/e2e-mobile.mjs` (Suite Q + P + M), `SOUND_PRIMING_SPEC.md`, `PER_SOUND_VOLUME_SPEC.md`, `PROJECT_STATE.md`,
+plus the EOL-only `src-tauri/Cargo.toml` non-diff. Rollback point:
+`ttrpg-soundboard-backup-20261010-212155` (206/206 verified). Claim released (UNCLAIMED). Next queued feature:
+`HOTKEYS_SPEC.md` (recommended after profiles).
+
+## 2026-10-10 22:10-23:12 - opencode - Phase 2: five more shared specs; all three gates 0 FAIL
+
+**What happened.** Turned the Phase 0/1 scaffolding into real coverage: moved five more suites out of the
+entrypoints into `e2e/specs/`, each run from **both** platforms, which closed every mobile gap the docs had
+listed except keyboard. Backup first: `ttrpg-soundboard-backup-20261010-221101` (212/212 verified, 39.4 MB - 212
+rather than 206 because the new lib/spec files are now included).
+
+**The five specs.**
+- `indicators.mjs` (U1-U7) - replaces inline Suite U on desktop and **inline Suite R on mobile**. R1-R6 were
+  U1/U2/U3/U4/U6 restated; the shared spec additionally brings **U5** (multi-file icon, "2 files available") and
+  **U7** (loop-icon count == 2), which mobile never had. Net mobile +1.
+- `sliders.mjs` (B1-B4) - the box-size slider, previously desktop-only. **One assertion genuinely differs by
+  platform and it is not a workaround:** on desktop a card is `140 * boxSize` px wide (1.8 => ~252px), but on
+  mobile the card is `w-full` and box-size picks the *grid column count* (App.jsx:5218, `>=1.5 => 1 col`). So B2
+  asserts card width on desktop and "grid collapsed to one column" on mobile.
+- `soundintogroup.mjs` (H1-H2) - adds a sound into `Tavern Pack > Ambience`. Navigation is the platform part:
+  desktop clicks a sidebar leaf, mobile opens the drawer, clicks the group, then the category.
+- `drag.mjs` (X1-X2) - drag reorder. The app's reorder is **pointer-event based** (`onPointerDown` -> document
+  `pointermove`/`pointerup`, `setPointerCapture`), so a CDP touch drag drives the identical code path; only the
+  delivery differs (`driver.dragFromTo`: mouse vs `Input.dispatchTouchEvent`). **Edit mode is mandatory** -
+  outside it the press arms the press-and-hold PRIME instead, since the two share `onPointerDown`.
+- `refcount.mjs` (G1-G5) - the file-reference guard, the safety-critical one: a copy shares the source's
+  `storedName`, so deleting the source container must not delete the file the copy still points at. Pure app
+  logic, identical everywhere, so it had no business being desktop-only.
+
+**Plumbing.** `lib/driver.mjs` gained `dragFromTo(from,to)`. Both ctx objects gained `isTauri`, `navigateTo`,
+`clickModalOpener`, `upload` (desktop = CDP `DOM.setFileInputFiles`, mobile = in-page `DataTransfer` because the
+Android WebView rejects CDP file IPC), `deleteCharacter` (sidebar badge vs drawer badge) and
+`closeDrawer`/`openDrawer`.
+
+**The regression worth remembering.** Desktop Suite **M** is *not* self-contained - it reads the board the
+inline suites leave behind - and neither is Suite **D**. My first two web runs failed (159/0/13 then 153/0/19)
+purely because of suite *placement*:
+1. Run 1: the new specs sat where the old inline suites were, so their seed+reload reset the fixture M reads.
+   Fixed by moving all shared specs into one block after Suite Y.
+2. Run 2: with them moved, Suites G and T leave the app **on the Groups board**, and the `Page.reload` that the
+   old inline drag suite used to do between G and D is what used to put it back on Human Paladin. D and M then
+   drove per-card controls that do not exist on a group board (`NO_CARD`, `1/1` card, "No characters yet").
+   Fixed with an explicit `Page.reload` before Suite D, commented as to why.
+
+💡 **Lesson: a desktop `NO_CARD` / empty-section failure in this suite is suspect as a *view* problem before it
+is a missing element.** The mobile entrypoint has no such coupling - every mobile suite seeds its own fixture.
+
+**Result - 0 FAIL on all three gates.**
+- Web **172/0/0 exit 0** (`e2e-run-20261010-224758.log`).
+- Windows **171/0/1 exit 1** (`e2e-run-20261010-225442.log`) - baseline, G5 skips on Tauri.
+- Android **161/0/1 exit 1** (`e2e-android-20261010-230145.log`) = 148 - 6 (Suite R) + 7 U + 4 B + 2 H + 2 X + 4 G.
+- Both risky ports passed first try on Android: drawer navigation reported `nav1=OK nav2=OK`, and the touch drag
+  reordered `[Smite, Shield Bash, Healing Light, Divine Light]` -> `[Divine Light, Smite, Shield Bash, Healing Light]`.
+- `node --check` clean; `npx eslint .` 0 errors, 3 pre-existing warnings.
+
+⚠️ **The Android gate is no longer exit 0, deliberately.** G5 is the negative localStorage case and cannot apply
+under Tauri (the upload is a physical file), so it logs a WARN, which maps to exit 1, which `e2e-android.ps1`
+treats as a failed phase. Android now matches Windows, which has always exited 1 for this same skip. Not
+downgraded to a silent skip: a quietly dropped test rots unnoticed, and **0 FAIL with the WARN visible** is the
+honest reading. Revert path if the user disagrees: make `refcount.mjs` log a skip instead of `WARN` on Android.
+
+**Deferred on purpose, with reasons.** Keyboard (Y): asserts `tabindex`/Enter-keydown - vacuous for a soft
+keyboard. Split view (L): N/A on mobile. Reset to Defaults and the live-playback gate: neither has a desktop
+twin to share, and Reset to Defaults wipes the fixture later suites read, so it must re-seed and run last.
+
+**State / handover.** Nothing committed or pushed. Working tree: `src/App.jsx`, `e2e/lib/driver.mjs`,
+`e2e/specs/*` (6 files), `e2e/e2e-full.mjs` (1866 -> 1565 lines), `e2e/e2e-mobile.mjs` (1402 -> 1466),
+`SOUND_PRIMING_SPEC.md`, `PER_SOUND_VOLUME_SPEC.md`, `PROJECT_STATE.md`, this file, plus the EOL-only
+`src-tauri/Cargo.toml` non-diff. Rollback point: `ttrpg-soundboard-backup-20261010-221101`. Claim released
+(UNCLAIMED). **Phase 3 remains**: `e2e/coverage.manifest.json` + a checker, the AGENTS.md definition-of-done, and
+folding/deleting `e2e-run.mjs` / `e2e-features.mjs` per the deprecated-parts rule. Next queued *feature* is
+`HOTKEYS_SPEC.md` (recommended after profiles).
+
+## 2026-10-10 21:40-22:07 - opencode - Shared E2E harness (e2e/lib + e2e/specs); all gates green
+
+**What happened.** Refactored the E2E harness into a shared-library + shared-specs architecture with **zero
+behavior change** - the "Phase 0 + Phase 1" refactor the user green-lit. Backup first:
+`ttrpg-soundboard-backup-20261010-214021` (206/206 verified, 39.4 MB).
+
+**Phase 0 - shared plumbing (`e2e/lib/`).**
+- `cdp.mjs` - `sleep(ms)`; `connect({ port, label, fatalExit = 3 })` returns `{ cdp, cdpInput, evalJs, close,
+  page }`; a fatal socket close/error calls `process.exit(fatalExit)`. `cdpInput` = `Page.bringToFront().then(() => cdp(...))`;
+  `evalJs` resolves the value or `{ __error }`.
+- `report.mjs` - `createReport(label, title)` returns `{ allResults, log, run, counts, summary, exitCode }`.
+  Summary prints `[label] title: PASS=.. FAIL=.. WARN=.. TOTAL=..` with no leading newline; exit code
+  `fail>0?2:(warn>0?1:0)`.
+- `page.mjs` - the duplicated seed/helper/instrument blocks: `SEED` (identical expression), `PAGE_HELPERS`
+  (incl. the dead `__uploadFile`), `INSTRUMENT_AUDIO` (eager `__origAudio`/`__audios` capture),
+  `CAPTURE_LS`, `restoreLs(captured)`, `submitModalExpr(btnText)`, `KNOWN_KEYS`.
+- `driver.mjs` - `makeDriver({ platform, cdp, cdpInput, evalJs, sleep })` returns `{ platform, isDesktop,
+  trustedTap(x,y), centeredCard(selector), enterEditMode(), exitEditMode() }`. `trustedTap` sends real
+  `mousePressed`/`mouseReleased` on desktop and `Input.dispatchTouchEvent` `touchStart`/`touchEnd` on touch.
+  Edit-mode enter/exit uses `button[title="Toggle Edit Mode"]` (lime-class check) on desktop and the
+  Enter/Exit Edit Mode buttons on mobile.
+- `spec-runner.mjs` - `runSpecs(ctx, specs)` prints `[label] === title ===` and awaits each `spec.run(ctx)`.
+
+**Phase 1 - `e2e/specs/volume.mjs` (shared Suite P).** Extracted desktop Suite P verbatim into a spec run from
+**both** entrypoints: P1-P16 + a P9-setup ("trusted gesture path available"), 21 `[VOL]` asserts total. The spec
+owns a self-contained seed (vol_half trim 0.5, vol_none no-volume-field, real bundled mp3s, `ttrpg_themes` [],
+`sound_file_*` cleared - mobile's superset) and unified helpers (`__master()` visible-first with list[0] fallback,
+`__volCard`, `__playCard`). P9's gesture goes through `driver.centeredCard('[data-sound-card][data-sound-id="vol_half"]')`
++ `driver.trustedTap(coords.x, coords.y)`; P15/P16 use `driver.enterEditMode/exitEditMode` +
+`ctx.submitModal('Save Changes')`.
+
+**Entrypoints thinned.** `e2e/e2e-full.mjs` 2198 -> 1863 lines; `e2e/e2e-mobile.mjs` 1716 -> 1400 lines. Both now
+import the libs, build the same `ctx` (`{ label, log, run, evalJs, sleep, reload, submitModal, driver }`) with the
+right platform, and call `await runSpecs(ctx, [volume])` in Suite P's place (suite bodies removed by a temp
+`C:\Users\emire\AppData\Local\Temp\opencode\splice.mjs` seam script - markers ending with `\n` get a real newline,
+embedded literal `\n` stays literal; verified the resulting seams in both files). Suite Q / M stay inline for now.
+
+**Result - identical counts, proving the seam is behavior-neutral (all 2026-10-10).**
+- Web `e2e-full.ps1 -Phase web -Suite full`: **172 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261010-215247.log`).
+- Windows `e2e-full.ps1 -Phase win -Suite full`: **171 PASS / 0 FAIL / 1 WARN (pre-existing G5 skip), exit 1** -
+  matches baseline (`e2e-run-20261010-215642.log`).
+- Android `e2e-android.ps1 -Suite mobile`: **148 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-android-20261010-215932.log`).
+- Shared volume spec: each log has 21 `[VOL]` lines; P9-setup PASS "trusted gesture path available", coords
+  web/win x:398,y:235 prior n:2, android x:163,y:308. `node --check` + `npx eslint .` clean (0 errors, 3
+  pre-existing warnings).
+
+**Tooling note.** The bash tool strips `$` from inline PowerShell commands (`$_`, `$b`, `$LASTEXITCODE` silently
+eaten) - write `.ps1` helpers into `%TEMP%\opencode\` and run them with `-File` instead. Log decode helper
+(`vol-check.ps1`) uses `[Text.Encoding]::UTF8.GetString(ReadAllBytes($p)).Replace([char]0,'')` - the gate logs are
+ASCII at the start, UTF-16 at the tail.
+
+**State / handover.** Nothing committed or pushed. Working tree adds: `e2e/lib/*`,
+`e2e/specs/volume.mjs`; modified: `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `PROJECT_STATE.md`, this file; plus
+the pre-existing priming/volume/move-copy working tree. Rollback point:
+`ttrpg-soundboard-backup-20261010-214021` (206/206 verified). Claim released (UNCLAIMED). Next phases:
+**Phase 2** (port remaining mobile gaps: refcount guard, U5/U7 indicators, box-size, Reset to Defaults,
+add-sound-to-group via drawer, live-playback gap, drag reorder touch), **Phase 3** (e2e/coverage.manifest.json +
+checker, AGENTS.md DoD, fold+delete `e2e-run.mjs`/`e2e-features.mjs` via the deprecated-parts rule).
+---
+
+## SESSION 2026-10-11 - PHASE 3: COVERAGE MANIFEST + CHECKER, AND PORT-THEN-RETIRE THE LEGACY SUITES
+
+Resumed a session that was cut off at the *reporting* stage. Claimed `PROJECT_STATE.md` (was UNCLAIMED), took
+the mandatory backup first (`ttrpg-soundboard-backup-20261011-102658`, 217/217 verified, 39.5 MB), then worked
+Phase 3. Phase 3b (AGENTS.md definition-of-done) is the only thing left.
+
+### Phase 3a - `e2e/check-coverage.mjs` + `e2e/coverage.manifest.json` (new)
+
+A **static** gate - no browser, no CDP - so it is cheap enough to belong in any pre-commit sweep. It enforces the
+invariant the whole shared-specs refactor exists to protect, plus the drift the state file keeps complaining about.
+
+| Check | Catches |
+|---|---|
+| `UNREGISTERED_ID` / `STALE_MANIFEST_ID` | a test added without being registered, or registered then deleted |
+| `SPEC_NOT_RUN` | a spec imported by an entrypoint but never passed to `runSpecs()` - looks wired up, never executes |
+| `SPEC_NOT_SHARED` | a shared spec running on only one entrypoint - a silent coverage hole nothing reports at runtime |
+| `PLATFORM_MISMATCH` | the manifest's `platforms` edited to match the code instead of the code being fixed |
+| `AMBIGUOUS_ID` | two suites whose `idPattern`s overlap on the same id |
+| `ORPHAN_FILE` | a new spec file nobody declared |
+| `RETIRED_PRESENT` | a retired harness file coming back |
+
+- `--update` rewrites **only** each suite's `ids` from the code and prints what it re-synced; it never invents,
+  deletes or reorders a suite, so a structurally drifted manifest still fails and still needs a human.
+- **The namespace is the pair `(cat, idPattern)`, and that is not optional.** `cat` alone cannot split a category
+  - `SOUND` is three separate suites (add / edit / delete) in each entrypoint. An id prefix alone cannot either -
+  mobile's `MOBILE M1-M7` and `MOVE M1-M22` both start with `M`. Keying on `cat` was tried first and silently
+  triple-counted the `SOUND` ids (157 reported where 123 existed).
+- Counts are **static, not runtime**: a legitimate pattern is one id logged from both arms of an if/else (the else
+  arm logging a hard-coded FAIL, e.g. `e2e-mobile.mjs` C4), and a platform branch asserting a different thing
+  under the same id (`sliders.mjs` B2: card width on desktop, grid columns on mobile). The report says so, and
+  points at the E2E summary as the authority on how many actually ran.
+- Final state: **36 suites, 305 ids, 9 shared specs**, `OK - manifest, code and platform wiring agree.`
+
+### Phase 3c - the plan was wrong, and the audit caught it
+
+Phase 3 was written as *"delete `e2e-run.mjs` / `e2e-features.mjs`"*. Before deleting, I extracted every
+`log()` call from both. **~31 of their tests existed nowhere else:**
+
+| Was | Now | Notes |
+|---|---|---|
+| `e2e-features.mjs` Suite E, **E1-E9 LIVE PLAYBACK** | `specs/playback.mjs` **Z1-Z10** | fade-in ramp, fade completion, live master, loop rewind, Stop All - the only assertions on real audio output anywhere |
+| `e2e-features.mjs` **D11/D12** (`loop=true` / `fadeIn=2` persisted) | `specs/playback.mjs` **Z11/Z12** | the modal hydrate/write round-trip |
+| `e2e-run.mjs` Suite A, **A1-A10 single-view scroll** | `specs/scroll.mjs` **R1-R10** | the only coverage of scroll containment |
+| `e2e-run.mjs` Suite P, **P1-P6 platform** | `specs/platform.mjs` **W1-W6** | the `isMobile` gate guard |
+| `e2e-run.mjs` Suite B (split-view), Suite C (feature matrix) | - | already covered inline; dropped as duplicates |
+| `e2e-run.mjs` C19 (lime ring colour), C32/C33 (viewport fill) | - | C19 cosmetic, accepted loss; C32/C33 now R7/R10 |
+
+**Lesson worth carrying: retire by porting, never by deleting.** The AGENTS.md deprecated-parts rule says to
+record what a deleted file knew; here what it *knew* was **live passing tests**, which is a stronger reason. The
+mechanical version of this audit - build the manifest while the old files still exist, then let the checker show
+you what disappears - would have caught it without reading 700 lines by eye.
+
+Only after all three specs were green on all three platforms: `git rm` the three files, `.gitignore` them with
+the reason inline, narrow `-Suite` to `full|mobile` with a `ValidateSet` on both runners (so a stale value fails
+at the parameter instead of becoming "e2e-run.mjs not found" three phases later), and update the README.
+
+### Three real defects the new specs caught - all in the tests, none in the app
+
+1. **Ternary precedence in a status argument.** `cond ? a : b ? 'PASS' : 'FAIL'` binds as
+   `cond ? a : (b ? 'PASS' : 'FAIL')`, so the `expectMobile` branch returned a **boolean**. `report.mjs` counts
+   anything that is not the literal `'PASS'`/`'FAIL'` as a **WARN**, so W3/W6/R2 were silently demoted from
+   results to warnings - **and only on Android**, because only there was `expectMobile` true. Web and Windows
+   reported `PASS` and would never have shown it. Fix: always `(cond ? a : b) ? 'PASS' : 'FAIL'`.
+2. **`window.__setInput` does not survive a reload.** It comes from `PAGE_HELPERS`, injected at entrypoint start,
+   so a spec that reloads and then calls it gets `undefined`; `evalJs` swallows the exception, the field keeps its
+   old value, and the failure surfaces much later as a misleading value (Z12 stored `fadeIn:1` after being set to
+   2). Each spec must define its **own** setter in its post-reload helper block - as `volume.mjs.__setRange` and
+   `playback.mjs.__pbSetField` already did.
+3. **The board does not scroll the same way on both platforms.** Desktop's panel carries `overflow-y-auto`
+   (App.jsx:4696) with the sidebar outside it; **mobile's board panel does not scroll at all** (App.jsx:5186) -
+   the main-content column (App.jsx:5044) is the scroll container and the icon rail lives *inside* it, so it
+   scrolls away with the content by design. `scroll.mjs` finds the scroller by walking up from a card to the
+   nearest ancestor that actually scrolls, and R8 asserts the correct expectation per platform instead of the
+   desktop one everywhere.
+
+### Gates (all three, 0 FAIL)
+
+| Phase | Result | Exit | Log |
+|---|---|---|---|
+| Web | **200 / 0 / 0** | 0 | `e2e-run-20261011-113830.log` |
+| Windows | **199 / 0 / 1** (pre-existing G5) | 1 | `e2e-run-20261011-114452.log` |
+| Android | **189 / 0 / 1** (same G5) | 1 | `e2e-android-20261011-115224.log` |
+
+`npx eslint .` 0 errors / 3 pre-existing warnings. `npx vite build` OK. `node --check` on every touched `.mjs`
+OK. Both `e2e-full.ps1` and `e2e-android.ps1` re-verified `PARSE-OK` after the `ValidateSet` edit.
+Web 172 -> 200 and Android 161 -> 189 are entirely the three ported specs.
+
+### Also noticed, not acted on
+
+- **`stash@{0}`** - *"On feature/multiple-sound-files: Backup before reroll to master"*, dated **2026-08-11**,
+  touching `src/App.jsx` (87+/224-). It predates all seven branches being merged into `mobile-support`
+  (2026-10-04), so it is very likely a dead pre-merge safety net. It was not mentioned anywhere in
+  `PROJECT_STATE.md` before this session. **Not dropped** - raised with the user, a stash is cheap insurance.
+- `SOUND_PRIMING_SPEC.md`'s 227/247 line diff is the plan -> build-record rewrite with LF working-copy endings,
+  not corruption (220 lines vs 217 in HEAD, 17.7 KB, reads clean).
+- `e2e/e2e-full.ps1` was edited (the `ValidateSet`). The repo `.git` exclusions added 2026-10-04 are confirmed
+  working, so the commit is safe - and having it committed is what gives `backup-project.ps1` a
+  `git show HEAD:e2e/e2e-full.ps1` fallback if Bitdefender eats the blob again.
