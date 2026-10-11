@@ -1,23 +1,9 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-11 21:12 — ✅ **profiles step 1 COMPLETE: all 7 gates green, Q11 solved, uploads guard in, hand-tested**
-🚨 **IF YOU ARE PICKING THIS UP: the work below is UNCOMMITTED and the claim is deliberately HELD.** Read
-"Handover — profiles step 1" below before doing anything. **All seven gates are green.** ✅ **The user has
-hand-tested the switch and it works** — the user-visible bar for step 1 is met. ⚠️ The user's real audio was moved
-out from under their installed app on 2026-10-11 — files are **intact** in `uploads/p_09b2806c/`, cause and harness
-fix are recorded below; the user has decided to move forward with the new build and **no restore of the old app is
-wanted**.
-
-### ✅ USER HAND-TEST PASSED (2026-10-11 23:2x) — the user-visible bar for step 1
-
-The user built/ran the app and tested the **profile switch**, and reported it **works fine**. That is the
-`AGENTS.md` requirement for a user-facing feature: *"Move/copy and per-sound volume both shipped only after the
-user hand-tested the built app... say so explicitly in the report."* Step 1 is user-facing, and this clears it.
-
-They also noted they could not find **import/export** — **correct, and expected: it does not exist yet.** Verified
-just now: the Profiles section has only `switch` / `rename` / `delete` / `create` (App.jsx:6833-6875), there is
-no `exportBundle` / `importBundle` anywhere, and **no zip dependency** (`fflate` / `jszip` / `@noble/hashes` are all
-absent from `package.json`). Those are spec steps **3–6**; step 1 is steps 1–2 only.
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 00:05) — **profiles step 1 COMMITTED as `577505d` and PUSHED; all 7 gates green, hand-tested**
+✅ **Step 1 is DONE and committed.** All seven gates green, the user hand-tested the switch, and the Tauri uploads
+defect is closed. ⚠️ **3 commits are ahead of `origin/mobile-support` and NOT pushed.** Export/import (spec steps
+3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
 
 **Profiles step 1 of 8 — IMPLEMENTED, web gate green, the Tauri uploads blocker FIXED, NOT yet committed.**
 User authorised implementation 2026-10-11 21:12. Per `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter + profile
@@ -53,37 +39,58 @@ regressions (§ below).
 Windows' exit 1 and Android's WARN are both the expected pre-existing **G5** skip, not regressions.
 Suite F is green on **all three platforms** (13 tests each).
 
-### 🟡 OPEN: Android Q11 regressed — investigate before committing
+### ✅ Android Q11 — SOLVED. It was a paint-timing race in the TEST, not a regression
 
-`[PRIME] Q11: stopping the primary stops the WHOLE primed group` → **FAIL, `{"stop":"NO_STOP_BTN","n":3,"stopped":0}`**
-on Android. It **passed on the 2026-10-11 baseline** (Android was 199/0/1), so it is a change from this session.
+**Root cause, established by measurement rather than guessed.** The old assertion sampled the DOM at a *single
+instant* (700 ms after the trigger) and reported `NO_STOP_BTN` if the button was not there **at that moment**.
+Replaced with a bounded **poll for the condition** (25 × 100 ms) that reports how long the button took. Result:
 
-**What is established:**
-- It is **Android-only**. The identical desktop test **P27 passes** on web and Windows.
-- **Playback is NOT broken.** `[PLAY] Z1–Z12` all pass on Android, including **Z10 "Stop All stops the audio and
-  clears the ring"**, and `[VOL] P9a–P9d` drive live audio. So files resolve and audio plays.
-- The prime group fires correctly: `n: 3` — three audio elements were created and `play()` was called.
-- The **Stop button is not rendered** on `p27_c` 700 ms after the tap, and `stopped` is 0.
+```
+PASS Q11  probe:{found:true, ms:209}  stop:OK  n:3  stopped:3
+  live:[{paused:true,ready:4,ct:0} ×3]
+```
 
-**The most likely mechanism, not yet confirmed.** `isPlaying` (App.jsx:4132) reads
-`isSoundPlaying` (3878) → `audioElementsRef.current`, and re-renders because `playSound` calls
-`setSoundInstances` right after registering an element (App.jsx:3760). So a registered element *should* paint the
-button. That the elements exist (`n:3`) but the button does not points at either the elements being **cleaned up
-again** (a load/`error` event — `play()` was still called, which is consistent) or a re-render not landing within
-the window. ⚠️ **`getFileFromLocalStorage` now awaits `ensureUploadsMigrated()` before its `exists()` check**, which
-inserts extra ticks at the very start of file resolution — a plausible timing shift on an already-slow emulator.
-That is a **hypothesis, not a finding.**
+The button **does** render — it just took **209 ms** to paint, and on a loaded emulator it sometimes slips past
+the 700 ms sample point. **Android is 212 PASS / 0 FAIL / 1 WARN.**
 
-**Do NOT fix this by bumping the 700 ms sleep.** That would turn a red test green without explaining it, which is
-the "a quietly dropped test rots unnoticed" failure this repo explicitly guards against. Either (a) confirm the
-elements are cleaned up and fix the underlying audio lifecycle, or (b) confirm it is purely a re-render-timing
-window on the emulator and make the app's `isPlaying` reliable rather than the test patient.
+**What was ruled out first, and how.** The first diagnostic distinguished "the card is gone" from "the button is
+not in the card", and dumped the live state of all three elements:
 
-🚧 **OUTSTANDING — do not treat step 1 as done until these are green:**
-1. **Android Q11** (above) — the one real regression.
-2. **Hand-test.** This is a **user-facing** feature, so by the DoD rule the user must hand-test the built app.
-   ⚠️ The Windows gate already proved the uploads migration on the user's own 112 files, but "does a sound play
-   from the migrated path, and does switching feel right" is still the user's call.
+```
+stop:NO_STOP_BTN  card:true  n:3
+live:[{paused:false,ended:false,error:false,ready:4,ct:0.11} ×3]
+```
+
+So the card was present and **all three elements were genuinely playing** (`readyState 4`, `paused:false`,
+`currentTime` advancing). That eliminated the obvious hypotheses — an audio load error, `cleanupAudio` unregistering
+them, or a missing card — and pointed at paint timing instead.
+
+**Why the Stop button paints late (a real, pre-existing app wart).** `isPlaying` (App.jsx:4254) derives from
+`isSoundPlaying` (3878), which reads the **`audioElementsRef` ref, not state**. The repaint is only triggered
+incidentally, by `setSoundInstances` — state that exists to disable the Stop All button and is never passed to the
+card. So the card's Stop affordance can lag until some unrelated state change renders. The `data-sound-card`
+element does contain the button, so this is not a DOM/ownership problem, and the same markup passes on web and
+Windows where the machine is fast.
+
+⚠️ **Honest accounting:** a latent timing sensitivity that this session's work made visible — the added
+`await ensureUploadsMigrated()` shifts registration slightly later, which on a loaded emulator can push the render
+past a fixed sample point. It is **not** a functional regression (stopping still works; Stop All is unaffected), and
+the underlying ref-derived render is pre-existing. The **test** was the thing that was wrong — it asserted an
+instant rather than a condition. 💡 **Lesson: an async UI assertion that samples once is a race wearing a
+trouser-suit; wait for the condition with a bounded timeout, and make the timeout visible in the failure.**
+
+### ✅ Nothing is outstanding — step 1 is done
+
+All seven gates green, the user hand-tested the switch, and both defects found during it (the Tauri uploads
+migration, and the harness that did not protect `uploads/`) are closed. **Export/import — spec steps 3–6 — remains
+unimplemented**, which is why the `coverage.manifest.json` feature entry correctly stays `status: planned`.
+
+✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
+profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
+`PROFILE_SYNC_SPEC.md` as **§0.3** and folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13. **Now IMPLEMENTED** —
+all three landed in step 1. Consequence recorded: the remount makes the profile switch the thing that validates
+the storage adapter's shape, so §12 step 1 is "adapter + profile index + migration + **a proven switch**", not
+"wrap 27 call sites".
 ✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
 profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
 `PROFILE_SYNC_SPEC.md` as **§0.3** and folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13. **Still docs
@@ -107,7 +114,7 @@ done** to `AGENTS.md`.
 **Then, later the same session:** a **features registry** (so a `shipped` feature cannot lack tests), a fix to a
 **blind spot in the checker itself** (its category regex excluded digits, hiding the whole `A11Y` keyboard
 suite), and **`specs/reset.mjs`** (**O1–O10**) closing the last uncovered feature.
-**Now: 38 suites, 318 tests, 10 shared specs, 23/23 shipped features covered, zero gaps.**
+**Now: 39 suites, 331 tests, 11 shared specs, 23/23 shipped features covered, zero gaps.**
 **Gates: web 210/0/0 exit 0 · Windows 209/0/1 exit 1 · Android 199/0/1 exit 1 — 0 FAIL on all three**
 (both nonzero exits are the pre-existing G5 skip, by design).
 Previous (Phase 2, opencode, claimed 2026-10-10 22:10, released 23:12): **closed the mobile coverage gaps** by moving five
@@ -185,23 +192,40 @@ are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
 - **Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx`** (was 6240 lines on 2026-10-06,
-  **~6500** after per-sound volume; **6769 now** after priming — line numbers in the specs have drifted, the
-  structure has not).
+  ~6500 after per-sound volume, 6769 after priming, **7033 now** after profiles — line numbers in the specs have
+  drifted, the structure has not; see the verified line map in the profiles handover section).
+- 🆕 **Storage is PROFILE-SCOPED as of `577505d`.** All board keys are now `profile:<id>:<key>`, resolved through
+  **`src/profileStorage.js`** (a separate module, deliberately not added to `App.jsx`). The profile index
+  `spellcaster_profiles` is deliberately **not** prefixed — it is how a profile is found. `localStorageMigrationCompleted`
+  is also global, by design: it is a device-level one-time audio flag.
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
-- Storage: Tauri → `BaseDirectory.AppData` via the fs plugin; web → `localStorage` `sound_file_*` data-URLs.
-- Data keys: `ttrpg_characters`, `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled
-  harnesses before), `ttrpg_groups`, `ttrpg_data_version`, plus `backgroundSettings` and `boxSize`.
-  `DATA_VERSION = '3'` (App.jsx:263) — **never bump it**: the mismatch path (App.jsx:322) renames the
-  user's keys to `*_old` and resets to defaults.
+- Storage: Tauri → `BaseDirectory.AppData` **`<identifier>/uploads/<profileId>/`** via the fs plugin; web →
+  `localStorage` `sound_file_*` data-URLs under the same profile prefix.
+- Data keys (all now behind a `profile:<id>:` prefix except the two noted): `ttrpg_characters`,
+  `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled harnesses before), `ttrpg_groups`,
+  `ttrpg_data_version`, `ttrpg_characters_icon`, `ttrpg_environment_icon`, plus `backgroundSettings` and `boxSize`.
+- ⚠️ **`fs:allow-rename` is granted; `fs:allow-remove-dir` does NOT exist in plugin-fs 2.5.2.** Directory removal
+  is therefore done file-by-file, and no directory listing carries file sizes (`stat` is not granted) — so the
+  "delete this profile?" prompt shows a file **count**, not a byte total.
+- `DATA_VERSION = '3'` (App.jsx:281) — **never bump it casually**: the mismatch path now **migrates** rather than
+  resets (a deliberate change, `PROFILE_SYNC_SPEC.md` §0.3 decision 3), but a bump with no forward-repair would
+  still affect every profile at once.
 - Package `com.mrhorakhty.thespellcaster.debug`; `tauri.conf.json` uses `devUrl: http://localhost:5173`.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
 - Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, verified
-  2026-10-11 12:10 after `git push` succeeded as `dc9c276..7455c3b`). ✅ Push works, no auth prompt or proxy
-  trouble — consistent with 2026-10-04, 2026-10-06 and 2026-10-11.
-- ✅ **Priming and the whole harness refactor are COMMITTED as `23bf458`** (2026-10-11 12:03), 30 files, after
-  the Phase 3 coverage gate and the port-then-retire. **⚠️ Still not pushed.** Commit contents: `src/App.jsx`,
+  2026-10-12 after `git push` succeeded as `0e1e37e..577505d`). ✅ Push works, no auth prompt or proxy
+  trouble — consistent with 2026-10-04, 2026-10-06, 2026-10-11 and 2026-10-12.
+- ✅ **Profiles step 1 is COMMITTED as `577505d`** (2026-10-12 00:00), 22 files, +2655/−322: `src/profileStorage.js`
+  (new), `src/App.jsx`, `src-tauri/capabilities/default.json`, `e2e/specs/profiles.mjs` (new),
+  `e2e/check-profile-keys.mjs` (new), `e2e/profileStorage.check.mjs` (new), `e2e/e2e-snapshot.mjs`,
+  `e2e/e2e-full.ps1`, `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `e2e/lib/page.mjs`, 7 existing specs,
+  `e2e/coverage.manifest.json`, `PROJECT_STATE.md`, `docs/session-history.md`.
+  Preceded by `0e1e37e` (spec refresh) and `4ddd428` (the three design decisions).
+- ✅ **Priming and the whole harness refactor were COMMITTED as `23bf458`** (2026-10-11 12:03), 30 files, after
+  the Phase 3 coverage gate and the port-then-retire. ✅ **Pushed** 2026-10-11 (`dc9c276..7455c3b`), and the
+  profiles work pushed again 2026-10-12. Commit contents: `src/App.jsx`,
   `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `e2e/e2e-full.ps1`, `e2e/e2e-android.ps1`, `README.md`,
   `.gitignore`, `PROJECT_STATE.md`, `docs/session-history.md`, `SOUND_PRIMING_SPEC.md`,
   `PER_SOUND_VOLUME_SPEC.md`, **new** `e2e/check-coverage.mjs`, `e2e/coverage.manifest.json`, `e2e/lib/*`,
@@ -356,7 +380,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 | `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs` | the two entrypoints the phases drive |
 | `e2e/check-coverage.mjs` | **static coverage gate (2026-10-11)** — no browser, no CDP. Two layers: a **suite** registry (ids cannot drift or rot, shared specs must run on both entrypoints) and a **features** registry (a `shipped` feature with no covering suite is an error). `--update` re-syncs the id lists and nothing else |
 | `e2e/lib/` | **shared plumbing** (2026-10-10): `cdp.mjs` (CDP connect + `sleep` + `evalJs`, fatal socket-exit 3), `report.mjs` (`createReport`, same exit-code contract), `page.mjs` (`SEED`/`PAGE_HELPERS`/`INSTRUMENT_AUDIO`/`CAPTURE_LS`/`restoreLs`/`submitModalExpr`), `driver.mjs` (`makeDriver`: `trustedTap` mouse+touch, `centeredCard`, `dragFromTo`, edit-mode enter/exit), `spec-runner.mjs` (`runSpecs`) |
-| `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 10 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, `reset.mjs` O1–O10 |
+| `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 11 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, `reset.mjs` O1–O10, `profiles.mjs` **F1–F12** |
 
 - Flags: `-Phase web|win|android|all` (default `all`), `-Suite full|mobile`. ⚠️ `run|features` were removed
   2026-10-11 when those suites were retired; both runners now carry a `ValidateSet`, so a stale `-Suite` value
@@ -382,15 +406,45 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - Run `kill-ports.bat` first if a run fails to start; `/all` also clears app processes and adb forwards, `/emu` shuts down the emulator.
 - **Both** runners snapshot `localStorage` before the suite and restore it afterwards, even on crash, via
   `e2e/e2e-snapshot.mjs` — so test data never clobbers real characters/sounds.
-- Windows Phase A/B cleanup is PID/port-scoped on `--remote-debugging-port=9224`. It deliberately does **not**
-  blanket-kill `msedgewebview2` (that killed the agent's own session once).
-- Scratch harnesses from past sessions are in `%TEMP%\opencode` — delete at will, not part of the repo.
+- 🔴 **`localStorage` WAS NOT THE ONLY PROTECTED STATE — the Tauri `uploads/` directory is now protected too
+  (2026-10-12).** It was not, and that cost the user real data: a Windows run's uploads migration moved an existing
+  install's 112 files into a profile subdirectory their older app could not find. `e2e-snapshot.mjs` gained
+  `save-uploads` / `restore-uploads`, and `e2e-full.ps1` snapshots **before `tauri dev` launches** and restores
+  **after the app is killed**. ⚠️ **The Windows phase writes into the user's REAL data, not a sandbox** — the
+  installed app and the dev build share one `%APPDATA%\<identifier>` directory. If the uploads snapshot fails the
+  phase **aborts** rather than running unprotected. 💡 Android needs no such guard: it drives an emulator whose
+  app data lives inside the AVD.
+- 🆕 **`node e2e/check-profile-keys.mjs`** — read-only guard for the profile-scoped storage seam. Catches the four
+  ways the suites can silently stop exercising the app: a bare `localStorage` literal, a bare literal
+  `sound_file_*` key, a bare **key variable** in a helper, and a raw `cdp('Page.reload')` that wipes the page
+  helpers. It is verified to fail on a deliberately re-broken file. Deliberate opt-outs use
+  `// PROFILE-GUARD-OFF: <reason>` … `// PROFILE-GUARD-ON` and the guard rejects an opt-out with no reason.
+- 🆕 **`node e2e/profileStorage.check.mjs`** — 26 fast node-level assertions over `src/profileStorage.js` against a
+  fake `localStorage`. No browser, so it is worth running for any future change to storage or the uploads plan.
 
 ## Verification gates
 - `npx eslint .` → **0 errors**, 3 pre-existing warnings (`convertFileSrc`, `_`, `ev` — all unused vars).
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
+- ✅ **All seven gates green after `577505d` (2026-10-12)** — the current baseline:
+
+| Gate | Result |
+|---|---|
+| `backup-project.ps1` | VERIFY OK, 224/224 |
+| `npx eslint .` | 0 errors / 3 pre-existing warnings |
+| `npx vite build` | exit 0 |
+| `node e2e/check-coverage.mjs` | exit 0 — **39 suites, 331 tests, 11 shared specs** |
+| web E2E | **223 PASS / 0 FAIL / 0 WARN, exit 0** |
+| Windows E2E | **222 PASS / 0 FAIL / 1 WARN, exit 1** (G5 baseline) |
+| Android E2E | **212 PASS / 0 FAIL / 1 WARN** (G5 baseline) |
+| user hand-test | **PASSED** — the user tested the profile switch on the built app |
+
+  The three exit-1s and the two WARNs are the pre-existing **G5** skip, not regressions. Suite F added **+13** tests
+  on each platform.
+- Previous baseline (2026-10-11, before profiles): web 210/0/0, Windows 209/0/1, Android 199/0/1.
+- The rest of this section is **per-phase history from before profiles** (2026-10-11 and earlier), kept for reference.
+
 - Web E2E suite `e2e/e2e-full.mjs` → **210 PASS / 0 FAIL / 0 WARN, exit 0** as of 2026-10-11 12:41
   (`e2e-run-20261011-123816.log`). Was 172 before Phase 3; **+38** are the four ported/added specs
   (W1–W6, R1–R10, Z1–Z12, O1–O10).
@@ -787,14 +841,42 @@ cancels, edit mode does not prime, a tap fires the primed set and consumes it, t
 
 | Spec | Status |
 |---|---|
-| `PROFILE_SYNC_SPEC.md` | **Revised again 2026-10-06** — docs only. Both platform unknowns are now **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`, so `fs:allow-read-dir` is not needed), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open` — registering the plugin alone would have shipped broken), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC; a 4100-byte payload landed as 12297 bytes of comma-separated digits with **no error**). **Implementation is still not authorised** — the user wants to review the design first. Do not write app code for it unasked. |
+| `PROFILE_SYNC_SPEC.md` | ✅ **AUTHORISED and IN PROGRESS — step 1 of 8 SHIPPED as `577505d`** (2026-10-12). The three design decisions are settled (§0.3: timestamps **cut**, switch = **full remount**, `DATA_VERSION` **migrates**), and step 1 delivered profile-scoped storage, the profile index, the first-run migration, the Tauri uploads migration, and a proven full-remount switch — all seven gates green and **hand-tested by the user**. Both platform unknowns remain **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open`), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC). ⚠️ **REMAINING: spec steps 3–6** — provenance classifier, bundle format, import (atomic, both modes), export + destination pickers. **None of that exists yet**; the user went looking for the import/export UI and correctly found it absent. No zip dependency is installed. The `coverage.manifest.json` feature entry correctly stays `status: planned` until the round-trip tests can be written. |
 | `MOVE_COPY_SOUND_SPEC.md` | **Retired 2026-10-04** — shipped, user-tested, committed as `f7f316e`, spec deleted. Its 8 settled decisions, invariants and deferred list are preserved in `docs/session-history.md`; the design now lives in `src/App.jsx`. See Retired files. |
 
-## 🚧 Handover — profiles step 1 (opencode, in flight, 2026-10-11)
+## ✅ Handover — profiles step 1 (opencode, COMMITTED as `577505d`, 2026-10-12 00:00)
 
-Everything here is **uncommitted**. `git status` shows modified `src/App.jsx`, `e2e/*`, `e2e/coverage.manifest.json`,
-`PROJECT_STATE.md`, `docs/session-history.md`, plus **new** `src/profileStorage.js`, `e2e/specs/profiles.mjs`,
-`e2e/profileStorage.check.mjs`, `e2e/check-profile-keys.mjs`. Base commit is `4ddd428`.
+**This section is now a RECORD of finished work, not a to-do list.** Everything described here shipped, is
+committed, and passed all seven gates. It is kept because it records the traps, not just the outcome.
+
+### 📍 Verified line map — `src/App.jsx` is **7033 lines** (was 6769 before profiles)
+
+Every reference below was re-checked on 2026-10-12. ⚠️ **Line numbers elsewhere in this file and in
+`PROFILE_SYNC_SPEC.md` are pre-profiles and have drifted** — the spec says so explicitly ("treat every
+`App.jsx:NNNN` as roughly right, verify before you rely on it"), and that is now true of this file too. The map
+below is the one to trust.
+
+| What | Line |
+|---|---|
+| `DATA_VERSION` | 281 |
+| `normalizeStoredData` | 289 |
+| `readStoredData` (takes a profile id) | 348 |
+| `mergeShippedDefaults` | 363 |
+| `function AppBoard` (the board; everything below is inside it) | 782 |
+| profile handlers — `handleSwitchProfile` / `handleDeleteProfile` | 826 / 862 |
+| the three auto-save effects (`ttrpg_characters`/`environment`/`groups`) | 4081 / 4091 / 4101 |
+| section icons | 1263 / 1267 |
+| `allSoundContainers` | 2219 |
+| `isFileReferencedElsewhere` | 2387 |
+| `getTauriStoragePath` / `ensureUploadDir` | 2740 / 2743 |
+| `storeFileInLocalStorage` / `getFileFromLocalStorage` | 2760 / 2803 |
+| `openSettingsModal` / `restoreDefaults` | 3101 / 3111 |
+| `removeFileFromLocalStorage` | 3676 |
+| `isSoundPlaying` | 3878 |
+| Profiles UI section in Settings | 6809 |
+| `function App` (owns the remount key) | 7023 |
+
+### What shipped
 
 ### 🔴 The harness does NOT protect the Tauri `uploads/` directory — and profiles turned that into data loss
 
@@ -952,16 +1034,19 @@ both of which re-seed for themselves. O must stay last of all.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- `PROFILE_SYNC_SPEC.md` — **re-opened 2026-10-04, design revised, awaiting the user's go-ahead.** Profiles +
-  export/import as a `.spellcaster` zip. Revised for real code drift, not cosmetics: `localStorage` call sites
-  went 23→**27** and there are **10** `uploads/` path sites, both key sets needing the profile prefix, plus
-  prefix *enumeration*; `ttrpg_characters_icon` / `ttrpg_environment_icon` were missing from the namespace
-  table; **`localStorageMigrationCompleted` must stay global** (prefixing it would re-run the one-time web→Tauri
-  audio sweep). Provenance turned out to be **structural, not a flag** — a reference with no `storedName` is a
-  bundled asset, so the old "add a write-time provenance flag" risk is gone. "Reset to starter sounds" already
-  shipped as `restoreDefaults` (App.jsx:2671), so it only needs profile-scoping. Two new risks added:
-  cross-profile shared blobs (never hardlink between profiles) and profile-switch state reload (revoke the
-  object-URL cache at App.jsx:2298).
+- ✅ `PROFILE_SYNC_SPEC.md` — **AUTHORISED 2026-10-11; step 1 of 8 shipped as `577505d`, all seven gates green,
+  hand-tested.** Profiles + export/import as a `.spellcaster` zip. Still to do: **steps 3–6** (provenance
+  classifier, bundle format, atomic import in both modes, export + the desktop/Android destination pickers) and
+  step 7 UI. ⚠️ **Facts that were re-verified and are now WRONG in older notes:** `localStorage` call sites are
+  still **27**, but the `uploads/` count is **4 chokepoints, not 10** — `getTauriStoragePath` (App.jsx:2740) is the
+  single path builder with 3 callers, and `getFileFromLocalStorage` bypasses it via `appDataDir`/`join`. Prefix
+  *enumeration* is real. `localStorageMigrationCompleted` **must stay global** (prefixing it would re-run the
+  one-time web→Tauri audio sweep) — as must the `spellcaster_profiles` index. Provenance is **structural, not a
+  flag**: a reference with no `storedName` is a bundled asset. "Reset to starter sounds" shipped as `restoreDefaults`
+  (App.jsx:3111) and now needs profile-scoping. Two risks remain on the board: cross-profile shared blobs (never
+  hardlink between profiles) and the object-URL cache on switch (App.jsx `objectUrlCache`). 💡 **The design also
+  changed in three places during step 1**: timestamps were **cut**, the switch became a **full remount** rather
+  than an in-place reload, and a `DATA_VERSION` mismatch now **migrates** instead of resetting.
 - ✅ **Per-sound volume is complete and committed** (2026-10-06): shipped, **hand-tested by the user** ("works as
   intended from the brief testing"), and green on web / Windows / Android. ✅ Suite P is **now ported** to
   `e2e-mobile.mjs` (2026-10-10) and passes on Android — **148 PASS / 0 FAIL / 0 WARN**. Still uncovered: the
