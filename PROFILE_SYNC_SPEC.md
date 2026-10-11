@@ -8,6 +8,8 @@
 > **Every code reference in this spec was re-verified against `src/App.jsx` at 6769 lines on 2026-10-11**, not
 > inherited from the 6240-line draft. See §0 for what changed, and §0.1 for the **three design facts that did not
 > exist when the previous revision was written** (per-sound volume, priming, and the E2E harness refactor).
+> ✅ **The three open design decisions are now SETTLED (2026-10-11)** — see **§0.3**. Timestamps are **cut** from
+> v1, the profile switch is a **full remount**, and `DATA_VERSION` mismatches **migrate** rather than reset.
 > **Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06, 2026-10-11
 > **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), the move/copy feature (shipped as `f7f316e`), per-sound volume (shipped 2026-10-06), and sound priming (shipped 2026-10-08).
 
@@ -34,6 +36,24 @@ move facts, not decisions. Nothing in §1, §2, §5, §6 or §8 needed to change
 **Status: both platform unknowns are now closed** (Android 2026-10-04, desktop 2026-10-06). What remains before
 implementation is a **design decision**, not a spike: pick the desktop route in §10 (recommend the runtime grant)
 and review the whole spec.
+
+### 0.3 ✅ The three open design decisions — SETTLED 2026-10-11
+
+These were the only genuinely open choices. They are now decided, and the consequences are folded into the
+sections below, so an implementer does not re-litigate them.
+
+| # | Question | **Decision** | What it changes |
+|---|---|---|---|
+| 1 | **Timestamps + tombstones (§4.3) — keep or cut from v1?** | ✅ **CUT from v1** | §4.3 stays as a record for the deferred Merge / folder-cloud sync work, but there is **no** implementation step. §12's step list loses it. Adding the fields later is cheap: `normalizeStoredData` (App.jsx:269) is the single place shapes are repaired, so a later migration can default them there without a `DATA_VERSION` bump. **Nothing in v1 reads them**, so shipping them would be dead weight — and dead weight in a *storage schema* is the expensive kind, because every later bundle format has to carry it |
+| 2 | **Profile switch — full remount or in-place state reload?** | ✅ **FULL REMOUNT for v1** | Settles §11 risk 7 and §11 risk 10. Switching profiles remounts the app with the new profile as the first-load state, so the three auto-save effects (App.jsx:3922-3949) **never run against a stale prefix** — the race is designed out rather than guarded against. ⚠️ **The price is a brief reload flash**, which is a real cost on Android where a remount also drops cached object URLs. That is the correct trade for v1: profiles are a rare, deliberate action, and correctness beats a smooth transition. 💡 If a future release wants the animation back, the correct route is a `switchingRef` guard the three effects consult — **not** a partial in-place reload |
+| 3 | **`DATA_VERSION` mismatch — reset or migrate?** | ✅ **MIGRATE** | Settles §11 risk 11. The **existing** mismatch path (App.jsx:319-325) resets a key to defaults and renames the old value to `<key>_old` — a destructive move that exists today only because there has never been a real version skew. Once namespaced, it fires **per profile**, and the worst case is an imported bundle from an older build wiping the user's board. **Migrate instead**: run the bundle through `normalizeStoredData` (App.jsx:269) and forward-repair, never reset. ⚠️ This means the profile code path must **not** reuse the existing mismatch branch as-is; it needs a sibling that repairs rather than discards. And `DATA_VERSION` still must not be bumped casually — it gates every profile at once |
+
+⚠️ **Decision 2 is load-bearing for the implementation order.** A remount means the profile switch must be
+**proven in the same commit as the storage adapter** — before any bundle code exists — because the switch is what
+validates the adapter's shape. §12's step 1 is therefore bigger than "wrap 27 call sites", and §13's
+byte-identical A → B → A assertion is the gate that says it worked.
+
+**Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06, 2026-10-11
 
 ### 0.1 Three things that did not exist at the last revision
 
@@ -128,7 +148,7 @@ spec as "roughly right, verify before you rely on it"** — the *structure* is w
 | **A `storedName` can now be shared by two sounds** | move/copy's copy **shares** the source's reference by design; `isFileReferencedElsewhere` (App.jsx:2255) exists because of it | Export **must** dedupe by content hash — two references, one blob (§5). Deleting a profile must not assume one owner. |
 | **`isFileReferencedElsewhere` scans only in-memory state** | it walks `allSoundContainers()` (App.jsx:2087) over the *current* React state | With profiles, "the current state" is **one profile**. Cross-profile sharing cannot happen through the UI today, so per-profile `uploads/<id>/` dirs stay correct — but say so in a comment before anyone "simplifies" it. |
 | **Custom background image is an inline data URL** | `backgroundSettings.imagePreview`, up to 5 MB base64, written straight into localStorage (App.jsx:3201, applied 3149-3173) | **Deliberately NOT synced** — it is a per-device display preference, and re-picking one image is far cheaper than rebuilding a library of sounds. It stays exactly where it is today. Export must **strip** it (§7) so a 5 MB blob never rides along inside `data.json` |
-| **No timestamps exist anywhere** | 0 hits for `updatedAt` / `createdAt` / `deletedAt` in `src/App.jsx` and `src/data.json` — re-checked 2026-10-11, still true | Last-write-wins is impossible today. Add timestamps + tombstones **now** — it is the prerequisite for A/C later |
+| **No timestamps exist anywhere** | 0 hits for `updatedAt` / `createdAt` / `deletedAt` in `src/App.jsx` and `src/data.json` — re-checked 2026-10-11, still true | Last-write-wins is impossible today, so Merge (§8) and folder/cloud sync (A/C) cannot be conflict-resolved when they arrive. ✅ **v1 does not add them** (§0.3 decision 1) — but whoever builds Merge will have to add them *to existing user data*, which is the expensive order. Decide then, not now |
 | **Env data key is singular** | `ttrpg_environment`, not `ttrpg_environments` (written at App.jsx:3934) | A latent bug that has fooled test harnesses before; be careful in any new code |
 | **`localStorage` access is 27 call sites and includes enumeration** | 13 `setItem` / 11 `getItem` / 3 `removeItem`, plus `localStorage.length` + `localStorage.key(i)` in the `sound_file_*` sweep (App.jsx:1310-1311) and 4 `ttrpg_*_icon` writes (App.jsx:1141-1149). **Re-counted 2026-10-11: still exactly 27 + 2** — per-sound volume and priming both added zero keys, which is asserted by `P14a`/`P14b` and `P31a` | The "single storage adapter" of §4.2 must own **enumeration and prefix matching**, not just get/set/remove. This spec's earlier "23 call sites" figure was already stale once. |
 | 🆕 **The three auto-save effects write the whole slice, undebounced** | `ttrpg_characters` (App.jsx:3922-3929) → `ttrpg_environment` (3932-3939) → `ttrpg_groups` (3942-3949). Each is `JSON.stringify(<entire slice>)` into localStorage on every state change | ⚠️ **This is the hard part of a profile switch and it is new.** See §11 risk 10 — a switch that changes the prefix but not the state will have the *old* profile's data written into the *new* profile's keys by these three effects. There is no write choke point and no transaction |
@@ -226,7 +246,18 @@ Added to every entity, optional on read (absent = epoch):
 
 `deletedAt` is a **tombstone**: deletes set it instead of splicing the array, so a later sync can propagate the deletion. Filtered out of the UI.
 
-**Status: cut from the v1 critical path.** These fields were originally required for merge-import conflict resolution — and merge is no longer in v1 (§8), so nothing in the first release actually reads them. They are kept here as the cheapest possible insurance for the deferred options: Merge, and folder/cloud sync (A/C), both need them, and adding timestamps after users have data in the field is far harder than adding them now. `normalizeStoredData` (App.jsx:269) already guarantees array shapes, so it is also the place to default missing timestamps — no `DATA_VERSION` bump required. **If you want minimum v1, cut this section and step 2 with it; nothing else breaks.**
+**Status: ✅ CUT from v1 (decided 2026-10-11, §0.3). There is no implementation step for this.** It was
+originally required for merge-import conflict resolution — and merge is no longer in v1 (§8), so nothing in the
+first release reads these fields. It is kept here as a record for the deferred work: Merge, and folder/cloud sync
+(A/C), both need them, and adding timestamps after users have data in the field is harder than adding them now.
+`normalizeStoredData` (App.jsx:269) already guarantees array shapes, so it is also the place to default missing
+timestamps later — **no `DATA_VERSION` bump required** when that day comes.
+
+💡 **Why cut rather than "cheap insurance now".** A field nothing reads is not free in a storage schema: every
+later `manifest.json` / `data.json` revision has to carry it, every import has to decide what to do with a
+tombstone from a bundle that may predate it, and `deletedAt` in particular implies a filter on the read path that
+does not otherwise exist. The insurance premium is paid in every future format version; the policy is only claimed
+if Merge or sync actually ships. Cut it, and take the small hit later if it is ever needed.
 
 ---
 
@@ -370,7 +401,10 @@ Implementation consequences:
 3. Verify every `files[].sha256`. Any mismatch → abort, report the file, write nothing.
 4. Write payloads into a **temp** dir `uploads/.import-<stamp>/`.
 5. Run `data.json` through `normalizeStoredData` (App.jsx:269) — the existing forward-migration entry point — and through `normalizeHex` (App.jsx:2998). ⚠️ `normalizeStoredData` is the **group-aware** path and returns `sounds: []` for the vestigial `groups[].sounds` (App.jsx:306), folding any legacy array into a `Default` category — so a bundle whose `groups[].sounds` was populated will come back reshaped. That is existing behaviour, not a bundle bug, but it means export→import is **not** byte-identical for that one vestigial array (§13 says the same about testing it).
-6. **Atomically swap** the temp dir into `uploads/<targetProfileId>/`, then commit the namespaced keys.
+6. **Atomically swap** the temp dir into `uploads/<targetProfileId>/`, then commit the namespaced keys. ⚠️ In
+   **"Replace active"** this installs into the **live** profile, which is the one place a remount does *not*
+   automatically protect — remount afterwards, or verify prefix/state agreement the way the switch does
+   (§11 risk 10).
 7. Report per file: imported / skipped (already present) / failed.
 
 ### Import modes (v1 — two modes)
@@ -558,12 +592,14 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    profile's in-memory state, so a future import path that links two profiles would delete bytes still in use.
    Rule to keep: **every profile owns its own `uploads/<profileId>/` directory; never hardlink or share blobs
    between profiles.** Content-addressed naming dedupes *within* a bundle, never across profiles.
-7. **NEW — a profile switch is a state reload.** Today the app reads storage once at mount
-   (`readStoredData` at App.jsx:317, first-load fallback at 683). Switching profiles means tearing down and
-   rebuilding `characters` / `environmentSounds` / `groups` / `boxSize` / `backgroundSettings` / section icons
-   in one go, plus revoking cached object URLs (`objectUrlCache` at App.jsx:846, populated 2587-2600) or the
-   previous profile's blobs leak for the session. Design the switch as an explicit reload path rather than three
-   setters, and decide early whether it is a full remount.
+7. ✅ **SETTLED 2026-10-11 — a profile switch is a FULL REMOUNT** (§0.3 decision 2). Today the app reads storage
+   once at mount (`readStoredData` at App.jsx:317, first-load fallback at 683). The remount makes the switch an
+   *explicit first-load* of the target profile, so `characters` / `environmentSounds` / `groups` / `boxSize` /
+   `backgroundSettings` / section icons all rebuild together and cached object URLs (`objectUrlCache`,
+   App.jsx:846, populated 2587-2600) go with the old tree — no stale blobs leak for the session. ⚠️ **The cost is
+   a reload flash**, most visible on Android where a remount also drops the object-URL cache. Accepted: a profile
+   switch is a rare, deliberate action, and this is the option that cannot corrupt data. 💡 If animation is wanted
+   later, add a `switchingRef` guard the three effects consult — do **not** restore a partial in-place reload.
 8. **NEW — a byte payload can be silently corrupted and it looks like success.** Desktop IPC sends the
    `write_file` body through `fetch`, and an `Array` body is coerced to a comma-joined string: the write
    *resolves*, and the file is 3× too large and unopenable (§3, §7). No error anywhere. Guard the single call
@@ -571,25 +607,26 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 9. **CLOSED — desktop picker-path write.** ✅ spiked 2026-10-06 (§10). Not a risk any more: the runtime grant
    works and is narrow. The only way to get this wrong now is to reach for the `fs:scope: ["**"]` shortcut,
    which works too and hands the frontend write access to the whole filesystem. Prefer the grant.
-10. 🆕 **NEW — the auto-save effects will write the wrong profile's data.** This is the one design problem the
-    previous revision could not have seen, and it is **the hardest part of a profile switch.** The three
-    auto-save effects (App.jsx:3922-3949) `JSON.stringify` the *entire* slice into localStorage on every state
-    change, undebounced, with **no write choke point and no transaction**. A switch that sets `activeProfileId`
-    and then calls three setters will, in the gap, have the **old** profile's `characters` written into the
-    **new** profile's keys — because the effects fire on the state change, and the prefix they read has already
-    moved. The failure is silent and corrupts the profile the user just switched *to*.
-    Mitigation options, in order of preference: (a) **key the effects on the profile id** so they re-run once
-    the state is loaded, and make the write a no-op while a switch is in flight; (b) a `switchingRef` guard the
-    three effects consult; (c) **full remount**, which is the crudest but sidesteps the interleaving entirely.
-    Whatever is chosen, §13 must assert **A → B → A leaves both profiles byte-identical to before**, because
-    nothing else in the app will catch this.
-11. 🆕 **NEW — `DATA_VERSION` interacts with namespacing.** `readStoredData` (App.jsx:319-325) resets a key to
-    defaults when `ttrpg_data_version` does not match, renaming the old value to `<key>_old`. Once that key is
-    `profile:<id>:ttrpg_data_version`, **the reset fires per profile** — so a profile created by an older build,
-    or one imported from an older bundle, silently loses its board to the same mechanism. Decide explicitly
-    whether a profile with a missing/older `data_version` is reset or migrated, and note that **an imported
-    bundle carries its own `dataVersion`** (§5.1), which is the one case where resetting would be most
-    surprising. **Never bump `DATA_VERSION` casually** — it resets every profile at once.
+10. ✅ **DESIGNED OUT by the remount decision (§0.3 decision 2) — but this is why that decision was made.** The
+    three auto-save effects (App.jsx:3922-3949) `JSON.stringify` the *entire* slice into localStorage on every
+    state change, undebounced, with **no write choke point and no transaction**. A switch that sets
+    `activeProfileId` and then calls three setters would, in the gap, have the **old** profile's `characters`
+    written into the **new** profile's keys — silently, corrupting the profile the user just switched *to*.
+    A **full remount** removes the gap entirely: the new profile is the first-load state and the effects only
+    ever run with a prefix and a state that already agree. ⚠️ **The residual risk is the in-place paths that
+    remain** — "Replace active" import (§8) installs into the live profile, and it must either remount too or
+    verify prefix/state agreement the same way. Do not let the remount create a false sense that the race class
+    is gone; §13's byte-identical A → B → A assertion is the guard, and it must also cover a switch immediately
+    followed by an edit.
+11. ✅ **SETTLED 2026-10-11 — mismatches MIGRATE, they do not reset** (§0.3 decision 3). `readStoredData`
+    (App.jsx:319-325) resets a key to defaults when `ttrpg_data_version` does not match, renaming the old value
+    to `<key>_old`. Once that key is `profile:<id>:ttrpg_data_version`, the reset fires **per profile** — so a
+    profile created by an older build, or one imported from an older bundle, would silently lose its board to
+    the same mechanism. **The profile path must migrate instead**: run the data through `normalizeStoredData`
+    (App.jsx:269) and forward-repair, never discard. ⚠️ **This means the profile code must not reuse the existing
+    mismatch branch as-is — it needs a sibling that repairs rather than resets**, and that sibling is the one the
+    import path (§8 step 5) uses. ⚠️ And `DATA_VERSION` still gates **every profile at once**, so it must not be
+    bumped casually: a bump with no forward-repair implemented is a simultaneous wipe of all users' boards.
 
 ---
 
@@ -600,18 +637,28 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    Desktop: `dialog.save` → plain path string, cancelled → `null`, and the write works after a runtime
    `allow_file` grant, byte-identical. **No platform unknowns remain.** What is left is the §10 design choice
    (grant vs `**`) — take the grant — and the user's review of this spec.
-1. **Storage adapter + profile refactor + first-run migration.** Alone, in its own commit. Nothing else starts
-   until existing users are proven safe. Scope per §4.2: **27** `localStorage` sites, **4** `uploads/`
-   chokepoints (§0.2 — not 10), prefix enumeration, and the two `ttrpg_*_icon` keys.
-   `localStorageMigrationCompleted` stays global. ⚠️ **Settle §11 risk 10 (the auto-save write race) *in this
-   step*, not later** — it is decided by how the adapter reads the active profile, so it is cheapest to get
-   right before anything is built on top. ⚠️ And decide §11 risk 11 (`DATA_VERSION` per profile) here too.
-2. **Timestamps + tombstones** — *optional*, see §4.3. Cut this step for minimum v1; nothing else depends on it any more.
+   **The three design decisions are also settled** (§0.3): timestamps cut, switch = full remount, `DATA_VERSION`
+   migrates. **Everything below is now unblocked.**
+1. **Storage adapter + profile index + first-run migration + a PROVEN profile switch.** Alone, in its own
+   commit — nothing else starts until existing users are proven safe. Scope per §4.2: **27** `localStorage`
+   sites, **4** `uploads/` chokepoints (§0.2 — not 10), prefix enumeration, and the two `ttrpg_*_icon` keys.
+   `localStorageMigrationCompleted` stays global.
+   ⚠️ **This step is bigger than "wrap 27 call sites", and that is by design.** The switch (a full remount,
+   §0.3 decision 2) is what validates the adapter's shape, so it ships *here*, before any bundle code exists.
+   Green means: two profiles, switch A → B → A, **both byte-identical to before** (§13).
+   ⚠️ Build the migrate-not-reset sibling of the version-mismatch path (§0.3 decision 3) in this step too — the
+   import path (§8 step 5) depends on it and retrofitting it later would mean touching the migration twice.
+2. ~~**Timestamps + tombstones**~~ — ✅ **CUT from v1** (§0.3 decision 1). There is no step; §4.3 is kept only as
+   a record for the deferred Merge / sync work.
 3. **Provenance classifier** (`isUploadedReference`) — ✅ a *structural* test now (§3), not a flag. Tiny, but do
    it before the bundle format so §13's bundle-size assertion has something to test.
 4. **Bundle format** — `manifest.json` / `data.json` schema + zip read/write. Carry sound objects **verbatim**
    so `volume` and any future sound field ride along without a schema edit (§5.2).
+   💡 Wire a **thin end-to-end round trip** as soon as `exportBundle`/`importBundle` exist as byte functions
+   (§9.3) — export a seeded profile, wipe, import, compare — and get it green before widening either half.
 5. **Import** (atomic, both v1 modes) — before export, so a bundle is provably readable before we can produce one.
+   ⚠️ "Replace active" installs into the **live** profile: either remount afterwards or verify prefix/state
+   agreement the same way the switch does (§11 risk 10's residual case).
 6. **Export + destination pickers** (desktop runtime grant + Android SAF; web excluded in v1). The picker
    contract is platform-asymmetric: **desktop resolves a path string or `null`, Android resolves a `content://`
    URI or rejects** — one `try`/`catch` plus a null check covers both.
@@ -644,16 +691,19 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [ ] Deleting a profile removes **only its own** `uploads/<profileId>/` (no orphaned blobs, and the other profile's audio still plays).
 - [ ] Migration: a localStorage snapshot from the current release upgrades to a default profile with no data loss.
 - [ ] **The two `ttrpg_*_icon` keys and `boxSize` follow the profile**, and `localStorageMigrationCompleted` does **not** get a profile prefix (a prefixed one would re-run the one-time audio sweep).
-- [ ] **Profile switch is clean:** switch A → B → A with different boards and different section icons; no bleed-through, and no stale blob URLs (a sound from A must not play after switching to B).
+- [ ] **Profile switch is clean:** switch A → B → A with different boards and different section icons; no bleed-through, and no stale blob URLs (a sound from A must not play after switching to B). *(byte-identity and the remount itself are asserted separately below — §11 risk 10 and §0.3 decision 2)*
 - [ ] 🆕 **A profile switch does not corrupt either profile (the auto-save race, §11 risk 10).** Give A and B
       *different* characters, switch A → B → A, and assert both profiles are **byte-identical to their
       pre-switch snapshot**. ⚠️ This is the assertion that catches the silent write of A's data into B's keys —
-      nothing else in the app will. Include the **rapid** case (switch twice inside one tick) and the
-      **switch-then-edit** case (edit immediately after landing on B, then reload).
-- [ ] 🆕 **`DATA_VERSION` is handled deliberately per profile (§11 risk 11).** A profile whose
-      `ttrpg_data_version` is missing or older does **not** silently reset to starter sounds; and an imported
-      bundle whose `dataVersion` differs from this build produces a clear message, not a wiped board. Assert
-      both, and assert `localStorageMigrationCompleted` still does **not** acquire a profile prefix.
+      nothing else in the app will. Include the **edit-immediately-after-switching** case (the residual path the
+      remount does *not* cover), and "Replace active" import (§8), which installs into the live profile.
+- [ ] 🆕 **`DATA_VERSION` mismatch migrates and never resets (§11 risk 11, §0.3 decision 3).** A profile whose
+      `ttrpg_data_version` is missing or older is **repaired**, not replaced with starter sounds; an imported
+      bundle whose `dataVersion` differs from this build imports with a clear message and **no data loss**;
+      and `localStorageMigrationCompleted` still does **not** acquire a profile prefix. Assert the board's
+      contents survive, not just that the app did not crash.
+- [ ] 🆕 **A profile switch remounts cleanly (§0.3 decision 2).** No stale blob URLs (a sound from A must not
+      play after switching to B), section icons follow the profile, and `boxSize` / theme do not bleed.
 - [ ] 🆕 **A sound's `volume` trim survives the round trip**, including `0` (a muted sound) and an absent value
       (which must come back as "no key" or `1`, not as a lost field). Use `normalizeSoundVolume`, and assert
       against the **new-sound** save path specifically — it is an explicit allowlist, so that is where a
@@ -700,7 +750,8 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 
 - [ ] Merge import (§8) — id remapping, duplicate names, `updatedAt` conflict rules.
 - [ ] Web export/import (§7) — needs web audio moved out of localStorage first.
-- [ ] Timestamps + tombstones (§4.3) if cut from v1.
+- [ ] Timestamps + tombstones (§4.3) — ✅ **cut from v1** (§0.3 decision 1). Merge and folder/cloud sync both
+      need them; adding them to existing user data at that point is the expensive order, so budget for it there.
 - [ ] Folder / WebDAV / cloud sync (options A and C in §2), enabled behind the same `ProfileTransport` boundary.
 
 ---

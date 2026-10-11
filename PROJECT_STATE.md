@@ -1,6 +1,12 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-11 20:56) — **`PROFILE_SYNC_SPEC.md` docs refreshed; docs only, nothing committed or pushed**
+🔓 UNCLAIMED — last holder: opencode (2026-10-11 21:08) — **profile spec refreshed + the three design decisions settled (docs only)**
+✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
+profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
+`PROFILE_SYNC_SPEC.md` as **§0.3** and folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13. **Still docs
+only — no app code, implementation remains unauthorised.** Consequence recorded: the remount makes the profile
+switch the thing that validates the storage adapter's shape, so §12 step 1 is now "adapter + profile index +
+migration + **a proven switch**", not "wrap 27 call sites". Gates 2-4 green.
 **Docs session, 2026-10-11 20:49.** `PROFILE_SYNC_SPEC.md` re-verified against `src/App.jsx` @ **6769** lines and
 refreshed: all line numbers, plus **three substantive changes** — (a) the **`uploads/` count is 4 chokepoints, not
 10** (`getTauriStoragePath` App.jsx:2604 has exactly 3 callers), (b) **two new design risks** — the auto-save write

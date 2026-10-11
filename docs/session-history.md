@@ -2458,3 +2458,39 @@ session-only with no `localStorage` key, so it must **not** appear in the bundle
 `node e2e/check-coverage.mjs` exit 0 - "OK, manifest, code and platform wiring agree" (38 suites, 318 tests,
 23/23 shipped features covered). Gates 5-7 (the three E2E phases) **were not run**: the change is documentation
 only, no code was touched, and the state file is explicit that a docs-only change does not need a hand-test.
+---
+
+## 2026-10-11 21:02 - The three profile design decisions settled (opencode)
+
+**Docs only. Still no app code; implementation remains unauthorised.**
+
+The refresh above left exactly three genuinely open choices. The user settled all three, and they are now recorded
+as **`PROFILE_SYNC_SPEC.md` §0.3**, with the consequences folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13
+so an implementer does not re-litigate them.
+
+1. **Timestamps + tombstones: CUT from v1.** §4.3 is kept as a record for the deferred Merge / folder-cloud sync
+   work, but there is no implementation step. The reasoning recorded is worth keeping because it is *not* the
+   spec's original argument: a field nothing reads is not free in a storage schema - every later `manifest.json`
+   revision has to carry it, every import has to decide what to do with a tombstone from a pre-tombstone bundle,
+   and `deletedAt` implies a read-path filter that does not otherwise exist. The insurance premium is paid in
+   every future format version; the policy is only claimed if Merge or sync actually ships.
+2. **Profile switch: FULL REMOUNT for v1.** This is the load-bearing one. It settles §11 risk 10 by *designing the
+   race out* rather than guarding it: the three auto-save effects (App.jsx:3922-3949) cannot fire with a stale
+   prefix, because the new profile is the first-load state and prefix and state always agree. The accepted cost is
+   a reload flash, most visible on Android where a remount also drops the object-URL cache - the right trade for a
+   rare, deliberate action. ⚠️ Recorded explicitly: the remount does **not** cover "Replace active" import, which
+   installs into the live profile, and does not cover the edit-immediately-after-switching path. Those stay in the
+   §13 assertions.
+3. **`DATA_VERSION` mismatch: MIGRATE, never reset.** The existing path (App.jsx:319-325) resets to defaults and
+   renames to `<key>_old`, which once namespaced fires **per profile** - so an imported bundle from an older
+   build could wipe a board. The profile path therefore needs a **sibling that repairs rather than discards**,
+   built in step 1 because §8's import step 5 depends on it and retrofitting would touch the migration twice.
+
+**Why step 1 got bigger, which is the interesting consequence.** The remount means the profile switch is what
+*validates the storage adapter's shape*, so it has to ship in the same commit as the adapter - before any bundle
+code exists. §12's step 1 is now "storage adapter + profile index + first-run migration + a proven switch",
+with green meaning two profiles and A -> B -> A **byte-identical**. Building the bundle first and working out the
+switch afterwards would have discovered the adapter needed a different shape and redone it.
+
+**Gates.** `npx eslint .` 0 errors / 3 pre-existing warnings. `npx vite build` exit 0. `node e2e/check-coverage.mjs`
+exit 0. Gates 5-7 not run - documentation only, no code touched.
