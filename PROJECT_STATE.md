@@ -366,16 +366,36 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
   JBR (21), `JAVA_HOME` points there. AVDs: `Pixel_7`, `Pixel_Tablet`, `Small_Phone`.
-- ProtonVPN's `10.2.0.2` interface previously collided with the emulator host mapping and baked the wrong
-  dev-server host.
-- 💡 **The raw logs of that incident are still on the Desktop and are NOT junk** — `~/Desktop/emu-out.log`,
-  `emu-err.log`, `tauri-dev-stdout.log`, `tauri-dev-stderr.log`, all dated **2026-08-31**, ~30 KB total.
-  `tauri-dev-stderr.log` contains the actual smoking gun (*"Info Using 10.2.0.2 to access the development
-  server / Info Replacing devUrl host with 10.2.0.2"*). They are the **primary source** for a gotcha this file
-  records in prose. The harness no longer writes there — every redirect now goes to `$tmp` = `%TEMP%\opencode\`
-  (`e2e-android.ps1:152-153`, `e2e-full.ps1:165-221`) — so these are one-off debris from a manual launch. **Left
-  in place 2026-10-11 pending the user's decision**, because the user referred to them as "backups" and they
-  are not: they are incident evidence. If they are deleted, the finding survives only in this line.
+- ⚠️ **Two ProtonVPN `10.2.0.2` gotchas, not one — they produce the same symptom and are easy to conflate.**
+  The adapter is **still present** (verified live 2026-10-11: `Get-NetIPAddress` shows `10.2.0.2 ProtonVPN`
+  alongside `192.168.1.102 Ethernet`), so either can recur. The trap is that the VPN address `10.2.0.2` and
+  Android's **hard-coded** emulator-to-host alias `10.0.2.2` sit in the same subnet prefix and look alike.
+  1. **Wrong host baked into the debug APK.** `tauri android dev` auto-detects the dev-server address and picks
+     the VPN adapter: *"Info Using 10.2.0.2 to access the development server / Info Replacing devUrl host with
+     10.2.0.2"*. `tauri.conf.json` still correctly ships `"devUrl": "http://localhost:5173"` — the rewrite
+     happens **at runtime in the debug build**, so grepping the repo never shows it.
+  2. **Vite not staying alive for the whole run.** Independently of the address, the app shows
+     `Failed to request 10.2.0.2:5173` (tauri.localhost error page) if :5173 dies mid-run —
+     `docs/session-history.md:571` records this one and attributes it to Vite's lifetime, not to the address.
+     **Fixing one does not fix the other**, and the symptom is identical for both.
+  ✅ **Mitigation for (1)**: `vite.config.js:19` binds `host: '0.0.0.0'`, so Vite answers on `10.0.2.2`,
+  `10.2.0.2` and `192.168.1.102` alike and the wrong guess stops mattering. Added in **`9c2a4c3`**
+  (2026-10-11-verified: *"Mobile UI adjustments"*, 2026-08-31). `e2e-full.ps1:296` additionally clears
+  `TAURI_DEV_HOST` in cleanup so detection cannot leak between runs.
+- 💡 **The raw logs of (1) are still on the Desktop and are NOT junk** — `~/Desktop/emu-out.log`,
+  `emu-err.log`, `tauri-dev-stdout.log`, `tauri-dev-stderr.log`, all dated **2026-08-31**, ~30 KB total, i.e.
+  the same day as the `9c2a4c3` fix. `tauri-dev-stderr.log` holds the detection lines quoted above and
+  `emu-out.log` shows `IPv4 server found: 10.2.0.1`.
+  ⚠️ **They corroborate this entry; they are not the only record of it.** An earlier version of this note called
+  them "the smoking gun" and "the primary source" — that overstated them. `docs/session-history.md:1701` logs
+  the same thing as a *risk noted* ("Vite lists the ProtonVPN `10.2.0.2` adapter first in its Network lines"),
+  not as a diagnosed-and-fixed incident, so the prose record was thinner than this note implied. What the logs
+  add is the **mechanism**, which no prose entry spells out.
+  The harness no longer writes there — every redirect now goes to `$tmp` = `%TEMP%\opencode\`
+  (`e2e-android.ps1:152-153`, `e2e-full.ps1:165-221`) — so these are one-off debris from a manual launch.
+  **Left in place 2026-10-11 at the user's decision:** they were referred to as "backups" and are not. They are
+  ~30 KB and would show a recurrence immediately. **If they are deleted, nothing in this section is lost** — the
+  mechanism is written out above.
 
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything

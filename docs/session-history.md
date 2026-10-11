@@ -2194,3 +2194,38 @@ placeholders read *"Character list will go here"*, over single-file logic (`soun
 💡 The reusable lesson: **grep the stashed blob for the feature's core symbols before deciding a stash is
 dead.** "That branch was merged" does not imply "that stash is empty" - the stash captured a *different point
 in time* from the merge, and here it pointed backwards, not forwards. There are now **no stashes** in this repo.
+## SESSION 2026-10-11 (close) - correcting the ProtonVPN entry in PROJECT_STATE.md
+
+Asked to explain the ProtonVPN gotchas. Doing so required reading the record rather than repeating it, and
+**the entry I had written hours earlier turned out to be overstated.** Rewritten.
+
+**What is actually true, verified 2026-10-11:**
+
+- The ProtonVPN adapter at **`10.2.0.2` is still present** - `Get-NetIPAddress` shows `10.2.0.2 ProtonVPN`
+  next to `192.168.1.102 Ethernet`. So this can recur; it is not a resolved-and-gone environment change.
+- The trap: the VPN address `10.2.0.2` and Android's **hard-coded** emulator-to-host alias **`10.0.2.2`** sit
+  in the same subnet prefix and are easy to misread as the same thing.
+- **Two distinct failures, not one**, and they produce an identical symptom:
+  1. `tauri android dev` auto-detects the dev-server address and picks the VPN adapter - *"Info Using 10.2.0.2
+     to access the development server / Info Replacing devUrl host with 10.2.0.2"* - baking the wrong address
+     into the debug APK. `tauri.conf.json` still correctly ships `localhost:5173`; the rewrite is **runtime
+     only**, so grepping the repo never reveals it.
+  2. Vite dying mid-run yields the same `Failed to request 10.2.0.2:5173` page. session-history.md:571 records
+     this one and blames Vite's lifetime, **not** the address.
+  Fixing one does not fix the other.
+- Mitigation for (1) is `vite.config.js:19` `host: '0.0.0.0'`, added in **`9c2a4c3`** (2026-08-31, "Mobile UI
+  adjustments") - verified by `git log -S`, and the **same day** as the Desktop logs. `e2e-full.ps1:296` also
+  clears `TAURI_DEV_HOST` in cleanup.
+
+**The correction:** my earlier note called the four Desktop logs *"the actual smoking gun"* and *"the primary
+source"* for the gotcha. Both were wrong, and the archive says so. `session-history.md:1701` records this as a
+**risk noted** (*"Vite lists the ProtonVPN 10.2.0.2 adapter first in its Network lines, which is the documented
+collision risk"*) - not a diagnosed-and-fixed incident. The prose record was thinner than I implied. What the
+logs uniquely add is the **mechanism**, which no prose entry spelled out; that is their actual value, and the
+note now says exactly that and no more. The note also records that **nothing is lost if they are deleted**.
+
+💡 **Lesson: "I found the primary source for X" is a claim about the record, so it has to be checked against the
+record.** I had inferred it from the fact that a log existed and contained a matching string - which shows the
+mechanism happened, not that the prose had failed to capture it. The general form of this mistake is the same
+one that produces phantom incident stories: assembling several true observations into a causal narrative no
+single record supports.
