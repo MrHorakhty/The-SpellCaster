@@ -2998,15 +2998,16 @@ first attempt looked wrong - a white band under the track - which is what expose
 | profileStorage.check | 26/26 |
 | **web E2E** | **223 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261012-123202.log`) - baseline unchanged |
 | Windows / Android E2E | **NOT run** - named, not implied; see below |
-| user hand-test | **REQUIRED - not yet done** |
+| user hand-test | **DONE (13:00)** - see the 12:50 entry; the user reviewed the restyled sliders and approved them |
 
 ⚠️ **Windows and Android E2E were not run.** The change is CSS plus four strings. The risk is cosmetic and
 platform-neutral, but WebView2 is a different Chromium build and **the whole finding is Chromium-specific**,
 so an Android/WebView2 check is genuinely worthwhile before trusting this. Suite P (card volume) and Suite B
 (box-size slider) both pass on web, and the screenshot confirms the CSS reaches the rendered DOM.
 
-**This is a user-facing change and the hand-test is still outstanding** - it moves sliders the user did not
-ask me to touch. Say so explicitly rather than implying it was done.
+**This is a user-facing change and the hand-test was outstanding** - it moves sliders the user did not
+ask me to touch. Say so explicitly rather than implying it was done. **It was done at 13:00**: the user looked
+at the restyled sliders and approved them, which is what closed the loop. The Windows/Android gap remains.
 
 ### Next
 `PROFILE_SYNC_SPEC.md` steps 3-6 (classifier, bundle format, atomic import, export + destination pickers) and
@@ -3039,8 +3040,8 @@ Rebuilt, re-screenshotted at 3-4x: rest (small lime pill on a thin rail), active
 and the master volume / zoom sliders now visibly less chunky than before.
 Gates: eslint **0 errors** / 3 warnings, vite build exit 0, check-coverage exit 0, check-profile-keys OK,
 web E2E **223 PASS / 0 FAIL / 0 WARN exit 0** (`e2e-run-20261012-124722.log`). Windows/Android not run again,
-for the same reason: the whole finding is Chromium-specific and WebView2 is a different build. **User hand-test
-still outstanding.**
+for the same reason: the whole finding is Chromium-specific and WebView2 is a different build.
+**User hand-test: done at 13:00** — the user reviewed the restyled sliders and approved them ("looks good").
 
 ### Lesson
 **Fixing a genuine bug can still be the wrong call when it removes something the user liked.** The dead-CSS

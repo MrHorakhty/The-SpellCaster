@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:55) — **slider restyled per feedback: lime accent (was slate-on-slate), handle 16px→11px on a 3px rail; card slider 5×12 pill. Web E2E 223/0/0 exit 0, eslint 0 errors, build + 2 static gates green. Windows/Android E2E NOT run. ⚠️ USER HAND-TEST STILL OUTSTANDING.**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 13:02) — **slider sign-off recorded: user reviewed and approved the restyled sliders (`fd93f72`, `f19498e`), closing the hand-test the DoD required. Web E2E 223/0/0 exit 0. Backups cleared. ⚠️ Windows/Android E2E still never run — the remaining verification risk.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -563,6 +563,10 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   sizing: the standard slider is an **11px lime handle on a 3px rail** (was 16px on 4px — a handle four times the
   height of its rail), and the **card** slider alone is a **5×12 lime pill on a 2px rail**, growing to the
   standard handle on `:active`/`:focus`. Colour is the theme accent in both states; only the size changes.
+  ✅ **User reviewed it and approved (2026-10-12 13:00) — the hand-test owed by the DoD is now satisfied** for
+  the slider change specifically. Shipped as **`fd93f72`** (copy trims + the CSS fix) and **`f19498e`** (colour
+  and handle size). ⚠️ **Windows and Android E2E still have not been run** — the whole diagnosis is
+  Chromium-specific and WebView2 is a different build, so that remains the open verification risk, not the look.
   💡 **Lesson, and it cuts both ways.** A stylesheet that has never taken effect looks exactly like a design
   decision — which is how the dead CSS survived. But the converse held too: I read the blue as a bug and fixed it
   without asking, and it turned out to be the browser's fallback that the user had simply grown to like.
