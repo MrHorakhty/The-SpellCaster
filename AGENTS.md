@@ -22,7 +22,22 @@ Only **regenerable** content is excluded, and each exclusion maps to a rebuild c
 | `dist` | 29 MB | `npm run build` |
 | `.git` | 21 MB | `git clone` (objects already in the repo) |
 | `target` | **25 GB** | `cargo build` |
-| `gen` | 5.8 GB | `tauri android init` |
+| `gen` | 5.8 GB | see the warning below — **only mostly** |
+
+⚠️ **`gen` is excluded from the backup, but it is NOT purely regenerable, and it is not gitignored.** Two
+things make the old "rebuilt by `tauri android init`" row wrong (corrected 2026-10-12):
+
+- **50 files under `src-tauri/gen/android/` are tracked in git.** `.gitignore` only excludes specific subpaths
+  (`gen/schemas/`, `Run App.bat`, `local.properties`, `*.keystore`, `*.jks`, `.gradle/`, `build/`, `.cxx/`) — not
+  the directory. Tracked and hand-maintained among them is
+  **`src-tauri/gen/android/app/src/main/java/com/mrhorakhty/thespellcaster/MainActivity.kt`**, which is where the
+  Rust plugins are registered, plus `build.gradle.kts` and `AndroidManifest.xml`.
+- So a fresh `tauri android init` would **not** reproduce them. That is precisely why they are tracked.
+
+The practical consequence: **a backup folder is not a complete checkout of this repo.** It omits 50 tracked
+files, including the Android entry point. That is safe *only* because those files are in git and pushed — which
+is the case as of `8f06de9`. 💡 The same shape as the `public/assets` lesson: check what is actually tracked
+before treating an exclusion as harmless.
 
 The script prints the exclusion list, file count and size on **every run**, and aborts (deleting the
 oversized folder, exit 1) if the result exceeds 150 MB. That guard exists because of a real incident:

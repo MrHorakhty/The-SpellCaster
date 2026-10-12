@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:05) — **`public/` is now tracked (`ba57282`) and clone-verified; the 29 MB of starter sounds are no longer uncommitted. Web E2E 223/0/0 exit 0, eslint 0 errors, build + both static gates green. Windows/Android E2E not run — nothing app-level changed. Also fixed the double claim-line bug.**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:25) — **backups pruned to ZERO after verifying every file they held is in git, junk, or regenerable. Corrected the `gen` exclusion row: it is NOT purely regenerable — 50 files under `src-tauri/gen/android/` are tracked, including the hand-maintained `MainActivity.kt`. Docs only; no code touched.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -607,18 +607,32 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything
-except regenerable build output (`node_modules`, `dist`, `.git`, `target`, `gen`), then verifies every
-source file reached the backup and repairs from git if not. ~203 files / ~39 MB, complete by the user's
-choice (including `public/assets` audio).
+except build output (`node_modules`, `dist`, `.git`, `target`, `gen`), then verifies every
+source file reached the backup and repairs from git if not. **223 files / ~39.7 MB**, including
+`public/assets` audio.
+
+⚠️ **`gen` is excluded but is NOT purely regenerable, and it is not gitignored** (corrected 2026-10-12).
+**50 files under `src-tauri/gen/android/` are tracked** — `.gitignore` excludes only specific subpaths, not the
+directory — and one of them is **hand-maintained**:
+`src-tauri/gen/android/app/src/main/java/com/mrhorakhty/thespellcaster/MainActivity.kt`, where the Rust plugins
+are registered. A fresh `tauri android init` would **not** reproduce it, which is exactly why it is tracked.
+**Consequence: a backup folder is not a complete checkout of this repo** — it omits those 50 files, including
+the Android entry point. Safe only because they are in git and pushed (verified at `8f06de9`). This was found by
+diffing the backup against `git ls-files` after the `public/assets` fix, and it is the same lesson twice: an
+exclusion is only harmless if you check what is actually tracked underneath it.
 
 💡 **The 31 GB incident:** `/XD src-tauri\target` was passed as a *path*; robocopy silently ignored it
 and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names. The script now prints
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
-💡 Backups accumulate — the script does not prune. Delete old ones by hand, but **keep the newest**.
-Latest: **`ttrpg-soundboard-backup-20261012-113352`** (224/224 verified, 39.7 MB) — taken 2026-10-12 during the
-integrity check after the cut-off session. ⚠️ It predates `ba57282`, so it holds the audio as *untracked* files
-rather than in git; take a fresh one before the next change.
+💡 Backups accumulate — the script does not prune. Delete old ones by hand.
+**There are currently ZERO backup folders**, cleared 2026-10-12 12:22 after verifying that every one of the
+223 files they held is either in git, junk (`dev-server.log`, `Run App.bat.lnk`, `e2e/_e2e_pixel.png`,
+`.idea/`) or regenerable from a tracked source (`src-tauri/icons/android|ios` derive from the tracked
+362 KB `icon.png`). ⚠️ **The icons are regenerable but NOT byte-identical** — measured, not assumed: `npx tauri
+icon src-tauri\icons\icon.png` reproduces only **1 of 26** android files and **0 of 18** ios files exactly. The
+APK's real launcher resources are tracked anyway (22 mipmaps under
+`src-tauri/gen/android/app/src/main/res/mipmap-*`), so this is equivalent-and-good-enough, not a loss.
 🗑️ **Pruned 2026-10-11 twice: 10 folders / ~355 MB -> 2 / ~79 MB (8 deleted, ~315 MB), then the remainder
 cleared after the final push.** Before the first prune, every file in all 8 was diffed against the repo and
 `git ls-files`; the only files not in the working tree were the three retired suites, recoverable from
