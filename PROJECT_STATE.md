@@ -1,13 +1,14 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 00:05) — **profiles step 1 COMMITTED as `577505d` and PUSHED; all 7 gates green, hand-tested**
-✅ **Step 1 is DONE and committed.** All seven gates green, the user hand-tested the switch, and the Tauri uploads
-defect is closed. ⚠️ **3 commits are ahead of `origin/mobile-support` and NOT pushed.** Export/import (spec steps
-3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 11:19) — **docs-only integrity check after the cut-off session: NO DAMAGE found; cleaned 3 leftover doc defects; corrected the false `public/assets` "all in git" claim in both files. Gates 2–7 not re-run (markdown only).**
+✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
+All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
+(spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
 
-**Profiles step 1 of 8 — IMPLEMENTED, web gate green, the Tauri uploads blocker FIXED, NOT yet committed.**
+**Profiles step 1 of 8 — SHIPPED as `577505d`.**
 User authorised implementation 2026-10-11 21:12. Per `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter + profile
-index + first-run migration + a **proven** profile switch.
+index + first-run migration + a **proven** profile switch. The handover further down is a **record of finished
+work**, not a to-do list.
 
 ✅ **App code (`src/`)**
 - **NEW `src/profileStorage.js`** — the whole storage layer, out of `App.jsx`. Profile-scoped keys
@@ -91,12 +92,6 @@ profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than rese
 all three landed in step 1. Consequence recorded: the remount makes the profile switch the thing that validates
 the storage adapter's shape, so §12 step 1 is "adapter + profile index + migration + **a proven switch**", not
 "wrap 27 call sites".
-✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
-profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
-`PROFILE_SYNC_SPEC.md` as **§0.3** and folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13. **Still docs
-only — no app code, implementation remains unauthorised.** Consequence recorded: the remount makes the profile
-switch the thing that validates the storage adapter's shape, so §12 step 1 is now "adapter + profile index +
-migration + **a proven switch**", not "wrap 27 call sites". Gates 2-4 green.
 **Docs session, 2026-10-11 20:49.** `PROFILE_SYNC_SPEC.md` re-verified against `src/App.jsx` @ **6769** lines and
 refreshed: all line numbers, plus **three substantive changes** — (a) the **`uploads/` count is 4 chokepoints, not
 10** (`getTauriStoragePath` App.jsx:2604 has exactly 3 callers), (b) **two new design risks** — the auto-save write
@@ -201,6 +196,11 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage: Tauri → `BaseDirectory.AppData` **`<identifier>/uploads/<profileId>/`** via the fs plugin; web →
   `localStorage` `sound_file_*` data-URLs under the same profile prefix.
+- 🔴 **`public/assets` is GITIGNORED** (`.gitignore:90`), so the **71 bundled audio files / 29 MB are untracked**
+  — only `public/assets/Icon.png` is in git (force-added). Consequences: a fresh clone yields an app with **no
+  starter sounds**, the remote is **not** a complete copy of the project, and **a backup folder is currently the
+  only independent copy of the audio**. The user's decision 2026-10-12 was to **keep it ignored** rather than add
+  ~29 MB to git history, so **never clear the last backup folder**. See Backups.
 - Data keys (all now behind a `profile:<id>:` prefix except the two noted): `ttrpg_characters`,
   `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled harnesses before), `ttrpg_groups`,
   `ttrpg_data_version`, `ttrpg_characters_icon`, `ttrpg_environment_icon`, plus `backgroundSettings` and `boxSize`.
@@ -214,9 +214,21 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, verified
-  2026-10-12 after `git push` succeeded as `0e1e37e..577505d`). ✅ Push works, no auth prompt or proxy
-  trouble — consistent with 2026-10-04, 2026-10-06, 2026-10-11 and 2026-10-12.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of `8032fb7` (0 ahead / 0 behind,
+  verified 2026-10-12). ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04, 2026-10-06,
+  2026-10-11 and 2026-10-12.
+- ✅ **Docs integrity check 2026-10-12 11:19 — NO DAMAGE from the cut-off session.** The `8032fb7` commit landed
+  (00:08:13) and is pushed. Verified: `git status` clean, all **143** tracked files present, none zero-byte, every
+  text file strict UTF-8 with **0 U+FFFD / 0 NUL**, `git fsck` shows only the known unreachable blob `3d1fcf15`,
+  backup VERIFY OK 224/224, no stray processes or listening ports. The one mid-file BOM in `docs/session-history.md`
+  is **not** damage — it is the literal `﻿Close the desktop.` inside the paragraph documenting that trap.
+  **What the cut-off session did leave behind was unfinished prose**, not lost content: the header still claimed
+  *"3 commits are ahead and NOT pushed"* and *"NOT yet committed"* (both false), plus a duplicated
+  design-decisions paragraph with contradictory tails and a duplicated post-commit-hook paragraph. All cleaned in
+  `AGENTS.md` + this file, **docs only** — no code touched, so gates 2–7 were not re-run (they are unaffected by a
+  markdown-only change; the 2026-10-12 00:00 baseline still stands).
+- 🔴 **The `public/assets` exposure — found and fixed 2026-10-12.** See Project facts and Backups. The audio
+  (71 files / 29 MB) is gitignored and untracked; **never clear the last backup folder** while that holds.
 - ✅ **Profiles step 1 is COMMITTED as `577505d`** (2026-10-12 00:00), 22 files, +2655/−322: `src/profileStorage.js`
   (new), `src/App.jsx`, `src-tauri/capabilities/default.json`, `e2e/specs/profiles.mjs` (new),
   `e2e/check-profile-keys.mjs` (new), `e2e/profileStorage.check.mjs` (new), `e2e/e2e-snapshot.mjs`,
@@ -234,11 +246,6 @@ are gated behind `isMobile` so desktop/web stay untouched.
   git normalised the LF working copy to match the committed blob, so `HEAD:src-tauri/Cargo.toml` and
   `HEAD~1:src-tauri/Cargo.toml` are the **same hash** `f701a93a`. Verified, not assumed.
   ✅ The AV-sensitive blob survived the commit: `HEAD:e2e/e2e-full.ps1` = `60f4645b`, 15765 bytes, readable.
-- ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
-  echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
-  a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
-  else. Do not read that output as "the commit was backed up" — use `.\backup-project.ps1`, which really does
-  copy and verify.
 - ✅ **The 2026-08-11 stash is gone** — `stash@{0}` (*"On feature/multiple-sound-files: Backup before reroll to
   master"*, touching `src/App.jsx`) was **dropped 2026-10-11** after the user confirmed multiple sound files has
   shipped and been working for a while. Verified obsolete before dropping, not assumed: the stash's `App.jsx` is
@@ -599,29 +606,33 @@ choice (including `public/assets` audio).
 and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names. The script now prints
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
-💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-Latest: **`ttrpg-soundboard-backup-20261011-130235`** (220/220 verified, 39.5 MB) — taken after the Reset spec
-shipped, so it matches the final commit. **The user authorised clearing the rest once everything was pushed**,
-which is sound: backups hold only source, docs, tests and `public/assets`, all of which are in git at
-`origin/mobile-support`, so a fresh clone plus `npm install` reproduces them. Anything older is redundant.
+💡 Backups accumulate — the script does not prune. Delete old ones by hand, but **keep the newest**.
+Latest: **`ttrpg-soundboard-backup-20261012-111949`** (224/224 verified, 39.7 MB) — taken 2026-10-12 during the
+integrity check after the cut-off session.
 🗑️ **Pruned 2026-10-11 twice: 10 folders / ~355 MB -> 2 / ~79 MB (8 deleted, ~315 MB), then the remainder
 cleared after the final push.** Before the first prune, every file in all 8 was diffed against the repo and
 `git ls-files`; the only files not in the working tree were the three retired suites, recoverable from
 `dc9c276:e2e/...`, verified with `git cat-file -e`, and `dc9c276` is on `origin/mobile-support`. So the prune
-provably lost nothing. 💡 **There are currently ZERO backup folders, and that is deliberate.** The user cleared them once the work was
-pushed, which is sound: backups hold only source, docs, tests and `public/assets`, all of which are in git at
-`origin/mobile-support`, so a fresh clone plus `npm install` reproduces everything a backup contains. 💡 That
-also disposes of the standing "the script does not prune, delete old ones by hand" advice in `AGENTS.md` —
-**after a successful push, you do not need one at all.** Two rules still hold and are unaffected:
+provably lost nothing.
+
+🔴 **But the "cleared after the final push" part was wrong, and it is corrected here (2026-10-12).** It rested on
+*"backups hold only source, docs, tests and `public/assets`, all of which are in git"*. **`public` is gitignored**
+(`.gitignore:90`), so the 71 bundled audio files / **29 MB are untracked** — only `public/assets/Icon.png` is in
+git. A fresh clone plus `npm install` does **not** reproduce a backup; it produces an app with **no starter
+sounds**. Clearing every folder therefore left the audio existing in exactly one place: this working tree.
+Verified 2026-10-12: `git ls-files public/assets` returns **1** file; the directory holds **71 / 29.0 MB**.
+⚠️ **The `AGENTS.md` rule carried the same error and has been corrected there too** — prune old backups, but
+**never the newest one**, for as long as `public/` is gitignored. 💡 It also disposed of the standing "the script
+does not prune, delete old ones by hand" advice, which now stands again. Two rules are unaffected:
 - **Back up before any change** — take one at the start of a work session, and
 - **re-take one at the end**, because the folder you want is the one matching the final commit.
 
-⚠️ The reason clearing them is *better* than keeping them, not merely tidier: `backup-project.ps1` reports
-`VERIFY OK` and Bitdefender then eats `e2e/e2e-full.ps1` from the copy anyway — that has happened at least
-twice (2026-09-30 from `.git\objects`, 2026-10-04 from a backup folder). **A "verified" backup is not
-automatically a complete one**, which is precisely why "VERIFY OK, so it is safe to delete the old ones" and
-"VERIFY OK, so it is safe to keep this one" are not equally strong arguments. The remote is the only copy that
-is both complete and independent.
+⚠️ There is a genuine tension here, and both sides are real. `backup-project.ps1` reports `VERIFY OK` and
+Bitdefender then eats `e2e/e2e-full.ps1` from the copy anyway — that has happened at least twice (2026-09-30
+from `.git\objects`, 2026-10-04 from a backup folder), so **a "verified" backup is not automatically a complete
+one**. That argued for keeping the remote as the single source of truth. But the remote is **missing the audio
+entirely**, so the remote is not a complete copy either. The honest position: neither one is sufficient alone
+while `public/` is gitignored — the working tree plus at least one backup folder is.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the

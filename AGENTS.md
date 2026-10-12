@@ -47,19 +47,25 @@ the file — stripping all process-kill commands did **not** help, and the patte
 is harmless. The e2e files are currently final and committed, so `backup-project.ps1` repairing from git
 is the accepted mitigation. The user declined excluding all of OneDrive.
 
-### Known: backups accumulate — and can be cleared entirely once pushed
-The script does **not** delete old backups. During a work session several accumulate; keep the newest one or
-two while you are still changing things.
+### Known: backups accumulate — prune them, but KEEP the newest one
+The script does **not** delete old backups. During a work session several accumulate. Delete the older ones by
+hand, but **always leave the most recent folder in place**, even after everything is pushed.
 
-⚠️ **Once the work is pushed, you do not need any of them.** A backup holds only source, docs, tests and
-`public/assets` — all of which are in git — so a fresh clone plus `npm install` reproduces its entire
-contents. Deleting every backup folder is safe *and* preferable, because `VERIFY OK` is not the same as
-complete: Bitdefender still eats `e2e/e2e-full.ps1` from backup copies (see above), so a "verified" backup is
-not necessarily a whole one. The remote is the only copy that is both complete and independent.
+🔴 **The reason is `public/assets`, and this rule was wrong until 2026-10-12.** `.gitignore:90` ignores `public`,
+so the **71 bundled audio files / 29 MB are untracked** — only `public/assets/Icon.png` is in git (force-added).
+A fresh clone plus `npm install` therefore does **not** reproduce a backup's contents: it produces an app with
+**no starter sounds at all**. An earlier version of this rule said the opposite ("all of which are in git, so a
+fresh clone plus `npm install` reproduces its entire contents"), and it was acted on — all backups were cleared
+on 2026-10-11, which left those 29 MB existing in exactly one place: the working tree.
+
+So the standing guidance is now:
+- **Source, docs, tests and the e2e harness ARE in git** — the remote covers those completely.
+- **`public/assets` is NOT** — a backup folder is currently the *only* independent copy of the audio.
+- 💡 **Never clear the last backup folder while `public/` is gitignored.** If you want the audio in git, that is a
+  deliberate decision (≈29 MB permanently in history), not a side effect of tidying.
 
 This does not weaken **backup before any change** — take one at the start of a work session, and re-take one
-at the end so the surviving folder matches the final commit. It means the *between*-session state needs no
-folder at all.
+at the end so the surviving folder matches the final commit.
 
 ### Build that path in PowerShell — do NOT type the accented characters
 

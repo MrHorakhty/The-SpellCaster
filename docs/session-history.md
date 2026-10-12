@@ -2807,3 +2807,68 @@ tools". The backup script is what turned a corrupted file into a 30-second undo 
 | **Windows** | **222 PASS / 0 FAIL / 1 WARN, exit 1** (G5 baseline; uploads guard verified in-flight) |
 | **Android** | **212 PASS / 0 FAIL / 1 WARN** |
 | **user hand-test** | **PASSED** - the user tested the switch on the built app |
+
+---
+
+## 2026-10-12 11:19 - Integrity check after the cut-off session (docs only, opencode)
+
+The previous session was cut off while making its closing doc edits. No damage found.
+
+### The cut-off session had actually finished
+8032fb7 "Refresh the state file after the profiles step 1 push" was committed at **00:08:13**, three minutes
+after the claim timestamp, and it is **pushed** - the branch was 0 ahead / 0 behind origin/mobile-support.
+The working tree was clean.
+
+### What was checked, and the result
+| Check | Result |
+|---|---|
+| git status --porcelain | empty (before this session's own edits) |
+| tracked files present on disk | **143 / 143** |
+| zero-byte files | none |
+| strict UTF-8 decode, every text file | **ok** - 0 U+FFFD, 0 NUL, no BOM added |
+| git fsck | only the **known** unreachable blob 3d1fcf15 (Bitdefender, 2026-09-30); rest is normal dangling debris |
+| .\backup-project.ps1 | **VERIFY OK 224/224, 39.7 MB** |
+| stray processes / listening ports | none (no node, app, adb; 5173/9222-9224/1420 free) |
+
+docs/session-history.md contains **two** EF BB BF sequences: one at offset 0 and one at 212801. The second is
+**not** corruption - it is the literal `Close the desktop.` inside the paragraph that documents the BOM trap,
+where the U+FEFF is the subject matter.
+
+### What the cut-off session did leave behind: unfinished prose, not lost content
+A reflow was interrupted mid-edit, so the header still said **"3 commits are ahead of origin/mobile-support and
+NOT pushed"** and **"NOT yet committed"** - both false, and actively misleading to the next agent. It also left a
+**duplicated** "three open profile design decisions" paragraph whose two copies contradict each other (*"Now
+IMPLEMENTED"* vs *"Still docs only"*), and a **duplicated** "post-commit git hook is decorative" paragraph.
+All three cleaned: +7 / -16 lines in PROJECT_STATE.md.
+
+### 🔴 The real find: public/assets is gitignored, and the docs said otherwise
+Found while verifying, not while looking. .gitignore:90 ignores public, so of the 71 bundled audio files
+(**29.0 MB**) exactly **one** is tracked (public/assets/Icon.png, force-added). Both AGENTS.md and
+PROJECT_STATE.md asserted the opposite:
+
+> "A backup holds only source, docs, tests and public/assets - all of which are in git - so a fresh clone plus
+> 
+pm install reproduces its entire contents."
+
+**It does not.** A fresh clone yields an app with **no starter sounds at all**. And that claim had already been
+acted on: every backup folder was cleared on 2026-10-11 under the rule *"after a successful push, you do not need
+one at all"* - which left the audio existing in exactly one place, this working tree.
+
+**Decision (user, 2026-10-12): keep public/ gitignored**, rather than commit ~29 MB into history permanently.
+Corrections made instead:
+- AGENTS.md - the heading is now *"prune them, but KEEP the newest one"*, with the reasoning and the measured
+  numbers (git ls-files public/assets = 1; directory = 71 files / 29.0 MB).
+- PROJECT_STATE.md - added to **Project facts** (so an agent sees it in the section it reads first) and the
+  **Backups** section now records the correction and the tension honestly.
+
+💡 **The lesson, and it generalises past this repo:** a rule whose justification is *"it's all in git"* is only as
+good as the .gitignore. One line at .gitignore:90 made a whole paragraph of standing guidance false, and the
+falsehood was acted on destructively within hours. **Verify the coverage of a redundancy claim, never inherit it.**
+Worth noting the asymmetry that made it survivable: the remote is the only copy that is *independent*, but it is
+not *complete* - and "complete" is what the rule actually needed.
+
+### Gates
+**Docs only - no code touched.** ackup-project.ps1 VERIFY OK 224/224 was run; gates 2-7 were **not** re-run,
+because a markdown-only change cannot affect eslint, the build, coverage or any E2E phase. The 2026-10-12 00:00
+baseline (web 223/0/0, Windows 222/0/1, Android 212/0/1, hand-tested) still stands. **No hand-test needed** -
+nothing user-facing changed.
