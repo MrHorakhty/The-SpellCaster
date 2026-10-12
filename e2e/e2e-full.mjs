@@ -998,9 +998,15 @@ async function main() {
   log('MOVE','M20: Esc closes picker',escClosed===true?'PASS':'FAIL','');
 
   // --- M21: data version untouched, no *_old keys (no data reset)
+  //
+  // Scoped to THIS profile via __keysFor(pid), not a raw scan of localStorage. The
+  // raw scan caught a `*_old` key belonging to a *different* profile - a leftover
+  // from an earlier run - and failed the suite on 2026-10-12 for a reason that had
+  // nothing to do with the code. The guard is still exactly as strict: a DATA_VERSION
+  // mismatch must not leave a backup behind for the profile under test.
   const ver = await evalJs(`(() => {
-    let old=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; if(k.endsWith('_old')) old.push(k); }
-    return { v:localStorage.getItem(window.__pk('ttrpg_data_version')), old };
+    const old = window.__keysFor(window.__pid()).filter(k => k.endsWith('_old'));
+    return { v: localStorage.getItem(window.__pk('ttrpg_data_version')), old };
   })()`);
   log('MOVE','M21: DATA_VERSION still 3, no *_old keys',ver?.v==='3'&&ver?.old?.length===0?'PASS':'FAIL',JSON.stringify(ver));
 

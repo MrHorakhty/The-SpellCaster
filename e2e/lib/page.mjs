@@ -74,18 +74,27 @@ export const PROFILE_HELPER = `(() => {
     }
     return out.join(',');
   };
-  // Every non-audio key, as BARE names, sorted. This is what the "the feature
-  // added no new storage key" assertions compare (P14a, P31a): they care about
-  // WHICH keys exist, not how they are scoped, so the profile prefix is stripped
-  // back off. Global device-level keys (the profile index, the one-time audio
-  // sweep flag) are kept - the expected-key lists name them explicitly, so
-  // dropping them here would silently weaken the assertion.
+  // Every non-audio key for THE ACTIVE PROFILE, as BARE names, sorted. This is what
+  // the "the feature added no new storage key" assertions compare (P13, P14a, P31a,
+  // O10): they care about WHICH keys exist, not how they are scoped, so the profile
+  // prefix is stripped back off. Global device-level keys (the profile index, the
+  // one-time audio sweep flag) are kept - the expected-key lists name them explicitly,
+  // so dropping them here would silently weaken the assertion.
+  //
+  // ⚠️ A key belonging to ANOTHER profile is now skipped rather than passed through
+  // with its full scoped name. It used to fall through the prefix test untouched and
+  // be returned as the full scoped name profile:p_xxxx:ttrpg_characters_old, which is not a bare name
+  // and matched no entry in any KNOWN_KEYS list - so a stale profile left behind by
+  // an earlier run failed these assertions on Windows while web and Android (clean
+  // stores) passed. Four tests, one cause, and the failure had nothing to do with the
+  // code under test. Use __keysFor(pid) when you really do mean another profile.
   window.__bareKeys = () => {
     const pre = 'profile:' + window.__pid() + ':';
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i) || '';
       if (!k) continue;
+      if (k.startsWith('profile:') && !k.startsWith(pre)) continue;
       const name = k.startsWith(pre) ? k.slice(pre.length) : k;
       if (name.startsWith('sound_file_')) continue;
       out.push(name);

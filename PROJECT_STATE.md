@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 13:02) — **slider sign-off recorded: user reviewed and approved the restyled sliders (`fd93f72`, `f19498e`), closing the hand-test the DoD required. Web E2E 223/0/0 exit 0. Backups cleared. ⚠️ Windows/Android E2E still never run — the remaining verification risk.**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 17:20) — **the harness bug that lost your board is FIXED and verified at the disk level**: Windows is back to 222/0/1, all seven gates green, and a post-run restart confirms 14/14 `localStorage` keys survive with the profile index intact. Root cause was `taskkill /F` beating WebView2's async commit, not any test. The 4 red tests were one stale key, not a regression. **No test sounds are in git** (checked). Board itself is gone and not recoverable — accepted; files safe in `uploads/p_09b2806c/`.
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -173,11 +173,11 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-12** (`bd3080d` — the 2026-10-12 working session: integrity check after the cut-off
-session, `public/` tracked so the starter sounds are no longer uncommitted, the `gen` exclusion row corrected,
-Settings copy trimmed, and the `.slider` stylesheet fixed after it turned out to have never applied. Web E2E
-223/0/0, eslint 0 errors, hand-test signed off. **Next up: `PROFILE_SYNC_SPEC.md` steps 3–6**, which the user
-is starting fresh in a new session.)
+Last updated: **2026-10-12, later session** (the E2E verification session: closed the Windows/Android gap, found
+that the harness had been silently destroying the user's board since 2026-10-11, fixed and disk-verified the
+restore, and made the profile-key assertions hermetic. All seven gates green; `git log` for the hash.) **Prior
+entry:** `bd3080d` — integrity check after the cut-off session, `public/` tracked, the `gen` exclusion row
+corrected, Settings copy trimmed, `.slider` stylesheet fixed. **Next up: `PROFILE_SYNC_SPEC.md` steps 3–6.**
 
 ---
 
@@ -218,15 +218,36 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of `8032fb7` (0 ahead / 0 behind,
-  verified 2026-10-12). ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04, 2026-10-06,
-  2026-10-11 and 2026-10-12.
-- ✅ **`public/` is now tracked — `ba57282`** (2026-10-12 11:42), 74 files, +38/−1: the 71 starter sounds /
-  icons plus `favicon.ico`, `favicon.svg`, `icons.svg`, and the `.gitignore` fix. `.git` **24.9 -> 52.9 MB**.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, verified and pushed
+  2026-10-12, later session). ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04,
+  2026-10-06, 2026-10-11 and 2026-10-12.
+- ✅ **Committed and pushed 2026-10-12 (later session): the E2E harness restore fix + the profile-scoped key
+  assertions**, 6 files (`e2e/e2e-snapshot.mjs`, `e2e/e2e-full.ps1`, `e2e/e2e-full.mjs`, `e2e/lib/page.mjs`,
+  `PROJECT_STATE.md`, `docs/session-history.md`). ⚠️ **`e2e/e2e-android.ps1` was deliberately left alone** — its
+  snapshots stay in `%TEMP%` because the Android phase drives an emulator whose app data lives inside the AVD, so
+  it never touches real user data and gains nothing from the durable location. Changing it would be churn.
+- ✅ **`public/` is now tracked — `ba57282`** (2026-10-12 11:42), 74 files, +38/−1: the 71 files in
+  `public/assets` — **52 audio + 19 images**, 29.0 MB ⚠️ **not "71 sounds", it is 71 *files*** — plus
+  `favicon.ico`, `favicon.svg`, `icons.svg`, and the `.gitignore` fix. `.git` **24.9 -> 52.9 MB**.
   Pushed and **verified by cloning from GitHub**: 71 assets / 28.95 MB present, all 70 `src/data.json`
   references resolve, and `npm install` + `npx vite build` produced a `dist/assets/` with all 71 files.
   `desktop.ini` (0 bytes) stays ignored. 💡 Root cause: `public` was **Nuxt/Gatsby boilerplate**, correct for
   those frameworks, wrong for a Vite app where `public/` is source.
+- ✅ **"Are the user's uploaded sounds in git?" — NO, verified across ALL history 2026-10-12 17:30.** The user
+  asked, reasonably, because this file carried a *"112 files / 17.4 MB"* figure. **That figure was never git** —
+  it was `%APPDATA%\com.mrhorakhty.thespellcaster\uploads`, and **46 of those 114 files are `e2e_silence`
+  fixtures (14.04 MB)**, so the real content was 53 files / 2.37 MB. What *is* tracked is `public/assets` (the
+  shipped starter content, 71 files) — a different thing entirely.
+  Verified by: `git rev-list --objects --all` over **every path ever committed** → **54 distinct audio paths**,
+  which is exactly the count in HEAD (52 `public/assets` + `e2e/e2e_silence.wav` + `.tmp_uploads/test_sound.wav`),
+  so **nothing audio was ever committed and later removed** (that would show ~166); **zero** paths matching the
+  runtime-upload pattern `sound_<rand>_<name>` / `icon_<rand>_<name>`; and the 20 largest blobs in all history are
+  `public/assets`, `src-tauri/icons` and source files. `.git` 53.9 MB is fully accounted for.
+  ⚠️ **Two leftovers found and left alone** (both tiny, both pre-profiles, neither user data): `.tmp_uploads/`
+  `test_sound.wav` (0 KB) and `test_icon.png` (0.1 KB), added 2026-08-17 in `ee4af98` *"Fixed uploads not
+  registering in tauri app"*. 💡 **Lesson: `git ls-files` only proves what is in the tree *now*.** The question
+  "was this ever committed" needs `git rev-list --objects --all`, or a removed file answers "no" for the wrong
+  reason.
 - ✅ **Docs integrity check 2026-10-12 11:19 — NO DAMAGE from the cut-off session.** The `8032fb7` commit landed
   (00:08:13) and is pushed. Verified: `git status` clean, all **143** tracked files present, none zero-byte, every
   text file strict UTF-8 with **0 U+FFFD / 0 NUL**, `git fsck` shows only the known unreachable blob `3d1fcf15`,
@@ -424,7 +445,13 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   volume where Z7 put it.
 - Run `kill-ports.bat` first if a run fails to start; `/all` also clears app processes and adb forwards, `/emu` shuts down the emulator.
 - **Both** runners snapshot `localStorage` before the suite and restore it afterwards, even on crash, via
-  `e2e/e2e-snapshot.mjs` — so test data never clobbers real characters/sounds.
+  `e2e/e2e-snapshot.mjs` — so test data never clobbers real characters/sounds. ⚠️ **That sentence was half true
+  until 2026-10-12 17:03** — the restore *ran* and reported success but never reached disk (hard-killed app vs
+  WebView2's async commit), so `localStorage` was being clobbered on every Windows run anyway. Now verified:
+  restore re-reads and compares (new **exit 5**), the runner settles and kills gracefully, and snapshots live in
+  **`%LOCALAPPDATA%\opencode\e2e-snapshots\`** rather than `%TEMP%` (keep newest 2 uploads / 5 localStorage).
+  💡 **The check to hold any restore to: restart the app and re-read the store from disk.** A suite's own log
+  line is not evidence — that is the whole lesson.
 - 🔴 **`localStorage` WAS NOT THE ONLY PROTECTED STATE — the Tauri `uploads/` directory is now protected too
   (2026-10-12).** It was not, and that cost the user real data: a Windows run's uploads migration moved an existing
   install's 112 files into a profile subdirectory their older app could not find. `e2e-snapshot.mjs` gained
@@ -446,14 +473,78 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
-- ✅ **All seven gates green after `577505d` (2026-10-12)** — the current baseline. ⚠️ **Re-verified since, but
-  only partially:** the 2026-10-12 UI work (`fd93f72`, `f19498e`) re-ran backup, eslint, build, both static
-  gates and **web E2E** — all green, web still **223/0/0** — and the user hand-tested and approved the sliders.
-  **Windows and Android E2E were NOT re-run**, so their figures below are from `577505d` and are the last
-  machine-verified numbers for the Tauri/WebView2 and Android builds. That matters for the slider work in
-  particular: the entire `.slider` finding is **Chromium-specific** and WebView2 is a different build, so the
-  new slider appearance is reviewed but **not machine-verified on Windows or Android**. Treat that as the open
-  verification gap, not as a green gate.
+- ⚠️ **The Windows/Android gap is now CLOSED, and the answer was not the expected one (2026-10-12 16:24–16:44).**
+  All three E2E gates were re-run at `3ba3b21` — the first full run since the slider work — with a backup taken
+  first, per the standing rule. **Web and Android are exact baselines; Windows is not.**
+  - **web 223 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261012-162429.log`) — identical to the `fd93f72` figure.
+  - **Android 212 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-android-20261012-163512.log`) — identical to the
+    `577505d` figure, and the WARN is the expected **G5**.
+  - **Windows 218 PASS / 4 FAIL / 1 WARN, exit 2** (`e2e-run-20261012-162854.log`) — **exit 2 means `fail > 0`.**
+    This is a real red gate and is the one thing left open from that session.
+  💡 **The slider work is now machine-verified on WebView2 and on Android**, which was the stated reason the gap
+  was open — the CSS change introduced no failure on either platform.
+  - ✅ **FIXED AND VERIFIED 17:03 — the harness no longer loses the user's board.** Windows is back to
+    **222/0/1 exit 1**. Three changes, **test-harness only, no app code**:
+    - **The restore now verifies itself** (`e2e-snapshot.mjs`, new **exit 5**): after the reload it re-reads
+      `localStorage` and compares key-by-key against the snapshot; any missing/extra/changed key is a **hard
+      failure**, not a success line. *"restored 7 keys"* is now a claim somebody checked.
+    - **The kill is graceful, and it settles first** (`e2e-full.ps1`) — this was the actual defect. The restore
+      applied in-page, the runner waited 3s then `taskkill /F`, and **WebView2 commits `localStorage`
+      asynchronously**, so the restore never reached disk. Now: 5s settle, then `taskkill` **without `/F`** so
+      WebView2 flushes and closes cleanly, with `/F` only as the fallback for survivors.
+    - **Snapshots moved out of `%TEMP%`** to `%LOCALAPPDATA%\opencode\e2e-snapshots\` (keep newest 2 uploads / 5
+      localStorage). `%TEMP%` is transient and Storage Sense can empty it — and these are exactly the
+      *"recover with: …"* instructions the runner prints when a restore fails. Outside the repo, so an 18 MB
+      uploads copy can never be committed.
+    - ✅ **Verified independently, not by the suite's own word**: after the run `tauri dev` was restarted and
+      `e2e-snapshot.mjs save` re-read the store **from disk** — **14/14 keys present, none added, none lost**,
+      index intact (`activeProfileId p_0d866f71`, same two profiles). That is the check which would have caught
+      the 2026-10-11 loss, and it is now the standard to hold any restore to. The only two diffs were the app
+      re-persisting its in-memory state after the reload (`volume 0.17→1`, `boxSize 0.9→1`) on a **test
+      fixture** profile — benign.
+    - **All gates re-run after the fix**: backup VERIFY OK 224/224 · eslint **0 errors / 3** · vite build exit 0 ·
+      check-coverage exit 0 · check-profile-keys OK · profileStorage.check **26/26** · **web 223/0/0 exit 0** ·
+      **Windows 222/0/1 exit 1** · **Android 212/0/1 exit 1** (`e2e-run-20261012-170301.log`,
+      `e2e-android-20261012-171030.log`). Uploads 114 → 114, no stray `__restore_backup`.
+  - ✅ **The 4 non-hermetic assertions are now profile-scoped** (`e2e/lib/page.mjs`, `e2e-full.mjs`). This was
+    the *other* half of the 4 FAILs, and it is what makes them store-independent rather than merely green today.
+    `__bareKeys()` used to let a **foreign** profile's key through with its **full scoped name** — not a bare
+    name, matching no entry in any `KNOWN_KEYS` list — so a stale profile failed these while web and Android
+    (clean stores) passed. It now **skips** other profiles' keys. `M21`'s raw global `_old` scan was moved onto
+    the existing `__keysFor(pid)`. One central change repaired **P13, P14a, P14b, P31a and O10**; `M21` was
+    separate. 💡 The guards are **not** weakened: a `*_old` backup for the profile *under test* still fails.
+    ⚠️ `M21` and the `P14`/`P31`/`O10` guards were **not** re-run against the exact stale `p_f121afb8` state they
+    originally failed on — web/Windows/Android all have clean stores now, so that path is fixed by construction
+    and reviewed, not re-proven against the old fixture.
+  - ✅ **Proven pre-existing, not inferred.** The localStorage snapshot the runner takes *before any suite code
+    runs* (`ls-backup-20261012-162900.json`, saved 16:29:00) **already contains that key**. This run did not
+    create it.
+  - ✅ **Proven to be test residue, not user data.** `spellcaster_profiles` in that snapshot lists only
+    `p_0d866f71` **"My Board"** and `p_f121afb8` **"New Profile"** — both Suite F test names — and the stored
+    characters are shipped starter defaults (`char_1`/`s_1`, `Caustic_Blast_Acid_*.mp3`). The `_old` value is
+    byte-length-identical to the live one.
+  - ✅ **The app is behaving as designed.** `profileStorage.js:341-344` writes `<key>_old` **on purpose** when a
+    profile has data but *no* version stamp (*"a key written before versioning, or an imported bundle"*), then
+    adopts the current version. The assertion guards against the *old* reset behaviour; it is tripping over a
+    legitimately-snapshotted key from a previous run.
+  - ✅ **Web and Android are the control.** They run the *same* assertions and both report `old: []`. Web gets a
+    clean store because headless Edge uses a fresh `--user-data-dir` per run; Android's is clean too. Only
+    Windows — whose `localStorage` *is* the user's persistent, real WebView2 store — carries residue forward.
+  - 💡 **So the defect is in the assertions, and they are non-hermetic two different ways** (`e2e/lib/page.mjs:83`).
+    (a) `M21` does a **raw global scan** for any key ending `_old`, so it catches keys belonging to *other*
+    profiles. (b) `__bareKeys()` strips the prefix of the **active** profile only — a key from another profile
+    passes through with its **full scoped name intact** (visible in the `P14a`/`P31a` output, which literally
+    lists `profile:p_f121afb8:...`), so the "no *new* key" comparison is made against a set polluted by other
+    profiles. `__keysFor(pid)` already exists for exactly this (page.mjs:98). ⚠️ **Not fixed — it is a test change
+    and needs the user's go-ahead.**
+  - ⚠️ **A second thing surfaced that is bigger than the failing tests and is NOT resolved.** The user's real
+    profile **`p_09b2806c` — the one holding all 114 real uploads — is absent from the `spellcaster_profiles`
+    index** in that same snapshot; the index points at the two Suite F leftovers instead. The 114 files are
+    intact on disk in `uploads/p_09b2806c/` (verified before and after the run), but a profile the index does
+    not reference will not be shown by the app. This **predates that session** — it was already true in the
+    snapshot taken before the suite ran — and the run restored that snapshot, so nothing caused or worsened it.
+    **It is the same shape as the 2026-10-11 uploads incident** and should be checked with the user *before* the
+    next Windows run rather than after.
 
 | Gate | Result |
 |---|---|
@@ -462,7 +553,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 | `npx vite build` | exit 0 |
 | `node e2e/check-coverage.mjs` | exit 0 — **39 suites, 331 tests, 11 shared specs** |
 | web E2E | **223 PASS / 0 FAIL / 0 WARN, exit 0** |
-| Windows E2E | **222 PASS / 0 FAIL / 1 WARN, exit 1** (G5 baseline) |
+| Windows E2E | ✅ **222 PASS / 0 FAIL / 1 WARN, exit 1** (G5 baseline) — **restored** by the harness fix below |
 | Android E2E | **212 PASS / 0 FAIL / 1 WARN** (G5 baseline) |
 | user hand-test | **PASSED** — the user tested the profile switch on the built app |
 
@@ -1080,6 +1171,58 @@ Suite F **clears storage** and creates/deletes profiles, so it runs **before** `
 both of which re-seed for themselves. O must stay last of all.
 
 ## Open items
+- 🔴 **URGENT (2026-10-12 16:56) — the user's real board is missing from `localStorage`, and the Windows E2E
+  phase is what displaces it. Do NOT run `-Phase win` again until the harness stops writing to the real store.**
+  - **What the user sees**: the app opens on a profile called "My Board" containing one character, "Human Paladin",
+    whose only sound is **"Playback Probe"**, and an empty Environments tab. That is **E2E fixture content, not
+    their board and not the shipped defaults** — `playback.mjs`'s fixture. The user confirmed this on 2026-10-12.
+  - **The user's real profile `p_09b2806c` is not in the `spellcaster_profiles` index.** Their board used to be
+    reachable; it is not now.
+  - ⚠️ **Correction to an earlier statement in this session: the board is NOT recoverable from the snapshots.** I
+    first read `ls-backup-20261011-221530.json`, saw `"Renamed Paladin"` / `"My Hero"` / `"My Custom Spell"` and
+    called it the user's board. **It is not.** Those are fixture ids — `s_6`, `mine_1`, `mine_2`, `zz_custom` from
+    `reset.mjs` — with `type:"Test"` and every file pointing at `Longbow_4.mp3`, the test asset. Every one of the
+    **36** `ls-backup-*.json` files was then checked: they contain empty state, shipped defaults
+    (`char_1`/`s_1` Elf Sorcerer), or E2E fixtures. **No snapshot holds the user's board.**
+  - **What *is* intact, measured** — `uploads/p_09b2806c/`, 114 files / 18.03 MB, and the split matters:
+    | | files | size | what it is |
+    |---|---|---|---|
+    | real audio | **53** | **2.37 MB** | **11 distinct sounds**: Daze, Fear, Force Barrage, Phantom Pain, Phase Bolt, Shield Magic, Telekinesis, Telekinetic Projectile, Tentacular Limbs, Ventriloquism, Warding Sign |
+    | icons | 15 | 1.62 MB | Tentacular Limbs, Warding Sign, Ventriloquism, Daze x3, Fear x2, Force Barrage x2, Phase Bolt, Shield Magic, Telekinesis, Telekinetic Projectile |
+    | `sound_*_e2e_silence.wav` | **46** | **14.04 MB** | **E2E test fixtures** — 312.5 KB each |
+    💡 **So this file's older figure — "112 files / 17.4 MB of real uploads" — is wrong.** ~78% of that bulk is
+    suite fixtures that accumulated in the user's real uploads directory across many runs. The 2026-10-11
+    incident was therefore smaller than recorded, and the recovery is bounded by **11 sounds, not 112 files**.
+  - **Recoverable in principle, not automatically**: the original filename is embedded in `storedName`
+    (`sound_<rand>_<safeName>`), so the audio and its names can be re-linked mechanically. **What is lost is the
+    board structure** — which character/category each sound sat in, and its type/colour/loop/fade settings. That
+    exists nowhere in any snapshot. A rebuild is a *guess* at grouping, not a restore.
+  - **Why the harness did this** (mechanism, partially established): the Windows phase writes into the user's real
+    WebView2 `localStorage`, and the end-of-run restore is **not faithful** — it writes the saved keys back but the
+    suite-created profiles outlive it and one ends up `activeProfileId`. Evidence: `p_09b2806c` is present in the
+    22:15:30 pre-run snapshot and absent from the 22:26:22 one, with the real content surviving *under a different
+    profile id*. The `uploads/` snapshot added 2026-10-12 23:09 works (verified 114 → 114 again today) — **`localStorage`
+    was never given the equivalent protection.**
+- ✅ **RESOLVED 2026-10-12 17:03 — the harness no longer writes the user's board away**, and both items below
+  were then answered by the user. Fixed and independently verified; see Verification gates for the three changes
+  and the disk-level proof. **`-Phase win` is safe to run again.** What is *not* resolved is the board itself.
+- ✅ **No data recovery wanted (user, 2026-10-12)** — they have the source files and will re-upload. So the 53 real
+  files / 11 sounds and 15 icons in `uploads/p_09b2806c/` were **left untouched**; nothing was deleted or rewritten.
+- ✅ **The user's explicit concern — "none of the test sounds were uploaded to git" — CHECKED AND CLEAN.**
+  `git ls-files` matched exactly one test-sound name, `e2e/e2e_silence.wav`, and that is the harness's **own
+  fixture source** (referenced by both entrypoints, committed in `79acc3e`) — a single 313 KB file. The **46**
+  `sound_*_e2e_silence.wav` copies exist **only** in `%APPDATA%\…\uploads\p_09b2806c\`, never in the repo. No
+  runtime upload (`sound_<rand>_<name>` / `icon_<rand>_<name>`) is tracked; the only large tracked files are
+  `public/assets` (the 71 shipped sounds, deliberately tracked in `ba57282`), `src-tauri/icons`, and the
+  `gen/android` launcher icon. 💡 The new snapshot directory is deliberately **outside the repo** for the same
+  reason — an 18 MB uploads copy per run must never be committable.
+- 🔴 **Still true, and worth re-reading before the next Windows run: the user's board is gone from `localStorage`
+  and only test-fixture content remains.** The app opens on `p_0d866f71` "My Board" holding one character
+  "Human Paladin" whose only sound is "Playback Probe" — `playback.mjs`'s fixture. Their real profile `p_09b2806c`
+  is not in the index. The **files** are safe in `uploads/p_09b2806c/`; the **board structure** is not recoverable
+  from any of the 36 `ls-backup-*.json` files (all hold empty state, shipped defaults, or fixtures). Accepted by
+  the user — but a restore from a snapshot will **not** bring the board back, and a future reader should not
+  assume otherwise.
 - **The claim/release protocol is unproven with a second agent.** Installed 2026-10-04; only opencode has
   used it, and only within the session that wrote it. Watch for the failure modes on the next non-opencode
   session: an agent that edits without claiming, an agent that never releases, or an agent that cannot tell

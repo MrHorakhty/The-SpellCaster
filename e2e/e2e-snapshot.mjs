@@ -25,7 +25,9 @@
 //   node e2e-snapshot.mjs save-uploads   <dir>    # plain filesystem, NO CDP
 //   node e2e-snapshot.mjs restore-uploads <dir>   # plain filesystem, NO CDP
 //
-// Exit codes: 0 ok, 3 app/CDP unreachable, 4 bad usage or unusable snapshot.
+// Exit codes: 0 ok, 3 app/CDP unreachable, 4 bad usage or unusable snapshot,
+//             5 restore applied but the store did not match it afterwards (the app
+//               rewrote storage on boot - treat the restore as NOT done).
 import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync, rmSync, cpSync, renameSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -206,5 +208,39 @@ log(`restored ${applied} localStorage keys from ${file}`);
 await cdp('Page.reload', { ignoreCache: true }).catch(() => {});
 await new Promise(r => setTimeout(r, 3000));
 log('page reloaded so the app re-reads storage');
+
+// ⚠️ VERIFY, because "restored N keys" used to be a claim nobody checked and it was
+// wrong. On 2026-10-11 the 22:15 Windows run reported "restored 7 localStorage keys",
+// reloaded, and was then hard-killed seconds later. WebView2 commits localStorage to
+// its backing store ASYNCHRONOUSLY, so the restore never reached disk: the next run's
+// snapshot 11 minutes later held a *different* profile (Suite F's "My Board",
+// p_9a1ed119) where the user's real one (p_09b2806c) had been. The board was lost
+// that way, not by any single test.
+//
+// So re-read the store and compare key-by-key against the snapshot. This proves the
+// in-page state; it cannot prove the on-disk flush, which is why the runner also
+// settles before killing (e2e-full.ps1) and why a mismatch is a hard failure rather
+// than a warning - a silently unrestored store is the failure mode that costs data.
+const check = await evalJs(`(() => {
+  const o = ${JSON.stringify(data)};
+  const now = {};
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k) now[k] = localStorage.getItem(k); }
+  const missing = Object.keys(o).filter(k => !(k in now));
+  const extra = Object.keys(now).filter(k => !(k in o));
+  const changed = Object.keys(o).filter(k => k in now && now[k] !== o[k]);
+  return { total: Object.keys(now).length, want: Object.keys(o).length, missing, extra, changed };
+})()`);
+
+if (check.missing.length || check.extra.length || check.changed.length) {
+  console.error(`[${LABEL}] FAILED: the store does not match the snapshot after reload.`);
+  if (check.missing.length) console.error(`[${LABEL}]        missing: ${check.missing.join(', ')}`);
+  if (check.extra.length)  console.error(`[${LABEL}]        extra:   ${check.extra.join(', ')}`);
+  if (check.changed.length) console.error(`[${LABEL}]        changed: ${check.changed.join(', ')}`);
+  console.error(`[${LABEL}]        The app rewrote storage on boot. Treat the restore as NOT done.`);
+  console.error(`[${LABEL}]        Snapshot kept at: ${file}`);
+  ws.close();
+  process.exit(5);
+}
+log(`verified: ${check.total} keys match the snapshot exactly`);
 ws.close();
 process.exit(0);

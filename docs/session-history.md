@@ -3051,3 +3051,184 @@ is the correction. 💡 A visual regression is the one kind nobody notices until
 is exactly why this change needs the hand-test more than a code change would.
 
 Next: `PROFILE_SYNC_SPEC.md` steps 3-6 and step 7 UI.
+
+---
+
+## 2026-10-12 16:24-16:44 - opencode: the Windows/Android verification gap, closed by measurement
+
+The previous session ended with one honest gap: the slider work (`fd93f72`, `f19498e`) was green on web but
+**Windows and Android E2E had never been re-run**, and the whole `.slider` diagnosis was Chromium-specific while
+WebView2 is a different build. The user asked for that gap to be closed. No code was changed - this session is
+verification only.
+
+### What ran
+Backup first, per the standing rule: **VERIFY OK, 224/224, 39.7 MB**. Then all three E2E gates at `3ba3b21`.
+
+| Gate | Result | vs baseline |
+|---|---|---|
+| web | **223 / 0 / 0, exit 0** (`e2e-run-20261012-162429.log`) | identical |
+| Windows | **218 / 4 / 1, exit 2** (`e2e-run-20261012-162854.log`) | **regression in the run, not in the code** |
+| Android | **212 / 0 / 1, exit 1** (`e2e-android-20261012-163512.log`) | identical, WARN is the expected G5 |
+
+So the gap closed the useful way: **the slider change is now machine-verified on WebView2 and Android** and broke
+nothing on either. The Windows phase also proved the new uploads guard still works under real use - 114 files
+snapshotted before launch, 114 restored after the kill, no stray directory.
+
+### The 4 Windows failures
+`M21`, `P13`, `P14a`, `P31a` - every one a *"no `*_old` keys"* / *"no new localStorage key"* guard - and every one
+failing on the same single key, `profile:p_f121afb8:ttrpg_characters_old`.
+
+Established by evidence, in this order:
+
+1. **It predates the run.** The snapshot the runner takes *before any suite code runs*
+   (`ls-backup-20261012-162900.json`, 16:29:00) already contains the key.
+2. **It is test residue, not user data.** `spellcaster_profiles` in that snapshot lists only `p_0d866f71`
+   *"My Board"* and `p_f121afb8` *"New Profile"* - both Suite F test names - and the stored characters are
+   shipped starter defaults (`char_1`/`s_1`, `Caustic_Blast_Acid_*.mp3`).
+3. **The app is correct.** `profileStorage.js:341-344` writes `<key>_old` deliberately when a profile has data but
+   no version stamp (*"a key written before versioning, or an imported bundle"*), then adopts the current version.
+   The assertion guards the *old* reset behaviour and is tripping over a legitimately-snapshotted key.
+4. **Web and Android are the control.** Same assertions, both report `old: []`. Headless Edge gets a fresh
+   `--user-data-dir` each run; the emulator's store is clean. Only Windows persists, because its `localStorage`
+   *is* the user's real WebView2 store.
+
+### Lesson
+**A test that scans global state is only as isolated as the machine it runs on.** Three of these guards looked at
+*every* key in the store rather than the profile under test, so they were green on two platforms and red on the
+third for a reason that had nothing to do with the code. `__keysFor(pid)` already existed at `page.mjs:98` for
+per-profile reads and these assertions did not use it; `__bareKeys()` strips the prefix of the *active* profile
+only, so another profile's key passes through with its **full scoped name** - visible in the `P14a` output, which
+literally lists `profile:p_f121afb8:...` where bare names were expected. The same failure mode as
+`check-profile-keys.mjs` existing at all: the harness's storage seam is load-bearing, and so is its scoping.
+💡 Not fixed - it is a test change, and the second finding below says the same store should not be touched
+before the user has looked at it.
+
+### Second finding, and the bigger one
+**The user's real profile `p_09b2806c` is not in the `spellcaster_profiles` index.** The index points at the two
+Suite F leftovers instead, while all **114 real uploads sit intact** in `uploads/p_09b2806c/` - verified before
+and after the run. A profile the index does not reference will not be shown by the app, so this is the same
+shape as the 2026-10-11 uploads incident, where files were moved somewhere the old app could not find them.
+
+It **predates this session** (true in the pre-run snapshot), and the run restored that snapshot, so nothing here
+caused or worsened it. But it means the user's board may currently be invisible in the app, and it is the reason
+not to go deleting keys from that store to make a gate green. **Raised with the user rather than acted on.**
+
+Next: `PROFILE_SYNC_SPEC.md` steps 3-6 and step 7 UI, once the two open items above are answered.
+---
+
+## 2026-10-12 16:24-17:20 - opencode: E2E verification, a lost board, and the harness bug that caused it
+
+Started as the narrow task the previous session left open - run the Windows and Android E2E gates that were never
+re-run after the slider work. It turned into the most consequential session this project has had.
+
+### Part 1 - the gates (16:24-16:44)
+Backup first: VERIFY OK 224/224. Then all three E2E gates at `3ba3b21`.
+**web 223/0/0 exit 0** and **Android 212/0/1 exit 1** - both exact baselines, so the slider CSS is now verified on
+WebView2 and Android. **Windows 218/4/1 exit 2** - exit 2 means `fail > 0`, a real red gate.
+
+The 4 failures were `M21`, `P13`, `P14a`, `P31a`, every one a *"no `*_old` keys"* / *"no new localStorage key"*
+guard, every one failing on the same single key `profile:p_f121afb8:ttrpg_characters_old`. Proven pre-existing (the
+pre-run snapshot already had it), proven test residue (Suite F's `"My Board"` / `"New Profile"` names, starter-default
+characters), and proven *correct app behaviour* - `profileStorage.js:341` writes `_old` deliberately for a profile with
+data but no version stamp. Web and Android were the control: same assertions, `old: []`.
+
+**The assertions were at fault.** `__bareKeys()` stripped only the *active* profile's prefix, so another profile's key
+passed through with its full scoped name - not a bare name, matching no `KNOWN_KEYS` entry. A test that scans global
+state is only as isolated as the machine it runs on.
+
+### Part 2 - the thing underneath (16:44-16:55)
+The user was asked whether their app showed their real board. It did not: one character "Human Paladin" whose only
+sound is "Playback Probe" - `playback.mjs`'s fixture.
+
+**I got this wrong first and corrected it.** I found `ls-backup-20261011-221530.json` containing `"Renamed Paladin"`,
+`"My Hero"`, `"My Custom Spell"` and said the board was recoverable. Those are fixture ids - `s_6`, `mine_1`,
+`zz_custom` - with `type:"Test"` and every file pointing at `Longbow_4.mp3`. All **36** snapshots were then checked:
+none holds the user's board. Also corrected: this project's own "112 files / 17.4 MB of real uploads" is wrong - **46
+of the 114 files are `e2e_silence` fixtures at 14.04 MB**, so the real content is 53 files / 2.37 MB / 11 sounds.
+The 2026-10-11 incident was smaller than recorded.
+
+### Part 3 - the actual bug (17:00-17:03)
+The two profiles that disagreed named the culprit. 22:15:30 held `p_09b2806c` "My Board"; 22:26:22 held `p_9a1ed119`
+"My Board", `createdAt` later - Suite F creates a profile literally named "My Board". That run's log said
+**"restored 7 localStorage keys"** and reloaded successfully.
+
+So the restore *ran*, reported success, and never reached disk. **WebView2 commits localStorage asynchronously, and
+the runner hard-killed the app 3 seconds after reloading it with `taskkill /F`.** Nothing flushed. The on-disk store
+kept whatever the suite had last written. Every run since then did the same, which is why the board is gone.
+
+Three fixes, harness only:
+1. **`e2e-snapshot.mjs restore` now verifies** - re-reads storage after the reload and compares key-by-key; new
+   **exit 5** on any mismatch. A restore that did not take is now a failure, not a success line.
+2. **`e2e-full.ps1` settles 5s, then kills gracefully** (`taskkill` without `/F`, `/F` only for survivors).
+3. **Snapshots moved from `%TEMP%` to `%LOCALAPPDATA%\opencode\e2e-snapshots\`** - `%TEMP%` is transient and
+   Storage Sense can empty it, and these are the "recover with: ..." instructions printed on failure. Outside the
+   repo so an 18 MB copy can never be committed.
+
+Plus the four assertions made profile-scoped: `__bareKeys()` now skips other profiles' keys (one central change
+fixing P13/P14a/P14b/P31a/O10), and M21's raw global scan moved onto the existing `__keysFor(pid)`.
+
+### Verified, not asserted
+**Windows 222/0/1 exit 1** - baseline restored. Then the check the suite's own word could never give: restarted
+`tauri dev` and re-read the store **from disk** - **14/14 keys present, none added, none lost, index intact**
+(`activeProfileId p_0d866f71`). Uploads 114 -> 114, no stray `__restore_backup`. All seven gates green: backup
+VERIFY OK, eslint 0 errors/3 warnings, vite build exit 0, check-coverage exit 0, check-profile-keys OK,
+profileStorage.check 26/26, web 223/0/0, Windows 222/0/1, Android 212/0/1.
+
+The user's own concern - that no test sounds reached git - checked and clean: the only match is
+`e2e/e2e_silence.wav`, the harness's deliberate 313 KB fixture source from commit `79acc3e`. The 46 copies exist
+only in `%APPDATA%`.
+
+### Lessons
+- **A snapshot/restore guarantee is only as good as its weakest flush.** The uploads guard was verified three ways
+  and localStorage was assumed equivalent - but uploads are a *filesystem* copy, restorable with the app dead, while
+  localStorage needed a live app AND a graceful shutdown. Same promise, two very different mechanisms.
+- **"restored N keys" was a claim nobody checked.** It was the kind of line that reads as verification and is not.
+  Every restore should now be re-read and compared.
+- **I twice stated recovery with more confidence than the evidence supported** - once on the fixture board, once by
+  quoting this project's own inflated upload figure. Checking 36 files instead of the one that looked promising is
+  what caught it, and it is cheap.
+- Board not recovered, by the user's choice - they have the files. **Nothing was deleted**: the 53 real files and 15
+  icons in `uploads/p_09b2806c/` are untouched and re-uploadable.
+
+Next: `PROFILE_SYNC_SPEC.md` steps 3-6 and step 7 UI.
+---
+
+## 2026-10-12 17:30 - opencode: "are the uploaded sounds in git?" - checked across all history, not just HEAD
+
+The user read my *"no test sounds reached git"* and pushed back: **"we previously added 112 sounds to git. Are you
+sure they are not in it?"** A fair challenge, and it exposed a real gap in my earlier check - **I had only run
+`git ls-files`, which proves what is in the tree NOW.** If 112 sounds had been committed and later removed, that
+command answers "no" for entirely the wrong reason. The right question needs history.
+
+### What history says
+`git rev-list --objects --all` over **every path ever committed**:
+- **54 distinct audio paths ever** - and HEAD has exactly **54** (52 `public/assets` + `e2e/e2e_silence.wav` +
+  `.tmp_uploads/test_sound.wav`). Identical sets, so **nothing audio was ever committed and later removed**; that
+  would have shown ~166.
+- **Zero** paths matching the runtime-upload pattern `sound_<rand>_<name>` / `icon_<rand>_<name>`.
+- Every audio path ever committed lives in `public/assets`, `e2e`, or `.tmp_uploads`. Nothing else, ever.
+- The 20 largest blobs in all history: `public/assets` sounds, `src-tauri/icons`, `src/App.jsx`,
+  `docs/session-history.md`, `e2e/e2e_silence.wav`. `.git` 53.9 MB fully accounted for.
+
+**Answer: no. The 112 were never in git.**
+
+### Where the confusion came from - two different numbers called similar things
+1. **"112 files / 17.4 MB"** was never git. It was `%APPDATA%\com.mrhorakhty.thespellcaster\uploads` - and 46 of
+   those 114 files are `e2e_silence` fixtures at 14.04 MB, so the real content was 53 files / 2.37 MB.
+2. **What was added to git is `public/assets`** - 71 files, 29.0 MB, deliberately tracked in `ba57282` because
+   `public` was gitignored by inherited Nuxt/Gatsby boilerplate, which for a Vite app is a bug.
+
+Corrected in `PROJECT_STATE.md` while I was there: it said *"71 starter sounds"* when it is **71 files = 52 audio
++ 19 images**. That is the third imprecise count in this file about audio, and imprecise counts are what produced
+this question in the first place.
+
+### Two leftovers found, left alone
+`.tmp_uploads/test_sound.wav` (0 KB) and `test_icon.png` (0.1 KB), tracked since 2026-08-17 (`ee4af98` *"Fixed
+uploads not registering in tauri app"*). Pre-profiles debug artefacts, a few hundred bytes, not user data - so not
+deleted unasked. Noted in `PROJECT_STATE.md` instead.
+
+### Lesson
+**`git ls-files` only proves what is in the tree now.** For "was this ever committed", the question is
+`git rev-list --objects --all`. A file that was committed and deleted gives the wrong answer with complete
+confidence, which is worse than not checking. I got the right conclusion by luck of timing; this time it was
+actually verified.

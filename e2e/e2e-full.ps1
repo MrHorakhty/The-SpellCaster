@@ -26,6 +26,24 @@ $Script:EdgeProfile = Join-Path $env:TEMP 'opencode\e2e-web-profile'
 $Script:TestStartTime = Get-Date
 
 $tmp   = Join-Path $env:TEMP 'opencode'
+
+# Snapshots that protect the user's REAL data go somewhere durable, not %TEMP%.
+# %TEMP% is transient - Storage Sense / Disk Cleanup can delete it - and the entire
+# value of a snapshot is that it is still there on the day you need it. These are the
+# recovery instructions the runner prints when a restore fails, so pointing them at a
+# folder Windows may have emptied is a trap. LOCALAPPDATA is stable and, crucially,
+# is OUTSIDE the repo, so a 18 MB uploads copy can never be committed by accident.
+$snapSafe = Join-Path $env:LOCALAPPDATA 'opencode\e2e-snapshots'
+New-Item -ItemType Directory -Path $snapSafe -Force | Out-Null
+
+# Keep the newest few of each and drop the rest, so a safety net cannot grow forever.
+function Remove-OldSnapshots {
+    param([string]$Filter, [int]$Keep = 3)
+    Get-ChildItem $snapSafe -Filter $Filter -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -Skip $Keep |
+        ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 $proj  = Split-Path -Parent $PSScriptRoot   # C:\Users\emire\Projects\ttrpg-soundboard
 $edge  = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 $results = [System.Collections.ArrayList]::new()
@@ -218,7 +236,8 @@ if ($Phase -in @('all', 'win')) {
     # file the moment it resolves one, and a snapshot taken after launch could
     # already be the post-migration state - i.e. a "restore" that restores the
     # damage. This is a plain filesystem copy and needs no CDP.
-    $upBackup = Join-Path $tmp "uploads-backup-$(Get-Date -f yyyyMMdd-HHmmss)"
+    $upBackup = Join-Path $snapSafe "uploads-backup-$(Get-Date -f yyyyMMdd-HHmmss)"
+    Remove-OldSnapshots -Filter 'uploads-backup-*' -Keep 2
     "`t[SNAP] saving app uploads -> $upBackup" | Add-Content $Script:TestLog
     & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save-uploads $upBackup 2>&1 | Add-Content $Script:TestLog
     if ($LASTEXITCODE -ne 0) {
@@ -259,7 +278,8 @@ if ($Phase -in @('all', 'win')) {
         # itself, but only if it survives; a crashed or killed run would otherwise
         # leave the E2E seed in the app. So the runner takes its own snapshot and
         # restores it from the finally block below (mirrors e2e-android.ps1).
-        $lsBackup = Join-Path $tmp "ls-backup-$(Get-Date -f yyyyMMdd-HHmmss).json"
+        $lsBackup = Join-Path $snapSafe "ls-backup-$(Get-Date -f yyyyMMdd-HHmmss).json"
+        Remove-OldSnapshots -Filter 'ls-backup-*.json' -Keep 5
         $env:CDP_PORT = '9224'
         $env:LABEL    = 'SNAP'
         "`t[SNAP] saving app storage -> $lsBackup" | Add-Content $Script:TestLog
@@ -286,7 +306,18 @@ if ($Phase -in @('all', 'win')) {
             $restoreCode = $LASTEXITCODE
             Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
             if ($restoreCode -eq 0) {
-                Write-Host "App storage restored." -ForegroundColor Green
+                Write-Host "App storage restored and verified." -ForegroundColor Green
+            } elseif ($restoreCode -eq 5) {
+                # The store did not match the snapshot after the reload: the app
+                # rewrote it on boot, so the restore did NOT take. This is the case
+                # that silently cost the user their board on 2026-10-11.
+                "`t[B-CLEANUP] RESTORE DID NOT STICK (exit 5) - the app rewrote storage on boot." | Add-Content $Script:TestLog
+                "`t[B-CLEANUP] Snapshot kept at: $lsBackup" | Add-Content $Script:TestLog
+                "`t[B-CLEANUP] Recover with: npm run tauri dev, then node e2e-snapshot.mjs restore $lsBackup" | Add-Content $Script:TestLog
+                Write-Host "WARNING: storage restore did not stick (exit 5)." -ForegroundColor Red
+                Write-Host "  Your app may now be showing E2E test data instead of your board." -ForegroundColor Red
+                Write-Host "  Snapshot kept at: $lsBackup" -ForegroundColor Red
+                $results.Add("WARNING: storage restore did not stick (exit 5) - snapshot at $lsBackup") | Out-Null
             } else {
                 "`t[B-CLEANUP] RESTORE FAILED (exit $restoreCode). The app may still hold E2E test data." | Add-Content $Script:TestLog
                 "`t[B-CLEANUP] Recover with: npm run tauri dev, then node e2e-snapshot.mjs restore $lsBackup" | Add-Content $Script:TestLog
@@ -295,8 +326,26 @@ if ($Phase -in @('all', 'win')) {
                 $results.Add("WARNING: app storage restore failed (exit $restoreCode) - snapshot at $lsBackup") | Out-Null
             }
         }
-        "`t[B-CLEANUP] killing tauri tree PID $($tauriProc.Id) ..." | Add-Content $Script:TestLog
-        if ($tauriProc) { Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null }
+        # ⚠️ SETTLE BEFORE KILLING. WebView2 commits localStorage to its backing store
+        # asynchronously, and a hard taskkill /F skips its shutdown entirely - so a
+        # restore applied seconds earlier never reached disk. On 2026-10-11 the 22:15
+        # run reported "restored 7 keys", reloaded, and was force-killed; the next
+        # run 11 minutes later snapshotted a different profile and the user's real
+        # board was gone. e2e-snapshot.mjs now re-reads and verifies the store after
+        # the reload (exit 5 on mismatch); this settle window plus the graceful kill
+        # below are what give that verified state a chance to reach disk.
+        "`t[B-CLEANUP] settling 5s so WebView2 can commit localStorage ..." | Add-Content $Script:TestLog
+        Start-Sleep -Seconds 5
+
+        "`t[B-CLEANUP] closing tauri tree PID $($tauriProc.Id) gracefully ..." | Add-Content $Script:TestLog
+        if ($tauriProc) {
+            # No /F first: a graceful close lets WebView2 flush and close its
+            # storage cleanly. The /F below is only the fallback if it hangs.
+            Invoke-Expression "taskkill /PID $($tauriProc.Id) /T 2>&1" | Out-Null
+            Start-Sleep -Seconds 3
+            "`t[B-CLEANUP] force-killing any survivors ..." | Add-Content $Script:TestLog
+            Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null
+        }
         "`t[B-CLEANUP] killing remaining app.exe + orphaned debug WebView2 trees ..." | Add-Content $Script:TestLog
         taskkill /F /IM app.exe /T 2>&1 | Out-Null
         # Scope by --remote-debugging-port, NOT by --webview-exe-name=SearchHost.exe:
