@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 17:20) — **the harness bug that lost your board is FIXED and verified at the disk level**: Windows is back to 222/0/1, all seven gates green, and a post-run restart confirms 14/14 `localStorage` keys survive with the profile index intact. Root cause was `taskkill /F` beating WebView2's async commit, not any test. The 4 red tests were one stale key, not a regression. **No test sounds are in git** (checked). Board itself is gone and not recoverable — accepted; files safe in `uploads/p_09b2806c/`.
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-12 17:28 — working on: `PROFILE_SYNC_SPEC.md` steps 3–6 (provenance classifier, bundle format, atomic import, export + destination pickers). All seven gates were green at handover; the E2E harness fix (the bug that was wiping the user's board) is verified at the disk level.
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.

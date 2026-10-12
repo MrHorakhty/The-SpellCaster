@@ -16,8 +16,10 @@
     "restore-last": "git reset --hard HEAD~1"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-os": "^2.3.2",
+    "fflate": "^0.8.3",
     "lucide-react": "^0.428.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
