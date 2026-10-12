@@ -2937,3 +2937,77 @@ cannot tell which is authoritative - so the file's own state became ambiguous to
 pickers) and step 7 UI. None of it exists; no zip dependency is installed. `HOTKEYS_SPEC.md` is queued after it.
 The user has a couple of **new default sounds** in mind - `public/assets` is now the place to add them, and the
 stated ceiling is **under 100 MB total**.
+
+---
+
+## 2026-10-12 12:32 - UI text trims, and a slider stylesheet that had never worked
+
+Four copy removals the user asked for, plus a per-sound volume restyle. The second turned into a real find.
+
+### The copy changes
+- Profiles blurb: dropped "it is quick, and nothing carries over" (now ends "Switching reloads the board.")
+- Removed the whole "Priming is not saved" paragraph under Profiles
+- Dropped the word **"built-in"** in all three Restore Defaults places (section blurb + 2 in the confirm dialog).
+  The user's wording ("Remove the '-' in restore default sections 'built-in'") was ambiguous between removing
+  the hyphen and removing the word; **asked rather than guessed**, and they confirmed the word.
+
+Checked first that no test asserts on this copy: `reset.mjs` matches only the button text `'Restore defaults'`
+and the heading `'Restore Defaults'`, neither of which changed.
+
+### 🔴 The `.slider` CSS has never worked - every slider in this app was the browser default
+The per-sound volume sliders look like "a wall of controls" because they render as **Chrome's native blue
+widget**, not as the lime/slate the stylesheet specifies. A screenshot at 3x made it unmistakable: the track
+and thumb were a saturated blue that appears nowhere in the theme.
+
+Two independent causes, each isolated by A/B screenshot rather than inferred:
+1. **Chrome ignores author `::-webkit-slider-thumb` styles** unless the *input itself* has `appearance: none`.
+   Injecting only that changed the thumb.
+2. The repo styled `::-webkit-slider-track`, which current Chrome does not honour; it honours
+   **`::-webkit-slider-runnable-track`**. Injecting only that changed the track.
+
+A third thing surfaced during the fix: with `appearance: none` the **legacy track box paints a white band**
+around the styled runnable-track, invisible until then. Every slider grew a bright white bar until
+`background: transparent` was set on both `.slider` and the legacy `::-webkit-slider-track`.
+
+The user's instruction was to revert the compact slider to "their current form ... the same as main volume
+slider and zoom slider" - which, before this fix, meant the *browser default*. Their reference point would have
+moved. Offered the choice explicitly; they chose to fix `.slider` everywhere, so all sliders now render as the
+theme intended.
+
+### What shipped
+- `.slider` gains `-webkit-appearance:none; appearance:none; background:transparent`, uses
+  `::-webkit-slider-runnable-track`, and clears the legacy track box.
+- New `.slider-compact` on the **card** slider only (App.jsx:4477): 6x14 rounded pill on a 2px track at rest,
+  reverting on `:active`/`:focus` to exactly the `.slider` thumb (16px lime circle, 4px track). Purely
+  cosmetic - element, value and handlers untouched. Rules must stay **after** `.slider`: equal specificity.
+- The 4 copy changes above.
+
+### Verified visually, not just by tests
+Restarted vite + headless Edge and screenshotted three states at 3-4x: rest (thin slate track, small slate
+pill), active (lime round thumb, thicker track), and the master volume / zoom sliders now themed. The
+first attempt looked wrong - a white band under the track - which is what exposed cause #3 above.
+
+### Gates
+| Gate | Result |
+|---|---|
+| backup | VERIFY OK 224/224 (`ttrpg-soundboard-backup-20261012-121310`) |
+| eslint | **0 errors** / 3 pre-existing warnings, exit 0 |
+| vite build | exit 0 |
+| check-coverage | exit 0 (39 suites / 331 tests) |
+| check-profile-keys | OK |
+| profileStorage.check | 26/26 |
+| **web E2E** | **223 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261012-123202.log`) - baseline unchanged |
+| Windows / Android E2E | **NOT run** - named, not implied; see below |
+| user hand-test | **REQUIRED - not yet done** |
+
+⚠️ **Windows and Android E2E were not run.** The change is CSS plus four strings. The risk is cosmetic and
+platform-neutral, but WebView2 is a different Chromium build and **the whole finding is Chromium-specific**,
+so an Android/WebView2 check is genuinely worthwhile before trusting this. Suite P (card volume) and Suite B
+(box-size slider) both pass on web, and the screenshot confirms the CSS reaches the rendered DOM.
+
+**This is a user-facing change and the hand-test is still outstanding** - it moves sliders the user did not
+ask me to touch. Say so explicitly rather than implying it was done.
+
+### Next
+`PROFILE_SYNC_SPEC.md` steps 3-6 (classifier, bundle format, atomic import, export + destination pickers) and
+step 7 UI. The user has new default sounds in mind; `public/assets` is now the place to add them.

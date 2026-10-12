@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:25) — **backups pruned to ZERO after verifying every file they held is in git, junk, or regenerable. Corrected the `gen` exclusion row: it is NOT purely regenerable — 50 files under `src-tauri/gen/android/` are tracked, including the hand-maintained `MainActivity.kt`. Docs only; no code touched.**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:45) — **UI copy trims done + `.slider` CSS fixed (it had NEVER worked; all sliders were the browser default). Web E2E 223/0/0 exit 0, eslint 0 errors, build + 3 static gates green. Windows/Android E2E NOT run — Chromium-specific change, worth checking there. ⚠️ USER HAND-TEST STILL OUTSTANDING.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -549,10 +549,18 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   Android — deliberately NOT done, because a silently skipped test rots unnoticed.
 - ✅ **Layout confirmed by screenshot, not just by tests.** Pulled a real Pixel-class screenshot after the run: the
   volume row renders as a `100%` label + native slider **below** each card, cards keep their square aspect, and the
-  multi-file and glow indicators are unaffected. 💡 The bars are visually prominent — four loud blue bars on a
-  four-card board. That follows the spec's decision (live slider on every card, always visible, because
-  hover-reveal is unusable on touch), but "a wall of visual noise" was a risk the spec itself flagged in §2b.3.
-  Worth a design opinion from the user; shrinking the control is purely cosmetic and no logic depends on its size.
+  multi-file and glow indicators are unaffected. 💡 The bars were visually prominent — four loud **blue** bars on a
+  four-card board — and "a wall of visual noise" was a risk the spec itself flagged in §2b.3.
+  ✅ **RESOLVED 2026-10-12: that "wall of visual noise" is now designed out**, and the loud blue had a mundane
+  cause. The blue was **not** the theme: the `.slider` stylesheet had **never applied**, so every slider in the app
+  was rendering as Chrome's native default widget. Two Chromium-specific causes, each isolated by A/B screenshot:
+  Chrome ignores author `::-webkit-slider-thumb` styles unless the **input itself** has `appearance: none`, and it
+  honours `::-webkit-slider-runnable-track` but not the deprecated `::-webkit-slider-track` the file used. A third
+  surfaced during the fix — with `appearance: none` the legacy track box paints a **white band**, which needed
+  `background: transparent`. All sliders now render as the theme intended (lime thumb, slate track), and the **card**
+  slider alone is a compact 6×14 rounded pill on a 2px track that reverts to the full `.slider` thumb on
+  `:active`/`:focus`. 💡 **Lesson: a stylesheet that has never taken effect looks exactly like a design decision.**
+  Nobody noticed because the native fallback looked like an intentional accent colour.
 - ✅ **Move/copy verified by hand** — the user tested the built app (not just E2E) on 2026-10-04 and reported it
   works. Mobile-suite coverage added 2026-10-10 (**Suite M** in `e2e-mobile.mjs`, Android green).
 - ✅ **Per-sound volume hand-tested too** — the user booted the built app on 2026-10-06 and reported it "works as

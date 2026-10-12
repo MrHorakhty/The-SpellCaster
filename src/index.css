@@ -122,8 +122,34 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
-/* Custom slider styling */
+/* Custom slider styling.
+
+   `appearance: none` on the input itself is load-bearing, not decoration. Chrome
+   ignores author `::-webkit-slider-thumb` styles otherwise and silently falls
+   back to the native widget - which is exactly what happened here until
+   2026-10-12, so every slider in the app (master volume, zoom, glow,
+   brightness, the modal volume and the per-card volume) rendered as the browser
+   default and none of the theming below was ever visible.
+
+   The track uses `::-webkit-slider-runnable-track`; `::-webkit-slider-track` is
+   deprecated and is NOT honoured by current Chrome. Both facts were confirmed by
+   A/B screenshots rather than inferred. */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+/* Chrome paints a white band in the legacy `::-webkit-slider-track` box around
+   the styled runnable-track. It is invisible until `appearance: none` reveals
+   it, at which point every slider grows a bright white bar. Clear both. */
+.slider::-webkit-slider-track {
+  background: transparent;
+  border: none;
+}
+
 .slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
   appearance: none;
   height: 16px;
   width: 16px;
@@ -133,7 +159,7 @@ body {
   border: 2px solid var(--theme-border);
 }
 
-.slider::-webkit-slider-track {
+.slider::-webkit-slider-runnable-track {
   background: var(--theme-border);
   height: 4px;
   border-radius: 2px;
@@ -150,6 +176,98 @@ body {
 
 .slider::-moz-range-track {
   background: var(--theme-border);
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* Per-sound volume slider (the one under every sound card).
+
+   There is one of these per card, always visible, so a full-size round thumb
+   reads as a wall of controls on a busy board - the risk PER_SOUND_VOLUME_SPEC.md
+   §2b.3 flagged. At rest it is a thin rounded bar; while it is being adjusted
+   (:active, or keyboard focus) it reverts to exactly the rules above, i.e. the
+   same control the master volume and zoom sliders use.
+
+   Purely cosmetic: the element, its value and every handler are untouched, so
+   nothing about playback, persistence or the E2E suite changes. These rules
+   must stay AFTER the `.slider` ones - equal specificity, later wins. */
+.slider-compact::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  width: 14px;
+  border-radius: 3px;
+  background: var(--theme-border);
+  cursor: pointer;
+  border: none;
+  transition: height 120ms ease, width 120ms ease, border-radius 120ms ease,
+    background-color 120ms ease, border-color 120ms ease;
+}
+
+.slider-compact::-webkit-slider-track {
+  background: transparent;
+  border: none;
+}
+
+.slider-compact::-webkit-slider-runnable-track {
+  background: var(--theme-border);
+  height: 2px;
+  border-radius: 1px;
+}
+
+.slider-compact::-moz-range-thumb {
+  height: 6px;
+  width: 14px;
+  border-radius: 3px;
+  background: var(--theme-border);
+  cursor: pointer;
+  border: none;
+  transition: height 120ms ease, width 120ms ease, border-radius 120ms ease,
+    background-color 120ms ease, border-color 120ms ease;
+}
+
+.slider-compact::-moz-range-track {
+  background: var(--theme-border);
+  height: 2px;
+  border-radius: 1px;
+}
+
+.slider-compact:active::-webkit-slider-thumb,
+.slider-compact:focus::-webkit-slider-thumb,
+.slider-compact:focus-visible::-webkit-slider-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  border: 2px solid var(--theme-border);
+}
+
+.slider-compact:active::-webkit-slider-track,
+.slider-compact:focus::-webkit-slider-track,
+.slider-compact:focus-visible::-webkit-slider-track {
+  background: transparent;
+}
+
+.slider-compact:active::-webkit-slider-runnable-track,
+.slider-compact:focus::-webkit-slider-runnable-track,
+.slider-compact:focus-visible::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+}
+
+.slider-compact:active::-moz-range-thumb,
+.slider-compact:focus::-moz-range-thumb,
+.slider-compact:focus-visible::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  border: 2px solid var(--theme-border);
+}
+
+.slider-compact:active::-moz-range-track,
+.slider-compact:focus::-moz-range-track,
+.slider-compact:focus-visible::-moz-range-track {
   height: 4px;
   border-radius: 2px;
 }

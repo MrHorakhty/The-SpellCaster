@@ -4474,7 +4474,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                         onPointerUp={(e) => commitCardVolume(sound.id, e.target.value)}
                         onKeyUp={(e) => commitCardVolume(sound.id, e.target.value)}
                         onBlur={(e) => commitCardVolume(sound.id, e.target.value)}
-                        className="slider h-3 min-w-0 flex-1 cursor-pointer"
+                        className="slider slider-compact h-3 min-w-0 flex-1 cursor-pointer"
                     />
                 </div>
             </div>
@@ -6810,7 +6810,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     <h3 className="text-lg font-medium mb-2">Profiles</h3>
                                     <p className="text-xs text-slate-400 mb-3">
                                         Each profile keeps its own characters, categories, groups, settings and uploaded
-                                        audio. Switching reloads the board — it is quick, and nothing carries over.
+                                        audio. Switching reloads the board.
                                     </p>
 
                                     <ul className="space-y-2 mb-3" data-profile-list>
@@ -6883,16 +6883,13 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     {profileNotice && (
                                         <p data-profile-notice className="text-xs text-slate-400 mt-2">{profileNotice}</p>
                                     )}
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        Priming is not saved — it lasts for one trigger in this session.
-                                    </p>
                                 </div>
 
                                 {/* Restore Defaults */}
                                 <div className="pt-4 border-t border-dark-700">
                                     <h3 className="text-lg font-medium mb-2">Restore Defaults</h3>
                                     <p className="text-xs text-slate-400 mb-3">
-                                        Bring the built-in characters and environment sounds back to how they shipped.
+                                        Bring the characters and environment sounds back to how they shipped.
                                         Sounds you added are kept, and your own characters, categories and groups are never touched.
                                     </p>
                                     <button
@@ -6926,9 +6923,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                         <div className="p-6">
                             <h2 className="text-xl font-bold mb-4">Restore Defaults</h2>
                             <p className="text-slate-300 mb-6">
-                                Restore the built-in sounds to their defaults? Sounds you added are kept, and your
+                                Restore the sounds to their defaults? Sounds you added are kept, and your
                                 custom groups, characters, categories and icons stay as they are. Edits you made to
-                                the built-in sounds cannot be undone automatically.
+                                the sounds cannot be undone automatically.
                             </p>
                             <div className="flex justify-end space-x-3">
                                 <button
