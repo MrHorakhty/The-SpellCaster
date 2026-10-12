@@ -746,10 +746,16 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-**There are currently ZERO backup folders**, cleared 2026-10-12 12:22 after verifying that every one of the
+**There is currently exactly ONE backup folder: `ttrpg-soundboard-backup-20261012-172438`** (223 files / 39.8 MB),
+taken after `fa01361` was committed and pushed, and verified to hold all 224 files. It was the last of **6** created
+during the 2026-10-12 verification session; the other 5 were deleted once the push landed, per the standing rule.
+✅ **`e2e/e2e-full.ps1` survived in it** (21.2 KB) — Bitdefender did not fire this time. The **50 tracked
+`src-tauri/gen/android/` files are absent by design** (the `gen` exclusion above), which is the one known gap
+between a backup and a checkout.
+Earlier: **ZERO folders** existed 2026-10-12 12:22–17:24, cleared after verifying that every one of the
 223 files they held is either in git, junk (`dev-server.log`, `Run App.bat.lnk`, `e2e/_e2e_pixel.png`,
 `.idea/`) or regenerable from a tracked source (`src-tauri/icons/android|ios` derive from the tracked
-362 KB `icon.png`). ⚠️ **The icons are regenerable but NOT byte-identical** — measured, not assumed: `npx tauri
+362 KB `icon.png`). ⚠️ **The icons are regenerable but NOT byte-identical** - measured, not assumed: `npx tauri
 icon src-tauri\icons\icon.png` reproduces only **1 of 26** android files and **0 of 18** ios files exactly. The
 APK's real launcher resources are tracked anyway (22 mipmaps under
 `src-tauri/gen/android/app/src/main/res/mipmap-*`), so this is equivalent-and-good-enough, not a loss.
