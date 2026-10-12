@@ -47,25 +47,23 @@ the file — stripping all process-kill commands did **not** help, and the patte
 is harmless. The e2e files are currently final and committed, so `backup-project.ps1` repairing from git
 is the accepted mitigation. The user declined excluding all of OneDrive.
 
-### Known: backups accumulate — prune them, but KEEP the newest one
-The script does **not** delete old backups. During a work session several accumulate. Delete the older ones by
-hand, but **always leave the most recent folder in place**, even after everything is pushed.
+### Known: backups accumulate — prune the old ones once pushed
+The script does **not** delete old backups. During a work session several accumulate; once the work is pushed
+and verified, older ones can be deleted by hand. **Keep the newest** regardless — it is the fast rollback point
+and it costs ~40 MB.
 
-🔴 **The reason is `public/assets`, and this rule was wrong until 2026-10-12.** `.gitignore:90` ignores `public`,
-so the **71 bundled audio files / 29 MB are untracked** — only `public/assets/Icon.png` is in git (force-added).
-A fresh clone plus `npm install` therefore does **not** reproduce a backup's contents: it produces an app with
-**no starter sounds at all**. An earlier version of this rule said the opposite ("all of which are in git, so a
-fresh clone plus `npm install` reproduces its entire contents"), and it was acted on — all backups were cleared
-on 2026-10-11, which left those 29 MB existing in exactly one place: the working tree.
+A backup holds source, docs, tests **and `public/assets`**, and **all of that is now in git** — `public/` was
+un-ignored in `ba57282` (2026-10-12). A fresh clone plus `npm install` therefore reproduces a backup's contents.
+That was **verified end to end, not assumed**: a fresh clone from GitHub built to a `dist/` containing all 71
+starter sounds, with every filename `src/data.json` references resolving.
 
-So the standing guidance is now:
-- **Source, docs, tests and the e2e harness ARE in git** — the remote covers those completely.
-- **`public/assets` is NOT** — a backup folder is currently the *only* independent copy of the audio.
-- 💡 **Never clear the last backup folder while `public/` is gitignored.** If you want the audio in git, that is a
-  deliberate decision (≈29 MB permanently in history), not a side effect of tidying.
-
-This does not weaken **backup before any change** — take one at the start of a work session, and re-take one
-at the end so the surviving folder matches the final commit.
+⚠️ **This was false until 2026-10-12, and the falsehood had already been acted on.** `.gitignore:90` read
+`public` — boilerplate inherited from the Nuxt/Gatsby blocks beside it, where ignoring it *is* correct. Here it
+was not: the app is Vite, so `public/` is source. The audio was untracked, the "all of which are in git" sentence
+was wrong, and every backup folder was cleared on 2026-10-11 under *"after a successful push, you do not need one
+at all"* — which left 29 MB of the shipped app existing in exactly one place: the working tree.
+💡 **Verify a redundancy claim against `.gitignore` before you rely on it.** A rule justified by *"it's all in
+git"* is only ever as good as the ignore list, and nobody re-reads a rule that has been working.
 
 ### Build that path in PowerShell — do NOT type the accented characters
 
@@ -100,6 +98,11 @@ reads it as another tool's private file. To stop two agents rewriting it at once
 🔒 CURRENT HOLDER: <agent name> — claimed <YYYY-MM-DD HH:MM> — working on: <one line>
 🔓 UNCLAIMED — last holder: <agent name> (<YYYY-MM-DD HH:MM>)
 ```
+
+⚠️ **Exactly one of those two lines is present at a time** — they are alternatives, not a pair. **Claiming means
+replacing** the `🔓` line, not adding a `🔒` line above it. With both present the reader cannot tell which is
+authoritative, and step 4 below only works if they can. opencode made exactly this mistake on 2026-10-12 by
+adding its `🔒` line instead of replacing, which briefly left the file claiming a holder *and* being unclaimed.
 
 ### Claim — first action of every session, before the backup
 1. Re-read the top of `PROJECT_STATE.md`.

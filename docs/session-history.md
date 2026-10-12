@@ -2872,3 +2872,68 @@ not *complete* - and "complete" is what the rule actually needed.
 because a markdown-only change cannot affect eslint, the build, coverage or any E2E phase. The 2026-10-12 00:00
 baseline (web 223/0/0, Windows 222/0/1, Android 212/0/1, hand-tested) still stands. **No hand-test needed** -
 nothing user-facing changed.
+
+---
+
+## 2026-10-12 11:42 - Track public/: the starter sounds are app content (`ba57282`)
+
+Follow-on from the 11:19 integrity check. The user asked to actually **fix** the audio exposure rather than only
+document it.
+
+### The cause was boilerplate, not a decision
+`.gitignore:90` read `public`, sitting inside a block of framework ignores (`.next`, `.nuxt`, `dist`, `.cache/`,
+then `public`, then the Storybook outputs). That entry is **correct for Nuxt and Gatsby**, which build *into*
+`public/`. This app is Vite, where `public/` is **source**. It was inherited, never reasoned about.
+
+### Measured before acting
+- 71 files / **28.95 MB** - 19 png (2.66 MB) + 52 mp3 (26.29 MB)
+- **0** duplicate contents (MD5), **0** unreferenced, **0** missing, **0** near-duplicate names
+- all **70** files are referenced by `src/data.json`, so nothing was trimmable
+- the size is inherent: 52 stereo loops of 2.5-5 min at 128-320 kbps (`Tavern_Music` = 152 s @ 320 kbps = 5.95 MB)
+
+So re-encoding was not a saving - it would be real quality loss on shipped content. Paid the 29 MB instead.
+
+### The fix, and the proof
+`ba57282` (74 files, +38/-1): removed the `public` ignore, kept `desktop.ini` (0-byte Windows noise), tracked
+`favicon.ico` / `favicon.svg` / `icons.svg` too (app content as well). `.git` **24.9 -> 52.9 MB**.
+
+Verified **end to end, not asserted** - cloned **from GitHub**, not from the local repo:
+- clone contains **71 assets / 28.95 MB**, and all **70** `src/data.json` references resolve
+- `npm install` (6 s) + `npx vite build` (1.7 s) -> `dist/assets/` holds 52 mp3 + 19 png, all 70 resolving
+
+That distinction is the whole point: the previous claim in these docs was *asserted* and had been **false for
+months**. This one is measured. `git fsck` and a content hash confirm the tracked blobs match what was on disk.
+
+### Gates
+| Gate | Result |
+|---|---|
+| backup | VERIFY OK 224/224 |
+| eslint | **0 errors** / 3 pre-existing warnings, exit 0 |
+| vite build | exit 0 |
+| check-coverage | exit 0 (39 suites / 331 tests) |
+| check-profile-keys | OK |
+| profileStorage.check | 26/26 |
+| **web E2E** | **223 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261012-115917.log`) - identical to the 00:00 baseline |
+| Windows / Android E2E | **NOT run** - see below |
+| user hand-test | **not needed** - nothing user-facing changed |
+
+⚠️ **Windows and Android were deliberately not run**, and are named here rather than implied. The change is
+`.gitignore` + 70 binary files + markdown; no app code changed and nothing is platform-specific. The relevant
+coverage did run: **Suite O** (reset to starter sounds) and **Z1/Z2** (the bundled `Longbow_4.mp3` resolves from
+`/assets/` and decodes) both passed, which is the direct check that the tracked assets are the ones the app loads.
+
+### Also fixed: the double claim line
+opencode claimed by **adding** a `🔒` line above the existing `🔓 UNCLAIMED` line, leaving the file claiming a
+holder and being unclaimed at once - the exact mistake `AGENTS.md` warns about. Corrected to a single line, and
+the `AGENTS.md` code block clarified: the two lines are **alternatives, never both**.
+
+💡 **Why it recurred even though the rule already forbade it:** the block shows both lines with nothing saying
+they are mutually exclusive, and step 4 works by the reader *finding* `UNCLAIMED`. With both present, a reader
+cannot tell which is authoritative - so the file's own state became ambiguous to the very step that depends on it.
+**A spec that shows two states without saying "exactly one" will eventually get both.**
+
+### Still open, unchanged
+`PROFILE_SYNC_SPEC.md` steps 3-6 (provenance classifier, bundle format, atomic import, export + destination
+pickers) and step 7 UI. None of it exists; no zip dependency is installed. `HOTKEYS_SPEC.md` is queued after it.
+The user has a couple of **new default sounds** in mind - `public/assets` is now the place to add them, and the
+stated ceiling is **under 100 MB total**.

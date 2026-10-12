@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 11:19) — **docs-only integrity check after the cut-off session: NO DAMAGE found; cleaned 3 leftover doc defects; corrected the false `public/assets` "all in git" claim in both files. Gates 2–7 not re-run (markdown only).**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:05) — **`public/` is now tracked (`ba57282`) and clone-verified; the 29 MB of starter sounds are no longer uncommitted. Web E2E 223/0/0 exit 0, eslint 0 errors, build + both static gates green. Windows/Android E2E not run — nothing app-level changed. Also fixed the double claim-line bug.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -196,11 +196,12 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - Backend: Rust/Tauri 2.x (`src-tauri/`), `tauri-plugin-fs` (2.5.1) + `tauri-plugin-log`.
 - Storage: Tauri → `BaseDirectory.AppData` **`<identifier>/uploads/<profileId>/`** via the fs plugin; web →
   `localStorage` `sound_file_*` data-URLs under the same profile prefix.
-- 🔴 **`public/assets` is GITIGNORED** (`.gitignore:90`), so the **71 bundled audio files / 29 MB are untracked**
-  — only `public/assets/Icon.png` is in git (force-added). Consequences: a fresh clone yields an app with **no
-  starter sounds**, the remote is **not** a complete copy of the project, and **a backup folder is currently the
-  only independent copy of the audio**. The user's decision 2026-10-12 was to **keep it ignored** rather than add
-  ~29 MB to git history, so **never clear the last backup folder**. See Backups.
+- ✅ **`public/assets` is TRACKED as of `ba57282`** (2026-10-12) — it used to be **gitignored**, leaving the 71
+  starter sounds / 29 MB untracked and existing in one place only. `src/data.json` references all **70** of them,
+  so a clone without them ships an app whose *"Reset to starter sounds"* restores 70 dangling references. Now in
+  git: `.git` is **52.9 MB**, and a fresh clone + `npm install` + `vite build` was **verified** to produce a
+  `dist/assets/` with all 71 files and every referenced name resolving. Adding more defaults is expected — the
+  user's stated budget is to stay **under 100 MB total**, and `.gitignore` now only excludes `desktop.ini`.
 - Data keys (all now behind a `profile:<id>:` prefix except the two noted): `ttrpg_characters`,
   `ttrpg_environment` (**singular** — not `ttrpg_environments`; this has fooled harnesses before), `ttrpg_groups`,
   `ttrpg_data_version`, `ttrpg_characters_icon`, `ttrpg_environment_icon`, plus `backgroundSettings` and `boxSize`.
@@ -217,6 +218,12 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of `8032fb7` (0 ahead / 0 behind,
   verified 2026-10-12). ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04, 2026-10-06,
   2026-10-11 and 2026-10-12.
+- ✅ **`public/` is now tracked — `ba57282`** (2026-10-12 11:42), 74 files, +38/−1: the 71 starter sounds /
+  icons plus `favicon.ico`, `favicon.svg`, `icons.svg`, and the `.gitignore` fix. `.git` **24.9 -> 52.9 MB**.
+  Pushed and **verified by cloning from GitHub**: 71 assets / 28.95 MB present, all 70 `src/data.json`
+  references resolve, and `npm install` + `npx vite build` produced a `dist/assets/` with all 71 files.
+  `desktop.ini` (0 bytes) stays ignored. 💡 Root cause: `public` was **Nuxt/Gatsby boilerplate**, correct for
+  those frameworks, wrong for a Vite app where `public/` is source.
 - ✅ **Docs integrity check 2026-10-12 11:19 — NO DAMAGE from the cut-off session.** The `8032fb7` commit landed
   (00:08:13) and is pushed. Verified: `git status` clean, all **143** tracked files present, none zero-byte, every
   text file strict UTF-8 with **0 U+FFFD / 0 NUL**, `git fsck` shows only the known unreachable blob `3d1fcf15`,
@@ -227,8 +234,10 @@ are gated behind `isMobile` so desktop/web stay untouched.
   design-decisions paragraph with contradictory tails and a duplicated post-commit-hook paragraph. All cleaned in
   `AGENTS.md` + this file, **docs only** — no code touched, so gates 2–7 were not re-run (they are unaffected by a
   markdown-only change; the 2026-10-12 00:00 baseline still stands).
-- 🔴 **The `public/assets` exposure — found and fixed 2026-10-12.** See Project facts and Backups. The audio
-  (71 files / 29 MB) is gitignored and untracked; **never clear the last backup folder** while that holds.
+- ✅ **The `public/assets` exposure — found and FIXED 2026-10-12 in `ba57282`.** It had been open for less than
+  an hour: the audio (71 files / 29 MB) was gitignored and untracked, and the docs claimed otherwise. Now tracked
+  and clone-verified, so the "clear every backup once pushed" rule is safe again on a true premise. See Project
+  facts and Backups.
 - ✅ **Profiles step 1 is COMMITTED as `577505d`** (2026-10-12 00:00), 22 files, +2655/−322: `src/profileStorage.js`
   (new), `src/App.jsx`, `src-tauri/capabilities/default.json`, `e2e/specs/profiles.mjs` (new),
   `e2e/check-profile-keys.mjs` (new), `e2e/profileStorage.check.mjs` (new), `e2e/e2e-snapshot.mjs`,
@@ -607,32 +616,32 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand, but **keep the newest**.
-Latest: **`ttrpg-soundboard-backup-20261012-111949`** (224/224 verified, 39.7 MB) — taken 2026-10-12 during the
-integrity check after the cut-off session.
+Latest: **`ttrpg-soundboard-backup-20261012-113352`** (224/224 verified, 39.7 MB) — taken 2026-10-12 during the
+integrity check after the cut-off session. ⚠️ It predates `ba57282`, so it holds the audio as *untracked* files
+rather than in git; take a fresh one before the next change.
 🗑️ **Pruned 2026-10-11 twice: 10 folders / ~355 MB -> 2 / ~79 MB (8 deleted, ~315 MB), then the remainder
 cleared after the final push.** Before the first prune, every file in all 8 was diffed against the repo and
 `git ls-files`; the only files not in the working tree were the three retired suites, recoverable from
 `dc9c276:e2e/...`, verified with `git cat-file -e`, and `dc9c276` is on `origin/mobile-support`. So the prune
-provably lost nothing.
+provably lost nothing **of what was in git** — but it did leave the audio in one place, see below.
 
-🔴 **But the "cleared after the final push" part was wrong, and it is corrected here (2026-10-12).** It rested on
-*"backups hold only source, docs, tests and `public/assets`, all of which are in git"*. **`public` is gitignored**
-(`.gitignore:90`), so the 71 bundled audio files / **29 MB are untracked** — only `public/assets/Icon.png` is in
-git. A fresh clone plus `npm install` does **not** reproduce a backup; it produces an app with **no starter
-sounds**. Clearing every folder therefore left the audio existing in exactly one place: this working tree.
-Verified 2026-10-12: `git ls-files public/assets` returns **1** file; the directory holds **71 / 29.0 MB**.
-⚠️ **The `AGENTS.md` rule carried the same error and has been corrected there too** — prune old backups, but
-**never the newest one**, for as long as `public/` is gitignored. 💡 It also disposed of the standing "the script
-does not prune, delete old ones by hand" advice, which now stands again. Two rules are unaffected:
+✅ **RESOLVED 2026-10-12 in `ba57282`: the audio is now in git.** The paragraph this section used to carry was
+alarmist, and its alarm was misplaced. It rested on *"backups hold only source, docs, tests and `public/assets`,
+all of which are in git"*. **`public` was gitignored** (`.gitignore:90`), so the 71 files / **29.0 MB were
+untracked** — a fresh clone did **not** reproduce a backup, it produced an app with no starter sounds. Clearing
+every folder on 2026-10-11 under the rule *"after a successful push, you do not need one at all"* therefore left
+the audio in exactly one place: this working tree.
+Root cause: `public` was not a decision, it was **boilerplate** inherited from the Nuxt/Gatsby block above it,
+where ignoring it *is* correct — those frameworks build into `public/`. This app is Vite, so `public/` is source.
+`ba57282` removed the entry and tracked the audio; a fresh clone from GitHub then built to a `dist/assets/`
+holding all **71** files, with all **70** `data.json` references resolving. **Verified, not asserted.**
+💡 **The generalisable lesson: a redundancy claim is only as strong as the `.gitignore`.** Nobody re-reads a rule
+that has been working, so a rule justified by *"it's all in git"* silently decays when the ignore list changes.
+⚠️ There *was* a real tension here and both sides were true: a backup is not reliably complete (Bitdefender ate
+`e2e/e2e-full.ps1` out of it twice, 2026-09-30 and 2026-10-04), so "clear them once pushed" had reasoning behind
+it — it just rested on a false premise about *which* files git held. Two rules are unaffected:
 - **Back up before any change** — take one at the start of a work session, and
 - **re-take one at the end**, because the folder you want is the one matching the final commit.
-
-⚠️ There is a genuine tension here, and both sides are real. `backup-project.ps1` reports `VERIFY OK` and
-Bitdefender then eats `e2e/e2e-full.ps1` from the copy anyway — that has happened at least twice (2026-09-30
-from `.git\objects`, 2026-10-04 from a backup folder), so **a "verified" backup is not automatically a complete
-one**. That argued for keeping the remote as the single source of truth. But the remote is **missing the audio
-entirely**, so the remote is not a complete copy either. The honest position: neither one is sufficient alone
-while `public/` is gitignored — the working tree plus at least one backup folder is.
 Previous: **`ttrpg-soundboard-backup-20261010-221101`** (212/212 verified, 39.4 MB) — taken **before** the Phase 2
 shared-spec work. (212 rather than 206 because the `e2e/lib` + `e2e/specs` files from Phase 0/1 are now included.)
 Previous: **`ttrpg-soundboard-backup-20261010-214021`** (206/206 verified, 39.4 MB) — taken **before** the
