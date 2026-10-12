@@ -173,8 +173,11 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-11** (Phase 3 complete — coverage gate, legacy suites ported then retired, AGENTS.md
-definition-of-done; committed and pushed `7455c3b`; all three gates 0 FAIL)
+Last updated: **2026-10-12** (`bd3080d` — the 2026-10-12 working session: integrity check after the cut-off
+session, `public/` tracked so the starter sounds are no longer uncommitted, the `gen` exclusion row corrected,
+Settings copy trimmed, and the `.slider` stylesheet fixed after it turned out to have never applied. Web E2E
+223/0/0, eslint 0 errors, hand-test signed off. **Next up: `PROFILE_SYNC_SPEC.md` steps 3–6**, which the user
+is starting fresh in a new session.)
 
 ---
 
@@ -443,7 +446,14 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
-- ✅ **All seven gates green after `577505d` (2026-10-12)** — the current baseline:
+- ✅ **All seven gates green after `577505d` (2026-10-12)** — the current baseline. ⚠️ **Re-verified since, but
+  only partially:** the 2026-10-12 UI work (`fd93f72`, `f19498e`) re-ran backup, eslint, build, both static
+  gates and **web E2E** — all green, web still **223/0/0** — and the user hand-tested and approved the sliders.
+  **Windows and Android E2E were NOT re-run**, so their figures below are from `577505d` and are the last
+  machine-verified numbers for the Tauri/WebView2 and Android builds. That matters for the slider work in
+  particular: the entire `.slider` finding is **Chromium-specific** and WebView2 is a different build, so the
+  new slider appearance is reviewed but **not machine-verified on Windows or Android**. Treat that as the open
+  verification gap, not as a green gate.
 
 | Gate | Result |
 |---|---|
@@ -1087,13 +1097,24 @@ both of which re-seed for themselves. O must stay last of all.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- ✅ `PROFILE_SYNC_SPEC.md` — **AUTHORISED 2026-10-11; step 1 of 8 shipped as `577505d`, all seven gates green,
-  hand-tested.** Profiles + export/import as a `.spellcaster` zip. Still to do: **steps 3–6** (provenance
-  classifier, bundle format, atomic import in both modes, export + the desktop/Android destination pickers) and
-  step 7 UI. ⚠️ **Facts that were re-verified and are now WRONG in older notes:** `localStorage` call sites are
-  still **27**, but the `uploads/` count is **4 chokepoints, not 10** — `getTauriStoragePath` (App.jsx:2740) is the
-  single path builder with 3 callers, and `getFileFromLocalStorage` bypasses it via `appDataDir`/`join`. Prefix
-  *enumeration* is real. `localStorageMigrationCompleted` **must stay global** (prefixing it would re-run the
+- 🔜 **`PROFILE_SYNC_SPEC.md` steps 3–6 is the next task, and the user is starting it fresh (2026-10-12).**
+  Step 1 of 8 shipped as `577505d`, all seven gates green, hand-tested. **Nothing of steps 3–7 exists yet** — no
+  provenance classifier, no bundle format, no import, no export, no UI, and **no zip dependency is installed**.
+  Starting points, so the next session does not re-derive them:
+  - **Storage is already profile-scoped** (`src/profileStorage.js`, `profile:<id>:<key>`, uploads at
+    `uploads/<profileId>/`), so export/import is a read-and-write over an existing adapter rather than a refactor.
+    The profile switch is a **full remount** and a `DATA_VERSION` mismatch **migrates** (§0.3 decisions 2 and 3).
+  - **The destination-picker write is already spiked and passing** on both platforms: desktop needs the ~5-line
+    `app.fs_scope().allow_file(path)` runtime grant (**no** blanket scope), and Android takes a `content://` URI
+    that `plugin-fs` resolves. Pass **`Uint8Array`, never `Array`** — desktop IPC stringifies an `Array` body.
+  - **Provenance is structural, not a flag**: a reference with no `storedName` is a bundled asset.
+    `localStorageMigrationCompleted` and the `spellcaster_profiles` index must **stay global**.
+  - ⚠️ **Register the feature as `planned` in `e2e/coverage.manifest.json` when you *start*, not when you finish**
+    — flipping it to `shipped` is what forces the tests to exist.
+  - ⚠️ **Facts re-verified and WRONG in older notes:** `localStorage` call sites are still **27**, but the
+    `uploads/` count is **4 chokepoints, not 10** — `getTauriStoragePath` (App.jsx:2740) is the
+    single path builder with 3 callers, and `getFileFromLocalStorage` bypasses it via `appDataDir`/`join`. Prefix
+    *enumeration* is real. `localStorageMigrationCompleted` **must stay global** (prefixing it would re-run the
   one-time web→Tauri audio sweep) — as must the `spellcaster_profiles` index. Provenance is **structural, not a
   flag**: a reference with no `storedName` is a bundled asset. "Reset to starter sounds" shipped as `restoreDefaults`
   (App.jsx:3111) and now needs profile-scoping. Two risks remain on the board: cross-profile shared blobs (never
