@@ -87,7 +87,19 @@ dist
 
 # Gatsby files
 .cache/
-public
+
+# ⚠️ `public` is deliberately NOT ignored.
+# This entry used to read `public`, which is boilerplate carried over from the
+# Nuxt / Gatsby blocks above: those frameworks *build into* `public/`, so
+# ignoring it is correct for them. This app is Vite, where `public/` is
+# **source** — it holds the 71 bundled starter sounds (29 MB) that
+# `src/data.json` references, plus the favicons. Ignoring it left all that
+# audio existing in exactly one place (this working tree) while AGENTS.md and
+# PROJECT_STATE.md claimed it was in git, and that claim had already been acted
+# on destructively. Removed 2026-10-12; see the Backups section of
+# PROJECT_STATE.md for the full account.
+# `desktop.ini` is the only thing under `public/` that should be ignored.
+desktop.ini
 
 # Storybook build outputs
 .out
