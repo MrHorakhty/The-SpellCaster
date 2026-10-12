@@ -133,7 +133,14 @@ body {
 
    The track uses `::-webkit-slider-runnable-track`; `::-webkit-slider-track` is
    deprecated and is NOT honoured by current Chrome. Both facts were confirmed by
-   A/B screenshots rather than inferred. */
+   A/B screenshots rather than inferred.
+
+   Sizing: the handle is deliberately small against its rail. The original 16px
+   thumb on a 4px track read as chunky - the handle was four times the height of
+   the rail it sat on - so the standard control is now an 11px handle on a 3px
+   track. Colour is the theme accent (lime) on every state; the handle is never
+   the browser's default blue, which is what the app fell back to by accident
+   before the fix and was never a deliberate choice. */
 .slider {
   -webkit-appearance: none;
   appearance: none;
@@ -151,8 +158,8 @@ body {
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  height: 16px;
-  width: 16px;
+  height: 11px;
+  width: 11px;
   border-radius: 50%;
   background: var(--theme-accent);
   cursor: pointer;
@@ -161,13 +168,13 @@ body {
 
 .slider::-webkit-slider-runnable-track {
   background: var(--theme-border);
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
 }
 
 .slider::-moz-range-thumb {
-  height: 16px;
-  width: 16px;
+  height: 11px;
+  width: 11px;
   border-radius: 50%;
   background: var(--theme-accent);
   cursor: pointer;
@@ -176,32 +183,35 @@ body {
 
 .slider::-moz-range-track {
   background: var(--theme-border);
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
 }
 
 /* Per-sound volume slider (the one under every sound card).
 
-   There is one of these per card, always visible, so a full-size round thumb
+   There is one of these per card, always visible, so a full-size round handle
    reads as a wall of controls on a busy board - the risk PER_SOUND_VOLUME_SPEC.md
-   §2b.3 flagged. At rest it is a thin rounded bar; while it is being adjusted
-   (:active, or keyboard focus) it reverts to exactly the rules above, i.e. the
-   same control the master volume and zoom sliders use.
+   §2b.3 flagged. At rest it collapses to a small rounded bar on a thin rail;
+   while it is being adjusted (:active, or keyboard focus) it reverts to exactly
+   the rules above, i.e. the same control the master volume and zoom sliders use.
 
-   Purely cosmetic: the element, its value and every handler are untouched, so
-   nothing about playback, persistence or the E2E suite changes. These rules
-   must stay AFTER the `.slider` ones - equal specificity, later wins. */
+   Colour is the theme accent in BOTH states - only the size changes. Purely
+   cosmetic: the element, its value and every handler are untouched, so nothing
+   about playback, persistence or the E2E suite changes.
+
+   These rules must stay AFTER the `.slider` ones - equal specificity, later
+   wins. */
 .slider-compact::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  height: 6px;
-  width: 14px;
+  height: 5px;
+  width: 12px;
   border-radius: 3px;
-  background: var(--theme-border);
+  background: var(--theme-accent);
   cursor: pointer;
   border: none;
   transition: height 120ms ease, width 120ms ease, border-radius 120ms ease,
-    background-color 120ms ease, border-color 120ms ease;
+    border-color 120ms ease;
 }
 
 .slider-compact::-webkit-slider-track {
@@ -216,14 +226,14 @@ body {
 }
 
 .slider-compact::-moz-range-thumb {
-  height: 6px;
-  width: 14px;
+  height: 5px;
+  width: 12px;
   border-radius: 3px;
-  background: var(--theme-border);
+  background: var(--theme-accent);
   cursor: pointer;
   border: none;
   transition: height 120ms ease, width 120ms ease, border-radius 120ms ease,
-    background-color 120ms ease, border-color 120ms ease;
+    border-color 120ms ease;
 }
 
 .slider-compact::-moz-range-track {
@@ -235,8 +245,8 @@ body {
 .slider-compact:active::-webkit-slider-thumb,
 .slider-compact:focus::-webkit-slider-thumb,
 .slider-compact:focus-visible::-webkit-slider-thumb {
-  height: 16px;
-  width: 16px;
+  height: 11px;
+  width: 11px;
   border-radius: 50%;
   background: var(--theme-accent);
   border: 2px solid var(--theme-border);
@@ -251,15 +261,15 @@ body {
 .slider-compact:active::-webkit-slider-runnable-track,
 .slider-compact:focus::-webkit-slider-runnable-track,
 .slider-compact:focus-visible::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
 }
 
 .slider-compact:active::-moz-range-thumb,
 .slider-compact:focus::-moz-range-thumb,
 .slider-compact:focus-visible::-moz-range-thumb {
-  height: 16px;
-  width: 16px;
+  height: 11px;
+  width: 11px;
   border-radius: 50%;
   background: var(--theme-accent);
   border: 2px solid var(--theme-border);
@@ -268,7 +278,7 @@ body {
 .slider-compact:active::-moz-range-track,
 .slider-compact:focus::-moz-range-track,
 .slider-compact:focus-visible::-moz-range-track {
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
 }
 

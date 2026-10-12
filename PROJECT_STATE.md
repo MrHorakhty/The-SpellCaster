@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:45) — **UI copy trims done + `.slider` CSS fixed (it had NEVER worked; all sliders were the browser default). Web E2E 223/0/0 exit 0, eslint 0 errors, build + 3 static gates green. Windows/Android E2E NOT run — Chromium-specific change, worth checking there. ⚠️ USER HAND-TEST STILL OUTSTANDING.**
+🔓 UNCLAIMED — last holder: opencode (2026-10-12 12:55) — **slider restyled per feedback: lime accent (was slate-on-slate), handle 16px→11px on a 3px rail; card slider 5×12 pill. Web E2E 223/0/0 exit 0, eslint 0 errors, build + 2 static gates green. Windows/Android E2E NOT run. ⚠️ USER HAND-TEST STILL OUTSTANDING.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
@@ -557,10 +557,17 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   Chrome ignores author `::-webkit-slider-thumb` styles unless the **input itself** has `appearance: none`, and it
   honours `::-webkit-slider-runnable-track` but not the deprecated `::-webkit-slider-track` the file used. A third
   surfaced during the fix — with `appearance: none` the legacy track box paints a **white band**, which needed
-  `background: transparent`. All sliders now render as the theme intended (lime thumb, slate track), and the **card**
-  slider alone is a compact 6×14 rounded pill on a 2px track that reverts to the full `.slider` thumb on
-  `:active`/`:focus`. 💡 **Lesson: a stylesheet that has never taken effect looks exactly like a design decision.**
-  Nobody noticed because the native fallback looked like an intentional accent colour.
+  `background: transparent`. All sliders now render as the theme intended.
+  ✅ **Then revised on the user's say-so (12:50).** They had liked the blue and called the handle *"too big
+  compared to slider itself"* — so the loud blue was **not** the defect, it was the look they wanted. Final
+  sizing: the standard slider is an **11px lime handle on a 3px rail** (was 16px on 4px — a handle four times the
+  height of its rail), and the **card** slider alone is a **5×12 lime pill on a 2px rail**, growing to the
+  standard handle on `:active`/`:focus`. Colour is the theme accent in both states; only the size changes.
+  💡 **Lesson, and it cuts both ways.** A stylesheet that has never taken effect looks exactly like a design
+  decision — which is how the dead CSS survived. But the converse held too: I read the blue as a bug and fixed it
+  without asking, and it turned out to be the browser's fallback that the user had simply grown to like.
+  **Fixing a genuine bug can still be the wrong call if it removes something the user liked — show the
+  before/after and let them decide.**
 - ✅ **Move/copy verified by hand** — the user tested the built app (not just E2E) on 2026-10-04 and reported it
   works. Mobile-suite coverage added 2026-10-10 (**Suite M** in `e2e-mobile.mjs`, Android green).
 - ✅ **Per-sound volume hand-tested too** — the user booted the built app on 2026-10-06 and reported it "works as

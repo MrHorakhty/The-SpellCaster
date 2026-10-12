@@ -3011,3 +3011,42 @@ ask me to touch. Say so explicitly rather than implying it was done.
 ### Next
 `PROFILE_SYNC_SPEC.md` steps 3-6 (classifier, bundle format, atomic import, export + destination pickers) and
 step 7 UI. The user has new default sounds in mind; `public/assets` is now the place to add them.
+
+---
+
+## 2026-10-12 12:50 - Slider colour and handle size, after the user saw it
+
+Follow-on to 12:32, same sitting. The CSS bug was real and worth fixing, but the *look* it restored was not
+what the user wanted, and that is the lesson.
+
+### What the user said
+> "The slider should be blue or the bright version of the selected theme color. And the sliders 'handle' is
+> too big compared to slider itself"
+
+I had read the loud blue as the defect. It was not — it was Chrome's fallback, and the user had simply grown to
+like it. Offered the choice (lime / blue / lime-on-blue); they chose **bright theme accent (lime)**.
+
+### Changes
+- Standard `.slider`: handle **16px -> 11px**, rail **4px -> 3px**. The old handle was four times the height of
+  the rail it sat on, which is what "too big compared to slider itself" was describing.
+- `.slider-compact` (card): **6x14 -> 5x12**, and its rest colour is now the **accent**, not the rail colour —
+  previously the pill was slate-on-slate and barely visible at rest.
+- Colour is the theme accent in **both** states; only size changes between rest and active. The user asked for
+  the slider to *be* the bright accent, so it no longer brightens only on press.
+
+### Verified
+Rebuilt, re-screenshotted at 3-4x: rest (small lime pill on a thin rail), active (11px lime handle, 3px rail),
+and the master volume / zoom sliders now visibly less chunky than before.
+Gates: eslint **0 errors** / 3 warnings, vite build exit 0, check-coverage exit 0, check-profile-keys OK,
+web E2E **223 PASS / 0 FAIL / 0 WARN exit 0** (`e2e-run-20261012-124722.log`). Windows/Android not run again,
+for the same reason: the whole finding is Chromium-specific and WebView2 is a different build. **User hand-test
+still outstanding.**
+
+### Lesson
+**Fixing a genuine bug can still be the wrong call when it removes something the user liked.** The dead-CSS
+diagnosis was correct and worth having — but shipping it without showing the before/after traded a liked look
+for an "intended" one. The 12:32 entry records the diagnosis as a clean win; it was half a win, and this entry
+is the correction. 💡 A visual regression is the one kind nobody notices until they are looking at the app, which
+is exactly why this change needs the hand-test more than a code change would.
+
+Next: `PROFILE_SYNC_SPEC.md` steps 3-6 and step 7 UI.
