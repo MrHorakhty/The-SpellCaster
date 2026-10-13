@@ -9,7 +9,8 @@ state would have left its residue behind and failed its own restore. Proven thre
 **(2)** The 114-file / 18.03 MB E2E snapshot holding the user's deleted audio was **deleted at their explicit
 instruction**, after its inventory was archived to `docs/session-history.md`. Their content is now gone from every
 location. **(3)** **Pushed** (`fd57d3a..a75ce40`, verified 0 ahead / 0 behind) and **pruned the desktop backups
-9 → 1**, freeing ~318 MB after proving 0 orphans in all 9.
+9 → 1**, freeing ~318 MB after proving 0 orphans in all 9. The survivor is `…-155810`, taken last so it matches
+HEAD.
 **Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6** (export/import), untouched.
 **Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
 **unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
@@ -834,14 +835,19 @@ All 9 were taken on 2026-10-13 between 14:58 and 15:52, all `VERIFY OK` 224 file
 `backup-project.ps1` **prints its folder name and nothing prunes it**, so a session that takes several backups
 (two at the start/end of a change, more after each commit) leaves the record out of date silently. **Count the
 folders on disk before writing the number down** — `Get-ChildItem $desk -Directory -Filter 'ttrpg-soundboard-backup-*'`.
-✅ **Pruned to ONE after a verified push** (2026-10-13, at the user's request): **8 deleted,
-`ttrpg-soundboard-backup-20261013-155220` kept** as the fast rollback point, per the standing rule in `AGENTS.md`.
-**358.1 MB → 39.8 MB, ~318 MB freed.** Safety was proven **before** deleting, not assumed: every file in all 9 was
-matched against **git `ls-files` ∪ the working tree**, and **all 9 returned 0 orphans** — nothing existed only in a
-backup. The survivor was then re-checked as a *kept* artifact, not assumed good: **224 files / 39.81 MB, 0 zero-byte,
-all 8 spot-checked paths present, 72 files in `public/assets`, and `e2e-full.ps1` survived** (Bitdefender did not
-fire). ⚠️ **The `Launch Opencode - ttrpg soundboard.bat.lnk` shortcut on the desktop was left alone** — it is a
-launcher, not a backup.
+✅ **Pruned to ONE after a verified push** (2026-10-13, at the user's request): 9 → 1, **~318 MB freed**
+(358.1 MB → 39.8 MB). Safety was proven **before** deleting, not assumed: every file in all 9 was matched against
+**git `ls-files` ∪ the working tree**, and **all 9 returned 0 orphans** — nothing existed only in a backup. The
+survivor was then re-checked as a *kept* artifact, not assumed good: **224 files / 39.81 MB, 0 zero-byte, all 8
+spot-checked paths present, 72 files in `public/assets`, and `e2e-full.ps1` survived** (Bitdefender did not fire).
+⚠️ **The `Launch Opencode - ttrpg soundboard.bat.lnk` shortcut on the desktop was left alone** — it is a launcher,
+not a backup.
+💡 **The surviving folder is `…-155810`, not the one first kept — and that is the rule working, not churn.**
+Pruning ran against `…-155220`, then the standing *"re-take one at the end so it matches the final state"* rule
+produced `…-155810`, so the stale one was deleted and the newest kept. **The two rules interact, and the fix is to
+prune last:** take the final backup, then delete the rest, then **do not re-backup for a docs-only touch-up** —
+otherwise each correction re-creates a folder and the session never converges on one. One markdown edit behind HEAD
+is a perfectly good rollback point; an unbounded folder count is not.
 ⚠️ **Do not confuse these with `ttrpg-soundboard-recovered-20261013`, which existed earlier today and is DELETED.**
 It was a one-off copy-out of the user's own upload files, not a backup of the project; gone at their instruction.
 ✅ **`e2e/e2e-full.ps1` survived in it** — Bitdefender did not fire. The **50 tracked `src-tauri/gen/android/`
