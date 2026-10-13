@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-13 15:58). Session, in two parts. **(1)** Closed the two standing
+🔓 UNCLAIMED — last holder: opencode (2026-10-13 16:04). Session, in three parts. **(1)** Closed the two standing
 warnings: the docs were **committed**, and the uploads snapshot guard was **re-verified against a live fixture** in
 `uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken** — `save-uploads`
 accepts an empty folder (exit 0) while `restore-uploads` rejects one (exit 4), so a Windows phase in the emptied
@@ -8,7 +8,8 @@ state would have left its residue behind and failed its own restore. Proven thre
 **real Windows phase (222/0/1 exit 1)**. **All seven gates run and green**; no app or harness code was touched.
 **(2)** The 114-file / 18.03 MB E2E snapshot holding the user's deleted audio was **deleted at their explicit
 instruction**, after its inventory was archived to `docs/session-history.md`. Their content is now gone from every
-location, and the "deleted everywhere" claim in this file is true again.
+location. **(3)** **Pushed** (`fd57d3a..a75ce40`, verified 0 ahead / 0 behind) and **pruned the desktop backups
+9 → 1**, freeing ~318 MB after proving 0 orphans in all 9.
 **Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6** (export/import), untouched.
 **Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
 **unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
@@ -187,14 +188,15 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-13, guard session** (opencode, 15:19 → 15:58). Two parts. **(1)** Closed the two standing
-warnings from the recovery session: the uploads snapshot guard was re-verified against a **live fixture** (and
-turned out to be *broken*, not merely vacuous — see Open items), and the uncommitted docs were committed. **No app
-code and no harness code was touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the
-repo. **All seven gates run and green**, including the real Windows phase, because that phase *is* the proof.
-**(2)** The 114-file / 18.03 MB E2E snapshot that still held the user's deleted audio was **deleted at their
-explicit instruction**, its inventory archived to `docs/session-history.md` first. Markdown-only for part 2, so
-gates 5–7 were not re-run. **Their content is now gone from every location.**
+Last updated: **2026-10-13** (opencode, 15:19 → 16:04). **(1)** Closed the two standing warnings from the recovery
+session: the uploads snapshot guard was re-verified against a **live fixture** (and turned out to be *broken*, not
+merely vacuous — see Open items), and the uncommitted docs were committed. **No app code and no harness code was
+touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the repo. **All seven gates run and
+green**, including the real Windows phase, because that phase *is* the proof. **(2)** The 114-file / 18.03 MB E2E
+snapshot that still held the user's deleted audio was **deleted at their explicit instruction**, its inventory
+archived to `docs/session-history.md` first. **(3)** **Pushed** (`fd57d3a..a75ce40`, 0 ahead / 0 behind verified) and
+**pruned the desktop backups 9 → 1** (~318 MB freed), after proving **0 orphans** in all 9 against git ∪ working tree.
+**Their content is now gone from every location.**
 **Prior entry: 2026-10-13** (session: took the claim off a cut-off one; established that the user's lost board
 is **unrecoverable** — the live WebView2 LevelDB holds only one dangling `Dungeon`/`Dripping` entry and **none**
 of their storedNames — and **corrected two false claims in this file** (that the board "survived under a different
@@ -214,8 +216,9 @@ has a list.* Enumerate the **sources that copy** the data — OneDrive sync, the
 dir, `%TEMP%` — not the locations you remember deleting from.
 **Prior entry: 2026-10-12, later session** — the E2E verification session that closed the Windows/Android gap,
 fixed the harness that was destroying the user's board, and made the key assertions hermetic.
-⚠️ **Also unreconciled: `fd57d3a "Bugfixes"`** is the current HEAD and is not described anywhere in this file
-(it only adds `fflate` + `@noble/hashes` to `package.json`; neither is imported).
+⚠️ **`fd57d3a "Bugfixes"` is no longer HEAD** (superseded 2026-10-13 by `d63095c` / `a75ce40`), but it is still the
+commit that **added `fflate@0.8.3` + `@noble/hashes@2.4.0` to `package.json`, and neither package is imported
+anywhere yet** — they are the intended inputs to `PROFILE_SYNC_SPEC.md` steps 3–4. Recorded under Repo state.
 **Next up: `PROFILE_SYNC_SPEC.md` steps 3–6.**
 
 ---
@@ -257,9 +260,14 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, verified and pushed
-  2026-10-12, later session). ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04,
-  2026-10-06, 2026-10-11 and 2026-10-12.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, **verified after the
+  push on 2026-10-13 16:00**, `fd57d3a..a75ce40`; previously verified and pushed 2026-10-12, later session).
+  ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04, 2026-10-06, 2026-10-11,
+  2026-10-12 and 2026-10-13.
+- ✅ **Committed and pushed 2026-10-13: `d63095c` (guard re-verified against a live fixture + the "deleted
+  everywhere" correction) and `a75ce40` (the stale 114-file E2E snapshot deleted, inventory archived first)** —
+  docs only, no app or harness code. `fd57d3a` is no longer HEAD; it remains the last commit that touched
+  `package.json` (`fflate` + `@noble/hashes`, neither imported yet).
 - ✅ **Committed and pushed 2026-10-12 (later session): the E2E harness restore fix + the profile-scoped key
   assertions**, 6 files (`e2e/e2e-snapshot.mjs`, `e2e/e2e-full.ps1`, `e2e/e2e-full.mjs`, `e2e/lib/page.mjs`,
   `PROJECT_STATE.md`, `docs/session-history.md`). ⚠️ **`e2e/e2e-android.ps1` was deliberately left alone** — its
@@ -799,8 +807,10 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything
 except build output (`node_modules`, `dist`, `.git`, `target`, `gen`), then verifies every
-source file reached the backup and repairs from git if not. **223 files / ~39.7 MB**, including
-`public/assets` audio.
+source file reached the backup and repairs from git if not. **224 files / ~39.8 MB**, including
+`public/assets` audio. (Was recorded as "223 files / ~39.7 MB" — stale since 2026-10-12.) ⚠️ **When counting
+files yourself, use `Get-ChildItem -Recurse -File -Force`** — without `-Force` the hidden files (`.gitignore`,
+`.oxlintrc.json`) are missed and you get 223 instead of 224, which looks like a missing file and is not.
 
 ⚠️ **`gen` is excluded but is NOT purely regenerable, and it is not gitignored** (corrected 2026-10-12).
 **50 files under `src-tauri/gen/android/` are tracked** — `.gitignore` excludes only specific subpaths, not the
@@ -817,16 +827,23 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-**There are currently TWO project backups in `Masaüstü`, both from this session, both `VERIFY OK` 224/224 /
-39.8 MB: `ttrpg-soundboard-backup-20261013-145839`** (taken first, per the "back up before any change" rule) **and
-`ttrpg-soundboard-backup-20261013-150318`** (taken at the end, so it matches the final state). **Keep the 150318
-one** — it is the fast rollback point — and the 145839 one is safe to delete once this work is committed and
-pushed. Not pruned yet, deliberately: the standing rule prunes *after* a verified push, and this session has
-**not committed anything**.
-⚠️ **Do not confuse this with `ttrpg-soundboard-recovered-20261013`, which existed earlier today and is now
-DELETED.** It was a one-off copy-out of the user's own upload files, not a backup of the project; it is gone at
-their instruction. Nothing in git or in either backup references it. The 2026-10-12 backup folder was already gone
-before this session began.
+**There were NINE project backups in `Masaüstü` when this session pruned them — not two, as this file claimed.**
+All 9 were taken on 2026-10-13 between 14:58 and 15:52, all `VERIFY OK` 224 files / ~39.8 MB:
+`145839`, `150318`, `150957`, `151308`, `151535`, `151927`, `154824`, `155152`, `155220`.
+💡 **The count in this file was wrong by 7** — it listed only the two the previous session knew about, because
+`backup-project.ps1` **prints its folder name and nothing prunes it**, so a session that takes several backups
+(two at the start/end of a change, more after each commit) leaves the record out of date silently. **Count the
+folders on disk before writing the number down** — `Get-ChildItem $desk -Directory -Filter 'ttrpg-soundboard-backup-*'`.
+✅ **Pruned to ONE after a verified push** (2026-10-13, at the user's request): **8 deleted,
+`ttrpg-soundboard-backup-20261013-155220` kept** as the fast rollback point, per the standing rule in `AGENTS.md`.
+**358.1 MB → 39.8 MB, ~318 MB freed.** Safety was proven **before** deleting, not assumed: every file in all 9 was
+matched against **git `ls-files` ∪ the working tree**, and **all 9 returned 0 orphans** — nothing existed only in a
+backup. The survivor was then re-checked as a *kept* artifact, not assumed good: **224 files / 39.81 MB, 0 zero-byte,
+all 8 spot-checked paths present, 72 files in `public/assets`, and `e2e-full.ps1` survived** (Bitdefender did not
+fire). ⚠️ **The `Launch Opencode - ttrpg soundboard.bat.lnk` shortcut on the desktop was left alone** — it is a
+launcher, not a backup.
+⚠️ **Do not confuse these with `ttrpg-soundboard-recovered-20261013`, which existed earlier today and is DELETED.**
+It was a one-off copy-out of the user's own upload files, not a backup of the project; gone at their instruction.
 ✅ **`e2e/e2e-full.ps1` survived in it** — Bitdefender did not fire. The **50 tracked `src-tauri/gen/android/`
 files are absent by design** (the `gen` exclusion above), which is the one known gap between a backup and a
 checkout.
