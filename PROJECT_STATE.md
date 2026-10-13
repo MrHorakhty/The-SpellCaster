@@ -1,14 +1,15 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-13 15:55). Session: **closed the two standing warnings** — the two
-docs are **committed**, and the uploads snapshot guard is **re-verified against a live fixture** in
-`uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken**: `save-uploads`
+🔓 UNCLAIMED — last holder: opencode (2026-10-13 15:58). Session, in two parts. **(1)** Closed the two standing
+warnings: the docs were **committed**, and the uploads snapshot guard was **re-verified against a live fixture** in
+`uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken** — `save-uploads`
 accepts an empty folder (exit 0) while `restore-uploads` rejects one (exit 4), so a Windows phase in the emptied
-state would have left its residue behind and failed its own restore. Proven three ways, SHA256-verified, including
-a **real Windows phase (222/0/1 exit 1)**. **All seven gates run and green**; no app or harness code was touched.
-⚠️ **Reported, not acted on — the user's decision:** a **114-file / 18.03 MB** copy of their audio (53 mp3 + 15
-png) **survives in `%LOCALAPPDATA%\opencode\e2e-snapshots\`**, which also makes this file's old "deleted everywhere"
-claim false. **Two more `-Phase win` runs will prune it automatically** — ask them first.
+state would have left its residue behind and failed its own restore. Proven three ways, SHA256-verified, including a
+**real Windows phase (222/0/1 exit 1)**. **All seven gates run and green**; no app or harness code was touched.
+**(2)** The 114-file / 18.03 MB E2E snapshot holding the user's deleted audio was **deleted at their explicit
+instruction**, after its inventory was archived to `docs/session-history.md`. Their content is now gone from every
+location, and the "deleted everywhere" claim in this file is true again.
+**Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6** (export/import), untouched.
 **Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
 **unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
 nowhere). All of their orphaned upload files were deleted at their own instruction. Three false/stale claims in
@@ -186,31 +187,31 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-13, guard session** (opencode, 15:19 → 15:48). Closed the two standing warnings from the
-recovery session: the uploads snapshot guard was re-verified against a **live fixture** (and turned out to be
-*broken*, not merely vacuous — see Open items), and the uncommitted docs are now committed. **No app code and no
-harness code was touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the repo.
-**All seven gates run and green**, including a real Windows phase, because that phase *is* the proof.
-⚠️ **Found and reported, not acted on: a 114-file / 18.03 MB copy of the user's deleted audio survives in
-`%LOCALAPPDATA%\opencode\e2e-snapshots\`.** Their call.
+Last updated: **2026-10-13, guard session** (opencode, 15:19 → 15:58). Two parts. **(1)** Closed the two standing
+warnings from the recovery session: the uploads snapshot guard was re-verified against a **live fixture** (and
+turned out to be *broken*, not merely vacuous — see Open items), and the uncommitted docs were committed. **No app
+code and no harness code was touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the
+repo. **All seven gates run and green**, including the real Windows phase, because that phase *is* the proof.
+**(2)** The 114-file / 18.03 MB E2E snapshot that still held the user's deleted audio was **deleted at their
+explicit instruction**, its inventory archived to `docs/session-history.md` first. Markdown-only for part 2, so
+gates 5–7 were not re-run. **Their content is now gone from every location.**
 **Prior entry: 2026-10-13** (session: took the claim off a cut-off one; established that the user's lost board
 is **unrecoverable** — the live WebView2 LevelDB holds only one dangling `Dungeon`/`Dripping` entry and **none**
 of their storedNames — and **corrected two false claims in this file** (that the board "survived under a different
 profile id", and that no zip dependency was installed). A copy-out of their upload files was made and then
 **deleted at their instruction**, followed by **all 114 originals** (`uploads/p_09b2806c/` → 0 files). No app code
 touched.
-⚠️ **CORRECTED 2026-10-13, guard session: the 11 sounds' files are NOT gone from *everywhere*.** The sentence this
-line replaced claimed *"deleted everywhere… no in-app copy and no OneDrive copy remain"*. That was **false, and it
-was false in the direction that matters** — a **third** copy survived in a place nobody looked, because the
-deletion sweep covered OneDrive and `%APPDATA%` but not the E2E harness's snapshot directory:
-`%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\` still holds **114 files / 18.03 MB**,
-including all **53** of the user's mp3 and **15** png. **Left in place, deliberately — it is the user's call, not
-mine** (`AGENTS.md`: do not delete what the user did not ask you to delete). ⚠️ It will be **pruned automatically**
-the next time `-Phase win` runs twice more (`Remove-OldSnapshots -Keep 2`, `e2e-full.ps1:240`) — which is an
-accidental deletion of their data, so **decide before running two more Windows phases.**
-💡 **Lesson: "I deleted it everywhere" is a claim about a *sweep*, and a sweep has a list.** Two named locations
-were checked and the third was not in anyone's notes — including this file's. Enumerate the *sources that copy*
-(a harness snapshot, a OneDrive sync folder, a temp dir), not the locations you remember deleting from.
+✅ **The 11 sounds' files are now genuinely gone from every location, as of 2026-10-13 15:56.** Three copies were
+deleted, in this order: the OneDrive copy-out, then the 114 originals (`uploads/p_09b2806c/` → 0 files), and finally
+the **114-file / 18.03 MB E2E harness snapshot** in
+`%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\`, which had survived the first sweep
+because it was in a location nobody checked. The user authorised that last one explicitly, having been told exactly
+what it held (all **53** of their mp3 + **15** png) and having said they hold their own copies elsewhere. **Its full
+inventory was written to `docs/session-history.md` *before* deletion** — that list is the only surviving record of
+which 11 sounds existed and how many variants each (Daze 8, Warding Sign 8, Force Barrage 7, 4 each of the rest).
+💡 **Lesson kept, because it was the actual finding:** *"deleted everywhere" is a claim about a sweep, and a sweep
+has a list.* Enumerate the **sources that copy** the data — OneDrive sync, the app's `%APPDATA%`, the E2E snapshot
+dir, `%TEMP%` — not the locations you remember deleting from.
 **Prior entry: 2026-10-12, later session** — the E2E verification session that closed the Windows/Android gap,
 fixed the harness that was destroying the user's board, and made the key assertions hermetic.
 ⚠️ **Also unreconciled: `fd57d3a "Bugfixes"`** is the current HEAD and is not described anywhere in this file
@@ -1260,16 +1261,24 @@ Suite F **clears storage** and creates/deletes profiles, so it runs **before** `
 both of which re-seed for themselves. O must stay last of all.
 
 ## Open items
-- 🟠 **THE USER'S DECISION — 114 files / 18.03 MB of their audio survives in the E2E snapshot dir.** Found
-  2026-10-13 while re-verifying the uploads guard:
-  `%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\` holds the complete pre-deletion set —
-  **53** mp3 + **15** png of the user's own content, plus **46** `e2e_silence` harness fixtures. **Deliberately not
-  touched**: they asked for the copies to go twice, but they also said they hold their own copies, and this one
-  was never in the record they were shown. Three options, all theirs: **(a)** delete it — then this file's
-  "deleted everywhere" claim becomes true; **(b)** keep it — then say so in this file, because the claim above is
-  wrong; **(c)** move it somewhere deliberate and name the location. ⚠️ **It is not safe to leave undecided**:
-  `e2e-full.ps1:240` prunes to `uploads-backup-* -Keep 2`, so **two more `-Phase win` runs delete it as routine
-  housekeeping.** Ask before running them.
+- ✅ **RESOLVED 2026-10-13 15:56 — the 114-file E2E snapshot is deleted, at the user's explicit instruction.** It
+  held **114 files / 18.03 MB** (all **53** mp3 + **15** png of theirs, plus 46 `e2e_silence` fixtures) in
+  `%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\`, having survived the earlier sweep. They
+  were told exactly what it contained and answered *"If they are not needed delete them. I have all my files stored
+  somewhere else"* — an informed decision, and not the "delete the last copy" trap, since the app has held none of
+  it since 2026-10-13 and the board itself is unrecoverable. **The inventory was archived to
+  `docs/session-history.md` first**, because deleting the folder also destroyed the only record of which 11 sounds
+  existed. Verified gone afterwards.
+  - 💡 **What the inventory showed that the earlier notes had not:** the audio had been uploaded **twice** in
+    places — Daze **8**, Warding Sign **8**, Force Barrage **7**, 4 each of the other eight. So "11 sounds" was
+    always a loose description of 53 files, and several share an identical byte size under different
+    `sound_<rand>_` prefixes (the same clip uploaded to more than one sound). Even the dedup was not obvious.
+  - ⚠️ **The auto-prune hazard is gone with it** — `e2e-full.ps1:240` keeps 2 `uploads-backup-*`, so two more
+    `-Phase win` runs would have deleted it as routine housekeeping. **No need to think about that before running
+    Windows phases any more.**
+  - Left alone on purpose: the `ls-backup-*.json` / `MANUAL-REFERENCE-ls-*.json` files beside it (~11 KB each).
+    They are **localStorage**, not audio, hold only E2E fixtures (no snapshot anywhere holds the user's board), and
+    one is cited as evidence elsewhere in this file.
 - 🔴 **URGENT (2026-10-12 16:56) — the user's real board is missing from `localStorage`, and the Windows E2E
   phase is what displaces it. Do NOT run `-Phase win` again until the harness stops writing to the real store.**
   - **What the user sees**: the app opens on a profile called "My Board" containing one character, "Human Paladin",

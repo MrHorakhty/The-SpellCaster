@@ -3388,3 +3388,121 @@ Both nonzero exits are the expected G5 skip. No stray processes, nothing listeni
 - Uncommitted docs committed; `PROJECT_STATE.md` claim released.
 - **Next task is still `PROFILE_SYNC_SPEC.md` steps 3-6** (export/import). Untouched.
 - **Ask the user about the 114-file snapshot before running `-Phase win` twice.**
+## 2026-10-13 15:52-15:58 - opencode: the stale E2E snapshot, inventoried and then deleted
+
+The user, told exactly what it held (114 files / 18.03 MB, including all 53 of their mp3 and 15 of their png),
+authorised deleting it: *"If they are not needed delete them. I have all my files stored somewhere else."* They had
+already asked twice for their content to go (the OneDrive copy-out, then the 114 originals), and had been told this
+directory was never in the record they were shown — so this was an informed decision, not the "last copy" trap the
+previous session's lesson warns about. It was never the last copy of the *app's* data either: the app has held none
+of it since 2026-10-13, and the board itself is unrecoverable.
+
+### Why inventory first, rather than just deleting
+Deleting the folder destroys the **only** record of what those files were. `AGENTS.md` says move a record to
+`docs/session-history.md` *before* deleting. So the full list below was captured first — generated from the
+filesystem rather than transcribed by hand — because it carries the one piece of recoverable knowledge in the whole
+saga: **which 11 sounds, with how many variants each.**
+
+### What it held
+Four subdirectories — `p_09b2806c` (the owner's), `p_0d866f71`, `p_f121afb8`, `p_5383a814` (Suite F test profiles)
+— 114 files / 18.03 MB: **68 real** (53 mp3 + 15 png) and **46 `e2e_silence` harness fixtures** at 312.5 KB each.
+
+The audio had been uploaded **twice** in places, which the counts show and which explains why *"11 sounds"* was
+always a loose description of 53 files: Daze 8, Warding Sign 8, Force Barrage 7, and 4 variants each of Fear,
+Phantom Pain, Phase Bolt, Shield Magic, Telekinesis, Telekinetic Projectile, Tentacular Limbs, Ventriloquism. The
+`Warding__Sign` double underscore is the one-way escaping of a non-space character in the original filename (see
+`toStoredFileName`, App.jsx:2255) — `_` → space is a *reconstruction*, not a record.
+
+Several files share an identical byte size under different `sound_<rand>_` prefixes (the three 75140 B Daze icons,
+for instance), i.e. the same image or clip uploaded to more than one sound — so even the dedup here was not obvious.
+
+### The 68 real files, verbatim (name / bytes)
+
+```
+icon_2rxi4ls9_Tentacular_Limbs.png                110613
+icon_57nb9nm7_Warding_Sign.png                    164201
+icon_9jgza7mg_Ventriloquism.png                    79235
+icon_a408f4d4_Daze.png                             75140
+icon_culckh0y_Fear.png                            119586
+icon_eqf82rtn_Force_Barrage.png                   127808
+icon_iplftafz_Phase_Bolt.png                      120346
+icon_kyawi64g_Daze.png                             75140
+icon_l5n4io5z_Shield_Magic.png                    152757
+icon_ryrwqspm_Telekinesis.png                     126330
+icon_uoa6iovi_Telekinetic_Projectile.png          121336
+icon_x71p9ro8_Phantom_Pain.png                    106830
+icon_xggjz8u8_Force_Barrage.png                   127808
+icon_z8nemytg_Daze.png                             75140
+icon_zjkupm3u_Fear.png                            119586
+sound_04uy664i_Fear_1.mp3                          32876
+sound_0aj034su_Daze_4.mp3                          48620
+sound_4cgphgib_Telekinetic_Projectile_2.mp3        72369
+sound_68yh1voc_Phantom_Pain_3.mp3                  64748
+sound_6qn0xnm5_Phantom_Pain_4.mp3                  97632
+sound_6tiqavph_Phantom_Pain_1.mp3                  64748
+sound_7jttlmwx_Daze_3.mp3                          48620
+sound_7sdi5dxi_Warding__Sign_2.mp3                 49581
+sound_7zoju4t1_Warding__Sign_1.mp3                 49581
+sound_8tisquck_Telekinetic_Projectile_1.mp3        48944
+sound_9a23868z_Warding__Sign_4.mp3                 25389
+sound_9vxi14m5_Force_Barrage_2.mp3                 30414
+sound_a17qzx0n_Ventriloquism_4.mp3                 49581
+sound_ahd4rkqp_Shield_Magic_3.mp3                  32876
+sound_b6kjbh5a_Phase_Bolt_2.mp3                    32876
+sound_bnv742p7_Telekinesis_3.mp3                   80208
+sound_bttjeco1_Force_Barrage_6.mp3                 23118
+sound_cfedx23c_Force_Barrage_4.mp3                 29262
+sound_co3pylvb_Fear_3.mp3                          32876
+sound_dejgfzp3_Force_Barrage_5.mp3                 21198
+sound_e3qq3m73_Tentacular_Limbs_3.mp3              48620
+sound_fiqa9yw6_Daze_1.mp3                          32876
+sound_ftl9u4wc_Daze_2.mp3                          48620
+sound_g1rqccg0_Fear_2.mp3                          32876
+sound_g9be88h3_Force_Barrage_7.mp3                 24654
+sound_gctgzjm6_Phantom_Pain_2.mp3                  64748
+sound_heb48oj3_Ventriloquism_2.mp3                 49581
+sound_hs39545n_Ventriloquism_3.mp3                 49581
+sound_iko5k1c7_Warding__Sign_4.mp3                 25389
+sound_j8it60le_Force_Barrage_3.mp3                 24270
+sound_jvqwt067_Shield_Magic_1.mp3                  32876
+sound_kllxck03_Warding__Sign_4.mp3                 25389
+sound_l4ydveg1_Telekinetic_Projectile_4.mp3        60003
+sound_lr2olos1_Telekinesis_2.mp3                  143202
+sound_nwfql86h_Telekinesis_1.mp3                   93666
+sound_oup1yska_Daze_1.mp3                          32876
+sound_ptf30esd_Tentacular_Limbs_2.mp3              48620
+sound_r7qep61b_Phase_Bolt_4.mp3                    16748
+sound_rgektlsk_Telekinesis_4.mp3                  142066
+sound_rilr8a35_Daze_2.mp3                          48620
+sound_rmzt7kur_Daze_3.mp3                          48620
+sound_rpc9a9oj_Ventriloquism_1.mp3                 49581
+sound_sl8d7j6l_Phase_Bolt_3.mp3                    32876
+sound_tmlfmy1z_Telekinetic_Projectile_3.mp3        32876
+sound_tvim5ew9_Phase_Bolt_1.mp3                    32876
+sound_uzct9tib_Daze_4.mp3                          48620
+sound_vy06v1am_Force_Barrage_1.mp3                 26573
+sound_wnopdnz1_Fear_4.mp3                          32876
+sound_x77sqzyf_Tentacular_Limbs_1.mp3              48620
+sound_x9od9x9x_Shield_Magic_4.mp3                  39621
+sound_xo74w9up_Warding__Sign_3.mp3                 25389
+sound_xt1tq3a9_Tentacular_Limbs_4.mp3              48620
+sound_z12x9lp5_Shield_Magic_2.mp3                  32876
+```
+
+### Deleted, and what it changes
+- `uploads-backup-20261012-170301/` **deleted**, verified gone afterwards.
+- `PROJECT_STATE.md`'s **"deleted everywhere" claim is now true again**, and the correction note that flagged it
+  has been rewritten to say so. The lesson it carried — *a sweep has a list; enumerate the sources that copy the
+  data, not the places you remember deleting from* — is kept, because that was the actual finding.
+- ⚠️ **The auto-prune hazard goes away with it.** `e2e-full.ps1:240` keeps 2 `uploads-backup-*` snapshots, so two
+  more `-Phase win` runs would have deleted it as routine housekeeping. **No need to think about it before running
+  Windows phases any more.**
+- Deliberately untouched: the `ls-backup-*.json` / `MANUAL-REFERENCE-ls-*.json` files in the same directory. They
+  are ~11 KB of **localStorage** and hold only E2E fixtures (established exhaustively on 2026-10-13 — no snapshot
+  anywhere holds the user's board), and one is cited as evidence in `PROJECT_STATE.md`. Not user audio, not in scope.
+- The uploads guard fixture `uploads/p_guardprobe/` lives in `%APPDATA%` and is untouched by any of this.
+
+### Gates
+Markdown-only change (no app or harness code), so the E2E phases were **not** run — markdown cannot affect them,
+and the previous session's figures stand. backup VERIFY OK 224/224 · eslint 0 errors / 3 baseline warnings ·
+`vite build` exit 0 · `check-coverage` exit 0. No hand-test — nothing user-facing shipped.
