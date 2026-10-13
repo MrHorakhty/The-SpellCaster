@@ -3232,3 +3232,159 @@ deleted unasked. Noted in `PROJECT_STATE.md` instead.
 `git rev-list --objects --all`. A file that was committed and deleted gives the wrong answer with complete
 confidence, which is worse than not checking. I got the right conclusion by luck of timing; this time it was
 actually verified.
+---
+
+## 2026-10-13 14:58-15:15 - opencode: a lost board, measured properly, then deliberately deleted
+
+Took over a claim left behind by a session that was cut off. It had committed `fd57d3a` 18 minutes after
+claiming it and nothing else - two dependencies, `fflate` and `@noble/hashes`, neither imported anywhere.
+
+### The board is unrecoverable - and the snapshots were not enough to say so
+`PROJECT_STATE.md` carried two claims that turned out to be wrong.
+
+**1. "The real content survived under a different profile id."** False. All 37 `ls-backup-*.json` files were
+grepped for `p_09b2806c`, for a real `storedName`, and for a real sound name. Exactly one matched -
+`ls-backup-20261011-221530.json` - and it held `reset.mjs` fixtures (`char_2` "Renamed Paladin", `s_6`,
+`mine_1`, `zz_custom`), every `files[]` pointing at `Longbow_4.mp3` with no `storedName` at all. There is no
+other profile id. It also means the overwrite happened *before* 2026-10-11 22:15, earlier than recorded.
+
+**2. The live store was never checked.** The real WebView2 `localStorage` is a LevelDB at
+`%LOCALAPPDATA%\com.mrhorakhty.thespellcaster\EBWebView\Default\Local Storage\leveldb\`, and **no snapshot
+covers it**. Read read-only as bytes, `p_09b2806c` survives in `000010.ldb` as exactly one value:
+
+```
+profile:p_09b2806c:ttrpg_environment = [{"id":"e1","category":"Dungeon","sounds":[{"id":"e1s1",
+"name":"Dripping","type":"Ambient","icon":"Icon.png","files":[{"name":"drip.mp3","displayName":"drip.mp3"}],
+"color":"#84cc16","duration":0,"randomPlay":false,"loop":true}]}]
+```
+
+One environment category, one looping ambient sound - and **unplayable**, because `drip.mp3` has no
+`storedName` and exists nowhere: not in `public/assets`, not in `src/data.json`, not among the 114 uploads.
+There is no `profile:p_09b2806c:ttrpg_characters` key at all, and **none of the 53 `storedName`s appear
+anywhere in the live store**.
+
+### Byte-grepping a LevelDB lies in both directions
+My first pass reported zero hits for `Telekinesis` and `sound_04uy664i`, which read as proof. It was a
+**false negative**: values are Snappy-compressed, so only uncompressed blocks are searchable as ASCII. Worse,
+dumping a byte window showed *"Forest"*, *"Tavern Pack"*, *"Music"*, *"Divine Smite"* sitting right after the
+Dungeon JSON - they are fragments of **other keys' compressed payloads bleeding into the same window**, not
+content of the key being read. A value counts only when the JSON starts immediately after its key and runs
+unbroken. Had I trusted the fragments I would have "recovered" a board that never existed.
+
+### "Recovery" was the wrong word, and it cost the user a minute
+I copied the 68 real files out to OneDrive as a safety net, verified every copy by SHA256, and reported it as
+**"Recovery DONE"**. The user opened tauri, web and the installed build looking for their sounds - because
+nothing had been re-added to the app, only backed up. Say **"copied out"** or **"preserved a copy"**; those
+words imply the app now holds the data, and it never did.
+
+### Then the files were deleted - copy-out first, originals second
+The user had copies of their own. They asked for the OneDrive copy-out to go, and then for the 114 originals
+(53 mp3 + 15 png + 46 `e2e_silence` fixtures, 18.03 MB) in `uploads/p_09b2806c/` - scope confirmed explicitly,
+since "the 11 files" is actually **68 files across 11 sounds**. Folder now holds 0 files; empty profile dirs
+left alone because `fs:allow-remove-dir` does not exist.
+
+💡 **The order was the mistake.** For a few minutes between the two deletions there was **no second copy
+anywhere**. "I have copies of those somewhere else" is a claim to check *before* removing the last copy, not
+after. I confirmed the count and the intent and still got the sequence wrong.
+
+### Two other stale facts corrected in place
+- **"No zip dependency is installed"** - false since `fd57d3a` added `fflate@0.8.3` + `@noble/hashes@2.4.0`.
+  Verified neither is imported anywhere in `src/` or `e2e/`.
+- The **uploads snapshot guard is now vacuous.** With the folder empty it passes trivially, so it proves
+  nothing until there is real data in it again. Re-verify with a real file before trusting it.
+
+### Gates
+Backup VERIFY OK 224/224 (four times) - eslint 0 errors / 3 baseline warnings - `vite build` exit 0 -
+`check-coverage` exit 0 (39 suites, 331 tests, 11 shared specs) - `check-profile-keys` OK -
+`profileStorage.check` 26/26. **web / Windows / Android E2E were not run**: the only tracked file changed was
+`PROJECT_STATE.md`, and no emulator was booted. No hand-test - nothing user-facing shipped.
+## 2026-10-13 15:19-15:55 - opencode: the uploads guard was not vacuous, it was broken
+
+Picked up the two warnings the recovery session left: commit the docs, and re-verify the uploads snapshot guard
+with a real file. **No app code and no harness code was changed** - the fixture lives outside the repo, in
+`%APPDATA%\com.mrhorakhty.thespellcaster\uploads\p_guardprobe\`.
+
+### The guard was worse than "vacuous" - reading the code found a live defect
+The previous session's note said the guard had gone *vacuous* with an empty uploads folder: it snapshots nothing
+and so proves nothing. Reading `e2e-snapshot.mjs` showed the empty state was not merely uninformative, it was
+**broken**, and asymmetrically so:
+
+| mode | empty snapshot | result |
+|---|---|---|
+| `save-uploads` | copies an empty folder | **exit 0** - "saved 0 upload file(s)", phase proceeds |
+| `restore-uploads` | `countFiles(file) === 0` | **exit 4** - "snapshot is empty - live files left untouched" |
+
+So a Windows phase run in that state would have uploaded its fixtures, **failed its own restore**, printed
+*"Your audio files may not be back where the app expects them"*, and **left the suite's residue in the live
+folder** - while `$results` recorded only a `WARNING:` line, so the phase exit code stays as the suite left it.
+
+The refusal is the *correct* fail-safe (an empty snapshot is indistinguishable from one that failed, and
+restoring emptiness would delete real audio), so I did not "fix" it. It simply cannot clean up when empty is the
+true state - which is exactly why the fixture is the right remedy rather than a code change.
+**`save` accepting 0 and `restore` rejecting 0 is not a bug so much as an unstated precondition: the guard needs
+at least one real file to exist to be usable at all.**
+
+### The fixture
+`uploads/p_guardprobe/`, deliberately **not** a real profile id and **not** in the `spellcaster_profiles` index,
+so the app can never list, open or delete it:
+- `guard_probe_tone_440hz.wav` - 4844 B, 0.3 s, 8 kHz 16-bit mono. Generated, not copied, so it is not
+  mistakable for a harness `e2e_silence` fixture. Verified by parsing the header back and counting upward zero
+  crossings: **131 over 0.3 s = 437 Hz**, i.e. one per cycle as a 440 Hz tone should be. (My first check divided
+  by 2 and "proved" 218 Hz - the WAV was fine and the arithmetic was wrong.)
+- `README-GUARD-PROBE.txt` - what it is, why it exists, how to remove it.
+
+**Why it is inside a profile-scoped subdirectory, not flat in `uploads/`:** a flat file would be swept up by the
+one-time uploads migration and **moved** into the active profile. That migration is the exact mechanism that made
+this guard necessary in the first place, so a flat fixture would muddy the measurement instead of sharpening it.
+
+### Verified three ways, all with SHA256 on the fixture files
+1. **Direct round trip** - snapshot 2 files, deleted the WAV, renamed the README away, added
+   `junk_should_not_survive.wav`, restored: exit 0, **both files back byte-identical**, junk gone, renamed file
+   back under its original name, **no stray `__restore_backup`**.
+2. **The refusals still refuse** - an *empty* and a *missing* snapshot each **exit 4** with `live files left
+   untouched`, confirmed by re-hashing afterwards. This is the property that protects real audio.
+3. **A real Windows phase** - `saved 2 upload file(s)` before launch, the suite genuinely uploaded
+   (`WAV uploaded`, `WAV uploaded to group`), `restored 2 upload file(s)` after the kill, and the folder on disk
+   afterwards is **exactly** the 2 fixture files at identical SHA256, 0 flat files, no stray backup dir.
+   Suite **222 PASS / 0 FAIL / 1 WARN exit 1**.
+
+The restore's own log line is a *claim*; the SHA256 match after the run is the evidence. Same standard the
+localStorage restore was given (exit 5, re-read and compare) after it reported success without reaching disk.
+
+### The bigger find: their audio is not gone from everywhere
+While checking the snapshot directory I found
+`%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\` still holding **114 files / 18.03 MB** -
+including all **53** mp3 and **15** png the user had asked to be deleted. It survived because the deletion sweep
+covered OneDrive and `%APPDATA%` and nobody looked at the harness's snapshot dir.
+
+**Left in place, and reported rather than acted on** - it is the user's call, and they were shown a record that
+did not include it. But it is **not safe to leave undecided**: `e2e-full.ps1:240` prunes
+`uploads-backup-* -Keep 2`, so **two more `-Phase win` runs delete it as routine housekeeping.**
+
+**"Deleted everywhere" was my own line in `PROJECT_STATE.md`, and it was false.** A sweep has a list, and the
+list was in my head rather than derived from *what copies the data*. The sources-that-copy list is short and
+enumerable: OneDrive sync, the app's own AppData, the harness snapshot dir, `%TEMP%`. Write it down before
+claiming everything is gone.
+
+### Gates - all seven, because this session's subject *was* an E2E phase
+The two previous sessions skipped web/Windows/Android as "measuring nothing" on a markdown-only change. That
+reason does not apply here: re-verifying the guard means running the Windows phase, so it ran.
+
+| Gate | Result |
+|---|---|
+| `backup-project.ps1` | VERIFY OK 224/224 (start and end) |
+| `npx eslint .` | 0 errors / 3 baseline warnings, exit 0 |
+| `npx vite build` | exit 0 (812 ms) |
+| `node e2e/check-coverage.mjs` | exit 0 - 39 suites, 331 tests, 23/23 features |
+| `check-profile-keys` / `profileStorage.check` | OK / 26/26, exit 0 |
+| web E2E | **223 / 0 / 0, exit 0** (`e2e-run-20261013-152155.log`) |
+| Windows E2E | **222 / 0 / 1, exit 1** (`e2e-run-20261013-152610.log`) - G5 baseline |
+| Android E2E | **212 / 0 / 1, exit 1** (`e2e-android-20261013-153452.log`) - G5 baseline |
+
+Both nonzero exits are the expected G5 skip. No stray processes, nothing listening on 9223/9224/9225/5173.
+**No hand-test** - nothing user-facing shipped; the app cannot see the fixture.
+
+### Handover
+- Uncommitted docs committed; `PROJECT_STATE.md` claim released.
+- **Next task is still `PROFILE_SYNC_SPEC.md` steps 3-6** (export/import). Untouched.
+- **Ask the user about the 114-file snapshot before running `-Phase win` twice.**

@@ -1,9 +1,22 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-12 17:28 — working on: `PROFILE_SYNC_SPEC.md` steps 3–6 (provenance classifier, bundle format, atomic import, export + destination pickers). All seven gates were green at handover; the E2E harness fix (the bug that was wiping the user's board) is verified at the disk level.
+🔓 UNCLAIMED — last holder: opencode (2026-10-13 15:55). Session: **closed the two standing warnings** — the two
+docs are **committed**, and the uploads snapshot guard is **re-verified against a live fixture** in
+`uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken**: `save-uploads`
+accepts an empty folder (exit 0) while `restore-uploads` rejects one (exit 4), so a Windows phase in the emptied
+state would have left its residue behind and failed its own restore. Proven three ways, SHA256-verified, including
+a **real Windows phase (222/0/1 exit 1)**. **All seven gates run and green**; no app or harness code was touched.
+⚠️ **Reported, not acted on — the user's decision:** a **114-file / 18.03 MB** copy of their audio (53 mp3 + 15
+png) **survives in `%LOCALAPPDATA%\opencode\e2e-snapshots\`**, which also makes this file's old "deleted everywhere"
+claim false. **Two more `-Phase win` runs will prune it automatically** — ask them first.
+**Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
+**unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
+nowhere). All of their orphaned upload files were deleted at their own instruction. Three false/stale claims in
+this file were corrected. **No app code was touched.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
 All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
 (spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
+**Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6.**
 
 **Profiles step 1 of 8 — SHIPPED as `577505d`.**
 User authorised implementation 2026-10-11 21:12. Per `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter + profile
@@ -173,11 +186,36 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-12, later session** (the E2E verification session: closed the Windows/Android gap, found
-that the harness had been silently destroying the user's board since 2026-10-11, fixed and disk-verified the
-restore, and made the profile-key assertions hermetic. All seven gates green; `git log` for the hash.) **Prior
-entry:** `bd3080d` — integrity check after the cut-off session, `public/` tracked, the `gen` exclusion row
-corrected, Settings copy trimmed, `.slider` stylesheet fixed. **Next up: `PROFILE_SYNC_SPEC.md` steps 3–6.**
+Last updated: **2026-10-13, guard session** (opencode, 15:19 → 15:48). Closed the two standing warnings from the
+recovery session: the uploads snapshot guard was re-verified against a **live fixture** (and turned out to be
+*broken*, not merely vacuous — see Open items), and the uncommitted docs are now committed. **No app code and no
+harness code was touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the repo.
+**All seven gates run and green**, including a real Windows phase, because that phase *is* the proof.
+⚠️ **Found and reported, not acted on: a 114-file / 18.03 MB copy of the user's deleted audio survives in
+`%LOCALAPPDATA%\opencode\e2e-snapshots\`.** Their call.
+**Prior entry: 2026-10-13** (session: took the claim off a cut-off one; established that the user's lost board
+is **unrecoverable** — the live WebView2 LevelDB holds only one dangling `Dungeon`/`Dripping` entry and **none**
+of their storedNames — and **corrected two false claims in this file** (that the board "survived under a different
+profile id", and that no zip dependency was installed). A copy-out of their upload files was made and then
+**deleted at their instruction**, followed by **all 114 originals** (`uploads/p_09b2806c/` → 0 files). No app code
+touched.
+⚠️ **CORRECTED 2026-10-13, guard session: the 11 sounds' files are NOT gone from *everywhere*.** The sentence this
+line replaced claimed *"deleted everywhere… no in-app copy and no OneDrive copy remain"*. That was **false, and it
+was false in the direction that matters** — a **third** copy survived in a place nobody looked, because the
+deletion sweep covered OneDrive and `%APPDATA%` but not the E2E harness's snapshot directory:
+`%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\` still holds **114 files / 18.03 MB**,
+including all **53** of the user's mp3 and **15** png. **Left in place, deliberately — it is the user's call, not
+mine** (`AGENTS.md`: do not delete what the user did not ask you to delete). ⚠️ It will be **pruned automatically**
+the next time `-Phase win` runs twice more (`Remove-OldSnapshots -Keep 2`, `e2e-full.ps1:240`) — which is an
+accidental deletion of their data, so **decide before running two more Windows phases.**
+💡 **Lesson: "I deleted it everywhere" is a claim about a *sweep*, and a sweep has a list.** Two named locations
+were checked and the third was not in anyone's notes — including this file's. Enumerate the *sources that copy*
+(a harness snapshot, a OneDrive sync folder, a temp dir), not the locations you remember deleting from.
+**Prior entry: 2026-10-12, later session** — the E2E verification session that closed the Windows/Android gap,
+fixed the harness that was destroying the user's board, and made the key assertions hermetic.
+⚠️ **Also unreconciled: `fd57d3a "Bugfixes"`** is the current HEAD and is not described anywhere in this file
+(it only adds `fflate` + `@noble/hashes` to `package.json`; neither is imported).
+**Next up: `PROFILE_SYNC_SPEC.md` steps 3–6.**
 
 ---
 
@@ -243,6 +281,9 @@ are gated behind `isMobile` so desktop/web stay untouched.
   so **nothing audio was ever committed and later removed** (that would show ~166); **zero** paths matching the
   runtime-upload pattern `sound_<rand>_<name>` / `icon_<rand>_<name>`; and the 20 largest blobs in all history are
   `public/assets`, `src-tauri/icons` and source files. `.git` 53.9 MB is fully accounted for.
+  ⚠️ **Those 114 files no longer exist** — the user deleted `uploads/p_09b2806c/` on 2026-10-13, the last on-disk
+  copy of the 53 real audio files. The figures above are a **2026-10-12 measurement**, kept because they are what
+  the git audit rested on; see Open items.
   ⚠️ **Two leftovers found and left alone** (both tiny, both pre-profiles, neither user data): `.tmp_uploads/`
   `test_sound.wav` (0 KB) and `test_icon.png` (0.1 KB), added 2026-08-17 in `ee4af98` *"Fixed uploads not
   registering in tauri app"*. 💡 **Lesson: `git ls-files` only proves what is in the tree *now*.** The question
@@ -559,6 +600,35 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 
   The three exit-1s and the two WARNs are the pre-existing **G5** skip, not regressions. Suite F added **+13** tests
   on each platform.
+
+- ✅ **Gates 2026-10-13 (guard session) — ALL SEVEN RUN, all green.** Unlike the previous two sessions, the E2E
+  gates were **not** skipped as "measuring nothing": this session's whole purpose was to re-exercise the Windows
+  phase, which **is** the thing under test.
+  - `backup-project.ps1` → **VERIFY OK, 224/224** (session start and again at the end)
+  - `npx eslint .` → **0 errors / 3** pre-existing warnings (`convertFileSrc`, `_`, `ev`)
+  - `npx vite build` → **exit 0** (812 ms; the `INEFFECTIVE_DYNAMIC_IMPORT` notice is pre-existing)
+  - `node e2e/check-coverage.mjs` → **exit 0** — 39 suites, 331 tests, 11 shared specs, 23/23 shipped features
+  - `node e2e/check-profile-keys.mjs` → **OK**, exit 0 · `node e2e/profileStorage.check.mjs` → **26/26**, exit 0
+  - **web 223 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261013-152155.log`)
+  - **Windows 222 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-run-20261013-152610.log`) — exact baseline; the WARN is
+    G5, and **uploads were snapshotted (2 files) and restored (2 files)** with SHA256 verified on disk after
+  - **Android 212 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-android-20261013-153452.log`, `Pixel_7` booted by the
+    script) — exact baseline
+  - ⚠️ **Windows/Android exit 1 is the expected G5 skip**, not a regression. **No stray processes and no listening
+    ports** (9223/9224/9225/5173) were left behind.
+  - **No user hand-test** — nothing user-facing shipped. The fixture is an inert file outside the repo; the app
+    cannot see it. Per the DoD the hand-test bar applies to *user-facing* features, so it does not apply here.
+- ✅ **Gates re-run 2026-10-13 (recovery session) — named individually, because not all seven ran.** The only
+  tracked file changed was **this markdown file**; no `src/` code was touched, so the three E2E gates would be
+  measuring nothing.
+  - `backup-project.ps1` → **VERIFY OK, 224/224**, twice (start and end of session)
+  - `npx eslint .` → **0 errors / 3** pre-existing warnings (`convertFileSrc`, `_`, `ev`) — the accepted baseline
+  - `npx vite build` → **exit 0** (1.44 s; the `INEFFECTIVE_DYNAMIC_IMPORT` notice is pre-existing)
+  - `node e2e/check-coverage.mjs` → **exit 0** — 39 suites, 331 tests, 11 shared specs, 23/23 shipped features
+  - `node e2e/check-profile-keys.mjs` → **OK**, exit 0 · `node e2e/profileStorage.check.mjs` → **26/26**, exit 0
+  - ⚠️ **web / Windows / Android E2E were NOT run** — no emulator or device booted, and a markdown-only change
+    cannot affect them. The 2026-10-12 figures above stand unchanged.
+  - **No user hand-test** — nothing user-facing shipped, so the DoD hand-test bar does not apply.
 - Previous baseline (2026-10-11, before profiles): web 210/0/0, Windows 209/0/1, Android 199/0/1.
 - The rest of this section is **per-phase history from before profiles** (2026-10-11 and earlier), kept for reference.
 
@@ -746,12 +816,19 @@ and the "backup" was 34,966 files / 31 GB. `/XD` needs **bare** directory names.
 its exclusion list every run and aborts above 150 MB (deleting the folder, exit 1) so this cannot
 recur unnoticed. **Never hand-copy with a bare `robocopy` call.**
 💡 Backups accumulate — the script does not prune. Delete old ones by hand.
-**There is currently exactly ONE backup folder: `ttrpg-soundboard-backup-20261012-172438`** (223 files / 39.8 MB),
-taken after `fa01361` was committed and pushed, and verified to hold all 224 files. It was the last of **6** created
-during the 2026-10-12 verification session; the other 5 were deleted once the push landed, per the standing rule.
-✅ **`e2e/e2e-full.ps1` survived in it** (21.2 KB) — Bitdefender did not fire this time. The **50 tracked
-`src-tauri/gen/android/` files are absent by design** (the `gen` exclusion above), which is the one known gap
-between a backup and a checkout.
+**There are currently TWO project backups in `Masaüstü`, both from this session, both `VERIFY OK` 224/224 /
+39.8 MB: `ttrpg-soundboard-backup-20261013-145839`** (taken first, per the "back up before any change" rule) **and
+`ttrpg-soundboard-backup-20261013-150318`** (taken at the end, so it matches the final state). **Keep the 150318
+one** — it is the fast rollback point — and the 145839 one is safe to delete once this work is committed and
+pushed. Not pruned yet, deliberately: the standing rule prunes *after* a verified push, and this session has
+**not committed anything**.
+⚠️ **Do not confuse this with `ttrpg-soundboard-recovered-20261013`, which existed earlier today and is now
+DELETED.** It was a one-off copy-out of the user's own upload files, not a backup of the project; it is gone at
+their instruction. Nothing in git or in either backup references it. The 2026-10-12 backup folder was already gone
+before this session began.
+✅ **`e2e/e2e-full.ps1` survived in it** — Bitdefender did not fire. The **50 tracked `src-tauri/gen/android/`
+files are absent by design** (the `gen` exclusion above), which is the one known gap between a backup and a
+checkout.
 Earlier: **ZERO folders** existed 2026-10-12 12:22–17:24, cleared after verifying that every one of the
 223 files they held is either in git, junk (`dev-server.log`, `Run App.bat.lnk`, `e2e/_e2e_pixel.png`,
 `.idea/`) or regenerable from a tracked source (`src-tauri/icons/android|ios` derive from the tracked
@@ -1001,7 +1078,13 @@ cancels, edit mode does not prime, a tap fires the primed set and consumes it, t
 
 | Spec | Status |
 |---|---|
-| `PROFILE_SYNC_SPEC.md` | ✅ **AUTHORISED and IN PROGRESS — step 1 of 8 SHIPPED as `577505d`** (2026-10-12). The three design decisions are settled (§0.3: timestamps **cut**, switch = **full remount**, `DATA_VERSION` **migrates**), and step 1 delivered profile-scoped storage, the profile index, the first-run migration, the Tauri uploads migration, and a proven full-remount switch — all seven gates green and **hand-tested by the user**. Both platform unknowns remain **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open`), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC). ⚠️ **REMAINING: spec steps 3–6** — provenance classifier, bundle format, import (atomic, both modes), export + destination pickers. **None of that exists yet**; the user went looking for the import/export UI and correctly found it absent. No zip dependency is installed. The `coverage.manifest.json` feature entry correctly stays `status: planned` until the round-trip tests can be written. |
+| `PROFILE_SYNC_SPEC.md` | ✅ **AUTHORISED and IN PROGRESS — step 1 of 8 SHIPPED as `577505d`** (2026-10-12). The three design decisions are settled (§0.3: timestamps **cut**, switch = **full remount**, `DATA_VERSION` **migrates**), and step 1 delivered profile-scoped storage, the profile index, the first-run migration, the Tauri uploads migration, and a proven full-remount switch — all seven gates green and **hand-tested by the user**. Both platform unknowns remain **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open`), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC). ⚠️ **REMAINING: spec steps 3–6** — provenance classifier, bundle format, import (atomic, both modes), export + destination pickers. **None of that exists yet**; the user went looking for the import/export UI and correctly found it absent.
+⚠️ **`fflate@0.8.3` (zip) and `@noble/hashes@2.4.0` ARE now installed — added by `fd57d3a` (2026-10-12 17:46)**, so
+this file's earlier *"no zip dependency is installed"* was true when written and is now false. Both are present in
+`package.json` *and* `node_modules`. **Neither is imported anywhere yet** — grep `src/` for `fflate` /
+`@noble/hashes` to confirm before assuming, and run `npx eslint .` since nothing consumes them.
+The `coverage.manifest.json` feature entry correctly stays `status: planned` until the round-trip tests can be
+written. |
 | `MOVE_COPY_SOUND_SPEC.md` | **Retired 2026-10-04** — shipped, user-tested, committed as `f7f316e`, spec deleted. Its 8 settled decisions, invariants and deferred list are preserved in `docs/session-history.md`; the design now lives in `src/App.jsx`. See Retired files. |
 
 ## ✅ Handover — profiles step 1 (opencode, COMMITTED as `577505d`, 2026-10-12 00:00)
@@ -1177,6 +1260,16 @@ Suite F **clears storage** and creates/deletes profiles, so it runs **before** `
 both of which re-seed for themselves. O must stay last of all.
 
 ## Open items
+- 🟠 **THE USER'S DECISION — 114 files / 18.03 MB of their audio survives in the E2E snapshot dir.** Found
+  2026-10-13 while re-verifying the uploads guard:
+  `%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\` holds the complete pre-deletion set —
+  **53** mp3 + **15** png of the user's own content, plus **46** `e2e_silence` harness fixtures. **Deliberately not
+  touched**: they asked for the copies to go twice, but they also said they hold their own copies, and this one
+  was never in the record they were shown. Three options, all theirs: **(a)** delete it — then this file's
+  "deleted everywhere" claim becomes true; **(b)** keep it — then say so in this file, because the claim above is
+  wrong; **(c)** move it somewhere deliberate and name the location. ⚠️ **It is not safe to leave undecided**:
+  `e2e-full.ps1:240` prunes to `uploads-backup-* -Keep 2`, so **two more `-Phase win` runs delete it as routine
+  housekeeping.** Ask before running them.
 - 🔴 **URGENT (2026-10-12 16:56) — the user's real board is missing from `localStorage`, and the Windows E2E
   phase is what displaces it. Do NOT run `-Phase win` again until the harness stops writing to the real store.**
   - **What the user sees**: the app opens on a profile called "My Board" containing one character, "Human Paladin",
@@ -1203,17 +1296,18 @@ both of which re-seed for themselves. O must stay last of all.
     (`sound_<rand>_<safeName>`), so the audio and its names can be re-linked mechanically. **What is lost is the
     board structure** — which character/category each sound sat in, and its type/colour/loop/fade settings. That
     exists nowhere in any snapshot. A rebuild is a *guess* at grouping, not a restore.
-  - **Why the harness did this** (mechanism, partially established): the Windows phase writes into the user's real
-    WebView2 `localStorage`, and the end-of-run restore is **not faithful** — it writes the saved keys back but the
-    suite-created profiles outlive it and one ends up `activeProfileId`. Evidence: `p_09b2806c` is present in the
-    22:15:30 pre-run snapshot and absent from the 22:26:22 one, with the real content surviving *under a different
-    profile id*. The `uploads/` snapshot added 2026-10-12 23:09 works (verified 114 → 114 again today) — **`localStorage`
-    was never given the equivalent protection.**
+  - **Why the harness did this** (mechanism, now **corrected** 2026-10-13 — see the next bullet): the Windows
+    phase writes into the user's real WebView2 `localStorage`. ⚠️ **This bullet previously claimed the real
+    content "survived under a different profile id". That is FALSE, and I have now checked it.** The `uploads/`
+    snapshot added 2026-10-12 23:09 works — **`localStorage` was never given the equivalent protection**, and
+    the overwrite is why the board is gone.
 - ✅ **RESOLVED 2026-10-12 17:03 — the harness no longer writes the user's board away**, and both items below
   were then answered by the user. Fixed and independently verified; see Verification gates for the three changes
   and the disk-level proof. **`-Phase win` is safe to run again.** What is *not* resolved is the board itself.
-- ✅ **No data recovery wanted (user, 2026-10-12)** — they have the source files and will re-upload. So the 53 real
-  files / 11 sounds and 15 icons in `uploads/p_09b2806c/` were **left untouched**; nothing was deleted or rewritten.
+- ✅ **No *structural* recovery is possible** — the user's answer holds ("I already have the files"), and nothing in
+  `uploads/p_09b2806c/` was undisturbed by it at the time, but see below — the files were **deleted on
+  2026-10-13**. The copy-out that briefly existed has also been deleted; the bullet below records what it
+  established, not where anything is.
 - ✅ **The user's explicit concern — "none of the test sounds were uploaded to git" — CHECKED AND CLEAN.**
   `git ls-files` matched exactly one test-sound name, `e2e/e2e_silence.wav`, and that is the harness's **own
   fixture source** (referenced by both entrypoints, committed in `79acc3e`) — a single 313 KB file. The **46**
@@ -1222,13 +1316,101 @@ both of which re-seed for themselves. O must stay last of all.
   `public/assets` (the 71 shipped sounds, deliberately tracked in `ba57282`), `src-tauri/icons`, and the
   `gen/android` launcher icon. 💡 The new snapshot directory is deliberately **outside the repo** for the same
   reason — an 18 MB uploads copy per run must never be committable.
-- 🔴 **Still true, and worth re-reading before the next Windows run: the user's board is gone from `localStorage`
-  and only test-fixture content remains.** The app opens on `p_0d866f71` "My Board" holding one character
-  "Human Paladin" whose only sound is "Playback Probe" — `playback.mjs`'s fixture. Their real profile `p_09b2806c`
-  is not in the index. The **files** are safe in `uploads/p_09b2806c/`; the **board structure** is not recoverable
-  from any of the 36 `ls-backup-*.json` files (all hold empty state, shipped defaults, or fixtures). Accepted by
-  the user — but a restore from a snapshot will **not** bring the board back, and a future reader should not
-  assume otherwise.
+- ✅ **Copy-out was made and then DELETED at the user's instruction (2026-10-13) — as were the originals.** They
+  authorised a copy on the condition it not be destructive, and at the time
+  `%APPDATA%\com.mrhorakhty.thespellcaster\uploads` was left alone; **a few minutes later they asked for the
+  originals to go too** and the scope was confirmed explicitly before anything was removed. What the copy
+  established, and what is still worth knowing:
+  - It held **53** mp3 + **15** png = **3.99 MB**, every copy **SHA256-verified** against source (0 mismatches),
+    with the source's newest write still **2026-10-11 22:17:04**. The user's own source copies already cover
+    these, so the folder was removed rather than kept as a redundant third copy.
+  - **11 sounds**, derived from the `safeName` half of `sound_<rand>_<safeName>`: Daze (8), Force Barrage (7),
+    Warding Sign (6), and 4 variants each of Fear, Phantom Pain, Phase Bolt, Shield Magic, Telekinesis,
+    Telekinetic Projectile, Tentacular Limbs, Ventriloquism. All **15** icons matched a sound name.
+  - ⚠️ **The escaping is one-way** — `toStoredFileName` (App.jsx:2255) maps every char outside `[a-zA-Z0-9._-]`
+    to `_`, so `_` → space is a *reconstruction*. `Warding__Sign` → "Warding  Sign" (double space) is the visible
+    mark that the original filename held a non-space character.
+  - 💡 **Wording lesson, and it cost the user a confusing minute.** This was a *copy-out of their files*, not a
+    restore into the app, and reporting it as "**Recovery DONE**" sent them opening three builds hunting for
+    sounds that had never been re-added. **Say "copied out" / "preserved a copy". Never "recovered" or
+    "restored"** — those words imply the app now contains the data.
+  - 💡 **Deliberately NOT done:** writing a rebuilt board back into the live `localStorage`. **Moot now** — with
+    the audio deleted there is nothing left for a rebuilt board to reference. Had it been wanted, it would have
+    needed a full LevelDB snapshot first and the user's decision on a guessed grouping.
+- 🔴 **CONFIRMED GONE, exhaustively (2026-10-13) — the board *structure* is unrecoverable.** I re-checked this
+  rather than trusting the note, and **all 37** `ls-backup-*.json` files (not 36 — one more has appeared since)
+  were grepped for `p_09b2806c`, for a real `storedName`, and for a real sound name. **Exactly one** file matches,
+  `ls-backup-20261011-221530.json`, and it is **fixture content**: `char_2` "Renamed Paladin", `s_6`,
+  `mine_1`, `mine_2`, `zz_custom` from `reset.mjs`, every `files[]` entry pointing at `Longbow_4.mp3` with **no
+  `storedName` field at all**. There is **no different profile id** holding the real board — the earlier claim of
+  one was wrong, and it now means **the board was overwritten *before* 2026-10-11 22:15**, earlier than this file
+  recorded. The app still opens on `p_0d866f71` "My Board" = `playback.mjs`'s "Human Paladin"/"Playback Probe"
+  fixture, and `p_f121afb8` = shipped defaults. ⚠️ **A restore from any snapshot will not bring the board back**,
+  and a future reader must not assume otherwise.
+  - ⚠️ **CORRECTED 2026-10-13, later — the snapshots were not the whole store, and I checked too late.** The
+    **live** WebView2 `localStorage` is a LevelDB at
+    `%LOCALAPPDATA%\com.mrhorakhty.thespellcaster\EBWebView\Default\Local Storage\leveldb\`, and **no snapshot
+    covers it**. Read **read-only** as bytes: `p_09b2806c` survives there in `000010.ldb`, and its one surviving
+    value is
+    `profile:p_09b2806c:ttrpg_environment` = `[{"id":"e1","category":"Dungeon","sounds":[{"id":"e1s1",
+    "name":"Dripping","type":"Ambient","icon":"Icon.png","files":[{"name":"drip.mp3","displayName":"drip.mp3"}],
+    "color":"#84cc16","duration":0,"randomPlay":false,"loop":true}]}]`
+    — a single environment category with one looping ambient sound. ⚠️ **And it is unplayable**: it references
+    `drip.mp3` with **no `storedName`**, and no `drip*` file exists in `public/assets`, in `src/data.json`, or
+    among the 114 uploads. So the last real board entry left is a dangling reference.
+    **There is no `profile:p_09b2806c:ttrpg_characters` key in the live store at all**, and **none of the 53
+    recovered `storedName`s appear anywhere in it** — the characters that held them are gone for good.
+  - ⚠️ **Why raw byte-grepping this store gives FALSE NEGATIVES.** Values are **Snappy-compressed**; only
+    uncompressed blocks are searchable as ASCII. A search for `Telekinesis` returned zero — but nearby dumps show
+    the strings *"Forest"*, *"Tavern Pack"*, *"Music"*, *"Divine Smite"* interleaved in the same byte window.
+    Those are fragments of **other keys' compressed payloads bleeding into the window**, not content of the key
+    being read. 💡 **Do not conclude a key is absent from one byte window, and do not treat a readable fragment as
+    belonging to the key above it.** Take a value only when the JSON starts immediately after its key and runs
+    unbroken — which is how the Dungeon entry was confirmed.
+  - 🗑️ **The 11 sounds' files were DELETED at the user's instruction on 2026-10-13 — they are GONE, not preserved.**
+  `uploads/p_09b2806c/` went from **114 files / 18.03 MB to 0**, i.e. **53 mp3 (2.37 MB) + 15 png (1.62 MB) of
+  the user's own content, plus 46 `e2e_silence` harness fixtures (14.04 MB)**. The empty profile directory was left
+  in place (the app cannot remove dirs — `fs:allow-remove-dir` does not exist). The user stated they hold their own
+  copies elsewhere and asked for this twice, the second time with the scope confirmed explicitly.
+  ⚠️ **So the corrected facts below are now historical, not current.** They record what was *true when measured*;
+  nothing on disk backs them any more. 💡 **The sequence is the lesson:** the OneDrive copy-out was deleted first,
+  and only afterwards the in-app original — so for a period there was no second copy anywhere. When the user says
+  "I have copies of those somewhere else", **that is a claim to check before deleting the last copy**, not after.
+- ✅ **The 53 audio + 15 icons were intact on disk until 2026-10-13, when they were deleted (see above).** They
+    were **orphaned** throughout: no surviving localStorage content referenced them, so the app never showed them.
+    What the copy-out established, and what is still worth knowing:
+- ✅ **The uploads snapshot guard is RE-VERIFIED 2026-10-13 — it had gone stale *and* broken, not just vacuous.**
+  A live fixture now lives in `uploads/p_guardprobe/` and a **real Windows phase was run against it**.
+  - 🔴 **The emptied folder left the harness in a broken state, which was not obvious from "vacuous".**
+    `save-uploads` snapshots an empty folder and **exits 0** (`e2e-snapshot.mjs:77`), so `e2e-full.ps1` proceeded —
+    but `restore-uploads` **exits 4** on an empty snapshot (`e2e-snapshot.mjs:92`). So a Windows phase run in that
+    state would upload its fixtures, **fail its own restore**, print *"Your audio files may not be back where the
+    app expects them"*, and **leave the suite's residue in the live folder** with the phase exit code untouched.
+    The refusal is the *correct* fail-safe — an empty snapshot is indistinguishable from a snapshot that failed —
+    but it cannot clean up when "empty" is the true state.
+  - ✅ **Fixture placed: `uploads/p_guardprobe/`** — `guard_probe_tone_440hz.wav` (4844 B, 0.3 s, 8 kHz 16-bit mono,
+    437 Hz measured) and `README-GUARD-PROBE.txt` (what it is, why, how to remove it). Inert by construction:
+    `p_guardprobe` is **not** in the `spellcaster_profiles` index, so the app never lists or deletes it, and it is
+    **inside a profile-scoped subdirectory on purpose** — a file *flat* in `uploads/` would be swept up by the
+    one-time uploads migration and **moved** into the active profile, which is the very mechanism that made this
+    guard necessary, so a flat fixture would muddy the measurement. The profile id is deliberately **not** a real
+    one (`p_09b2806c` is the owner's). Safe to delete; nothing references it.
+  - ✅ **Proven three ways, 2026-10-13, all with SHA256 on the fixture files:**
+    1. **Direct round trip** — snapshot 2 files → deleted the WAV, renamed the README away, added
+       `junk_should_not_survive.wav` → `restore-uploads` exit 0 → **both files back byte-identical** (`4901390C…`,
+       `55E27DE5…`), junk gone, renamed file back under its original name, **no stray `__restore_backup`**.
+    2. **The refusals still refuse** — an *empty* snapshot and a *missing* snapshot each **exit 4** with
+       `live files left untouched`, verified afterwards by re-hashing. 💡 This is the property that protects real
+       audio, so it is worth re-checking whenever the guard is touched.
+    3. **A real Windows phase** — `e2e-full.ps1 -Phase win -Suite full`: `saved 2 upload file(s)` before launch,
+       the suite genuinely uploaded (`WAV uploaded`, `WAV uploaded to group`), `restored 2 upload file(s)` after
+       the kill, and the folder on disk afterwards is **exactly** the 2 fixture files with **identical SHA256**,
+       0 flat files, no stray backup dir. Suite **222 PASS / 0 FAIL / 1 WARN exit 1** (G5 baseline).
+  - 💡 **The check to hold this guard to: re-hash the live folder after the run, not the restore's own log line.**
+    "restored 2 upload file(s)" is a claim; the SHA256 match is the evidence. Same lesson as the localStorage
+    restore, which had to be given a verifying re-read (exit 5) after reporting success without reaching disk.
+  - ⚠️ **`uploads/` now legitimately holds 2 files, all fixture.** Do not read a file count there as "the user's
+    audio is back" — their content was deleted on 2026-10-13 and is not coming back (see above).
 - **The claim/release protocol is unproven with a second agent.** Installed 2026-10-04; only opencode has
   used it, and only within the session that wrote it. Watch for the failure modes on the next non-opencode
   session: an agent that edits without claiming, an agent that never releases, or an agent that cannot tell
@@ -1246,9 +1428,14 @@ both of which re-seed for themselves. O must stay last of all.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- 🔜 **`PROFILE_SYNC_SPEC.md` steps 3–6 is the next task, and the user is starting it fresh (2026-10-12).**
-  Step 1 of 8 shipped as `577505d`, all seven gates green, hand-tested. **Nothing of steps 3–7 exists yet** — no
-  provenance classifier, no bundle format, no import, no export, no UI, and **no zip dependency is installed**.
+- 🔜 **`PROFILE_SYNC_SPEC.md` steps 3–6 is the next task.** Step 1 of 8 shipped as `577505d`, all seven gates
+  green, hand-tested. **No app code for steps 3–7 exists** — no provenance classifier, no bundle format, no
+  import, no export, no UI. ⚠️ **The cut-off 2026-10-12 17:28 session got as far as `fd57d3a` (17:46): it added
+  `fflate@0.8.3` and `@noble/hashes@2.4.0` to `package.json` and committed them, and nothing else.** That is the
+  whole of its contribution — **no `src/` file references either package** — so the next session starts from a
+  clean tree with the dependencies already waiting. 💡 Those two are the obvious inputs to steps 3–4 (zip for the
+  bundle format, hashes for content addressing / integrity), so the choice was probably deliberate; confirm against
+  the spec before building on it.
   Starting points, so the next session does not re-derive them:
   - **Storage is already profile-scoped** (`src/profileStorage.js`, `profile:<id>:<key>`, uploads at
     `uploads/<profileId>/`), so export/import is a read-and-write over an existing adapter rather than a refactor.
