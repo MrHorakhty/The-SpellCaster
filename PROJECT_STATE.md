@@ -904,6 +904,12 @@ converges on one.
 🗑️ Gone: `…-20261013-172917`, `…-20261014-175940`, `…-200929`, `…-20261014-202032`, `…-232715`.
 ⚠️ **`e2e/e2e-full.ps1` was Bitdefender-quarantined out of `…-20261013-172917`** (226 files, not 227) — the same
 containment failure recorded above, and the reason the keeper was taken fresh rather than kept.
+ℹ️ **The keeper is `…-20261015-000122`** (VERIFY OK 228/228, `e2e/e2e-full.ps1` present), taken last at the very
+end of the session. It replaced `…-235700`, which was pruned on 2026-10-15 00:01 because it predated the final
+two commits — keeping it would have meant keeping a rollback point behind the tip. ⚠️ **That backup is one
+docs-only commit behind HEAD, which is the accepted trade:** taking a backup *after* the final edit would
+re-create the very folder churn the prune exists to stop, and "one markdown edit behind" is a perfectly good
+rollback point.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
