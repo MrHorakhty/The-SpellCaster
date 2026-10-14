@@ -613,10 +613,14 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   `uploads/p_6fd7a1c1/` directory, which the app cannot remove (`fs:allow-remove-dir` does not exist).
   💡 **A spec must never throw.** Suite I's `run()` is wrapped, every page result is dereferenced defensively,
   and a failed prerequisite FAILs the dependent ids by name (`I0` logs only when the catch fires).
-- 🔴 **The restore-to-disk doubt is NOT closed.** Across today's runs the in-page restore verified every time,
-  yet the **next** run's pre-run snapshot held the previous run's fixture profile. The reload now proves itself,
-  so the remaining suspect is WebView2's asynchronous flush across the `taskkill`. The check that would settle
-  it — restart the app after a run and re-snapshot from disk — **has still never been automated.** Open risk.
+- 🔴 **The restore-to-disk doubt is CLOSED (2026-10-14 23:20).** It was **not** a flush delay and **not** the app
+  re-persisting its boot state. Proven by a controlled A/B: `taskkill` on the tree loses the write, `WM_CLOSE`
+  to the window keeps it. WebView2 commits `localStorage` on window close and commits nothing on a kill, so the
+  runner's "graceful" kill was the whole bug. `Close-AppGracefully` now closes the window and waits for the CDP
+  page target to disappear; `e2e-snapshot.mjs compare` then reads the store back from a fresh start and fails
+  hard (exit 7) on any difference. **Verified:** `Restore verified FROM DISK - the store matches the pre-run
+  snapshot exactly`, with the suite at 239 PASS / 0 FAIL / 1 WARN in the same run, and `uploads/` pruned to just
+  `p_guardprobe/` (2 files).
 - ⚠️ **PROJECT_STATE.md was briefly corrupted by a PowerShell line-range rewrite** that read the file as ANSI and
   re-encoded it, and the `git checkout` used to undo that also discarded the **uncommitted 2026-10-13** edits to
   this file. Both were recovered: the corrupt write was reverted and this file was restored from the
@@ -1406,69 +1410,77 @@ exceeded`. `check-profile-keys.mjs` is read-only and replaces them. **Do not res
 Suite F **clears storage** and creates/deletes profiles, so it runs **before** `refcount` (G) and `reset` (O) —
 both of which re-seed for themselves. O must stay last of all.
 
-## 🔜 AGREED PLAN 2026-10-14 — after every E2E run the store is left as it was, and that is PROVEN from disk
+## ✅ AGREED PLAN 2026-10-14 — DONE. The root cause was not a flush delay; it was the kill.
 
 **The user's proposal.** After every E2E run the boards should return to their shipped state — not merely via the
 app's *Restore Defaults* button, which is a **merge** and therefore leaves sounds the user added. The user also
-suggested this would fix the restore-to-disk gap flagged below.
+suggested this would fix the restore-to-disk gap.
 
-**What was agreed, and the honest correction.** Writing a clean state is still a `localStorage` write inside the
-process whose flush is in question, so it does **not** by itself fix that gap — and the app's three auto-save
-effects fire on mount, so whatever is written gets replaced by the board the app booted with unless the reload
-comes after. The gap is only closed by proving the result **from disk**. But the proposal is right that a clean
-post-run state should happen, and it is worth **more** than the gap: the residue left in the store is what forced
-four narrow assertion workarounds on 2026-10-14 (`<key>_old` skips in `__bareKeys` and M21,
-`spellcaster_import_backups` added to `KNOWN_KEYS`, and the two hand-copied key lists P31a/Q9 that had already
-drifted). A clean state removes the **class**, not each symptom, and those four can then be reverted with the
-guards at full strictness.
+**What actually turned out to be wrong, and what was right.** Writing a clean state is still a `localStorage`
+write inside the process being shut down, so on its own it would **not** have fixed the gap — but the gap turned
+out to have a single, provable cause, and closing it made the clean state stick for free.
 
-⚠️ **The safety rule, which is the whole design.** "Shipped state" must NEVER mean "overwrite whatever was
-there" — that is how a real board would be lost, and this harness has already cost the user data twice. It means
-**leave the store byte-identical to how it was before the run, with nothing added.** That *is* shipped state when
-the user has nothing in it, and it is their board when they have one. Same rule as the backup script: never
-destroy, only restore-and-prune. **Anything this plan deletes must be provably created by the run.**
+### 🔴 THE ROOT CAUSE, PROVEN BY A CONTROLLED A/B
+Write one marker key in the page, close the app two different ways, then start it fresh and read the store back:
 
-**The user's two decisions, 2026-10-14:** delete the empty `uploads/<id>/` directories the app cannot remove
-itself, and accept ~40s per Windows run for the from-disk proof (no opt-in flag).
+| how the app was closed | did the write survive? |
+|---|---|
+| `taskkill` on the process tree | **NO** — 27 keys, marker gone |
+| `WM_CLOSE` to the app window, then wait | **YES** — 28 keys, marker present |
 
-### Part 1 — residue sweep (and an honest note on how small it really is)
-**`localStorage` needs no sweep.** `e2e-snapshot.mjs restore` already does `localStorage.clear()` and then
-re-sets every key from the snapshot, so a *completed* restore leaves no key residue by construction. What actually
-persists is:
-- **empty `uploads/<id>/` directories** — `fs:allow-remove-dir` does not exist in plugin-fs 2.5.2, so the app
-  leaves every profile folder it has ever touched behind (`p_0d866f71`, `p_5383a814`, `p_6fd7a1c1`, …). Node can
-  remove them; the app cannot. **Approved by the user.**
-- **anything left by a CRASHED run**, where the suite never reached its own restore. The runner's `finally` block
-  is the backstop, but it is a backstop, not a guarantee.
-So Part 1 is: after `restore-uploads`, remove every directory under `uploads/` that is empty **and** was not in
-the uploads snapshot, and report the count. Small, but it is the visible litter the user has been looking at.
+**WebView2 commits `localStorage` when the window closes, and commits NOTHING when the process is killed.** So
+every "restored and verified" this harness ever printed was true *of the page* and silent *about the disk*,
+because the page's data died with the process. The runner's "graceful" `taskkill` without `/F` was not graceful
+at all for a GUI process — it terminated it. 💡 This is the whole answer to a question that had been open across
+three sessions and two data-loss incidents.
 
-### Part 2 — prove the restore from disk (the part that actually closes the gap)
-After the app is killed: restart `tauri dev`, wait for CDP, `e2e-snapshot.mjs save` into a scratch file, and
-compare it key-by-key against the pre-run snapshot. **Any missing / extra / changed key is a hard failure** with a
-new exit code, the scratch file kept, and the recovery command printed — never a "restored and verified" line.
-Cost ~40s per Windows run, approved. 💡 This is the check `PROJECT_STATE` has demanded since 2026-10-12
-("restart the app and re-read the store from disk") and which **has still never been automated**. It is also the
-only thing that would have *detected* the 2026-10-14 divergence instead of inferring it.
+### Part 1 — residue sweep ✅
+`restore-uploads` now removes every **empty** directory under `uploads/` and reports the count. Safe
+unconditionally: an empty directory holds no bytes and the app mkdirs on demand, so nothing can miss it. This is
+also why `uploads/` used to fill with shells — `fs:allow-remove-dir` does not exist, so the app creates
+`uploads/<profileId>/` on demand but can never remove one. **Verified: `uploads/` now holds only
+`p_guardprobe/` (2 files), which is what a fresh install looks like.**
 
-### Part 3 — revert today's four workarounds, then re-run all seven gates
-With a verified-clean store, drop the `<knownKey>_old` skip in `__bareKeys()` and in M21, and put
-`spellcaster_import_backups` back out of the *skip* logic (it legitimately stays in `KNOWN_KEYS` — it is a real
-app key — but the `<key>_old` exclusions are pure symptom-treatment). Re-run web + Windows + Android and confirm
-0 FAIL, which is what proves the guards are strict again rather than merely quiet.
+### Part 2 — prove the restore from disk ✅
+`e2e-snapshot.mjs` gained a **`compare <expected> <actual>`** mode: pure Node, no CDP (it has to work when the
+app is dead), key-by-key, **exit 7** on any difference. `e2e-full.ps1` now, after a Windows phase: restores the
+store, closes the app, restarts it, snapshots again, and compares against the pre-run snapshot. A mismatch is a
+**hard failure** with both file paths and the recovery command printed — never a green "restored and verified"
+line. **It fired correctly the first time it ran** and reported `missing (24) / extra (24) / changed (2)` —
+the whole fixture store, proving the restore had not survived at all.
 
-**Order matters: Part 2 before Part 3.** Reverting the exclusions while residue may still be present would just
-re-open today's four failures, and it would be impossible to tell a real regression from the old residue.
+### Part 3 — the fix that makes both work ✅ `Close-AppGracefully`
+The runner no longer kills the app at the end of a phase. It posts **`WM_CLOSE`** to the app's visible window(s)
+and waits for the **CDP page target to disappear** — that is the signal the WebView2 profile has been disposed
+and the store committed. Only then does it clear up the leftover processes, which can no longer lose anything.
+⚠️ **Waiting for the PROCESS to exit is the wrong signal**: after `WM_CLOSE` the Tauri process lingers for tens
+of seconds while the window and its profile are already gone. The first version waited for the process and
+"hung" for 30s on every run.
+**Verified end to end 2026-10-14 23:20:** `App closed cleanly - the store was committed.` →
+`Restore verified FROM DISK - the store matches the pre-run snapshot exactly.` with **web-suite 239 PASS /
+0 FAIL / 1 WARN** in the same run.
+
+⚠️ **Part 3 was not in the original plan** — it is the thing the other two were waiting on, and it is the
+actual fix for the gap that has been open since 2026-10-11.
+
+### The residue fallout, now that the store is clean — 🔜 Part 4, not yet done
+With a verified-clean store, the four narrow workarounds from earlier today can be **reverted** and the guards
+put back at full strictness: the `<knownKey>_old` skip in `__bareKeys()`, the same skip in M21, and
+`spellcaster_import_backups` in `KNOWN_KEYS`. ⚠️ **Reverting `spellcaster_import_backups` itself is NOT advised** —
+it is a genuine app key that simply arrived late, and listing it is correct. Only the `<key>_old` exclusions were
+symptom-treatment for residue that no longer exists. Re-run all three E2E gates afterwards and require 0 FAIL,
+which is what proves the guards are strict again rather than merely quiet.
 
 **Not in scope:** step 7 (Restore Defaults profile scoping, import progress UI) and promoting the node checks to
 gates.
+## Open items
+
 - 🔜 **Consider the node checks gates.** `profileBundle.check.mjs` (36), `profileStorage.check.mjs` (26) and
   `check-profile-keys.mjs` need no browser, yet none is in the seven-gate table — so a session can report "all
   gates green" without ever running them. Adding them is a one-line change to the DoD.
-- 🔴 **The restore-to-disk gap is still open** — see Verification gates. The fix is to restart the app after a
-  Windows phase and re-snapshot from disk, comparing against the pre-run snapshot. Until that exists,
-  "restored and verified" means *in-page*, which has twice been true while the on-disk store held the fixture.
-  This is the highest-value remaining harness work: it is the failure that has cost the user data twice.
+- ✅ **The restore-to-disk gap is CLOSED** — see the AGREED PLAN section above. Root cause proven by A/B
+  (WebView2 commits only on window close, never on a kill), `compare` added and fired correctly on its first run,
+  and `Close-AppGracefully` now closes the window and waits for the commit.
 - ⚠️ **The native picker is the one untested link** in export/import, and it is untestable from CDP (every
   `__TAURI_INTERNALS__` member is immutable; the writable `chrome.webview.postMessage` is bypassed by a closure).
   The user's hand-test covers it. Re-verifying costs a human clicking two dialogs.

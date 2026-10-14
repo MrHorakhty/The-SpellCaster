@@ -24,28 +24,89 @@
 //   node e2e-snapshot.mjs restore        <file>   # localStorage, via CDP
 //   node e2e-snapshot.mjs save-uploads   <dir>    # plain filesystem, NO CDP
 //   node e2e-snapshot.mjs restore-uploads <dir>   # plain filesystem, NO CDP
+//   node e2e-snapshot.mjs compare        <a> <b>  # two snapshots, NO CDP
 //
 // Exit codes: 0 ok, 3 app/CDP unreachable, 4 bad usage or unusable snapshot,
 //             5 restore applied but the store did not match it afterwards (the app
-//               rewrote storage on boot - treat the restore as NOT done).
-import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync, rmSync, cpSync, renameSync, readdirSync } from 'node:fs';
+//               rewrote storage on boot - treat the restore as NOT done),
+//             6 the page did not reload after a restore, so the app is still
+//               holding the pre-restore board in memory,
+//             7 `compare` found the two snapshots differ.
+import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync, rmSync, rmdirSync, cpSync, renameSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEBUG_PORT = process.env.CDP_PORT || 9225;
 const LABEL = process.env.LABEL || 'SNAP';
-const [mode, file] = process.argv.slice(2);
+const [mode, file, second] = process.argv.slice(2);
 
 const log = (...a) => console.log(`[${LABEL}]`, ...a);
 
 const LS_MODES = ['save', 'restore'];
 const FS_MODES = ['save-uploads', 'restore-uploads'];
 
-if (![...LS_MODES, ...FS_MODES].includes(mode) || !file) {
+if (mode !== 'compare' && (![...LS_MODES, ...FS_MODES].includes(mode) || !file)) {
   console.error(`[${LABEL}] usage: node e2e-snapshot.mjs save|restore <file>`);
   console.error(`[${LABEL}]        or: node e2e-snapshot.mjs save-uploads|restore-uploads <dir>`);
+  console.error(`[${LABEL}]        or: node e2e-snapshot.mjs compare <expected.json> <actual.json>`);
   process.exit(4);
+}
+
+// --- compare: two localStorage snapshots, no CDP ----------------------------
+//
+// This is Part 2 of the post-run store plan, and it exists because "restored N
+// keys ... verified" had been a statement about the PAGE, never about the disk.
+// A restore can pass the in-page verify - localStorage genuinely holds the
+// snapshot - and still not survive: WebView2 commits asynchronously, the runner
+// then kills the process, and the next run's snapshot shows the fixture again.
+// That happened on 2026-10-14 and the only evidence was circumstantial.
+//
+// So the runner restarts the app after a phase, snapshots again, and compares the
+// two files HERE. That is the check this whole script was written around, finally
+// performed against the only thing that matters.
+//
+// Pure Node on purpose: it must work when the app is dead, which is the whole
+// point. Exit 7 on any difference.
+if (mode === 'compare') {
+  if (!file || !second) {
+    console.error(`[${LABEL}] FAILED: compare needs two snapshot paths.`);
+    process.exit(4);
+  }
+  const read = (p) => {
+    try { return JSON.parse(readFileSync(p, 'utf8')); } catch (err) {
+      console.error(`[${LABEL}] FAILED: could not read ${p}: ${err.message}`);
+      process.exit(4);
+    }
+  };
+  const expected = read(file);
+  const actual = read(second);
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) {
+    console.error(`[${LABEL}] FAILED: ${file} is not a snapshot object.`);
+    process.exit(4);
+  }
+  if (!actual || typeof actual !== 'object' || Array.isArray(actual)) {
+    console.error(`[${LABEL}] FAILED: ${second} is not a snapshot object.`);
+    process.exit(4);
+  }
+
+  const missing = Object.keys(expected).filter(k => !(k in actual));
+  const extra = Object.keys(actual).filter(k => !(k in expected));
+  const changed = Object.keys(expected).filter(k => k in actual && actual[k] !== expected[k]);
+
+  if (!missing.length && !extra.length && !changed.length) {
+    log(`verified FROM DISK: ${Object.keys(actual).length} keys match ${file} exactly`);
+    process.exit(0);
+  }
+  console.error(`[${LABEL}] FAILED: the store on DISK does not match the snapshot taken before the run.`);
+  if (missing.length) console.error(`[${LABEL}]        missing (${missing.length}): ${missing.slice(0, 8).join(', ')}${missing.length > 8 ? ', …' : ''}`);
+  if (extra.length)   console.error(`[${LABEL}]        extra   (${extra.length}): ${extra.slice(0, 8).join(', ')}${extra.length > 8 ? ', …' : ''}`);
+  if (changed.length) console.error(`[${LABEL}]        changed (${changed.length}): ${changed.slice(0, 8).join(', ')}${changed.length > 8 ? ', …' : ''}`);
+  console.error(`[${LABEL}]        The restore did NOT survive the app being killed.`);
+  console.error(`[${LABEL}]        Expected: ${file}`);
+  console.error(`[${LABEL}]        Found on disk: ${second}`);
+  console.error(`[${LABEL}]        Recover with: node e2e-snapshot.mjs restore ${file}  (needs the app running)`);
+  process.exit(7);
 }
 
 // --- filesystem modes: uploads/ -------------------------------------------
@@ -111,8 +172,41 @@ if (FS_MODES.includes(mode)) {
     process.exit(4);
   }
   rmSync(aside, { recursive: true, force: true });
-  log(`restored ${countFiles(uploads)} upload file(s) from ${file}`);
+  const pruned = pruneEmptyProfileDirs(uploads);
+  log(`restored ${countFiles(uploads)} upload file(s) from ${file}${pruned ? `; pruned ${pruned} empty profile directory(ies)` : ''}`);
   process.exit(0);
+}
+
+/**
+ * Remove every EMPTY directory directly under uploads/ (the per-profile folders).
+ *
+ * These accumulate because `fs:allow-remove-dir` does not exist in plugin-fs
+ * 2.5.2, so the app can create `uploads/<profileId>/` on demand but can never
+ * remove one - every profile a run has ever touched leaves a shell behind.
+ *
+ * Deleting an EMPTY directory is provably lossless: it holds no bytes, and the
+ * app recreates it on demand (`ensureUploadDir` mkdirs when `exists` is false), so
+ * nothing can miss it. That is what makes this safe to do unconditionally, unlike
+ * the profile-key sweep, which has to be restricted to what the run created.
+ *
+ * Runs AFTER the restore rather than instead of it, and it must stay last in the
+ * runner's cleanup: a verification restart of the app re-creates these, so
+ * sweeping earlier just moves the litter.
+ */
+function pruneEmptyProfileDirs(root) {
+  let pruned = 0;
+  let entries = [];
+  try { entries = readdirSync(root, { withFileTypes: true }); } catch { return 0; }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const p = join(root, entry.name);
+    try {
+      if (readdirSync(p).length > 0) continue;
+      rmdirSync(p);
+      pruned++;
+    } catch { /* not empty after all, or in use - leave it and say nothing */ }
+  }
+  return pruned;
 }
 
 function countFiles(dir) {

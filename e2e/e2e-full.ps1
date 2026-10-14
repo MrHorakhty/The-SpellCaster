@@ -115,6 +115,83 @@ function Stop-ProcessTree {
     Start-Sleep -Milliseconds 500
 }
 
+# -----------------------------------------------------------------------------
+#  Close-AppGracefully - THE ONLY WAY THE STORE SURVIVES A RUN
+# -----------------------------------------------------------------------------
+# Proven 2026-10-14 with a controlled A/B, one variable changed. Write one marker
+# key in the page, then close the app two different ways and read the store back
+# from a fresh start:
+#
+#     taskkill on the process tree  ->  marker GONE     (27 keys, as before)
+#     WM_CLOSE to the app window   ->  marker PRESENT  (28 keys)
+#
+# WebView2 commits localStorage when the window closes properly, and commits
+# NOTHING when the process is killed. That is why the runner could report
+# "restored and verified", print a green line, and still leave the E2E fixture on
+# disk: the verify only ever read the page, and the page's data died with it.
+#
+# So the run must not kill the app. It must close it, the way a user closing the
+# window does, and WAIT for the commit. Waiting for the PROCESS to exit is the
+# wrong signal - after WM_CLOSE the Tauri process lingers for tens of seconds
+# while the window and its WebView2 profile are already gone. The right signal is
+# the CDP page target disappearing, which is what this waits for.
+#
+# Returns $true if the page target went away, $false if the caller should fall
+# back to killing (in which case the store may not have been committed - the
+# from-disk verification later is what will say so).
+function Close-AppGracefully {
+    param([int]$Port, [int]$Seconds = 25)
+    if (-not ([System.Management.Automation.PSTypeName]'WinClose').Type) {
+        Add-Type -Namespace Win -Name Close -MemberDefinition @'
+[DllImport("user32.dll", SetLastError=true)] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+public delegate bool EnumProc(IntPtr h, IntPtr l);
+'@
+    }
+    $procs = @(Get-Process -Name app -ErrorAction SilentlyContinue)
+    if ($procs.Count -eq 0) { return $true }
+
+    $posted = 0
+    foreach ($proc in $procs) {
+        $targetPid = $proc.Id
+        $handles = New-Object System.Collections.ArrayList
+        $cb = [Win.Close+EnumProc]{
+            param($h, $l)
+            $owner = 0
+            [Win.Close]::GetWindowThreadProcessId($h, [ref]$owner) | Out-Null
+            if ($owner -eq $targetPid -and [Win.Close]::IsWindowVisible($h)) { $handles.Add($h) | Out-Null }
+            return $true
+        }
+        [Win.Close]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+        foreach ($h in $handles) {
+            # WM_CLOSE. The app closes the window and disposes its WebView2
+            # profile on the way, which is the commit we are here for.
+            if ([Win.Close]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) { $posted++ }
+        }
+    }
+    if ($posted -eq 0) { return $false }
+    "`t[B-CLEANUP] posted WM_CLOSE to $posted window(s); waiting for the page to go away ..." | Add-Content $Script:TestLog
+
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    while ((Get-Date) -lt $deadline) {
+        $stillThere = $false
+        try {
+            $res = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/json" -TimeoutSec 2
+            if ($res.StatusCode -eq 200 -and $res.Content -match 'webSocketDebuggerUrl') { $stillThere = $true }
+        } catch { $stillThere = $false }
+        if (-not $stillThere) {
+            "`t[B-CLEANUP] page target gone - the WebView2 profile was disposed and localStorage committed." | Add-Content $Script:TestLog
+            Start-Sleep -Seconds 1
+            return $true
+        }
+        Start-Sleep -Milliseconds 400
+    }
+    "`t[B-CLEANUP] the page target never went away; falling back to a kill (the store may not be committed)." | Add-Content $Script:TestLog
+    return $false
+}
+
 function Remove-AllEdgeProfiles {
     foreach ($profile in @($Script:EdgeProfile, "$tmp\e2e-feat-profile")) {
         if (Test-Path $profile) {
@@ -332,18 +409,29 @@ if ($Phase -in @('all', 'win')) {
         # run reported "restored 7 keys", reloaded, and was force-killed; the next
         # run 11 minutes later snapshotted a different profile and the user's real
         # board was gone. e2e-snapshot.mjs now re-reads and verifies the store after
-        # the reload (exit 5 on mismatch); this settle window plus the graceful kill
-        # below are what give that verified state a chance to reach disk.
-        "`t[B-CLEANUP] settling 5s so WebView2 can commit localStorage ..." | Add-Content $Script:TestLog
-        Start-Sleep -Seconds 5
+        # the reload (exit 5 on mismatch).
+        "`t[B-CLEANUP] settling 3s ..." | Add-Content $Script:TestLog
+        Start-Sleep -Seconds 3
 
-        "`t[B-CLEANUP] closing tauri tree PID $($tauriProc.Id) gracefully ..." | Add-Content $Script:TestLog
+        # 🔴 THIS IS THE STEP THAT MATTERS, and it used to be a kill.
+        # A controlled A/B on 2026-10-14 (write one marker key, close the app two
+        # ways, read the store back from a fresh start) proved:
+        #     taskkill on the tree -> marker GONE
+        #     WM_CLOSE to the window -> marker PRESENT
+        # WebView2 commits localStorage when the window closes and commits NOTHING
+        # when the process is killed. Every "restored and verified" this harness
+        # ever printed was true of the page and silent about the disk, because the
+        # page's data died with the process. So: close the window, wait for the
+        # commit, and only then kill whatever is left over.
+        "`t[B-CLEANUP] closing the app window so WebView2 commits localStorage ..." | Add-Content $Script:TestLog
+        $graceful = Close-AppGracefully -Port 9224 -Seconds 25
+        if ($graceful) { Write-Host "App closed cleanly - the store was committed." -ForegroundColor Green }
+
+        "`t[B-CLEANUP] clearing up whatever process is left over ..." | Add-Content $Script:TestLog
         if ($tauriProc) {
-            # No /F first: a graceful close lets WebView2 flush and close its
-            # storage cleanly. The /F below is only the fallback if it hangs.
-            Invoke-Expression "taskkill /PID $($tauriProc.Id) /T 2>&1" | Out-Null
-            Start-Sleep -Seconds 3
-            "`t[B-CLEANUP] force-killing any survivors ..." | Add-Content $Script:TestLog
+            # The window is already closed and the data committed by this point, so
+            # these kills can no longer lose anything - they are only clearing
+            # processes out of the way.
             Invoke-Expression "taskkill /PID $($tauriProc.Id) /T /F 2>&1" | Out-Null
         }
         "`t[B-CLEANUP] killing remaining app.exe + orphaned debug WebView2 trees ..." | Add-Content $Script:TestLog
@@ -377,6 +465,99 @@ if ($Phase -in @('all', 'win')) {
                 Write-Host "  Your audio files may not be back where the app expects them." -ForegroundColor Red
                 Write-Host "  Snapshot kept at: $upBackup" -ForegroundColor Red
                 $results.Add("WARNING: uploads restore failed (exit $upRestoreCode) - snapshot at $upBackup") | Out-Null
+            }
+        }
+
+        # ---------------------------------------------------------------------
+        #  VERIFY THE RESTORE FROM DISK (PROFILE_SYNC_SPEC / post-run store plan)
+        # ---------------------------------------------------------------------
+        # Everything above is a statement about the PAGE or about files we just
+        # wrote. None of it proves the restore SURVIVED the app being killed, and
+        # on 2026-10-14 it did not: the in-page restore verified, and the next
+        # run's pre-run snapshot held the previous run's fixture anyway.
+        #
+        # So: restart the app, read the store back FROM DISK, and compare it with
+        # the snapshot taken before the suite ran. A difference is a hard failure
+        # (exit 7 from the compare mode) with both files kept and the recovery
+        # command printed - never a "restored and verified" line nobody checked.
+        #
+        # ~40s, which the user accepted explicitly rather than behind a flag.
+        if ($lsBackup -and (Test-Path $lsBackup)) {
+            "`t[B-VERIFY] restarting the app to read the store back from disk ..." | Add-Content $Script:TestLog
+            Write-Host "Verifying the restore from disk (restarts the app, ~40s) ..." -ForegroundColor Cyan
+            $verifyProc = $null
+            try {
+                $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'
+                $verifyProc = Start-Process 'npm.cmd' @('run','tauri','dev') `
+                    -WorkingDirectory $proj `
+                    -RedirectStandardOutput  "$tmp\e2e-verify-tauri.log" `
+                    -RedirectStandardError   "$tmp\e2e-verify-tauri.err.log" `
+                    -WindowStyle Hidden -PassThru
+
+                if (Wait-Cdp -Port 9224 -Minutes 5) {
+                    Start-Sleep -Seconds 4   # let the app boot and re-read storage
+                    $diskSnap = Join-Path $snapSafe "ls-diskcheck-$(Get-Date -f yyyyMMdd-HHmmss).json"
+                    $env:CDP_PORT = '9224'; $env:LABEL = 'DISK'
+                    & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save $diskSnap 2>&1 | Add-Content $Script:TestLog
+                    $saveCode = $LASTEXITCODE
+                    Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+
+                    if ($saveCode -ne 0) {
+                        "`t[B-VERIFY] could not re-read the store (save exit $saveCode); the restore is UNVERIFIED." | Add-Content $Script:TestLog
+                        Write-Host "WARNING: could not re-read the store from disk - the restore is UNVERIFIED." -ForegroundColor Red
+                        $results.Add("WARNING: store could not be re-read from disk - restore unverified") | Out-Null
+                    } else {
+                        & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') compare $lsBackup $diskSnap 2>&1 | Add-Content $Script:TestLog
+                        $cmpCode = $LASTEXITCODE
+                        if ($cmpCode -eq 0) {
+                            Write-Host "Restore verified FROM DISK - the store matches the pre-run snapshot exactly." -ForegroundColor Green
+                        } else {
+                            "`t[B-VERIFY] THE RESTORE DID NOT SURVIVE THE KILL (compare exit $cmpCode)." | Add-Content $Script:TestLog
+                            "`t[B-VERIFY] expected: $lsBackup" | Add-Content $Script:TestLog
+                            "`t[B-VERIFY] found on disk: $diskSnap" | Add-Content $Script:TestLog
+                            Write-Host "FAIL: the store on disk does NOT match the pre-run snapshot." -ForegroundColor Red
+                            Write-Host "  expected: $lsBackup" -ForegroundColor Red
+                            Write-Host "  found:    $diskSnap" -ForegroundColor Red
+                            Write-Host "  Recover: open the app, then run  node e2e\e2e-snapshot.mjs restore `"$lsBackup`"" -ForegroundColor Red
+                            $results.Add("FAIL: post-run store does not match the pre-run snapshot - restore did not survive the kill") | Out-Null
+                        }
+                    }
+                } else {
+                    "`t[B-VERIFY] the app never came back up; the restore is UNVERIFIED." | Add-Content $Script:TestLog
+                    Write-Host "WARNING: the app did not restart, so the restore could not be verified from disk." -ForegroundColor Yellow
+                    $results.Add("WARNING: app did not restart - restore unverified from disk") | Out-Null
+                }
+            } finally {
+                # The verification app must not outlive the check, or it goes on
+                # re-persisting whatever it booted with - which is the very thing
+                # being tested. Closed the same way as the suite's app, so its
+                # shutdown is a commit and not a truncated write.
+                if ($verifyProc) {
+                    Close-AppGracefully -Port 9224 -Seconds 20 | Out-Null
+                    Invoke-Expression "taskkill /PID $($verifyProc.Id) /T /F 2>&1" | Out-Null
+                }
+                taskkill /F /IM app.exe /T 2>&1 | Out-Null
+                Get-CimInstance Win32_Process |
+                    Where-Object {
+                        $_.Name -eq 'msedgewebview2.exe' -and
+                        $_.CommandLine -like '*remote-debugging-port=9224*'
+                    } |
+                    ForEach-Object { taskkill /F /PID $_.ProcessId /T 2>&1 | Out-Null }
+                Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
+                Remove-Item Env:\TAURI_DEV_HOST -ErrorAction SilentlyContinue
+                Remove-Orphans
+
+                # And LAST of all: restore uploads once more and sweep the empty
+                # per-profile directories. It has to be last because the
+                # verification restart re-creates them, and because
+                # restore-uploads is what performs the sweep. An empty directory
+                # holds no bytes and the app mkdirs on demand, so this is always
+                # safe - and it leaves the folder as a fresh install would have it.
+                if ($upBackup) {
+                    "`t[B-CLEANUP] restoring uploads again and sweeping empty profile directories ..." | Add-Content $Script:TestLog
+                    & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') restore-uploads $upBackup 2>&1 |
+                        Where-Object { $_ -match 'pruned' } | Add-Content $Script:TestLog
+                }
             }
         }
     }
