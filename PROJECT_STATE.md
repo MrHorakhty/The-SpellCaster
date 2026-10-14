@@ -1,8 +1,8 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-14 — working on: PROFILE_SYNC_SPEC.md step 8. **Code, suite and all seven gates are DONE and green.** Remaining: commit + push, then release.
+🔓 UNCLAIMED — last holder: opencode (2026-10-14 20:20). **Step 8 SHIPPED and committed as `81abd2e`, pushed `48ad37d..81abd2e`, 0 ahead / 0 behind. All seven gates green** (web 225/0/0 exit 0 · Windows 239/0/1 exit 1 · Android 229/0/1 exit 1, both exit-1s the G5 skip). The user hand-tested export/import on 2026-10-14 (web → Android), so the DoD bar is met.
 Previous holder: opencode (released 2026-10-13 17:50). Steps 3–6 DONE, all seven gates green. Backups pruned 5 → 1, keeping `…-172917` (~159 MB freed, 0 orphans proven in all 5 first). ⚠️ Found and recorded: **Bitdefender quarantined `e2e/e2e-full.ps1` out of ALL FIVE backup folders this session**, including the keeper — which had "not fired" through 15:00 the same day. No data lost (repo copy intact, committed and pushed at `48ad37de`), but the surviving backup is **226/227** and a failed prune is NOT a no-op: the AV write-lock left four partially-deleted shells.
-Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates are green.**
+Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates were green.**
 ✅ **STEP 8 IS WRITTEN AND GREEN — and on its first honest run it found a REAL, SHIPPING BUG.** The user **hand-tested export/import on 2026-10-14** (including exporting on the web build and importing into the Android build), so the DoD hand-test bar is **met**. New `e2e/specs/bundle.mjs` (**Suite I, I0–I17**), wired into **both** entrypoints and registered in the manifest; the feature entry is now `status: shipped`.
 🔴 **THE BUG: `src/profileBundle.js` called `dirname(fullPath)` WITHOUT `await`.** `dirname` from `@tauri-apps/api/path` is **async** (it is a Tauri command — `dirname(path: string): Promise<string>`), so `dir` was a Promise, `exists()` received an object, and the IPC rejected with *"invalid args `path` for command `exists`: invalid type: map, expected a string"*. **Consequence: EVERY import containing an uploaded audio file failed with `write-failed`, on desktop AND Android.** A bundle of shipped sounds has no blobs, so the write loop never ran — which is exactly why the hand-test passed and this shipped. Fixed with the `await`; the comment in the file names the failure string. 💡 **Lesson: the hand-test and the automated test disagreed, and the hand-test was the one that could not reach the case.**
 🔴 **THE NATIVE PICKER CANNOT BE STUBBED — measured, not assumed.** Every property on `window.__TAURI_INTERNALS__` (`invoke`, `ipc`, `postMessage`, `transformCallback`) is `writable:false, configurable:false`, and so is the object on `window`; the one writable seam (`window.chrome.webview.postMessage`) is bypassed because Tauri's injected `ipc` captures it in a closure. So **any test that clicks Export/Import opens a real `#32770` that wedges the run.** Suite I therefore drives everything *below* the picker — the app's own `grant_path` + `writeFile` + `readFile` sequence against a path the test names — and the two-line handoff of the picker's answer stays with the user's hand-test.
@@ -303,19 +303,18 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- ⚠️ **NOT COMMITTED, NOT PUSHED.** Steps 3–6 **and** step 8 are complete and gated in the working tree.
-  **New this session: `e2e/specs/bundle.mjs` (Suite I, I0–I17).** **Modified this session:
-  `src/profileBundle.js` (the `dirname` await — a real bug fix and the only app-code change), `e2e/lib/page.mjs`
-  (`__bareKeys` and `KNOWN_KEYS`), `e2e/e2e-snapshot.mjs` (reload proof, new exit 6), `e2e/check-profile-keys.mjs`
-  (reads `specs/` from the directory), `e2e/e2e-full.mjs` + `e2e/e2e-mobile.mjs` (import and wire the spec;
-  M21 and the P31a/Q9 key lists), `e2e/specs/playback.mjs` (Z1/Z2), `e2e/coverage.manifest.json`,
-  `PROJECT_STATE.md`.**
-  Still uncommitted from 2026-10-13: `src/App.jsx`, `src/profileStorage.js`, `eslint.config.js`,
-  `package.json`, `package-lock.json`, `PROFILE_SYNC_SPEC.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`,
-  `src-tauri/src/main.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, plus the 2026-10-13
-  `src/profileBundle.js` / `src-tauri/src/scope.rs` / `e2e/profileBundle.check.mjs`.
-- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of HEAD **`48ad37d`** (0 ahead /
-  0 behind) — i.e. **nothing from 2026-10-13 or today is pushed.**
+- ✅ **COMMITTED AND PUSHED as `81abd2e`** (2026-10-14 20:19), 25 files, +3373/−209 — steps 3–6 **and** step 8
+  together, because today's changes interleave with 2026-10-13's in the same files and a split would have been
+  cosmetic. New: `e2e/specs/bundle.mjs`, `e2e/profileBundle.check.mjs`, `src/profileBundle.js`,
+  `src-tauri/src/scope.rs`. Modified: `src/App.jsx`, `src/profileStorage.js`, `eslint.config.js`,
+  `package.json`/`package-lock.json`, `src-tauri/Cargo.toml`/`Cargo.lock` (the dialog plugin — a **real** change
+  this time, not the EOL-only case the old note described), `src-tauri/src/{main,lib}.rs`,
+  `src-tauri/capabilities/default.json`, `e2e/{e2e-full.mjs,e2e-mobile.mjs,e2e-snapshot.mjs,
+  check-profile-keys.mjs,coverage.manifest.json}`, `e2e/lib/page.mjs`, `e2e/specs/playback.mjs`,
+  `PROFILE_SYNC_SPEC.md`, `PROJECT_STATE.md`, `docs/session-history.md`, `README.md`.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of HEAD **`81abd2e`** (0 ahead /
+  0 behind, verified after the push). `git cat-file -e HEAD:e2e/e2e-full.ps1` passes — the AV-sensitive file
+  survived the commit.
 - ✅ **Committed and pushed 2026-10-13: `d63095c` (guard re-verified against a live fixture + the "deleted
   everywhere" correction) and `a75ce40` (the stale 114-file E2E snapshot deleted, inventory archived first)** —
   docs only, no app or harness code. `fd57d3a` is no longer HEAD; it remains the last commit that touched
@@ -1407,7 +1406,6 @@ Suite F **clears storage** and creates/deletes profiles, so it runs **before** `
 both of which re-seed for themselves. O must stay last of all.
 
 ## Open items
-- 🔜 **Commit and push** — nothing from 2026-10-13 or today is in git, including the `dirname` bug fix.
 - 🔜 **Consider the node checks gates.** `profileBundle.check.mjs` (36), `profileStorage.check.mjs` (26) and
   `check-profile-keys.mjs` need no browser, yet none is in the seven-gate table — so a session can report "all
   gates green" without ever running them. Adding them is a one-line change to the DoD.

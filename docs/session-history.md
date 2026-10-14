@@ -1,4 +1,4 @@
-﻿# Session History (archive)
+# Session History (archive)
 
 > Append-only archive of past AI-agent sessions for **The SpellCaster** (`ttrpg-soundboard`).
 > Written 2026-10-04 when the project-state file was split: that file now holds only the
@@ -3597,3 +3597,71 @@ Desktop.
 - **The user has not hand-tested the built app.** Per the DoD this is user-facing, so the bar applies and it has
   not been met. The coverage-manifest feature entry stays `status: planned` accordingly.
 - **Not committed, not pushed.**
+
+---
+
+## 2026-10-14 - Profiles step 8: the shared E2E spec, and the bug it found
+
+**Outcome:** step 8 shipped and committed as `81abd2e` (pushed, `48ad37d..81abd2e`, 0 ahead / 0 behind). All
+seven gates green. The user hand-tested export/import on 2026-10-14 - web build to Android build - so the DoD
+bar for this feature is met.
+
+**What was built.** `e2e/specs/bundle.mjs`, Suite I (I0-I17), wired into BOTH entrypoints and registered in the
+manifest; the `coverage.manifest.json` feature entry flipped `planned` -> `shipped`, which is what forced the
+round-trip tests to exist. Plus `e2e/profileBundle.check.mjs` (36 node assertions, no browser) from the prior
+session.
+
+**The bug the spec found, which the hand-test could not reach.** `src/profileBundle.js` called
+`dirname(fullPath)` without `await`. `dirname` from `@tauri-apps/api/path` is ASYNC - it is a Tauri command,
+`dirname(path: string): Promise<string>` - so `dir` was a Promise, `exists()` received an object, and the IPC
+rejected with *"invalid args `path` for command `exists`: invalid type: map, expected a string"*. Every import
+containing an uploaded audio file failed with `write-failed`, on desktop AND Android. A bundle of shipped sounds
+contains no blobs, so the write loop never ran - which is exactly the shape the user's hand-test moved. Fixed
+with the `await`, and the comment names the failure string.
+
+**The native picker cannot be stubbed - measured, not reasoned about.** Every property on
+`window.__TAURI_INTERNALS__` (`invoke`, `ipc`, `postMessage`, `transformCallback`) is
+`writable:false, configurable:false`, and so is the object on `window`. The one writable seam,
+`window.chrome.webview.postMessage`, has no effect because Tauri's injected `ipc` captured that function in a
+closure at init. So any test that clicks Export/Import opens a real `#32770` that wedges the run. The spec
+therefore drives everything BELOW the picker - the app's own `grant_path` + `writeFile` + `readFile` sequence
+against a path the test names - and clicks only the mode buttons and the confirm gate, which never reach the
+dialog. The two-line handoff of the picker's answer remains the user's hand-test.
+
+**The engine is reached by importing `/src/profileBundle.js`** - the same module URL the app imported, so it is
+the live instance - which only the Vite DEV server serves. The web phase runs `vite preview` against a built
+dist, so Suite I's web arm is I1 and I2 only. That is correct rather than a gap: export/import is Tauri-only by
+design (PROFILE_SYNC_SPEC.md section 7), because web audio is base64 in localStorage and caps around 5 MB.
+
+**Harness defects found and fixed, each with a recorded reason:**
+- `e2e/e2e-snapshot.mjs` did `await cdp('Page.reload').catch(() => {})` and then logged "page reloaded"
+  unconditionally, while the verify beneath it only re-reads `localStorage` - which is correct even when no
+  navigation happened. It now stamps a marker, reloads, and requires the marker to be gone (new exit 6).
+- `__bareKeys()` counted the app's own deliberate `<key>_old` migration backups, so P14a/P31a failed on any
+  Windows run whose store held an unversioned profile. The skip is narrow: only a known key plus `_old`.
+- `spellcaster_import_backups` joined `KNOWN_KEYS`, and the two hand-copied key lists (P31a, Q9) now import it
+  rather than duplicating it - which is how it was missed in one place and found in the other.
+- `check-profile-keys.mjs` held a hard-coded list of spec basenames, so a new spec would silently escape the
+  guard. It now reads `e2e/specs/` from the directory.
+- `playback.mjs` Z1 and Z2 sampled a single instant against a 0.576s asset (`Longbow_4.mp3`), with `z1` taken
+  ~2.3s after the trigger. The Android Q11 race again. Z2 now polls for the condition with a bounded timeout;
+  Z1 accepts "still running" or "demonstrably ran (`currentTime > 0`)".
+
+**Two mistakes worth keeping.** (1) The first Suite I version threw on a null manifest, which unwound `main()`
+and SKIPPED the entrypoint's localStorage restore - leaving the E2E fixture as the user's live board. Recovered
+from the intact snapshot and verified (15/15 keys). A spec must never throw; `run()` is now wrapped and a
+failed prerequisite FAILs the dependent ids by name. (2) I corrupted PROJECT_STATE.md with a PowerShell
+line-range rewrite (Get-Content reads as ANSI, so the UTF-8 was mangled), and the `git checkout` used to undo it
+also discarded the previous session's UNCOMMITTED edits to that file. Both were recovered from the
+session-start backup. Never rewrite a tracked UTF-8 file with Get-Content/WriteAllLines in PowerShell 5.1, and
+never `git checkout` a file whose changes are uncommitted and not backed up.
+
+**Gates.** backup VERIFY OK 228/228; eslint 0 errors / 3 pre-existing warnings; vite build exit 0;
+check-coverage exit 0 (40 suites, 349 tests, 12 shared specs, 24/24 shipped features covered, 0 gaps);
+check-profile-keys OK; profileBundle.check 36/36; profileStorage.check 26/26; web 225/0/0 exit 0; Windows
+239/0/1 exit 1; Android 229/0/1 exit 1. Both exit-1s are the expected G5 skip.
+
+**Still open.** The restore-to-disk gap: the in-page restore verified on every run, yet the next run's pre-run
+snapshot held the previous run's fixture profile, so WebView2's async flush across `taskkill` is the remaining
+suspect and has never been checked from disk. Also: step 7's remainder (Restore Defaults profile scoping, the
+progress/report UI), and the case for promoting the three node checks to gates.
