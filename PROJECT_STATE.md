@@ -875,6 +875,17 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   *"there is no `ttrpg_themes` key at all"*). Any "no new localStorage key" assertion must include it in the
   expected set or it will fail for a reason that has nothing to do with the code.
 
+✅ **Pruned 2026-10-14 23:58, 6 → 1, keeping `…-20261014-235700`** (at the user's request, after the push) —
+**~200 MB freed** (240 MB → 40 MB). Safety was **proven before deleting**, not assumed: every file in all five
+folders was matched against `git ls-files` ∪ the working tree, and **all five returned 0 orphans**. The keeper was
+taken last, so it matches the final state rather than something a correction re-created afterwards.
+⚠️ **Order matters and the two rules interact:** take the final backup FIRST, then delete the rest, then **do not
+re-back-up for a docs-only touch-up** — otherwise each correction re-creates a folder and the session never
+converges on one.
+🗑️ Gone: `…-20261013-172917`, `…-20261014-175940`, `…-200929`, `…-20261014-202032`, `…-232715`.
+⚠️ **`e2e/e2e-full.ps1` was Bitdefender-quarantined out of `…-20261013-172917`** (226 files, not 227) — the same
+containment failure recorded above, and the reason the keeper was taken fresh rather than kept.
+
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
   JBR (21), `JAVA_HOME` points there. AVDs: `Pixel_7`, `Pixel_Tablet`, `Small_Phone`.
