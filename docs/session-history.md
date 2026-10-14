@@ -3506,3 +3506,94 @@ sound_z12x9lp5_Shield_Magic_2.mp3                  32876
 Markdown-only change (no app or harness code), so the E2E phases were **not** run — markdown cannot affect them,
 and the previous session's figures stand. backup VERIFY OK 224/224 · eslint 0 errors / 3 baseline warnings ·
 `vite build` exit 0 · `check-coverage` exit 0. No hand-test — nothing user-facing shipped.
+---
+
+## 2026-10-13, 16:01-17:05 - opencode - PROFILE_SYNC_SPEC steps 3-6 (export/import)
+
+**Claimed** immediately (it was UNCLAIMED), then **backed up first** (VERIFY OK 224/224), per AGENTS.md.
+**Scope** was agreed with the user up front: steps 3-6 **plus minimal UI wiring**, and **both** import modes
+with snapshot-first for "replace active". Step 8 (the shared E2E spec) was explicitly left for a later session.
+
+### What shipped
+- **`src/profileBundle.js`** (new, 989 lines) - the `.spellcaster` format end to end.
+- **`e2e/profileBundle.check.mjs`** (new) - **36/36** node-level assertions.
+- **`src-tauri/src/scope.rs`** (new, 40 lines) - the `grant_path` command, `mod scope;`-declared at the top of
+  both entry points.
+- `src/profileStorage.js` - added `requestProfileRemount()` (19 lines).
+- `src/App.jsx` (+270) - the imports, the handlers, the Settings UI, and a `flushCurrentProfile()` extraction
+  shared with the profile switch.
+- `src-tauri/` - `tauri-plugin-dialog` in Cargo.toml + both entry points, `dialog:allow-save`/`allow-open`,
+  regenerated `gen/schemas/capabilities.json`.
+- `package.json` - `@tauri-apps/plugin-dialog`, `eslint.config.js` - 4 browser globals.
+
+### The bugs and traps worth keeping
+1. **`pruneUnresolvableSounds` silently dropped `settings`.** It rebuilt the data object with only
+   `characters`/`environmentSounds`/`groups`, so every import reset `boxSize` to 1 and lost the background
+   theme. **Caught by the node check on its first run**, not by any browser test - and it is exactly the class of
+   silent partial-write the design warns about.
+2. **`tauri-plugin-dialog` is needed in `package.json`, not just `Cargo.toml`.** Registering the Rust crate does
+   nothing for the bundler; `vite build` fails with "Rolldown failed to resolve import". Cost one build cycle.
+3. **Pin the npm dialog package to the crate's minor.** `^2` resolved npm to 2.8.2 against a Rust crate of
+   2.7.3, and every `tauri dev` printed "Error Found version mismatched Tauri packages". Now `~2.7.3`.
+4. **`mod` cannot be declared inside a function body** - `cargo check` failed with "cannot declare a file module
+   inside a block unless it has a path attribute". `mod scope;` sits at the top of both entry points.
+5. **`src-tauri/scope.rs` was written one directory up** (`src-tauri/` not `src-tauri/src/`), which `cargo
+   check` reported as "file not found for module `scope`". Caught immediately by reading the error rather than
+   guessing.
+6. **`@noble/hashes` v2 needs an explicit `.js` subpath** - `@noble/hashes/sha2` fails with
+   `ERR_PACKAGE_PATH_NOT_EXPORTED`; it is `@noble/hashes/sha2.js`.
+7. **The edit tool introduced a typo I did not make by hand.** My `oldString`/`newString` for the App.jsx
+   import block both spelled `TreeDececiduous`, but HEAD spells `TreeDeciduous` - the tool fuzzy-matched and
+   silently "fixed" the import to a misspelling, which eslint then correctly reported as `'TreeDeciduous' is not
+   defined`. **Caught only because the baseline is 0 errors and 3 warnings, and I knew the exact number.** A
+   fuzzy match that "succeeds" can change code you did not intend to change.
+
+### The scope-grant probe - four probe bugs, then 11/11
+The grant was the one part of step 6 no existing test could reach, so it was measured over CDP against a live
+`tauri dev`. Getting there took four wrong probes, and **every one of them was a trap the spec warns about,
+failing to be obvious**:
+
+1. **CDP `returnByValue` serialises a `Uint8Array` to `{}`.** A read-back came back `len 0` and looked like a
+   corrupt write. It was the probe.
+2. **Raw `invoke('plugin:fs|write_file', {path, body})` is the wrong shape** - the bytes are the **body** and the
+   path rides in a **header** (`{headers: {path: encodeURIComponent(p), options}}`). It fails with
+   "missing file path", which reads like a permissions problem. **The app code uses the JS wrapper, so it was
+   never at risk** - but this is precisely why the spec documents the trap.
+3. **A grant persists for the whole app session.** A later probe re-used a path an earlier probe had granted, so
+   "ungranted writes are refused" appeared to **fail** and looked like the scope was wide open. It was already
+   granted. This is also a genuine finding worth recording (it is §11 risk 3's transient-grant point, measured).
+4. **Unhandled rejections surface as `{"__error":"Uncaught (in promise)"}`** and are indistinguishable from
+   success unless the page-side expression catches.
+
+Fix for all four: run the whole probe as one page-side async IIFE that resolves to a JSON string, and confirm
+every verdict **on disk from node**, never from an IPC promise.
+
+**Final result, 11/11, on real hardware:** an ungranted `Documents` write AND read are both refused; `grant_path`
+accepts the picked path; the granted file writes and reads back byte-exact with the zip magic intact; **a sibling
+in the same folder is still refused for both read and write** (the narrowness that justifies route A over
+`fs:scope: ["**"]`); re-granting is idempotent; and `plugin:dialog|message` returns neither "Plugin not found"
+nor "Permissions associated with this command".
+
+💡 **The §11 risk 8 `Array` trap reproduced live for real:** passing a plain `Array` as the write body produced a
+**189-byte** file of comma-joined digits from a 64-byte payload, with **no error at all**. That is now measured
+rather than quoted, and it is why the app reads the file back off disk and checks size + `PK` magic before
+reporting success.
+
+### Gates
+All seven, run **twice** - the npm dialog downgrade landed after the first full pass, so the reported numbers are
+the second run, not stale ones. backup VERIFY OK **227/227** · eslint **0 errors / 3** baseline warnings ·
+`vite build` exit 0 (840 ms) · `check-coverage` exit 0 (39 suites / 331 tests / 23 of 23 shipped features) ·
+`check-profile-keys` OK · `profileStorage.check` **26/26** · **`profileBundle.check` 36/36** ·
+`cargo check --offline` clean (tauri-plugin-dialog 2.7.3, rfd 0.16.0) · **web 223/0/0 exit 0** ·
+**Windows 222/0/1 exit 1** (G5; uploads re-hashed after the run - both fixture files byte-identical, 0 flat, no
+stray dir) · **Android 212/0/1 exit 1** (G5). No stray processes, no listening ports, no probe leftovers on the
+Desktop.
+
+### Not done - stated plainly
+- **No native picker has ever been opened.** `dialog.save`/`dialog.open` are code-reviewed and the plugin is
+  proven live, but no test clicks one. The per-platform cancel rows in spec §13 are code-reviewed, not executed.
+- **The cross-device half of the round trip is unrun** - export on desktop, import on Android - which is the
+  feature's actual purpose.
+- **The user has not hand-tested the built app.** Per the DoD this is user-facing, so the bar applies and it has
+  not been met. The coverage-manifest feature entry stays `status: planned` accordingly.
+- **Not committed, not pushed.**

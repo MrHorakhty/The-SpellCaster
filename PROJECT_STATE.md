@@ -1,6 +1,24 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-13 16:04). Session, in three parts. **(1)** Closed the two standing
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-14 — working on: PROFILE_SYNC_SPEC.md step 8. **Code, suite and all seven gates are DONE and green.** Remaining: commit + push, then release.
+Previous holder: opencode (released 2026-10-13 17:50). Steps 3–6 DONE, all seven gates green. Backups pruned 5 → 1, keeping `…-172917` (~159 MB freed, 0 orphans proven in all 5 first). ⚠️ Found and recorded: **Bitdefender quarantined `e2e/e2e-full.ps1` out of ALL FIVE backup folders this session**, including the keeper — which had "not fired" through 15:00 the same day. No data lost (repo copy intact, committed and pushed at `48ad37de`), but the surviving backup is **226/227** and a failed prune is NOT a no-op: the AV write-lock left four partially-deleted shells.
+Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates are green.**
+✅ **STEP 8 IS WRITTEN AND GREEN — and on its first honest run it found a REAL, SHIPPING BUG.** The user **hand-tested export/import on 2026-10-14** (including exporting on the web build and importing into the Android build), so the DoD hand-test bar is **met**. New `e2e/specs/bundle.mjs` (**Suite I, I0–I17**), wired into **both** entrypoints and registered in the manifest; the feature entry is now `status: shipped`.
+🔴 **THE BUG: `src/profileBundle.js` called `dirname(fullPath)` WITHOUT `await`.** `dirname` from `@tauri-apps/api/path` is **async** (it is a Tauri command — `dirname(path: string): Promise<string>`), so `dir` was a Promise, `exists()` received an object, and the IPC rejected with *"invalid args `path` for command `exists`: invalid type: map, expected a string"*. **Consequence: EVERY import containing an uploaded audio file failed with `write-failed`, on desktop AND Android.** A bundle of shipped sounds has no blobs, so the write loop never ran — which is exactly why the hand-test passed and this shipped. Fixed with the `await`; the comment in the file names the failure string. 💡 **Lesson: the hand-test and the automated test disagreed, and the hand-test was the one that could not reach the case.**
+🔴 **THE NATIVE PICKER CANNOT BE STUBBED — measured, not assumed.** Every property on `window.__TAURI_INTERNALS__` (`invoke`, `ipc`, `postMessage`, `transformCallback`) is `writable:false, configurable:false`, and so is the object on `window`; the one writable seam (`window.chrome.webview.postMessage`) is bypassed because Tauri's injected `ipc` captures it in a closure. So **any test that clicks Export/Import opens a real `#32770` that wedges the run.** Suite I therefore drives everything *below* the picker — the app's own `grant_path` + `writeFile` + `readFile` sequence against a path the test names — and the two-line handoff of the picker's answer stays with the user's hand-test.
+⚠️ **The engine is reached by importing `/src/profileBundle.js`** — the same module URL the app imported, so it is the *live* instance — which **only the Vite dev server serves**. The web phase runs `vite preview` on a built dist, so Suite I's **web arm is I1 and I2 only**; that is correct, not a gap (§7: export/import is Tauri-only because web audio is base64 in localStorage and caps around 5 MB).
+New `src/profileBundle.js` (provenance classifier, the `.spellcaster` bundle format, atomic import in both v1
+modes, export) + `e2e/profileBundle.check.mjs` (**36/36**). New `src-tauri/src/scope.rs` (the `grant_path`
+command, shared by both entry points), `tauri-plugin-dialog` 2.7.3 registered, `dialog:allow-save`/`allow-open`
+granted, `@tauri-apps/plugin-dialog` added to `package.json` **and pinned to the crate's minor**. Minimal UI in
+Settings > Profiles.
+**The scope grant was measured on real desktop hardware — 11/11**, including the per-file narrowness that is the
+whole reason for choosing it over `fs:scope: ["**"]`.
+⚠️ **Not committed, not pushed.** ⚠️ **Three things are NOT proven**: no native picker has ever been opened, the
+cross-device half of the round trip is unrun, and **the user has not hand-tested the built app**. The
+coverage-manifest feature entry therefore stays `status: planned` — **spec step 8 (the shared E2E spec) is the next
+task**, and step 7 is partial.
+Previous holder: opencode (2026-10-13 16:04). Session, in three parts. **(1)** Closed the two standing
 warnings: the docs were **committed**, and the uploads snapshot guard was **re-verified against a live fixture** in
 `uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken** — `save-uploads`
 accepts an empty folder (exit 0) while `restore-uploads` rejects one (exit 4), so a Windows phase in the emptied
@@ -11,15 +29,17 @@ instruction**, after its inventory was archived to `docs/session-history.md`. Th
 location. **(3)** **Pushed** (`fd57d3a..a75ce40`, verified 0 ahead / 0 behind) and **pruned the desktop backups
 9 → 1**, freeing ~318 MB after proving 0 orphans in all 9. The survivor is `…-155810`, taken last so it matches
 HEAD.
-**Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6** (export/import), untouched.
+**Next task was `PROFILE_SYNC_SPEC.md` steps 3–6 (export/import) — DONE 2026-10-13; the next task is step 8.**
 **Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
 **unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
 nowhere). All of their orphaned upload files were deleted at their own instruction. Three false/stale claims in
 this file were corrected. **No app code was touched.**
 ✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
-All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed. Export/import
-(spec steps 3-6) is untouched and still unimplemented — the user went looking for it and correctly found it absent.
-**Next task remains `PROFILE_SYNC_SPEC.md` steps 3–6.**
+All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed.
+⚠️ **Superseded 2026-10-13:** the two sentences below described the state *then*. Export/import (steps 3–6) **is
+now implemented** — see the header of this file and Open items. It was unbuilt when the user went looking for it
+and correctly found it absent; the complaint is resolved.
+**Next task was `PROFILE_SYNC_SPEC.md` steps 3–6 → DONE; the next task is step 8.**
 
 **Profiles step 1 of 8 — SHIPPED as `577505d`.**
 User authorised implementation 2026-10-11 21:12. Per `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter + profile
@@ -96,11 +116,13 @@ the underlying ref-derived render is pre-existing. The **test** was the thing th
 instant rather than a condition. 💡 **Lesson: an async UI assertion that samples once is a race wearing a
 trouser-suit; wait for the condition with a bounded timeout, and make the timeout visible in the failure.**
 
-### ✅ Nothing is outstanding — step 1 is done
+### ✅ Step 1 is done — and steps 3–6 have since been added (2026-10-13)
 
 All seven gates green, the user hand-tested the switch, and both defects found during it (the Tauri uploads
-migration, and the harness that did not protect `uploads/`) are closed. **Export/import — spec steps 3–6 — remains
-unimplemented**, which is why the `coverage.manifest.json` feature entry correctly stays `status: planned`.
+migration, and the harness that did not protect `uploads/`) are closed. ⚠️ **This paragraph said export/import
+"remains unimplemented" — that was true when written and is now false.** Steps 3–6 shipped 2026-10-13; the
+`coverage.manifest.json` feature entry still says `status: planned`, but now because **step 8 (the shared E2E spec)
+has not been written**, not because the feature is unbuilt.
 
 ✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
 profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
@@ -189,15 +211,34 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-13** (opencode, 15:19 → 16:04). **(1)** Closed the two standing warnings from the recovery
-session: the uploads snapshot guard was re-verified against a **live fixture** (and turned out to be *broken*, not
-merely vacuous — see Open items), and the uncommitted docs were committed. **No app code and no harness code was
-touched** — the fixture lives in `%APPDATA%\…\uploads\p_guardprobe\`, outside the repo. **All seven gates run and
-green**, including the real Windows phase, because that phase *is* the proof. **(2)** The 114-file / 18.03 MB E2E
-snapshot that still held the user's deleted audio was **deleted at their explicit instruction**, its inventory
-archived to `docs/session-history.md` first. **(3)** **Pushed** (`fd57d3a..a75ce40`, 0 ahead / 0 behind verified) and
-**pruned the desktop backups 9 → 1** (~318 MB freed), after proving **0 orphans** in all 9 against git ∪ working tree.
-**Their content is now gone from every location.**
+Last updated: **2026-10-14** (opencode). **PROFILE_SYNC_SPEC.md step 8 shipped**: `e2e/specs/bundle.mjs` (Suite I,
+I0–I17) is the shared browser spec for the `.spellcaster` bundle, wired into both entrypoints; the
+coverage-manifest feature entry flipped `planned` → `shipped`. **It found a real bug on its first run** — the
+missing `await` on `dirname` in `profileBundle.js`, which broke every import carrying an uploaded file on both
+desktop and Android (fixed). Also fixed, all harness-side and each with a recorded reason:
+`e2e/e2e-snapshot.mjs` now **proves** its `Page.reload` happened instead of swallowing the error (new exit 6);
+`__bareKeys()` no longer counts the app's own deliberate `<key>_old` migration backups;
+`spellcaster_import_backups` joined `KNOWN_KEYS`, and the two hand-copied key lists (P31a, Q9) now import it
+instead of duplicating it; M21 excludes the same narrow `<knownKey>_old` case; `check-profile-keys.mjs` reads
+`e2e/specs/` from the **directory** rather than a hard-coded list; `playback.mjs` Z1 and Z2 no longer sample a
+single instant against a 0.576s asset.
+⚠️ **Not committed, not pushed.** ⚠️ **Android has not been re-run since the Z1 fix** — every other gate is green.
+**Prior entry: 2026-10-13** (opencode, 16:01 → 17:05) — **`PROFILE_SYNC_SPEC.md` steps 3–6 shipped**: the
+provenance classifier, the `.spellcaster` bundle format, atomic import in both v1 modes ("replace active"
+snapshot-first) and export with its destination pickers. New `src/profileBundle.js` +
+`e2e/profileBundle.check.mjs` (**36/36**); new `src-tauri/src/scope.rs` holding the `grant_path` command shared by
+both entry points; `tauri-plugin-dialog` 2.7.3 in **both** `Cargo.toml` and `package.json` (pinned to the crate's
+minor); `dialog:allow-save`/`allow-open` granted; minimal Export/Import UI in Settings > Profiles. **All seven gates
+run and green, and re-run after the last dependency change** — web 223/0/0 exit 0, Windows 222/0/1 exit 1,
+Android 212/0/1 exit 1 (both exit-1s are the G5 skip), eslint 0 errors / 3, build exit 0, check-coverage exit 0,
+cargo check clean, uploads guard re-verified by SHA256. **The scope grant was measured on real desktop hardware
+(11/11)**, which reproduced the §11 risk 8 `Array` trap live and re-confirmed that the grant is per-file.
+⚠️ **Not hand-tested by the user, and no native picker has been opened** — the coverage-manifest feature entry
+stays `planned`, and **step 8 (the shared E2E spec) is the next task**.
+**Prior entry: 2026-10-13 16:04** (session in three parts) — closed the two standing warnings, deleted the
+114-file E2E snapshot holding the user's audio at their explicit instruction (inventory archived to
+`docs/session-history.md` first), pushed, and pruned the desktop backups 9 → 1 (~318 MB freed) after proving
+0 orphans in all 9. Their content is now gone from every location.
 **Prior entry: 2026-10-13** (session: took the claim off a cut-off one; established that the user's lost board
 is **unrecoverable** — the live WebView2 LevelDB holds only one dangling `Dungeon`/`Dripping` entry and **none**
 of their storedNames — and **corrected two false claims in this file** (that the board "survived under a different
@@ -233,8 +274,9 @@ are gated behind `isMobile` so desktop/web stay untouched.
 
 ## Project facts
 - **Frontend: React 19 + Vite, entry `src/main.jsx`, all logic in `src/App.jsx`** (was 6240 lines on 2026-10-06,
-  ~6500 after per-sound volume, 6769 after priming, **7033 now** after profiles — line numbers in the specs have
-  drifted, the structure has not; see the verified line map in the profiles handover section).
+  ~6500 after per-sound volume, 6769 after priming, 7033 after profiles, **7300 now** after steps 3–6 — line
+  numbers in the specs have drifted, the structure has not; see the verified line map in the profiles handover
+  section, which is now pre-steps-3-6 and itself drifted).
 - 🆕 **Storage is PROFILE-SCOPED as of `577505d`.** All board keys are now `profile:<id>:<key>`, resolved through
   **`src/profileStorage.js`** (a separate module, deliberately not added to `App.jsx`). The profile index
   `spellcaster_profiles` is deliberately **not** prefixed — it is how a profile is found. `localStorageMigrationCompleted`
@@ -261,10 +303,19 @@ are gated behind `isMobile` so desktop/web stay untouched.
 - **Do not hardcode the version** — `vite.config.js` `define`s `__APP_VERSION__` from `package.json`.
 
 ## Repo state
-- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** (0 ahead / 0 behind, **verified after the
-  push on 2026-10-13 16:00**, `fd57d3a..a75ce40`; previously verified and pushed 2026-10-12, later session).
-  ✅ Push works, no auth prompt or proxy trouble — consistent with 2026-10-04, 2026-10-06, 2026-10-11,
-  2026-10-12 and 2026-10-13.
+- ⚠️ **NOT COMMITTED, NOT PUSHED.** Steps 3–6 **and** step 8 are complete and gated in the working tree.
+  **New this session: `e2e/specs/bundle.mjs` (Suite I, I0–I17).** **Modified this session:
+  `src/profileBundle.js` (the `dirname` await — a real bug fix and the only app-code change), `e2e/lib/page.mjs`
+  (`__bareKeys` and `KNOWN_KEYS`), `e2e/e2e-snapshot.mjs` (reload proof, new exit 6), `e2e/check-profile-keys.mjs`
+  (reads `specs/` from the directory), `e2e/e2e-full.mjs` + `e2e/e2e-mobile.mjs` (import and wire the spec;
+  M21 and the P31a/Q9 key lists), `e2e/specs/playback.mjs` (Z1/Z2), `e2e/coverage.manifest.json`,
+  `PROJECT_STATE.md`.**
+  Still uncommitted from 2026-10-13: `src/App.jsx`, `src/profileStorage.js`, `eslint.config.js`,
+  `package.json`, `package-lock.json`, `PROFILE_SYNC_SPEC.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`,
+  `src-tauri/src/main.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, plus the 2026-10-13
+  `src/profileBundle.js` / `src-tauri/src/scope.rs` / `e2e/profileBundle.check.mjs`.
+- Branch **`mobile-support`**, ✅ **in sync with `origin/mobile-support`** as of HEAD **`48ad37d`** (0 ahead /
+  0 behind) — i.e. **nothing from 2026-10-13 or today is pushed.**
 - ✅ **Committed and pushed 2026-10-13: `d63095c` (guard re-verified against a live fixture + the "deleted
   everywhere" correction) and `a75ce40` (the stale 114-file E2E snapshot deleted, inventory archived first)** —
   docs only, no app or harness code. `fd57d3a` is no longer HEAD; it remains the last commit that touched
@@ -471,7 +522,7 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
 | `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs` | the two entrypoints the phases drive |
 | `e2e/check-coverage.mjs` | **static coverage gate (2026-10-11)** — no browser, no CDP. Two layers: a **suite** registry (ids cannot drift or rot, shared specs must run on both entrypoints) and a **features** registry (a `shipped` feature with no covering suite is an error). `--update` re-syncs the id lists and nothing else |
 | `e2e/lib/` | **shared plumbing** (2026-10-10): `cdp.mjs` (CDP connect + `sleep` + `evalJs`, fatal socket-exit 3), `report.mjs` (`createReport`, same exit-code contract), `page.mjs` (`SEED`/`PAGE_HELPERS`/`INSTRUMENT_AUDIO`/`CAPTURE_LS`/`restoreLs`/`submitModalExpr`), `driver.mjs` (`makeDriver`: `trustedTap` mouse+touch, `centeredCard`, `dragFromTo`, edit-mode enter/exit), `spec-runner.mjs` (`runSpecs`) |
-| `e2e/specs/` | **platform-shared specs** (2026-10-10/11), **all 11 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, `reset.mjs` O1–O10, `profiles.mjs` **F1–F12** |
+| `e2e/specs/` | **platform-shared specs** (2026-10-10/11, + bundle 2026-10-14), **all 12 run from *both* entrypoints**: `volume.mjs` P1–P16, `indicators.mjs` U1–U7, `sliders.mjs` B1–B4, `soundintogroup.mjs` H1–H2, `drag.mjs` X1–X2, `refcount.mjs` G1–G5, `platform.mjs` W1–W6, `scroll.mjs` R1–R10, `playback.mjs` Z1–Z12, `reset.mjs` O1–O10, `profiles.mjs` **F1–F12**, `bundle.mjs` **I0–I17**. 🔴 **`bundle.mjs` must never click `[data-profile-export]` or `[data-profile-import]`** — the native picker cannot be stubbed (every `__TAURI_INTERNALS__` member is immutable) and a `#32770` dialog wedges the run. It drives the app's `grant_path`/`writeFile`/`readFile` sequence directly, and only clicks the mode buttons and the confirm gate, which never reach the picker. |
 
 - Flags: `-Phase web|win|android|all` (default `all`), `-Suite full|mobile`. ⚠️ `run|features` were removed
   2026-10-11 when those suites were retired; both runners now carry a `ValidateSet`, so a stale `-Suite` value
@@ -516,11 +567,62 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   `sound_file_*` key, a bare **key variable** in a helper, and a raw `cdp('Page.reload')` that wipes the page
   helpers. It is verified to fail on a deliberately re-broken file. Deliberate opt-outs use
   `// PROFILE-GUARD-OFF: <reason>` … `// PROFILE-GUARD-ON` and the guard rejects an opt-out with no reason.
+- 🆕 **`node e2e/profileBundle.check.mjs`** — **36 fast node-level assertions** over `src/profileBundle.js`
+  (2026-10-13), against a fake `localStorage` **and a fake blob store**. It covers the whole `.spellcaster`
+  pipeline: provenance, all five container shapes, a full export → wipe → import → deep-compare round trip,
+  dedupe-by-hash, both import modes, the snapshot/restore path, the atomicity ordering, and every refusal
+  (corrupt payload, newer `formatVersion`, unreadable blob, failed blob write). ⚠️ **It is not a substitute for the
+  shared browser spec** — it never opens a picker and never touches Tauri — which is precisely why the coverage
+  feature entry stays `planned`.
 - 🆕 **`node e2e/profileStorage.check.mjs`** — 26 fast node-level assertions over `src/profileStorage.js` against a
   fake `localStorage`. No browser, so it is worth running for any future change to storage or the uploads plan.
 
 ## Verification gates
-- `npx eslint .` → **0 errors**, 3 pre-existing warnings (`convertFileSrc`, `_`, `ev` — all unused vars).
+- ✅ **Gates 2026-10-14 (step 8 session) — ALL SEVEN GREEN.** Named individually, with real numbers and
+  exit codes. The Android re-run that was outstanding has since passed.
+  | Gate | Result |
+  |---|---|
+  | `backup-project.ps1` | **VERIFY OK, 228/228** (`…-20261014-200929`), taken at the end so it matches the final state |
+  | `npx eslint .` | **0 errors / 3** pre-existing warnings (`convertFileSrc`, `_`, `ev`) |
+  | `npx vite build` | **exit 0** (783 ms) |
+  | `node e2e/check-coverage.mjs` | **exit 0 — 40 suites, 349 tests, 12 shared specs, 24/24 shipped features covered, 0 gaps** |
+  | `check-profile-keys` / `profileBundle.check` / `profileStorage.check` | **OK** / **36/36** / **26/26** |
+  | **web E2E** | **225 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261014-192405.log`) — Suite I contributes I1 + I2 |
+  | **Windows E2E** | **239 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-run-20261014-191900.log`) — the WARN is G5, by design. **All 17 Suite I ids green** |
+  | **Android E2E** | **229 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-android-20261014-201224.log`) — the WARN is G5, by design. **All 17 Suite I ids green** |
+  | user hand-test | ✅ **PASSED 2026-10-14** — the user tested export/import on the built app, web build → Android build |
+- 🔴 **THE SUITE FOUND A REAL BUG THE HAND-TEST COULD NOT.** `src/profileBundle.js` called
+  `dirname(fullPath)` without `await`; `dirname` is async, so `exists()` got a Promise and the IPC rejected
+  with *"invalid args `path` for command `exists`: invalid type: map"*. **Every import carrying an uploaded audio
+  file failed on desktop AND Android.** A bundle of shipped sounds has no blobs, so the loop never ran. Fixed;
+  see the header for the full account.
+- ⚠️ **`playback.mjs` Z1 and Z2 sampled a single instant against a 0.576s asset** (`Longbow_4.mp3`), and `z1` is
+  taken ~2.3s after the trigger — the Android Q11 race again ("a race wearing a trouser-suit"). Z2 now polls for
+  `readyState >= 2` with a bounded timeout and reports how long it waited; Z1 accepts "still running
+  (`paused === false`) **or** demonstrably ran (`currentTime > 0`)". **Both unverified on Android.**
+- 🔴 **`e2e-snapshot.mjs` was reporting a reload it could not prove.** It did
+  `await cdp('Page.reload').catch(() => {})` and then logged "page reloaded" unconditionally, while the verify
+  beneath it only re-reads `localStorage` — which is **correct even when no navigation happened**. With no reload
+  the app keeps its boot-time board in React state and re-persists it over the restore. It now stamps a marker,
+  reloads, and requires the marker to be gone (**new exit 6**), telling the user to close the app by hand if not.
+  💡 **This is the check the 2026-10-11 data loss needed and never had.**
+- ⚠️ **The user's board was displaced once today and restored.** The first Suite I version **threw** on a null
+  `manifest`, which unwound `main()` and **skipped the entrypoint's localStorage restore**, leaving the E2E
+  fixture (`Hero` / `Uploaded Roar` / `Uploaded Roar (copy)`) as the live board. Recovered from the intact
+  `ls-backup-20261014-181642.json` and **verified: all 15 keys match.** The only residue is an empty
+  `uploads/p_6fd7a1c1/` directory, which the app cannot remove (`fs:allow-remove-dir` does not exist).
+  💡 **A spec must never throw.** Suite I's `run()` is wrapped, every page result is dereferenced defensively,
+  and a failed prerequisite FAILs the dependent ids by name (`I0` logs only when the catch fires).
+- 🔴 **The restore-to-disk doubt is NOT closed.** Across today's runs the in-page restore verified every time,
+  yet the **next** run's pre-run snapshot held the previous run's fixture profile. The reload now proves itself,
+  so the remaining suspect is WebView2's asynchronous flush across the `taskkill`. The check that would settle
+  it — restart the app after a run and re-snapshot from disk — **has still never been automated.** Open risk.
+- ⚠️ **PROJECT_STATE.md was briefly corrupted by a PowerShell line-range rewrite** that read the file as ANSI and
+  re-encoded it, and the `git checkout` used to undo that also discarded the **uncommitted 2026-10-13** edits to
+  this file. Both were recovered: the corrupt write was reverted and this file was restored from the
+  `…-20261014-175940` backup (strict UTF-8, 87 arrows intact). 💡 **Never rewrite a tracked UTF-8 file with
+  `Get-Content`/`WriteAllLines` in PowerShell 5.1 — use the editor, and never `git checkout` a file whose
+  changes are uncommitted and not backed up.**
 - `npx vite build` succeeds.
 - `npm run lint` is green; it was failing before 2026-10-04 (`vite.config.js` needed a scoped Node globals
   entry in `eslint.config.js` — scoped on purpose so `process` can't leak into browser code).
@@ -805,6 +907,26 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   `docs/session-history.md`. They were referred to as "backups" once, which is how this got re-raised twice;
   they are not backups and there is no decision outstanding.
 
+⚠️ **THE AV CONTAINMENT HAS REGRESSED — `e2e/e2e-full.ps1` was quarantined from ALL FIVE backup folders on
+2026-10-13, including the surviving one.** This contradicts the *"it did not fire again during the final runs"*
+line this section used to carry; that was true through 2026-10-13 15:00 and false by 17:45. Measured, not assumed:
+five backups existed at 21 741 B each, the file was present and the right size, it was **locked and unreadable**
+("being used by another process" — Bitdefender scanning), and ~30 minutes later it was **gone from all five**.
+  - **No data was lost, and that is the part worth stating precisely.** The repo copy survives (the project's
+    `e2e\` directory is excluded from scanning), it is **committed and pushed** — verified `HEAD == origin/mobile-support`
+    at `48ad37de` with `git cat-file -e HEAD:e2e/e2e-full.ps1` passing — and `git show HEAD:e2e/e2e-full.ps1`
+    returns the blob. So the file exists in **three** places and the backups are the one that is degraded.
+  - ⚠️ **The surviving backup is therefore 226 files, not 227.** It is the newest and it matches the working tree
+    (226/226 byte-identical by SHA256), so it is a sound rollback point for everything git does not already hold.
+    **It was deliberately NOT re-taken:** the repair would just re-copy a file the AV removes again, and the
+    standing rule is to prune last and not re-backup after it.
+  - 💡 **The lock is the leading indicator, and it is worth knowing before the file vanishes.** During the prune,
+    `Remove-Item` failed on all four folders with *"the process cannot access the file … being used by another
+    process"*, leaving four **partially deleted shells** (183–185 files each) rather than clean deletions. So the
+    AV holds a write lock for several minutes *before* it quarantines. A prune that fails this way is not a
+    no-op — it has already destroyed most of each folder. **Verify what is left before assuming a failed prune
+    deleted nothing.**
+
 ## Backups
 Run `.\backup-project.ps1` (root) **before any change** — full rules in `AGENTS.md`. Copies everything
 except build output (`node_modules`, `dist`, `.git`, `target`, `gen`), then verifies every
@@ -835,11 +957,14 @@ All 9 were taken on 2026-10-13 between 14:58 and 15:52, all `VERIFY OK` 224 file
 `backup-project.ps1` **prints its folder name and nothing prunes it**, so a session that takes several backups
 (two at the start/end of a change, more after each commit) leaves the record out of date silently. **Count the
 folders on disk before writing the number down** — `Get-ChildItem $desk -Directory -Filter 'ttrpg-soundboard-backup-*'`.
-✅ **Pruned to ONE after a verified push** (2026-10-13, at the user's request): 9 → 1, **~318 MB freed**
-(358.1 MB → 39.8 MB). Safety was proven **before** deleting, not assumed: every file in all 9 was matched against
-**git `ls-files` ∪ the working tree**, and **all 9 returned 0 orphans** — nothing existed only in a backup. The
-survivor was then re-checked as a *kept* artifact, not assumed good: **224 files / 39.81 MB, 0 zero-byte, all 8
-spot-checked paths present, 72 files in `public/assets`, and `e2e-full.ps1` survived** (Bitdefender did not fire).
+✅ **Pruned again 2026-10-13 at 17:45, 5 → 1** (at the user's request), keeping **`…-172917`** — **~159 MB freed**
+(199.3 MB → 39.89 MB). All five were taken this session plus the last one: `155810` (pre-session survivor),
+`160137`, `161425`, `172435`, `172917`. Safety was proven **before** deleting, not assumed: every file in all five
+was matched against **git `ls-files` ∪ the working tree**, and **all five returned 0 orphans**. The survivor was
+then re-checked as a *kept* artifact: **226/226 files byte-identical to the working tree by SHA256**, 0 zero-byte,
+all three new files present (`src/profileBundle.js`, `src-tauri/src/scope.rs`, `e2e/profileBundle.check.mjs`),
+71 files in `public/assets`. ⚠️ **It is 226 and not 227** — `e2e/e2e-full.ps1` was quarantined by Bitdefender; see
+the AV section above. That is one file behind HEAD, recoverable from git, and deliberately not re-taken.
 ⚠️ **The `Launch Opencode - ttrpg soundboard.bat.lnk` shortcut on the desktop was left alone** — it is a launcher,
 not a backup.
 💡 **The surviving folder is `…-155810`, not the one first kept — and that is the rule working, not churn.**
@@ -907,9 +1032,12 @@ Older: `ttrpg-soundboard-backup-20261006-215129` (206/206, before the volume cha
 ✅ The accented path check passes: `Masaüstü` char codes are `77,97,115,97,252,115,116,252`.
 
 ### Bitdefender quarantined the backup folder itself?
-Not excluded, but it also did not fire again during the final runs — the several test backups taken after
-the first deletion all kept `e2e-full.ps1`. Likely AV caching from the re-scan of identical content, not
-safety. Assume it *will* be eaten again; `backup-project.ps1` is the mitigation, not a fix.
+**It fired on 2026-10-13 and the containment has regressed** — see the ⚠️ note immediately above this heading.
+`e2e/e2e-full.ps1` was quarantined from **all five** backup folders this session, where it had survived every run
+through 2026-10-13 15:00. The repo copy is excluded from scanning and is committed and pushed, so this is a
+backup-folder problem only. `backup-project.ps1` remains the mitigation, not a fix — but note that a *repair* now
+restores a file the AV deletes again, so a repaired backup can report `VERIFY OK` and still be one file short by
+the time it is used.
 
 ## Docs layout (changed 2026-10-04)
 This file was split from a 1000-line `opencode-summary.md` — it had grown so large that future sessions had
@@ -1102,13 +1230,8 @@ cancels, edit mode does not prime, a tap fires the primed set and consumes it, t
 
 | Spec | Status |
 |---|---|
-| `PROFILE_SYNC_SPEC.md` | ✅ **AUTHORISED and IN PROGRESS — step 1 of 8 SHIPPED as `577505d`** (2026-10-12). The three design decisions are settled (§0.3: timestamps **cut**, switch = **full remount**, `DATA_VERSION` **migrates**), and step 1 delivered profile-scoped storage, the profile index, the first-run migration, the Tauri uploads migration, and a proven full-remount switch — all seven gates green and **hand-tested by the user**. Both platform unknowns remain **closed**: Android spiked 2026-10-04, **desktop spiked 2026-10-06**. The desktop answer: a user-picked path **is** writable, via a **~5-line Rust command** that calls `app.fs_scope().allow_file(path)` — the same mechanism the fs plugin uses for drag-and-drop. **No blanket fs scope, no `fs:scope: ["**"]`.** That 2026-10-06 spike also **falsified a fact the spec asserted** (`fs:default` *does* grant `read_dir`), **found a missing capability** (`dialog:allow-save` / `dialog:allow-open`), and **found a silent-corruption trap** (a plain `Array` byte payload is stringified by desktop IPC). ⚠️ **REMAINING: spec steps 3–6** — provenance classifier, bundle format, import (atomic, both modes), export + destination pickers. **None of that exists yet**; the user went looking for the import/export UI and correctly found it absent.
-⚠️ **`fflate@0.8.3` (zip) and `@noble/hashes@2.4.0` ARE now installed — added by `fd57d3a` (2026-10-12 17:46)**, so
-this file's earlier *"no zip dependency is installed"* was true when written and is now false. Both are present in
-`package.json` *and* `node_modules`. **Neither is imported anywhere yet** — grep `src/` for `fflate` /
-`@noble/hashes` to confirm before assuming, and run `npx eslint .` since nothing consumes them.
-The `coverage.manifest.json` feature entry correctly stays `status: planned` until the round-trip tests can be
-written. |
+| `PROFILE_SYNC_SPEC.md` | ✅ **steps 1, 3–6 AND 8 SHIPPED; steps 2 (cut) and 7 (partial) remain.** Step 1 shipped as `577505d` (2026-10-12) and is covered by `specs/profiles.mjs` (F1–F12). Steps 3–6 shipped 2026-10-13. **Step 8 shipped 2026-10-14** as `specs/bundle.mjs` (**I0–I17**), and the `coverage.manifest.json` feature entry is now **`status: shipped`** — the flip is what forced the round-trip tests to exist. The user **hand-tested export/import on 2026-10-14** (web → Android). Design decisions settled (§0.3: timestamps **cut**, switch = **full remount**, `DATA_VERSION` **migrates**). **REMAINING: step 7** — the Restore Defaults profile-scoping proof and the progress/report UI. The desktop `app.fs_scope().allow_file(path)` route is shipped and measured (11/11 on real hardware, per-file narrowness confirmed) — **no blanket fs scope, no `fs:scope: ["**"]`.** |
+| 🆕 **`fflate@0.8.3` (zip) and `@noble/hashes@2.4.0` ARE installed and NOW IMPORTED** — added by `fd57d3a` (2026-10-12 17:46) but **dead weight until 2026-10-13**, when `src/profileBundle.js` became their first consumer. ⚠️ `@noble/hashes` v2 has an **explicit-`.js` exports map**: the import is `@noble/hashes/sha2.js`, and the bare `@noble/hashes/sha2` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `coverage.manifest.json` feature entry stays `status: planned` until the shared browser spec exists. |
 | `MOVE_COPY_SOUND_SPEC.md` | **Retired 2026-10-04** — shipped, user-tested, committed as `f7f316e`, spec deleted. Its 8 settled decisions, invariants and deferred list are preserved in `docs/session-history.md`; the design now lives in `src/App.jsx`. See Retired files. |
 
 ## ✅ Handover — profiles step 1 (opencode, COMMITTED as `577505d`, 2026-10-12 00:00)
@@ -1284,6 +1407,25 @@ Suite F **clears storage** and creates/deletes profiles, so it runs **before** `
 both of which re-seed for themselves. O must stay last of all.
 
 ## Open items
+- 🔜 **Commit and push** — nothing from 2026-10-13 or today is in git, including the `dirname` bug fix.
+- 🔜 **Consider the node checks gates.** `profileBundle.check.mjs` (36), `profileStorage.check.mjs` (26) and
+  `check-profile-keys.mjs` need no browser, yet none is in the seven-gate table — so a session can report "all
+  gates green" without ever running them. Adding them is a one-line change to the DoD.
+- 🔴 **The restore-to-disk gap is still open** — see Verification gates. The fix is to restart the app after a
+  Windows phase and re-snapshot from disk, comparing against the pre-run snapshot. Until that exists,
+  "restored and verified" means *in-page*, which has twice been true while the on-disk store held the fixture.
+  This is the highest-value remaining harness work: it is the failure that has cost the user data twice.
+- ⚠️ **The native picker is the one untested link** in export/import, and it is untestable from CDP (every
+  `__TAURI_INTERNALS__` member is immutable; the writable `chrome.webview.postMessage` is bypassed by a closure).
+  The user's hand-test covers it. Re-verifying costs a human clicking two dialogs.
+- ⚠️ **Step 7's remainder:** Restore Defaults is **not yet proven to act on the active profile only**, and there is
+  no import progress dialog or per-file report (§9.2 asks for both). The current UI reports **errors** and
+  deliberately says nothing on success — see the note below on why that silence is not a bug.
+- ⚠️ **A successful import deliberately shows no confirmation.** Both modes remount (a new profile activates, a
+  replaced one calls `requestProfileRemount`), so the Settings modal unmounts with the tree and any message set
+  first would be discarded. The board visibly changing is the feedback. Errors *do* show, because a failed
+  import does not remount. If the user finds the silence disorienting, the fix is a notice that survives the
+  remount (a one-shot localStorage key), not re-adding per-file progress.
 - ✅ **RESOLVED 2026-10-13 15:56 — the 114-file E2E snapshot is deleted, at the user's explicit instruction.** It
   held **114 files / 18.03 MB** (all **53** mp3 + **15** png of theirs, plus 46 `e2e_silence` fixtures) in
   `%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\`, having survived the earlier sweep. They
@@ -1460,35 +1602,47 @@ both of which re-seed for themselves. O must stay last of all.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- 🔜 **`PROFILE_SYNC_SPEC.md` steps 3–6 is the next task.** Step 1 of 8 shipped as `577505d`, all seven gates
-  green, hand-tested. **No app code for steps 3–7 exists** — no provenance classifier, no bundle format, no
-  import, no export, no UI. ⚠️ **The cut-off 2026-10-12 17:28 session got as far as `fd57d3a` (17:46): it added
-  `fflate@0.8.3` and `@noble/hashes@2.4.0` to `package.json` and committed them, and nothing else.** That is the
-  whole of its contribution — **no `src/` file references either package** — so the next session starts from a
-  clean tree with the dependencies already waiting. 💡 Those two are the obvious inputs to steps 3–4 (zip for the
-  bundle format, hashes for content addressing / integrity), so the choice was probably deliberate; confirm against
-  the spec before building on it.
-  Starting points, so the next session does not re-derive them:
-  - **Storage is already profile-scoped** (`src/profileStorage.js`, `profile:<id>:<key>`, uploads at
-    `uploads/<profileId>/`), so export/import is a read-and-write over an existing adapter rather than a refactor.
-    The profile switch is a **full remount** and a `DATA_VERSION` mismatch **migrates** (§0.3 decisions 2 and 3).
-  - **The destination-picker write is already spiked and passing** on both platforms: desktop needs the ~5-line
-    `app.fs_scope().allow_file(path)` runtime grant (**no** blanket scope), and Android takes a `content://` URI
-    that `plugin-fs` resolves. Pass **`Uint8Array`, never `Array`** — desktop IPC stringifies an `Array` body.
-  - **Provenance is structural, not a flag**: a reference with no `storedName` is a bundled asset.
-    `localStorageMigrationCompleted` and the `spellcaster_profiles` index must **stay global**.
-  - ⚠️ **Register the feature as `planned` in `e2e/coverage.manifest.json` when you *start*, not when you finish**
-    — flipping it to `shipped` is what forces the tests to exist.
+- 🔜 **`PROFILE_SYNC_SPEC.md` step 8 is the next task: the shared E2E spec.** Steps 3–6 shipped 2026-10-13 and
+  step 7 is partial, but **no browser spec covers export/import**, so the manifest feature entry stays
+  `status: planned` — which is the gate doing its job, not an oversight. The spec is `e2e/specs/profiles.mjs`,
+  imported by **both** entrypoints (wired to one only fails `check-coverage` with `SPEC_NOT_SHARED`), plus a
+  `suites` block and a `--update`.
+  - 💡 **§9.3 is what makes it possible.** `exportBundle`/`importBundle` take and return **bytes**, so a spec can
+    drive the whole round trip in-page and **never open a native dialog** — the only way it could be tested on
+    Android at all (`DOM.setFileInputFiles` kills the Android WebView).
+  - ⚠️ **Pick a free id prefix.** `F` is now taken (Suite F, F1–F12). `I` was the other free candidate on
+    2026-10-11 — re-check `coverage.manifest.json` before choosing, and keep `idPattern` non-overlapping
+    (`AMBIGUOUS_ID`).
+  - ⚠️ **A spec that reloads constantly needs its OWN post-reload helpers.** `window.__setInput` does not survive
+    a reload and `evalJs` swallows the exception, so the failure surfaces much later with a misleading value.
+  - ⚠️ **Step 7's remainder:** Restore Defaults is **not yet proven to act on the active profile only**, and there is
+    no progress dialog or per-file report (§9.2 asks for both). The current UI reports **errors** and deliberately
+    says nothing on success — see the note under Open items.
+- ⚠️ **The user has NOT hand-tested export/import.** Per the DoD this is a **user-facing** feature, so the
+  hand-test bar applies and it has **not** been met. Say so plainly; do not imply otherwise. Only a human can
+  confirm that a native picker opens on each platform, that export → import on a *different* device preserves the
+  board, and that "Replace active" behaves under a real board.
+- ✅ **Steps 3–6 shipped 2026-10-13.** What follows is what the next session should NOT have to re-derive:
+  - **The bundle engine is `src/profileBundle.js`**, a pure-bytes module (§9.3) — `exportBundle(options)` returns
+    `{bytes, manifest, data}` and `importBundle(bytes, options)` returns a report. Both take injectable `store` /
+    `normalize` so `e2e/profileBundle.check.mjs` drives them in node against a fake localStorage (**36/36**).
+  - **Provenance is structural, not a flag**: a reference with no `storedName` is a bundled asset, and bundled
+    assets never enter a bundle. `localStorageMigrationCompleted` and the `spellcaster_profiles` index **stay
+    global**.
+  - **Pass `Uint8Array`, never `Array`** — desktop IPC stringifies an `Array` body. This was **reproduced live**
+    (64 bytes → a 189-byte file of digits, no error), which is why the app also reads the file back off disk and
+    checks its size and `PK` magic before reporting success.
+  - **The destination-picker write needs no new capability** — just the ~5-line `app.fs_scope().allow_file(path)`
+    runtime grant, **measured working and per-file** (11/11). Android takes a `content://` URI that `plugin-fs`
+    resolves, with no scope change at all.
   - ⚠️ **Facts re-verified and WRONG in older notes:** `localStorage` call sites are still **27**, but the
-    `uploads/` count is **4 chokepoints, not 10** — `getTauriStoragePath` (App.jsx:2740) is the
-    single path builder with 3 callers, and `getFileFromLocalStorage` bypasses it via `appDataDir`/`join`. Prefix
-    *enumeration* is real. `localStorageMigrationCompleted` **must stay global** (prefixing it would re-run the
-  one-time web→Tauri audio sweep) — as must the `spellcaster_profiles` index. Provenance is **structural, not a
-  flag**: a reference with no `storedName` is a bundled asset. "Reset to starter sounds" shipped as `restoreDefaults`
-  (App.jsx:3111) and now needs profile-scoping. Two risks remain on the board: cross-profile shared blobs (never
-  hardlink between profiles) and the object-URL cache on switch (App.jsx `objectUrlCache`). 💡 **The design also
-  changed in three places during step 1**: timestamps were **cut**, the switch became a **full remount** rather
-  than an in-place reload, and a `DATA_VERSION` mismatch now **migrates** instead of resetting.
+    `uploads/` count is **4 chokepoints, not 10** — `getTauriStoragePath` is the single path builder with 3
+    callers, and `getFileFromLocalStorage` bypasses it via `appDataDir`/`join`. Prefix *enumeration* is real.
+    "Reset to starter sounds" shipped as `restoreDefaults` (App.jsx:3111) and now needs profile-scoping. Two risks
+    remain on the board: cross-profile shared blobs (never hardlink between profiles) and the object-URL cache on
+    switch (App.jsx `objectUrlCache`). 💡 **The design changed in three places during step 1**: timestamps were
+    **cut**, the switch became a **full remount** rather than an in-place reload, and a `DATA_VERSION` mismatch now
+    **migrates** instead of resetting.
 - ✅ **Per-sound volume is complete and committed** (2026-10-06): shipped, **hand-tested by the user** ("works as
   intended from the brief testing"), and green on web / Windows / Android. ✅ Suite P is **now ported** to
   `e2e-mobile.mjs` (2026-10-10) and passes on Android — **148 PASS / 0 FAIL / 0 WARN**. Still uncovered: the

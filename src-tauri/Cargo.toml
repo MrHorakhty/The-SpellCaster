@@ -25,3 +25,8 @@ tauri = { version = "2.11.3", features = ["protocol-asset"] }
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-log = "2"
 tauri-plugin-os = "2.2.0"
+# Save/open pickers for profile export and import (PROFILE_SYNC_SPEC.md §7, §10).
+# Resolves to 2.7.x and pulls rfd. BOTH entry points must register it - a plugin
+# registered only in main.rs is silently missing on mobile, which fails with
+# "dialog.save not allowed. Plugin not found".
+tauri-plugin-dialog = "2"

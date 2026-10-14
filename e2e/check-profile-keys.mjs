@@ -22,7 +22,7 @@
 // were deleted after use; this is the guard that replaces them.
 //
 // Run: node e2e/check-profile-keys.mjs
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,10 +30,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const ENTRYPOINTS = ['e2e/e2e-full.mjs', 'e2e/e2e-mobile.mjs'];
 const SPECS_DIR = 'e2e/specs';
-const SPECS = [
-  'volume', 'indicators', 'sliders', 'soundintogroup', 'drag', 'refcount',
-  'platform', 'scroll', 'playback', 'reset', 'profiles',
-].map(n => `${SPECS_DIR}/${n}.mjs`).filter(rel => existsSync(join(root, rel)));
+// Every file in e2e/specs, read from the DIRECTORY. This list was a hard-coded
+// enumeration, which is the same shape of bug this script exists to catch: a spec
+// added later is simply not scanned, so it can quietly go non-profile-aware and
+// still report OK. A guard whose own coverage list can go stale is worse than no
+// guard. `existsSync` on the directory keeps this working before it exists.
+const SPECS = existsSync(join(root, SPECS_DIR))
+  ? readdirSync(join(root, SPECS_DIR)).filter(f => f.endsWith('.mjs')).map(f => `${SPECS_DIR}/${f}`).sort()
+  : [];
 
 const BARE_KEYS = [
   'ttrpg_characters_icon', 'ttrpg_environment_icon', 'ttrpg_characters',

@@ -17,6 +17,8 @@
     "fs:allow-mkdir",
     "fs:allow-remove",
     "fs:allow-rename",
-    "os:default"
+    "os:default",
+    "dialog:allow-save",
+    "dialog:allow-open"
   ]
 }

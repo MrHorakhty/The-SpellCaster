@@ -45,7 +45,13 @@ export default [
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',
-        clearInterval: 'readonly'
+        clearInterval: 'readonly',
+        // Bundle encoding/decoding (profileBundle.js): web audio is stored as
+        // base64 data URLs, and a bundle's zip payloads are TextEncoder output.
+        atob: 'readonly',
+        btoa: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly'
       }
     },
     rules: {

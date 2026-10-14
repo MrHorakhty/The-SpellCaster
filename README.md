@@ -56,6 +56,8 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 - **Icon Support**: PNG, JPG, and GIF icon formats for sound customization
 - **Persistent Storage**: Automatic saving of configurations and file management
 - **Visible Save Failures**: Storage errors (for example a full browser quota) surface in-app instead of failing silently
+- **Profiles**: Each profile keeps its own characters, environment categories, groups, settings and uploaded audio, on one device. Create, rename, switch or delete them from Settings; switching reloads the board. Deleting a profile warns how many uploaded files go with it, and only ever removes that profile's own audio
+- **Profile Export & Import**: Move a whole board between devices as one `.spellcaster` file *(desktop and Android; see Platform Support)*. Export writes a plain zip containing the audio **you** added — the sounds that ship with the app are identical everywhere and are not duplicated into it. Import offers **Create a new profile** (leaves everything as it is) or **Replace this profile** (snapshots it first, so it stays recoverable). A corrupted or newer-format bundle is refused before anything is written, naming the problem; a sound whose audio is missing is dropped and reported rather than installed half-broken. **There is no account, no sign-in and no server — the file goes wherever you save it, and nothing leaves your machine unless you send it somewhere yourself.** Two things deliberately do *not* travel: your **custom background image** (a per-device display choice — the theme and colour do travel) and **priming**, which is deliberately one-shot and lasts for a single trigger in the session
 
 ## Platform Support
 
@@ -63,11 +65,15 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 |---|---|---|---|
 | Sound playback, characters, environment, groups | ✅ | ✅ | ✅ |
 | Persistent storage | Filesystem + localStorage | Filesystem + localStorage | localStorage only |
+| Profiles (create / switch / rename / delete) | ✅ | ✅ | ✅ |
+| Profile export & import (`.spellcaster`) | ✅ | ✅ | — |
 | Split View | ✅ | — (single column) | ✅ |
 | Custom backgrounds & themes | ✅ | ✅ | ✅ |
 | Minimum version | — | Android 7.0 (API 24) | Any modern browser |
 
 Audio files uploaded on desktop/web are stored through the Tauri filesystem plugin where available, and fall back to `localStorage` in the browser. On Android they are written to the app's private data directory.
+
+⚠️ **Export/import is deliberately not offered in the web build.** Browser audio lives as base64 data-URLs inside `localStorage` and caps out around 5 MB, so a web export could only ever be metadata — a misleading promise. Supporting it properly means first moving web audio out of `localStorage` into real files, which is separate work. The bundle format itself is platform-agnostic and already written so web can be enabled behind it with no rework.
 
 ## Tech Stack
 

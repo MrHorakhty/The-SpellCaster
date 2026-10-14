@@ -269,6 +269,25 @@ export function subscribeProfileSwitch(listener) {
     return () => switchListeners.delete(listener)
 }
 
+/**
+ * Ask the app to remount onto the profile it is ALREADY on.
+ *
+ * Separate from `setActiveProfile` because that one changes state, and this
+ * does not - it is a lie to call it here, and it would stop being the right
+ * call the moment the id check tightened.
+ *
+ * It exists for one case: "Replace active" import writes a new board into the
+ * live profile's keys while React still holds the old one. The three auto-save
+ * effects then fire on the next state change and write that stale state straight
+ * back over the import. A remount is the fix, and it is the same fix a switch
+ * uses (PROFILE_SYNC_SPEC.md §11 risk 10's residual case).
+ */
+export function requestProfileRemount() {
+    const active = readProfileIndex().activeProfileId
+    for (const listener of switchListeners) listener(active)
+    return active
+}
+
 // --- scoped value access ---------------------------------------------------
 
 export function readProfileValue(profileId, key) {

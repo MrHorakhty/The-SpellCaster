@@ -205,9 +205,42 @@ const applied = await evalJs(`(() => {
   return Object.keys(o).length;
 })()`);
 log(`restored ${applied} localStorage keys from ${file}`);
-await cdp('Page.reload', { ignoreCache: true }).catch(() => {});
+
+// 🔴 PROVE THE RELOAD HAPPENED. This line used to be
+// `await cdp('Page.reload', ...).catch(() => {})` followed by an unconditional
+// "page reloaded so the app re-reads storage" - and the swallow meant a failed
+// reload was reported as a successful one. The verify below then passes anyway,
+// because it re-reads `localStorage`, which IS correct even when the page never
+// navigated. That combination is theatre: with no reload the app keeps the board
+// it loaded at boot in React state, the next state change re-persists it over
+// the restore, and the "restored and verified" run leaves the fixture on disk.
+//
+// Observed 2026-10-14: a suite that CRASHED before its own restore left exactly
+// that state behind - the in-page store matched the snapshot, and the live
+// WebView2 store held the test fixture instead.
+//
+// So: stamp a marker, reload, and require the marker to be gone. A reload that
+// did not happen is a hard failure, not a warning.
+await evalJs(`(() => { window.__restoreMarker = 'pre-reload'; return 'stamped'; })()`);
+let reloadError = null;
+try {
+  await cdp('Page.reload', { ignoreCache: true });
+} catch (err) {
+  reloadError = err && err.message;
+}
 await new Promise(r => setTimeout(r, 3000));
-log('page reloaded so the app re-reads storage');
+const markerGone = await evalJs(`typeof window.__restoreMarker === 'undefined'`).catch(() => false);
+
+if (reloadError || markerGone !== true) {
+  console.error(`[${LABEL}] FAILED: the page did not reload, so the app is still holding the pre-restore board in memory and will write it back over this restore.`);
+  if (reloadError) console.error(`[${LABEL}]        Page.reload error: ${reloadError}`);
+  if (markerGone !== true) console.error(`[${LABEL}]        the pre-reload marker survived, i.e. no navigation occurred`);
+  console.error(`[${LABEL}]        Snapshot kept at: ${file}`);
+  console.error(`[${LABEL}]        Recover with: close the app by hand, then rerun this script.`);
+  ws.close();
+  process.exit(6);
+}
+log('page reloaded (marker gone) so the app re-reads storage');
 
 // ⚠️ VERIFY, because "restored N keys" used to be a claim nobody checked and it was
 // wrong. On 2026-10-11 the 22:15 Windows run reported "restored 7 localStorage keys",

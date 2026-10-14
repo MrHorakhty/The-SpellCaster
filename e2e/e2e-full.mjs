@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connect, sleep } from './lib/cdp.mjs';
 import { createReport } from './lib/report.mjs';
-import { CAPTURE_LS, INSTRUMENT_AUDIO, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
+import { CAPTURE_LS, INSTRUMENT_AUDIO, KNOWN_KEYS, PAGE_HELPERS, PK_KEYS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
 import { makeDriver } from './lib/driver.mjs';
 import { runSpecs } from './lib/spec-runner.mjs';
 import { volume } from './specs/volume.mjs';
@@ -37,6 +37,7 @@ import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
+import { bundle } from './specs/bundle.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9333;
 const LABEL = process.env.LABEL || 'FULL';
@@ -1004,8 +1005,19 @@ async function main() {
   // from an earlier run - and failed the suite on 2026-10-12 for a reason that had
   // nothing to do with the code. The guard is still exactly as strict: a DATA_VERSION
   // mismatch must not leave a backup behind for the profile under test.
+  //
+  // One key IS excluded, and 2026-10-14 is why: `<knownKey>_old`. readProfileData
+  // writes that copy ON PURPOSE, for a profile that holds data with no version
+  // stamp ("a key written before versioning, or an imported bundle"), then adopts
+  // the current version. The user's Windows store still carries a profile in
+  // exactly that state, so the app performed that migration at page load - before
+  // this harness can speak - and the key was sitting here on every run. Counting
+  // it as "a data reset" tests the wrong thing: the app is behaving as designed,
+  // and the DATA_VERSION assertion below is what proves no reset happened. The
+  // exclusion is narrow - only a known key plus `_old`; any other `_old` still fails.
   const ver = await evalJs(`(() => {
-    const old = window.__keysFor(window.__pid()).filter(k => k.endsWith('_old'));
+    const known = ${JSON.stringify(PK_KEYS)};
+    const old = window.__keysFor(window.__pid()).filter(k => k.endsWith('_old') && !known.includes(k.slice(0, -4)));
     return { v: localStorage.getItem(window.__pk('ttrpg_data_version')), old };
   })()`);
   log('MOVE','M21: DATA_VERSION still 3, no *_old keys',ver?.v==='3'&&ver?.old?.length===0?'PASS':'FAIL',JSON.stringify(ver));
@@ -1533,8 +1545,12 @@ async function main() {
   await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fireCoords.x, y: fireCoords.y, button: 'right', clickCount: 1, buttons: 0 });
   await sleep(250);
   const keysBefore = await evalJs(`window.__bareKeys()`);
-  const knownPrimeKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted','spellcaster_profiles'];
-  const primeKeys = (keysBefore||[]).filter(k => !knownPrimeKeys.includes(k));
+  // KNOWN_KEYS, imported - not a second copy of it. That copy is how
+  // spellcaster_import_backups got missed here on 2026-10-14 and failed P31a on
+  // every Windows run whose store already held one, while P14a (volume.mjs, which
+  // imports the list) passed. Two lists of "the keys the app may persist" is one
+  // too many; both assertions now read the same one.
+  const primeKeys = (keysBefore||[]).filter(k => !KNOWN_KEYS.includes(k));
   log('PRIME','P31a: no new localStorage key for priming',primeKeys.length===0?'PASS':'FAIL',JSON.stringify(primeKeys));
 
   await reloadPage();
@@ -1600,6 +1616,18 @@ async function main() {
   // the end, before the two specs that re-seed for themselves. It must stay
   // ahead of refcount and reset, which both re-seed after themselves.
   await runSpecs(ctx, [profiles]);
+
+  // ================================================================
+  //  I: PROFILE BUNDLES - EXPORT / IMPORT (shared spec - specs/bundle.mjs)
+  // ================================================================
+  // Steps 3-6 of the profile feature: the .spellcaster format, both import
+  // modes, and the refusals. It seeds its own board and uploads a real sound so
+  // the upload provenance is genuine, and it replaces the native picker with a
+  // stub on window.__TAURI_INTERNALS__.invoke - grant_path, writeFile and
+  // readFile still run for real, so the desktop journey is covered end to end
+  // (I10 and I18) without a #32770 dialog anyone can dismiss. On the web phase
+  // only I1 and I2 run: export/import is Tauri-only by design (§7).
+  await runSpecs(ctx, [bundle]);
 
   // ================================================================
   //  G: FILE REFCOUNT GUARD (shared spec - see e2e/specs/refcount.mjs)

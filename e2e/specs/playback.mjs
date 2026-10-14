@@ -138,9 +138,35 @@ export const playback = {
                    dur:Number.isFinite(a.duration)?a.duration:null,
                    ring: c ? c.className.includes('ring') : null } : null;
     })()`);
-    log('PLAY','Z1: playback started',z1?.paused===false?'PASS':'FAIL',JSON.stringify(z1));
-    log('PLAY','Z2: audio source resolved and decoded',!!z1?.src && z1?.ready>=2?'PASS':'FAIL',`ready=${z1?.ready} src=${(z1?.src||'').slice(0,60)}`);
+    // "Playback started" is proven by currentTime having ADVANCED, not by a paused
+    // flag sampled at one instant. The fixture is Longbow_4.mp3, which is 0.576s
+    // long, and z1 is taken ~2.3s after the trigger (the ramp sample above is 16 x
+    // 120ms, then a 400ms settle) - so a correctly-started clip has usually
+    // ALREADY ENDED by then and reports paused:true. Sampling an instant against a
+    // sub-second asset is the same trap as Android Q11. Accept either window:
+    // still running (paused false), or demonstrably ran (currentTime > 0).
+    log('PLAY','Z1: playback started',z1 && (z1.paused===false || z1.ct>0)?'PASS':'FAIL',JSON.stringify(z1));
     log('PLAY','Z3: card shows the play ring while playing',z1?.ring===true?'PASS':'FAIL',String(z1?.ring));
+
+    // ---- Z2: decoded, POLLED not sampled -----------------------------------
+    // This used to read `readyState` out of the single z1 sample, taken ~400ms
+    // after the trigger, and report FAIL whenever the source had resolved but not
+    // yet buffered - ready=1 is HAVE_METADATA. That is the same race Android Q11
+    // had (see PROJECT_STATE: "an async UI assertion that samples once is a race
+    // wearing a trouser-suit"), and it fired on a loaded emulator on 2026-10-14.
+    //
+    // So: poll for the CONDITION with a bounded timeout and report how long it
+    // took, which is what makes the failure diagnosable. Safe to do here because
+    // the fade ramp above is already fully sampled by this point - z4 was captured
+    // before z1 - so waiting longer cannot disturb Z4/Z5.
+    let z2 = null;
+    for (let i = 0; i < 25; i++) {
+      z2 = await evalJs(`(() => { const a = window.__pbEl(); return a ? { ready:a.readyState, src:(a.src||'') } : null; })()`);
+      if (z2 && z2.ready >= 2) { z2.waitedMs = i * 120; break; }
+      await sleep(120);
+    }
+    log('PLAY','Z2: audio source resolved and decoded',!!z2?.src && z2?.ready>=2?'PASS':'FAIL',
+      `ready=${z2?.ready} waitedMs=${z2?.waitedMs ?? '>3000'} src=${(z2?.src||'').slice(0,60)}`);
 
     // ---- Z4-Z5: the fade-in ramp -------------------------------------------
     // applyFadeIn walks 20 steps across fadeIn seconds from 0 to _baseVolume. The

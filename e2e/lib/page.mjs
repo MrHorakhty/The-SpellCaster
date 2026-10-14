@@ -88,8 +88,20 @@ export const PROFILE_HELPER = `(() => {
   // an earlier run failed these assertions on Windows while web and Android (clean
   // stores) passed. Four tests, one cause, and the failure had nothing to do with the
   // code under test. Use __keysFor(pid) when you really do mean another profile.
+  //
+  // ⚠️ A '<knownKey>_old' key is skipped, and this one is a HARNESS bug fixed 2026-10-14,
+  // not an app one. readProfileData (profileStorage.js) deliberately writes a
+  // '<key>_old' copy when a profile holds data but no version stamp - "a key
+  // written before versioning, or an imported bundle" - and then stamps the
+  // version. That is the app working. But the user's Windows store carries a
+  // profile in exactly that state, so the migration fired in the MIDDLE of a run
+  // and P14a/P31a reported ttrpg_characters_old as a key "the feature added".
+  // The skip is deliberately narrow: only a known key plus '_old' is dropped, so a
+  // genuinely unexpected key - or even a misspelt foo_old - is still reported.
   window.__bareKeys = () => {
     const pre = 'profile:' + window.__pid() + ':';
+    const known = ${JSON.stringify(PK_KEYS)};
+    const isAppBackup = (name) => name.endsWith('_old') && known.includes(name.slice(0, -4));
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i) || '';
@@ -97,6 +109,7 @@ export const PROFILE_HELPER = `(() => {
       if (k.startsWith('profile:') && !k.startsWith(pre)) continue;
       const name = k.startsWith(pre) ? k.slice(pre.length) : k;
       if (name.startsWith('sound_file_')) continue;
+      if (isAppBackup(name)) continue;
       out.push(name);
     }
     return out.sort();
@@ -193,13 +206,19 @@ export function submitModalExpr(btnText) {
 // ---- storage key inventory (P14 in the volume spec) ---------------------------
 
 // The keys the app is allowed to have persisted. Used by the "this feature added
-// no new storage key" assertions (P14a, P31a) to detect an unexpected key.
+// no new localStorage key" assertions (P14a, P31a) to detect an unexpected key.
 // 'spellcaster_profiles' is the profile index and is deliberately NOT scoped -
 // it is how a profile is found in the first place. __bareKeys() strips the
 // profile prefix off before this comparison, so the list stays in bare names.
+// 'spellcaster_import_backups' joined it on 2026-10-14: the pre-import snapshot
+// that makes "replace active" recoverable (profileBundle.js snapshotProfile).
+// It is global for the same reason the index is - the point is to read it back
+// when the profile it describes no longer holds what it said it did. Without it
+// here, any Windows run whose store already held one failed P14a and P31a for a
+// key the import feature legitimately owns.
 export const KNOWN_KEYS = [
   'backgroundSettings', 'boxSize', 'ttrpg_characters', 'ttrpg_characters_icon',
   'ttrpg_data_version', 'ttrpg_environment', 'ttrpg_environment_icon',
   'ttrpg_groups', 'ttrpg_themes', 'localStorageMigrationCompleted',
-  'spellcaster_profiles'
+  'spellcaster_profiles', 'spellcaster_import_backups'
 ];

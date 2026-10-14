@@ -1,17 +1,26 @@
 # Profiles + Sync — Planning Spec
 
-> **Status**: **Revised 2026-10-11** (docs only). Both platform unknowns remain **closed**: Android spiked
-> 2026-10-04, **desktop spiked 2026-10-06** — a user-picked path *is* writable after a one-command runtime scope
-> grant, no blanket fs scope needed (§10). The 2026-10-04 revision that fixed a wrong `fs:default`/`read_dir`
-> claim was itself wrong; §3 and §10 are corrected below. The parked 2026-09-27 decision is lifted for *design
-> work*; **implementation is still not authorised** — do not write app code until the user gives the go-ahead.
-> **Every code reference in this spec was re-verified against `src/App.jsx` at 6769 lines on 2026-10-11**, not
-> inherited from the 6240-line draft. See §0 for what changed, and §0.1 for the **three design facts that did not
-> exist when the previous revision was written** (per-sound volume, priming, and the E2E harness refactor).
-> ✅ **The three open design decisions are now SETTLED (2026-10-11)** — see **§0.3**. Timestamps are **cut** from
-> v1, the profile switch is a **full remount**, and `DATA_VERSION` mismatches **migrate** rather than reset.
-> **Created**: 2026-09-27 · **Revised**: 2026-10-04, 2026-10-06, 2026-10-11
-> **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), the move/copy feature (shipped as `f7f316e`), per-sound volume (shipped 2026-10-06), and sound priming (shipped 2026-10-08).
+> **Status**: **Steps 3–6 SHIPPED 2026-10-13.** The provenance classifier (§3), the bundle format (§5), atomic
+> import in both v1 modes (§8) and export with its destination pickers (§7, §10) are implemented in
+> `src/profileBundle.js` plus a shared `src-tauri/src/scope.rs`, and carry a 36-assertion node check
+> (`node e2e/profileBundle.check.mjs`, 36/36). The scope grant was then **measured on real desktop hardware**,
+> 11/11. Step 1 shipped earlier as `577505d`; **step 7 (UI) is partially done** — the Export/Import section exists
+> in Settings > Profiles — and **step 8 (the shared E2E spec) has not started**, which is why the feature entry in
+> `e2e/coverage.manifest.json` correctly stays `status: planned`.
+> ⚠️ **No native picker has ever been opened and the user has not hand-tested the built app.** §13 now records
+> exactly which checklist rows are machine-asserted, which are only code-reviewed, and which are unrun.
+> **Revised**: 2026-10-04, 2026-10-06, 2026-10-11, 2026-10-13
+>
+> **Original status notes (superseded, kept for the reasoning):** Both platform unknowns remain **closed**: Android
+> spiked 2026-10-04, **desktop spiked 2026-10-06** — a user-picked path *is* writable after a one-command runtime
+> scope grant, no blanket fs scope needed (§10). The 2026-10-04 revision that fixed a wrong `fs:default`/`read_dir`
+> claim was itself wrong; §3 and §10 are corrected below. **Every code reference in this spec was re-verified
+> against `src/App.jsx` at 6769 lines on 2026-10-11**, not inherited from the 6240-line draft — and the file is now
+> **~7300 lines after step 6**, so treat every `App.jsx:NNNN` as "roughly right, verify before you rely on it".
+> The three open design decisions are **SETTLED** (§0.3).
+> **Created**: 2026-09-27 · **Related**: the icon feature (formerly `ICON_FEATURE_SPEC.md`, implemented & verified
+> 2026-09-28; that spec file was deleted 2026-09-28), Restore Defaults (shipped as `bde7483`), the move/copy feature
+> (shipped as `f7f316e`), per-sound volume (shipped 2026-10-06), and sound priming (shipped 2026-10-08).
 
 ---
 
@@ -466,10 +475,21 @@ desktop — reuse that pattern for a "Profiles & Sync" section rather than addin
 ## 10. Required plugin / capability changes
 
 **Re-verified 2026-10-11**; Android half *executed* 2026-10-04; desktop half *executed* 2026-10-06. Both spikes
-needed the dialog plugin — **those spike edits were reverted afterwards** (at the user's request), so nothing
-below is in the tree yet. `cargo check` was clean before, during and after. **Re-confirmed 2026-10-11:** `main.rs:7`
-still registers fs only, `lib.rs:4-5` still registers fs + os, `lib.rs:8-9` log, and `dialog` appears **zero**
-times in `Cargo.toml` or `capabilities/default.json`.
+needed the dialog plugin — **those spike edits were reverted afterwards** (at the user's request), so nothing below
+was in the tree as of the 2026-10-11 refresh.
+
+> ✅ **SHIPPED 2026-10-13 (spec step 6).** Every row below is now implemented and verified. `tauri-plugin-dialog`
+> **2.7.3** (with `rfd` 0.16.0) is in `Cargo.toml`, registered in `main.rs` **and** `lib.rs`, `dialog:allow-save` +
+> `dialog:allow-open` are in `capabilities/default.json`, and `grant_path` lives in a shared
+> `src-tauri/src/scope.rs`. `cargo check --offline` is clean and `gen/schemas/capabilities.json` regenerated.
+> **Three facts that cost time and are not in this table:**
+> - **`tauri-plugin-dialog` is needed in `package.json` as well.** Registering the Rust crate does nothing for the
+>   bundler; `vite build` fails with *"Rolldown failed to resolve import '@tauri-apps/plugin-dialog'"*.
+> - **Pin the npm package to the crate's minor.** `^2` resolved npm to **2.8.2** against a Rust crate of
+>   **2.7.3**, and every `tauri dev` then printed *"Error Found version mismatched Tauri packages"*. It is
+>   `@tauri-apps/plugin-dialog@~2.7.3` now.
+> - **`mod` cannot be declared inside a function body.** The shared `grant_path` module is `mod scope;` at the
+>   *top* of both entry points, not inside `main()` / `run()`.
 
 | Change | Where | Why |
 |---|---|---|
@@ -477,7 +497,7 @@ times in `Cargo.toml` or `capabilities/default.json`.
 | ⚠️ **`dialog:allow-save` + `dialog:allow-open`** (or `dialog:default`) | `src-tauri/capabilities/default.json` | **This row was missing and would have shipped broken.** Registering the plugin is not enough: with no `dialog:*` permission the call fails with *"Permissions associated with this command: dialog:allow-save, dialog:default"*. Verified on desktop 2026-10-06 — that error only appears **after** adding the permission does the picker open |
 | ❌ **`fs:allow-read-dir` — NOT NEEDED, drop it** | ~~`capabilities/default.json`~~ | This spec used to claim `fs:default` has no directory listing. **It does**: `fs:default` → `read-app-specific-dirs-recursive` → `allow-read-dir` + `scope-app-recursive`. Measured 2026-10-06 with the **unmodified** capability file: `readDir('uploads', AppData)` → **90 entries**, AppData root → `uploads`. Enumerating `uploads/` to build a manifest therefore needs **no permission change at all**. (The earlier build error that rejected `fs:allow-read-dirs` was real, but it was fixing a non-problem: `permissions/read-dirs.toml` defines a *set* named `read-dirs`; the per-command permission is `allow-read-dir`. Keep that in mind if you ever do need it.) |
 | ✅ **Desktop destination: a runtime scope grant — RECOMMENDED** | **one new Rust command**, see below | Answering the old "last unverified item". **Both** routes below were built and measured; the grant is the one to ship |
-| New frontend deps: **`fflate`** (zip) + a SHA-256 helper | `package.json` | streaming zip create/extract; small, fast, no native build step. For hashing use a small pure-JS implementation (e.g. `@noble/hashes`) — **not** `crypto.subtle`, which is unavailable outside a secure context, and not a Rust command, which would re-add the native work this design no longer needs. Neither is installed yet: current deps are `@tauri-apps/plugin-fs`, `@tauri-apps/plugin-os`, `lucide-react`, `react`, `react-dom` |
+| New frontend deps: **`fflate`** (zip) + a SHA-256 helper | `package.json` | streaming zip create/extract; small, fast, no native build step. For hashing use a small pure-JS implementation — **not** `crypto.subtle`, which is unavailable outside a secure context, and not a Rust command, which would re-add the native work this design no longer needs. ✅ **Both installed** (added by `fd57d3a`, first imported by step 4). ⚠️ **`@noble/hashes` v2 has an explicit-`.js` exports map**: the import is `@noble/hashes/sha2.js`, **not** `@noble/hashes/sha2`, which fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Current deps are `@tauri-apps/plugin-dialog`, `@tauri-apps/plugin-fs`, `@tauri-apps/plugin-os`, `@noble/hashes`, `fflate`, `lucide-react`, `react`, `react-dom` |
 | (`src-tauri/Cargo.toml`) | — | `tauri-plugin-dialog = "2"` **must be added** alongside `tauri-plugin-fs = "2.5.1"` / `-log = "2"` / `-os = "2.2.0"`; it resolves to **2.7.3** and pulls `rfd 0.16.0`. All 12 added packages were already in the local cargo cache, so `cargo check --offline` resolved without network. The resolved fs version is **2.5.2**, so read permission names from the resolved crate, not the declared one |
 
 ### ✅ Desktop destination: the last unknown, closed (spiked 2026-10-06, Windows)
@@ -650,18 +670,43 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    import path (§8 step 5) depends on it and retrofitting it later would mean touching the migration twice.
 2. ~~**Timestamps + tombstones**~~ — ✅ **CUT from v1** (§0.3 decision 1). There is no step; §4.3 is kept only as
    a record for the deferred Merge / sync work.
-3. **Provenance classifier** (`isUploadedReference`) — ✅ a *structural* test now (§3), not a flag. Tiny, but do
-   it before the bundle format so §13's bundle-size assertion has something to test.
-4. **Bundle format** — `manifest.json` / `data.json` schema + zip read/write. Carry sound objects **verbatim**
-   so `volume` and any future sound field ride along without a schema edit (§5.2).
-   💡 Wire a **thin end-to-end round trip** as soon as `exportBundle`/`importBundle` exist as byte functions
-   (§9.3) — export a seeded profile, wipe, import, compare — and get it green before widening either half.
-5. **Import** (atomic, both v1 modes) — before export, so a bundle is provably readable before we can produce one.
-   ⚠️ "Replace active" installs into the **live** profile: either remount afterwards or verify prefix/state
-   agreement the same way the switch does (§11 risk 10's residual case).
-6. **Export + destination pickers** (desktop runtime grant + Android SAF; web excluded in v1). The picker
-   contract is platform-asymmetric: **desktop resolves a path string or `null`, Android resolves a `content://`
-   URI or rejects** — one `try`/`catch` plus a null check covers both.
+3. ✅ **Provenance classifier** (`isUploadedReference`) — DONE 2026-10-13. A *structural* test (§3), no flag.
+   In `src/profileBundle.js`: `isUploadedReference(ref)` for `files[]` entries and `isUploadedIcon(sound)` for the
+   bare-string icon, both funnelled through ONE `classifySoundReferences(sound)` so the audio and icon paths cannot
+   disagree. 💡 The icon needed its own predicate and the honest reason is worth keeping: `sound.icon` is a bare
+   string in both cases, so no shape test separates them, and §3 forbids inferring from filenames. The evidence is
+   `iconDisplayName`, which `handleIconUpload` writes in the same setState and `src/data.json` never has.
+4. ✅ **Bundle format** — DONE 2026-10-13. `manifest.json` / `data.json` + zip via `fflate` (streaming `Zip` +
+   `ZipPassThrough` on write, `unzipSync` on read) and SHA-256 via `@noble/hashes/sha2.js`. Sound objects go across
+   **verbatim** (§5.2): spread, with only the *reference fields* rewritten to content-addressed names.
+   **Three additions to this section that the draft did not have:**
+   - **`settings.sectionIcons` was added** to `data.json`. §5.2's settings block listed only `boxSize` and
+     `background`, but §4.2 makes both `ttrpg_*_icon` keys profile content, so without it a round trip silently
+     dropped a custom Characters/Environment icon.
+   - **`exportBundle` returns `{bytes, manifest, data}`, not bare `bytes`.** §9.3's purity requirement is that the
+     UI can hand the result to `writeFile` without the bundle logic knowing about pickers, and it still can; the
+     extra fields are so the success message can report real counts.
+   - **The zip output is still buffered into one `Uint8Array`,** because `exportBundle` returns bytes and
+     `writeFile` takes one buffer. "Streamed, never buffered whole in JS memory" holds for the *inputs* (each blob
+     can be released once pushed), not the output. That is unavoidable given §9.3, and it is why §11 risk 8 matters.
+   ✅ **Thin end-to-end round trip wired and green first**, as this step requires: `node e2e/profileBundle.check.mjs`,
+   **36/36**, covering export → wipe → import → deep compare plus every refusal path.
+5. ✅ **Import** (atomic, both v1 modes) — DONE 2026-10-13. `parseBundle` verifies every checksum before a byte is
+   written; `importBundle` then writes all blobs and **commits the namespaced keys last**. That ordering IS the
+   atomicity, because `fs:allow-remove-dir` does not exist and so a temp-dir swap — the textbook atomic replace —
+   is not available (see rule 4 in the header comment of `src/profileBundle.js`). A failure anywhere before the
+   commit leaves the previous board byte-for-byte intact and the half-written blobs as harmless orphans. "Replace active" snapshots the live profile's keys to a global
+   `spellcaster_import_backups` (last 3 kept) **before** touching anything, and ends with `requestProfileRemount()`
+   — §11 risk 10's residual case, the one path the remount-on-switch does not cover by itself.
+6. ✅ **Export + destination pickers** — DONE 2026-10-13. `tauri-plugin-dialog` 2.7.3 registered in **both** entry
+   points, `dialog:allow-save` + `dialog:allow-open` in `capabilities/default.json`, and the ~5-line `grant_path`
+   command in a **shared `src-tauri/src/scope.rs`** (a file module cannot be declared inside a function block, so
+   `mod scope;` sits at the top of both `main.rs` and `lib.rs`). Web excluded, as §7 requires.
+   ⚠️ **`tauri-plugin-dialog` must be added to `package.json` too, not only `Cargo.toml`** — registering the Rust
+   crate is not enough, and `vite build` fails with *"Rolldown failed to resolve import"* until the npm package is
+   there. ⚠️ **Pin the npm package to the crate's minor** (`@tauri-apps/plugin-dialog@~2.7.3`, not `^2`): with `^2`
+   npm took **2.8.2** against a Rust crate of **2.7.3** and every `tauri dev` printed *"Error Found version
+   mismatched Tauri packages"*.
 7. **UI** — profiles modal, Settings section, progress + report. Profile-scoped Restore Defaults (§9.2).
 8. **E2E shared spec** `e2e/specs/profiles.mjs` + **manifest registration** + docs (README testing section).
    ⚠️ This is not "add a file" any more — see §14. **Register the feature as `planned` in
@@ -672,79 +717,60 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 
 ## 13. Verification checklist
 
-- [ ] A profile created on desktop exports; imported on Android; **all** characters, categories, groups, sounds, colors, loop/fade settings, theme and box size survive the round trip byte-identically.
-- [ ] A bundle is a plain, unencrypted zip — openable with any standard zip tool, with no crypto fields in the manifest.
-- [ ] A bundle with a corrupted payload is rejected on checksum, with the offending filename named.
-- [ ] A bundle exported by a **newer** `formatVersion` is refused with both versions named.
-- [ ] Import is atomic: kill the app mid-import → the previous profile is intact and usable.
-- [ ] A known 3-character / 11-sound seed produces a bundle containing **only** user uploads (assert total bytes < 1 MB) — proves provenance classification.
-- [ ] A sound **copied** into another character (§ move/copy, `f7f316e`) appears **once** in the bundle, not twice — proves dedupe-by-hash (§5).
-- [ ] Export walks **all five** container shapes: a sound sitting in `groups[].sounds` (the vestigial array) is
-      exported. ⚠️ **that array cannot be tested by seeding it and reloading** — `normalizeStoredData`'s group
-      branch returns `sounds: []` and folds a legacy array into a `Default` category, so it is **wiped on every
-      read**. Assert the `Default`-category fold (the shape that actually survives a reload), or seed in-session
-      without a reload.
-- [ ] A custom sound icon survives export/import as a **file** in `icons/`, not as inline base64.
-- [ ] The custom background image is **absent** from the bundle: `data.json` contains no `imagePreview` and no `background/` entry, and a fresh import falls back to the theme colour until the user picks an image. A user with a 5 MB background set still gets a bundle under 1 MB.
-- [ ] "New profile" import leaves the active profile untouched; "Replace active" is recoverable.
-- [ ] **Unresolvable audio:** a bundle referencing a sound this app does not have imports successfully — the character/category is kept, the sound is dropped, and the summary names it and reports the count. A missing icon falls back to the default rather than dropping the sound.
-- [ ] Deleting a profile removes **only its own** `uploads/<profileId>/` (no orphaned blobs, and the other profile's audio still plays).
-- [ ] Migration: a localStorage snapshot from the current release upgrades to a default profile with no data loss.
-- [ ] **The two `ttrpg_*_icon` keys and `boxSize` follow the profile**, and `localStorageMigrationCompleted` does **not** get a profile prefix (a prefixed one would re-run the one-time audio sweep).
-- [ ] **Profile switch is clean:** switch A → B → A with different boards and different section icons; no bleed-through, and no stale blob URLs (a sound from A must not play after switching to B). *(byte-identity and the remount itself are asserted separately below — §11 risk 10 and §0.3 decision 2)*
-- [ ] 🆕 **A profile switch does not corrupt either profile (the auto-save race, §11 risk 10).** Give A and B
-      *different* characters, switch A → B → A, and assert both profiles are **byte-identical to their
-      pre-switch snapshot**. ⚠️ This is the assertion that catches the silent write of A's data into B's keys —
-      nothing else in the app will. Include the **edit-immediately-after-switching** case (the residual path the
-      remount does *not* cover), and "Replace active" import (§8), which installs into the live profile.
-- [ ] 🆕 **`DATA_VERSION` mismatch migrates and never resets (§11 risk 11, §0.3 decision 3).** A profile whose
-      `ttrpg_data_version` is missing or older is **repaired**, not replaced with starter sounds; an imported
-      bundle whose `dataVersion` differs from this build imports with a clear message and **no data loss**;
-      and `localStorageMigrationCompleted` still does **not** acquire a profile prefix. Assert the board's
-      contents survive, not just that the app did not crash.
-- [ ] 🆕 **A profile switch remounts cleanly (§0.3 decision 2).** No stale blob URLs (a sound from A must not
-      play after switching to B), section icons follow the profile, and `boxSize` / theme do not bleed.
-- [ ] 🆕 **A sound's `volume` trim survives the round trip**, including `0` (a muted sound) and an absent value
-      (which must come back as "no key" or `1`, not as a lost field). Use `normalizeSoundVolume`, and assert
-      against the **new-sound** save path specifically — it is an explicit allowlist, so that is where a
-      forgotten field disappears.
-- [ ] 🆕 **No priming state in the bundle.** `manifest.json` and `data.json` contain no primed-sound list, and
-      no new `localStorage` key appears (the absence is the assertion — cf. `P31a`).
-- [ ] **Restore Defaults stays idempotent and non-destructive** after being profile-scoped: press it twice on a profile with user sounds, and nothing user-created is lost (§9.2). It must also act on the **active profile only** — restoring in B must not touch A.
-- [ ] **No `fs:scope: ["**"]` and no blanket write scope ships.** Assert it in review: `capabilities/default.json`
-      contains no `fs:scope` entry with a wildcard, and the only fs paths the frontend can write are the app
-      directories plus the single file the user just picked.
-- [ ] **The grant is per-file, not per-directory.** After exporting to `X`, writing `X.bak` in the same folder
-      through `writeFile` must be **refused** — that is what makes the grant worth having.
-- [ ] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes
-      (open the file and compare size + zip magic; do not trust the resolved promise). Round-trip it back through
-      `dialog.open()` + import.
-- [ ] **Bytes are handed over as a `Uint8Array`.** Regression guard for §11 risk 8: export a bundle and assert
-      the file's on-disk size matches the returned byte length exactly. A `Array.from(bytes)` payload produces a
-      ~3× larger file of comma-separated digits and **no error**.
-- [ ] Android: export → import on the same device via a user-picked SAF location. ⚠️ **Import needs its own
-      `dialog.open()`, which returns a URI the same way — so the read path is proven by symmetry, but the
-      picker is a second `ACTION_OPEN_DOCUMENT` and the *selected* document may be one this app no longer has a
-      grant for. Test it rather than assuming.** The export half of this line is already proven (§7).
-- [ ] ⚠️ **A picker cancel is handled on both platforms, and they differ.** **Android rejects**
-      (`saveFileDialogResult` → `invoke.reject("File picker cancelled")`); **desktop resolves `null`**
-      (`desktop.rs save_file` → `Option<FilePath>`, measured 2026-10-06). An `await` with no handler on Android
-      produces an unhandled rejection and a silent no-op; on desktop a `null` path passed to `writeFile` throws.
-      Both need handling, and neither platform's behaviour may be assumed for the other.
-- [ ] **The dialog permissions are present in `capabilities/default.json`** (`dialog:allow-save` +
-      `dialog:allow-open`, or `dialog:default`). Without them the call fails with *"Permissions associated with
-      this command: dialog:allow-save, dialog:default"* — which reads like a plugin-registration bug and is not.
-- [ ] The web build is **unchanged** — no export/import controls, and its existing behaviour intact.
-- [ ] Two profiles side by side have fully independent data, settings and audio.
-- [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds; `cargo check` clean.
-- [ ] 🆕 **`node e2e/check-coverage.mjs` is green**, and the `Profile sync and export/import` feature entry in
-      `e2e/coverage.manifest.json` has flipped from `planned` to `shipped` **with a non-empty `coveredBy`**.
-      A `shipped` feature with no covering suite **fails the gate** — that is the point of the registry.
-- [ ] E2E: `e2e/specs/profiles.mjs` (seed → export → wipe → import → deep compare) runs from **both**
-      entrypoints, and is green on web, Windows and Android. See §14 — a shared spec wired to one entrypoint
-      fails the same gate.
-- [ ] README documents export/import and states plainly that there is no account and no data leaves the device —
-      including the priming-is-not-synced note (§9.2).
+> ✅ / ❌ marks below are as of **2026-10-13**, when steps 3–6 shipped. The unchecked ones are either step 7/8 work
+> (UI beyond the minimal wiring, shared E2E spec) or things needing a real second device. **The `node
+> e2e/profileBundle.check.mjs` rows are marked with the check name** rather than ✅, so a reader can tell a
+> machine-run assertion from a claim.
+>
+> ⚠️ **Nothing here is covered by a browser spec yet.** The feature stays `planned` in
+> `e2e/coverage.manifest.json` precisely because of that — step 8 is what turns these into `shipped`.
+
+- [x] A profile created on desktop exports; imported on Android; **all** characters, categories, groups, sounds, colors, loop/fade settings, theme and box size survive the round trip byte-identically. → *"the imported board deep-compares to the exported one"*, plus a separate boxSize/background/section-icons row. ⚠️ **Desktop-only so far**; the Android half is unverified.
+- [x] A bundle is a plain, unencrypted zip — openable with any standard zip tool, with no crypto fields in the manifest. → *"the bundle is a PLAIN zip - PK magic"* and *"assertUint8Array rejects a plain Array"*. 💡 **That second check matters more than it looks:** the Array form really does produce a comma-joined file — reproduced live during the step 6 probe, where a 64-byte payload landed as **189 bytes** of digits with no error.
+- [x] A bundle with a corrupted payload is rejected on checksum, with the offending filename named. → *"a corrupt payload is refused on checksum, naming the file"*.
+- [x] A bundle exported by a **newer** `formatVersion` is refused with both versions named. → *"a newer formatVersion is refused, naming BOTH versions"*.
+- [x] Import is atomic: kill the app mid-import → the previous profile is intact and usable. → *"a failed blob write aborts BEFORE any key is touched"*, plus *"a refused bundle writes NOTHING"*. ⚠️ **Proven by an injected write failure, not by killing the app mid-import** — the ordering is what makes it hold, but the literal kill test is unrun.
+- [x] A known 3-character / 11-sound seed produces a bundle containing **only** user uploads — proves provenance classification. → *"the manifest lists ONLY uploads"* + *"the bundle stays small - no 5 MB background image rides along"*.
+- [x] A sound **copied** into another character (§ move/copy, `f7f316e`) appears **once** in the bundle, not twice — proves dedupe-by-hash (§5). → *"a copied sound is ONE blob, not two"*.
+- [x] Export walks **all five** container shapes → *"all five container shapes are found"*. ⚠️ As §13 already warned, that array cannot be tested by seeding it and reloading; the check walks a plain fixture object, so it proves the *walker*, not a reload round trip.
+- [x] A custom sound icon survives export/import as a **file** in `icons/`, not as inline base64. → *"classification agrees across the audio and icon paths"* + the manifest row listing `Fireball.png`.
+- [x] The custom background image is **absent** from the bundle: `data.json` contains no `imagePreview` and no `background/` entry, and a fresh import falls back to the theme colour. → *"data.json carries no imagePreview"* + *"boxSize, background and section icons all follow the profile"* (which asserts `imagePreview === ''` on the importing side).
+- [x] "New profile" import leaves the active profile untouched; "Replace active" is recoverable. → *"the previous profile is untouched"* / *"the replaced profile is RECOVERABLE"* / *"restoring the snapshot brings the old board back byte-for-byte"*.
+- [x] **Unresolvable audio:** a bundle referencing a sound this app does not have imports successfully — the character/category is kept, the sound is dropped, and the summary names it and reports the count. → *"a sound the bundle cannot resolve is DROPPED but its container is kept"*.
+- [ ] Deleting a profile removes **only its own** `uploads/<profileId>/` — ✅ covered by Suite F, ⚠️ but not re-run against a profile that came from an import.
+- [x] Migration: a localStorage snapshot from the current release upgrades to a default profile with no data loss. → Suite F, and `profileStorage.check.mjs`.
+- [x] **The two `ttrpg_*_icon` keys and `boxSize` follow the profile**, and `localStorageMigrationCompleted` does **not** get a profile prefix. → Suite F + `profileStorage.check.mjs` ("stays GLOBAL").
+- [x] 🆕 **A profile switch does not corrupt either profile (the auto-save race, §11 risk 10).** → Suite F `F7`/`F6a`.
+- [x] 🆕 **`DATA_VERSION` mismatch migrates and never resets (§11 risk 11).** → Suite F `F10`, plus *"the data version stamp is written so the first read does not fake a backup"*.
+- [x] 🆕 **A profile switch remounts cleanly (§0.3 decision 2).** → Suite F.
+- [x] 🆕 **A sound's `volume` trim survives the round trip**, including `0` and an absent value. → *"volume rides along verbatim, including the legitimate 0"*.
+- [x] 🆕 **No priming state in the bundle.** → the bundle module has no priming import at all, and `P31a` asserts no key exists.
+- [ ] **Restore Defaults stays idempotent and non-destructive after being profile-scoped** → `specs/reset.mjs` covers the merge contract; ⚠️ the "acts on the active profile only" half is **step 7 work, not done**.
+- [x] **No `fs:scope: ["**"]` and no blanket write scope ships.** → `capabilities/default.json` carries no `fs:scope` entry at all; the only extra reach is the single-file `grant_path`.
+- [x] **The grant is per-file, not per-directory.** → ✅ **measured on real hardware 2026-10-13**, 11/11: an ungranted `Documents` write AND read are refused, the granted file writes and reads byte-exact, and **a sibling in the same folder is still refused for both read and write**. Re-granting is idempotent.
+- [x] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes. → the grant probe wrote 64 bytes to the Desktop and read them back with the zip magic intact; ⚠️ **that was the probe's payload, not a real `exportBundle` result through the picker** — the picker itself has never been opened.
+- [x] **Bytes are handed over as a `Uint8Array`.** → `assertUint8Array` at the single call site, *plus* the app reads the file back off disk after writing and compares size and magic before reporting success.
+- [ ] Android: export → import on the same device via a user-picked SAF location. → the export half was proven 2026-10-04; ⚠️ **the import half needs its own `dialog.open()` and is unverified.**
+- [x] ⚠️ **A picker cancel is handled on both platforms, and they differ.** → both arms are handled in `pickSavePath`/`pickOpenPath`: a `/cancel/i` rejection resolves to `null` (Android) and a `null` return is honoured (desktop). ⚠️ **Code-reviewed, not executed** — neither platform's picker was opened.
+- [x] **The dialog permissions are present in `capabilities/default.json`** → ✅ present, and **verified live**: `plugin:dialog|message` was invoked over CDP against a real `tauri dev` and did **not** return "Plugin not found" or "Permissions associated with this command".
+- [x] The web build is **unchanged** — no export/import controls, and its existing behaviour intact. → the section is gated on `isTauri`; web E2E is 223/0/0.
+- [x] Two profiles side by side have fully independent data, settings and audio. → Suite F.
+- [x] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds; `cargo check` clean. → all three, 2026-10-13.
+- [ ] 🆕 **`node e2e/check-coverage.mjs` is green**, and the `Profile sync and export/import` feature entry has flipped from `planned` to `shipped` **with a non-empty `coveredBy`**. → ⚠️ **checker is green but the feature is still `planned`**, on purpose: no shared spec exists, and a `shipped` feature with no covering suite fails the gate. That is step 8.
+- [ ] E2E: `e2e/specs/profiles.mjs` (seed → export → wipe → import → deep compare) runs from **both** entrypoints, green on web, Windows and Android. → **step 8, not started.**
+- [x] README documents export/import and states plainly that there is no account and no data leaves the device — including the priming note (§9.2). → ✅ **done 2026-10-13**: Features bullets for Profiles and Profile Export & Import, two Platform Support rows, and an explicit note that web has no export/import *and why*. 💡 **The README had documented neither priming nor profiles either** — both shipped weeks earlier and neither had ever reached it, so this row was less a steps-3-6 chore than a three-feature gap found by it.
+
+### ⚠️ What is NOT proven, stated plainly
+
+Steps 3–6 ship a working engine and a real, proven scope grant, and everything that can be asserted without a
+human has been asserted. Three things remain unproven and none of them is covered by the 36 node checks:
+
+1. **No native picker has ever been opened.** `dialog.save` / `dialog.open` are exercised by code review and by the
+   grant probe, but no test clicks one. §13's per-platform cancel rows are therefore code-reviewed, not executed.
+2. **The cross-device half of the round trip is unrun.** Export → import on a *different* device is the feature's
+   actual purpose and nothing has done it.
+3. **The user has not hand-tested the built app.** Per the DoD this feature needs that before it counts as done —
+   and it is the reason the manifest entry stays `planned`.
 
 ### Deferred to a later release (not v1)
 

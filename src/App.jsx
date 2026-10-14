@@ -4,7 +4,7 @@ import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
     Axe, Target, Crosshair, Heart, HeartPulse, Cloud, CloudRain, CloudLightning, Droplets, X, Plus, Edit, Trash2,
     Folder, Sparkles, Square, ZoomIn, Shuffle, Infinity as InfinityIcon, Info, Maximize, Menu, AlertTriangle, RotateCcw,
-    ArrowRightLeft,
+    ArrowRightLeft, Upload, Download,
     // Icon-picker catalogue (ICON_MAP). Every name here is verified to exist in
     // the installed lucide-react version - importing a missing name breaks the build.
     Crown, Skull, Ghost, Bot, Brain, Cat, Dog, Fish, Bird, Rabbit,
@@ -34,6 +34,14 @@ import {
     profileUploadFileCount,
     removeProfileUploads,
 } from './profileStorage.js'
+import {
+    exportBundle,
+    importBundle,
+    bundleFileName,
+    assertUint8Array,
+    BundleError,
+    collectProfileForExport,
+} from './profileBundle.js'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
@@ -823,21 +831,29 @@ function AppBoard() {
 
     const refreshProfiles = () => setProfileIndex(readProfileIndex())
 
+    // Persist the live board into the ACTIVE profile's keys. Needed before
+    // anything that changes or reads another profile's keys, because the three
+    // auto-save effects are undebounced and may not have run for a just-made
+    // edit - and in the "replace active" case the next thing that happens is a
+    // snapshot, which reads storage, not React state.
+    const flushCurrentProfile = () => {
+        try {
+            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
+            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
+            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
+        } catch (err) {
+            console.error('Failed to flush the current profile:', err)
+        }
+    }
+
     const handleSwitchProfile = (profileId) => {
         if (profileId === activeProfileId) {
             setProfileNotice('Already on that profile')
             return
         }
         // Persist the current board BEFORE switching, so the profile we are
-        // leaving is fully written. The auto-save effects may not have run for
-        // a just-made edit.
-        try {
-            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
-            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
-            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
-        } catch (err) {
-            console.error('Failed to flush current profile before switching:', err)
-        }
+        // leaving is fully written.
+        flushCurrentProfile()
         setProfileNotice('')
         setActiveProfile(profileId)
     }
@@ -890,6 +906,186 @@ function AppBoard() {
         setProfileNotice(wasActive
             ? `Profile deleted${removed ? ` (${removed} file${removed === 1 ? '' : 's'} removed)` : ''}`
             : '')
+    }
+
+    // -----------------------------------------------------------------------
+    // Export / import (PROFILE_SYNC_SPEC.md §7, §8, §9.2)
+    //
+    // The whole bundle logic lives in profileBundle.js as functions that take
+    // and return BYTES (§9.3). Everything here is pickers and bytes-on-disk:
+    // it exists so the E2E suite can test the format without ever opening a
+    // native dialog, which cannot be driven from a webview.
+    //
+    // NOT AVAILABLE ON WEB, deliberately (§7). Web audio lives as base64 data
+    // URLs in localStorage and caps out around 5 MB, so a web "export" could
+    // only ever be metadata - a misleading promise. The bundle functions are
+    // written so web can be switched on later behind the same byte-level API.
+    // -----------------------------------------------------------------------
+    const [bundleBusy, setBundleBusy] = useState(null)          // null | 'export' | 'import'
+    const [bundleNotice, setBundleNotice] = useState('')
+    const [importMode, setImportMode] = useState('new')          // 'new' | 'replace'
+
+    // The picker contract is ASYMMETRIC and neither platform's behaviour may be
+    // assumed for the other (§7, §13):
+    //   desktop  save -> a plain absolute path, cancel -> null (resolved)
+    //   Android  save -> a `content://` URI,  cancel -> REJECTED
+    // An unhandled rejection is a silent no-op on Android and a thrown TypeError
+    // on desktop, so both arms are handled here.
+    const pickSavePath = async (defaultPath) => {
+        const { save } = await import('@tauri-apps/plugin-dialog')
+        try {
+            return await save({
+                defaultPath,
+                filters: [{ name: 'SpellCaster profile', extensions: ['spellcaster'] }],
+            })
+        } catch (err) {
+            if (/cancel/i.test(String(err))) return null
+            throw err
+        }
+    }
+
+    const pickOpenPath = async () => {
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        let picked
+        try {
+            picked = await open({
+                multiple: false,
+                directory: false,
+                filters: [{ name: 'SpellCaster profile', extensions: ['spellcaster'] }],
+            })
+        } catch (err) {
+            if (/cancel/i.test(String(err))) return null
+            throw err
+        }
+        if (!picked) return null
+        return Array.isArray(picked) ? picked[0] : picked
+    }
+
+    // Desktop only (§10). The fs scope is AppData-only, so a user-picked path
+    // is refused for BOTH read and write until the app grants it. Android needs
+    // nothing: its `content://` branch skips the scope check entirely.
+    //
+    // This is a per-FILE runtime grant, not a blanket `fs:scope: ["**"]`, which
+    // would hand the frontend write access to the whole filesystem.
+    const grantPickedPath = async (path) => {
+        if (isMobile) return
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('grant_path', { path })
+    }
+
+    const handleExportProfile = async () => {
+        if (bundleBusy) return
+        setBundleNotice('')
+        setBundleBusy('export')
+        try {
+            // Read the LIVE state, not storage: the user is exporting what is on
+            // screen, and the auto-save effects may lag a keystroke behind it.
+            const { data: boardData, settings } = collectProfileForExport({
+                characters, environmentSounds, groups,
+                boxSize, backgroundSettings, charSectionIcon, envSectionIcon,
+                parse: key => readProfileValue(activeProfileId, key),
+            })
+
+            const { bytes, manifest } = await exportBundle({
+                profileId: activeProfileId,
+                profileName: profileIndex.profiles.find(p => p.id === activeProfileId)?.name,
+                data: boardData,
+                settings,
+                appVersion: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0',
+                dataVersion: DATA_VERSION,
+            })
+
+            const path = await pickSavePath(bundleFileName(
+                profileIndex.profiles.find(p => p.id === activeProfileId)?.name
+            ))
+            if (!path) {
+                setBundleNotice('Export cancelled - nothing was saved.')
+                return
+            }
+
+            const { writeFile, readFile } = await import('@tauri-apps/plugin-fs')
+            await grantPickedPath(path)
+
+            // A Uint8Array, always (§11 risk 8): a plain Array is coerced to a
+            // comma-joined string by the desktop IPC layer and produces a file
+            // ~3x too large with NO error.
+            await writeFile(path, assertUint8Array(bytes))
+
+            // Read it back off disk rather than trusting the resolved promise -
+            // that is the only check which catches a silently corrupt write.
+            const onDisk = await readFile(path)
+            if (onDisk.length !== bytes.length || onDisk[0] !== 0x50 || onDisk[1] !== 0x4b) {
+                throw new BundleError('The file was written but does not look like a valid bundle. Check the destination is writable.', 'corrupt-write')
+            }
+
+            const size = (onDisk.length / 1024).toFixed(0)
+            setBundleNotice(`Exported "${manifest.profile.name}" - ${manifest.counts.sounds} sound(s), ${manifest.counts.files} uploaded file(s), ${size} KB.`)
+        } catch (err) {
+            console.error('[profiles] export failed:', err)
+            setBundleNotice(err instanceof BundleError
+                ? err.message
+                : `Export failed: ${err && err.message ? err.message : String(err)}`)
+        } finally {
+            setBundleBusy(null)
+        }
+    }
+
+    const handleImportProfile = async () => {
+        if (bundleBusy) return
+        setBundleNotice('')
+
+        if (importMode === 'replace') {
+            // "Replace active" overwrites the live profile. Confirm first, and
+            // flush live state first - the snapshot that makes this recoverable
+            // reads storage, not React state, so unflushed edits would be lost
+            // from BOTH the new board and the backup.
+            flushCurrentProfile()
+            const confirmed = window.confirm(
+                'Replace the active profile\'s board with the imported one?\n\n' +
+                'The current profile is snapshotted first and stays recoverable, but its audio files are left on disk.'
+            )
+            if (!confirmed) return
+        }
+
+        setBundleBusy('import')
+        try {
+            const path = await pickOpenPath()
+            if (!path) {
+                setBundleNotice('Import cancelled - nothing was changed.')
+                return
+            }
+
+            const { readFile } = await import('@tauri-apps/plugin-fs')
+            await grantPickedPath(path)
+            const bytes = await readFile(path)
+
+            const report = await importBundle(bytes, {
+                mode: importMode,
+                targetProfileId: activeProfileId,
+                normalize: normalizeStoredData,
+                dataVersion: DATA_VERSION,
+            })
+
+            // No notice on success, and that is deliberate: both modes remount
+            // (a new profile activates, a replaced one asks to be re-read), so
+            // this modal unmounts with the tree and any message set here would
+            // be thrown away. The board visibly changing IS the feedback.
+            if (report.dropped.length > 0) {
+                const names = report.dropped.slice(0, 3).map(d => d.name).join(', ')
+                console.warn(`[profiles] import dropped ${report.dropped.length} unresolvable sound(s): ${names}`)
+            }
+            if (report.dataVersionSkew) {
+                console.log(`[profiles] imported bundle from data version ${report.dataVersionSkew.bundle}, this build is ${report.dataVersionSkew.app}; it was migrated forward, not reset.`)
+            }
+            refreshProfiles()
+        } catch (err) {
+            console.error('[profiles] import failed:', err)
+            setBundleNotice(err instanceof BundleError
+                ? err.message
+                : `Import failed: ${err && err.message ? err.message : String(err)}`)
+        } finally {
+            setBundleBusy(null)
+        }
     }
     const isMobile = (() => {
         if (isTauri) {
@@ -6882,6 +7078,80 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                                     {profileNotice && (
                                         <p data-profile-notice className="text-xs text-slate-400 mt-2">{profileNotice}</p>
+                                    )}
+
+                                    {/* Export / Import. Desktop + Android only - web keeps no buttons here
+                                        on purpose (PROFILE_SYNC_SPEC.md §7): its audio lives as base64 in
+                                        localStorage and caps out around 5 MB, so a web export could only
+                                        ever be metadata. The engine behind these buttons is platform-
+                                        agnostic and is ready to be switched on for web later. */}
+                                    {isTauri && (
+                                        <div className="mt-4 pt-4 border-t border-dark-700" data-bundle-section>
+                                            <h4 className="text-sm font-medium mb-2">Export &amp; Import</h4>
+                                            <p className="text-xs text-slate-400 mb-3">
+                                                Move a board between devices as one file. Nothing is uploaded
+                                                anywhere - the file goes wherever you save it.
+                                            </p>
+
+                                            <button
+                                                onClick={handleExportProfile}
+                                                disabled={bundleBusy !== null}
+                                                data-profile-export
+                                                className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 disabled:opacity-50 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
+                                            >
+                                                <Download size={16} />
+                                                <span>{bundleBusy === 'export' ? 'Exporting…' : 'Export this profile…'}</span>
+                                            </button>
+
+                                            <div className="mt-3 mb-2">
+                                                <label className="text-xs text-slate-400 block mb-1">
+                                                    Importing a file will:
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setImportMode('new')}
+                                                        data-import-mode="new"
+                                                        aria-pressed={importMode === 'new'}
+                                                        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'new' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
+                                                    >
+                                                        Create a new profile
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setImportMode('replace')}
+                                                        data-import-mode="replace"
+                                                        aria-pressed={importMode === 'replace'}
+                                                        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'replace' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
+                                                    >
+                                                        Replace this profile
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-2">
+                                                    {importMode === 'new'
+                                                        ? 'Leaves everything as it is. Safest option.'
+                                                        : 'Snapshots this profile first so it stays recoverable.'}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                onClick={handleImportProfile}
+                                                disabled={bundleBusy !== null}
+                                                data-profile-import
+                                                className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 disabled:opacity-50 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
+                                            >
+                                                <Upload size={16} />
+                                                <span>{bundleBusy === 'import' ? 'Importing…' : 'Import a profile…'}</span>
+                                            </button>
+
+                                            {bundleNotice && (
+                                                <p data-bundle-notice role="status" className="text-xs text-slate-300 mt-2">{bundleNotice}</p>
+                                            )}
+
+                                            <p className="text-xs text-slate-500 mt-3">
+                                                An exported profile is an ordinary, unencrypted zip containing the audio
+                                                you added - you are responsible for sharing it lawfully.
+                                                Priming is not saved or exported; it lasts for one trigger per session.
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
 

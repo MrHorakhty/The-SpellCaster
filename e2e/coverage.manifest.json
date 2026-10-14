@@ -252,9 +252,12 @@
     {
       "name": "Profile sync and export/import",
       "spec": "PROFILE_SYNC_SPEC.md",
-      "status": "planned",
-      "coveredBy": [],
-      "note": "AUTHORISED 2026-10-11. Step 1 of 8 SHIPPED and covered by specs/profiles.mjs (Suite F, F1-F12): storage adapter + profile index + first-run migration + a proven full-remount switch. `coveredBy` stays EMPTY on purpose - the checker rejects a `planned` feature that claims coverage, because the feature is not finished. Flip this to `shipped` with Suite F listed once the bundle format and export/import (spec steps 3-6) exist; that is what forces the round-trip tests to be written."
+      "status": "shipped",
+      "coveredBy": [
+        "specs/profiles.mjs::F",
+        "specs/bundle.mjs::I"
+      ],
+      "note": "AUTHORISED 2026-10-11. Step 1 shipped as 577505d and is covered by specs/profiles.mjs (F1-F12). Steps 3-6 shipped 2026-10-13 (provenance classifier, .spellcaster format, atomic import in both v1 modes, export with the desktop runtime scope grant and the Android SAF picker) and step 8 shipped 2026-10-14 as specs/bundle.mjs (I1-I18), the shared browser spec. The user HAND-TESTED export/import on 2026-10-14, including exporting on the web build and importing into the Android build. Flip planned->shipped is what forced the round-trip tests to exist; e2e/profileBundle.check.mjs (36 node-level assertions) covers the engine's refusal paths in node. Steps 2 (timestamps, cut) and 7 remain: Restore Defaults is not yet proven to act on the active profile only, and there is no import progress dialog or per-file report - the current UI reports errors and deliberately says nothing on success."
     },
     {
       "name": "Keyboard hotkeys",
@@ -1157,6 +1160,41 @@
         "F9"
       ],
       "note": "step 1 of PROFILE_SYNC_SPEC.md. Clears storage and creates/deletes profiles, so it runs ahead of refcount (G) and reset (O), which both re-seed for themselves"
+    },
+    {
+      "key": "I",
+      "cat": "BUNDLE",
+      "title": "Profile bundles - export / import",
+      "file": "specs/bundle.mjs",
+      "export": "bundle",
+      "covers": "the .spellcaster format end to end against the real store: the platform gate, Uint8Array not Array, one blob for two references and none for a bundled asset, checksums, settings travel, the app's real grant_path + writeFile + readFile path, the import round trip surviving a reload, the same import sourced from bytes read back off disk, the pre-import snapshot on replace, and the corrupt / newer-format refusals leaving the target byte-identical",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^I\\d",
+      "ids": [
+        "I0",
+        "I1",
+        "I10",
+        "I11",
+        "I12",
+        "I13",
+        "I14",
+        "I15",
+        "I16",
+        "I17",
+        "I2",
+        "I3",
+        "I4",
+        "I5",
+        "I6",
+        "I7",
+        "I8",
+        "I9"
+      ],
+      "note": "PROFILE_SYNC_SPEC.md step 8. The engine is reached by importing /src/profileBundle.js - the same module URL the app imported, so it is the live instance - which only the Vite DEV server serves; the web phase runs a built dist under vite preview, and export/import is Tauri-only by design (§7), so the web arm is I1 and I2 alone. THE NATIVE PICKER IS NEVER STUBBED AND NEVER OPENED, because it cannot be: every property on window.__TAURI_INTERNALS__ is writable:false/configurable:false, and the one writable seam (chrome.webview.postMessage) is bypassed because Tauri's injected ipc captures it in a closure - both measured 2026-10-14. The spec therefore drives everything below the picker, running the app's own destination sequence against a path the test names; only the picker's two-line handoff is left to the user's hand-test. Clicking Export/Import here would open a #32770 that wedges the run. I0 logs ONLY when the spec's try/catch contains an exception, which is a real failure - it exists so a throw cannot unwind main() and skip the entrypoint's localStorage restore. Skipped ids print a SKIP line rather than logging a WARN, which would push the web phase off its exit-0 baseline. Runs after profiles (F) and before refcount (G) and reset (O), which re-seed for themselves"
     }
   ]
 }

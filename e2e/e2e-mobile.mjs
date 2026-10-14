@@ -24,7 +24,7 @@
 // needs for CDP DOM.setFileInputFiles.
 import { connect, sleep } from './lib/cdp.mjs';
 import { createReport } from './lib/report.mjs';
-import { CAPTURE_LS, INSTRUMENT_AUDIO, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
+import { CAPTURE_LS, INSTRUMENT_AUDIO, KNOWN_KEYS, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
 import { makeDriver } from './lib/driver.mjs';
 import { runSpecs } from './lib/spec-runner.mjs';
 import { volume } from './specs/volume.mjs';
@@ -38,6 +38,7 @@ import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
+import { bundle } from './specs/bundle.mjs';
 
 const DEBUG_PORT = process.env.CDP_PORT || 9224;
 const LABEL = process.env.LABEL || 'MOBILE';
@@ -1102,8 +1103,7 @@ async function main() {
   // absence of a localStorage key is asserted here too.
   const qf9 = await centered('p_fire'); await hold(qf9.x, qf9.y, 900); await sleep(250);
   const qKeys = await evalJs(`window.__bareKeys()`);
-  const knownPrimeKeys = ['backgroundSettings','boxSize','ttrpg_characters','ttrpg_characters_icon','ttrpg_data_version','ttrpg_environment','ttrpg_environment_icon','ttrpg_groups','ttrpg_themes','localStorageMigrationCompleted','spellcaster_profiles'];
-  const qExtraKeys = (qKeys||[]).filter(k => !knownPrimeKeys.includes(k));
+const qExtraKeys = (qKeys||[]).filter(k => !KNOWN_KEYS.includes(k));
   log('PRIME','Q9: no new localStorage key for priming',qExtraKeys.length===0?'PASS':'FAIL',JSON.stringify(qExtraKeys));
 
   await reloadPage();
@@ -1508,6 +1508,18 @@ async function main() {
   // creates/deletes profiles, so it runs before the two specs that re-seed for
   // themselves - refcount and reset. Both headers expose title="Settings".
   await runSpecs(ctx, [profiles]);
+
+  // ================================================================
+  //  I: PROFILE BUNDLES - EXPORT / IMPORT (shared spec - specs/bundle.mjs)
+  // ================================================================
+  // Steps 3-6 of the profile feature. It seeds its own board, uploads a real
+  // sound so the upload provenance is genuine, and replaces the native picker
+  // with a stub on window.__TAURI_INTERNALS__.invoke - which is the ONLY way this
+  // runs on Android at all, since a SAF dialog cannot be dismissed over CDP and
+  // open() can only return a content:// URI a test cannot mint. Runs after
+  // profiles (which leaves storage cleared-then-rebuilt) and before the two
+  // specs that re-seed for themselves.
+  await runSpecs(ctx, [bundle]);
 
   // ================================================================
   // Standalone and last: re-seeds a known storedName, copies the sound, deletes
