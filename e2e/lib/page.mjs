@@ -89,19 +89,21 @@ export const PROFILE_HELPER = `(() => {
   // stores) passed. Four tests, one cause, and the failure had nothing to do with the
   // code under test. Use __keysFor(pid) when you really do mean another profile.
   //
-  // ⚠️ A '<knownKey>_old' key is skipped, and this one is a HARNESS bug fixed 2026-10-14,
-  // not an app one. readProfileData (profileStorage.js) deliberately writes a
-  // '<key>_old' copy when a profile holds data but no version stamp - "a key
-  // written before versioning, or an imported bundle" - and then stamps the
-  // version. That is the app working. But the user's Windows store carries a
-  // profile in exactly that state, so the migration fired in the MIDDLE of a run
-  // and P14a/P31a reported ttrpg_characters_old as a key "the feature added".
-  // The skip is deliberately narrow: only a known key plus '_old' is dropped, so a
-  // genuinely unexpected key - or even a misspelt foo_old - is still reported.
+  // ⚠️ This function USED TO skip the '<knownKey>_old' backups, added and removed
+  // on the same day, 2026-10-14. It was symptom-treatment: readProfileData writes
+  // those backups deliberately, and a profile left unversioned in the user's store
+  // made the app perform that migration mid-run, which P14a/P31a read as "the
+  // feature added a key". The harness no longer leaves such a store behind - every
+  // run now ends with the store verified byte-identical to its pre-run state FROM
+  // DISK - so the skip is gone and the guard is back at full strictness. If a
+  // '_old' key turns up here again, that means the store is dirty, which is a
+  // finding and not noise. 💡 Lesson: fix the environment before relaxing the
+  // assertion, or the test can no longer see the thing it was written for.
+  // ⚠️ NOTE for whoever edits this: this whole block lives inside a JS template
+  // literal, so a BACKTICK in a comment terminates the string and Node tries to
+  // evaluate the rest as code. That has now bitten this file twice.
   window.__bareKeys = () => {
     const pre = 'profile:' + window.__pid() + ':';
-    const known = ${JSON.stringify(PK_KEYS)};
-    const isAppBackup = (name) => name.endsWith('_old') && known.includes(name.slice(0, -4));
     const out = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i) || '';
@@ -109,7 +111,6 @@ export const PROFILE_HELPER = `(() => {
       if (k.startsWith('profile:') && !k.startsWith(pre)) continue;
       const name = k.startsWith(pre) ? k.slice(pre.length) : k;
       if (name.startsWith('sound_file_')) continue;
-      if (isAppBackup(name)) continue;
       out.push(name);
     }
     return out.sort();

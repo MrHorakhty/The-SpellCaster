@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connect, sleep } from './lib/cdp.mjs';
 import { createReport } from './lib/report.mjs';
-import { CAPTURE_LS, INSTRUMENT_AUDIO, KNOWN_KEYS, PAGE_HELPERS, PK_KEYS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
+import { CAPTURE_LS, INSTRUMENT_AUDIO, KNOWN_KEYS, PAGE_HELPERS, SEED, restoreLs, submitModalExpr } from './lib/page.mjs';
 import { makeDriver } from './lib/driver.mjs';
 import { runSpecs } from './lib/spec-runner.mjs';
 import { volume } from './specs/volume.mjs';
@@ -1006,18 +1006,14 @@ async function main() {
   // nothing to do with the code. The guard is still exactly as strict: a DATA_VERSION
   // mismatch must not leave a backup behind for the profile under test.
   //
-  // One key IS excluded, and 2026-10-14 is why: `<knownKey>_old`. readProfileData
-  // writes that copy ON PURPOSE, for a profile that holds data with no version
-  // stamp ("a key written before versioning, or an imported bundle"), then adopts
-  // the current version. The user's Windows store still carries a profile in
-  // exactly that state, so the app performed that migration at page load - before
-  // this harness can speak - and the key was sitting here on every run. Counting
-  // it as "a data reset" tests the wrong thing: the app is behaving as designed,
-  // and the DATA_VERSION assertion below is what proves no reset happened. The
-  // exclusion is narrow - only a known key plus `_old`; any other `_old` still fails.
+  // This briefly excluded `<knownKey>_old` too, because a profile left unversioned
+  // in the user's store made the app write that backup mid-run. Removed again the
+  // same day: the harness now ends every run with the store verified from disk
+  // against its pre-run state, so residue cannot accumulate and there is nothing
+  // left for this assertion to trip over. 💡 Fix the environment before relaxing
+  // the assertion - otherwise you cannot tell a real regression from old litter.
   const ver = await evalJs(`(() => {
-    const known = ${JSON.stringify(PK_KEYS)};
-    const old = window.__keysFor(window.__pid()).filter(k => k.endsWith('_old') && !known.includes(k.slice(0, -4)));
+    const old = window.__keysFor(window.__pid()).filter(k => k.endsWith('_old'));
     return { v: localStorage.getItem(window.__pk('ttrpg_data_version')), old };
   })()`);
   log('MOVE','M21: DATA_VERSION still 3, no *_old keys',ver?.v==='3'&&ver?.old?.length===0?'PASS':'FAIL',JSON.stringify(ver));
