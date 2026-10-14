@@ -1,5 +1,6 @@
 # Project State
 
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-14 (later) — working on: the **agreed post-run store plan** below (3 parts). Written down BEFORE any code changes, so a cut-off leaves a resumable plan rather than a half-applied one.
 🔓 UNCLAIMED — last holder: opencode (2026-10-14 20:20). **Step 8 SHIPPED and committed as `81abd2e`, pushed `48ad37d..81abd2e`, 0 ahead / 0 behind. All seven gates green** (web 225/0/0 exit 0 · Windows 239/0/1 exit 1 · Android 229/0/1 exit 1, both exit-1s the G5 skip). The user hand-tested export/import on 2026-10-14 (web → Android), so the DoD bar is met.
 Previous holder: opencode (released 2026-10-13 17:50). Steps 3–6 DONE, all seven gates green. Backups pruned 5 → 1, keeping `…-172917` (~159 MB freed, 0 orphans proven in all 5 first). ⚠️ Found and recorded: **Bitdefender quarantined `e2e/e2e-full.ps1` out of ALL FIVE backup folders this session**, including the keeper — which had "not fired" through 15:00 the same day. No data lost (repo copy intact, committed and pushed at `48ad37de`), but the surviving backup is **226/227** and a failed prune is NOT a no-op: the AV write-lock left four partially-deleted shells.
 Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates were green.**
@@ -1405,7 +1406,62 @@ exceeded`. `check-profile-keys.mjs` is read-only and replaces them. **Do not res
 Suite F **clears storage** and creates/deletes profiles, so it runs **before** `refcount` (G) and `reset` (O) —
 both of which re-seed for themselves. O must stay last of all.
 
-## Open items
+## 🔜 AGREED PLAN 2026-10-14 — after every E2E run the store is left as it was, and that is PROVEN from disk
+
+**The user's proposal.** After every E2E run the boards should return to their shipped state — not merely via the
+app's *Restore Defaults* button, which is a **merge** and therefore leaves sounds the user added. The user also
+suggested this would fix the restore-to-disk gap flagged below.
+
+**What was agreed, and the honest correction.** Writing a clean state is still a `localStorage` write inside the
+process whose flush is in question, so it does **not** by itself fix that gap — and the app's three auto-save
+effects fire on mount, so whatever is written gets replaced by the board the app booted with unless the reload
+comes after. The gap is only closed by proving the result **from disk**. But the proposal is right that a clean
+post-run state should happen, and it is worth **more** than the gap: the residue left in the store is what forced
+four narrow assertion workarounds on 2026-10-14 (`<key>_old` skips in `__bareKeys` and M21,
+`spellcaster_import_backups` added to `KNOWN_KEYS`, and the two hand-copied key lists P31a/Q9 that had already
+drifted). A clean state removes the **class**, not each symptom, and those four can then be reverted with the
+guards at full strictness.
+
+⚠️ **The safety rule, which is the whole design.** "Shipped state" must NEVER mean "overwrite whatever was
+there" — that is how a real board would be lost, and this harness has already cost the user data twice. It means
+**leave the store byte-identical to how it was before the run, with nothing added.** That *is* shipped state when
+the user has nothing in it, and it is their board when they have one. Same rule as the backup script: never
+destroy, only restore-and-prune. **Anything this plan deletes must be provably created by the run.**
+
+**The user's two decisions, 2026-10-14:** delete the empty `uploads/<id>/` directories the app cannot remove
+itself, and accept ~40s per Windows run for the from-disk proof (no opt-in flag).
+
+### Part 1 — residue sweep (and an honest note on how small it really is)
+**`localStorage` needs no sweep.** `e2e-snapshot.mjs restore` already does `localStorage.clear()` and then
+re-sets every key from the snapshot, so a *completed* restore leaves no key residue by construction. What actually
+persists is:
+- **empty `uploads/<id>/` directories** — `fs:allow-remove-dir` does not exist in plugin-fs 2.5.2, so the app
+  leaves every profile folder it has ever touched behind (`p_0d866f71`, `p_5383a814`, `p_6fd7a1c1`, …). Node can
+  remove them; the app cannot. **Approved by the user.**
+- **anything left by a CRASHED run**, where the suite never reached its own restore. The runner's `finally` block
+  is the backstop, but it is a backstop, not a guarantee.
+So Part 1 is: after `restore-uploads`, remove every directory under `uploads/` that is empty **and** was not in
+the uploads snapshot, and report the count. Small, but it is the visible litter the user has been looking at.
+
+### Part 2 — prove the restore from disk (the part that actually closes the gap)
+After the app is killed: restart `tauri dev`, wait for CDP, `e2e-snapshot.mjs save` into a scratch file, and
+compare it key-by-key against the pre-run snapshot. **Any missing / extra / changed key is a hard failure** with a
+new exit code, the scratch file kept, and the recovery command printed — never a "restored and verified" line.
+Cost ~40s per Windows run, approved. 💡 This is the check `PROJECT_STATE` has demanded since 2026-10-12
+("restart the app and re-read the store from disk") and which **has still never been automated**. It is also the
+only thing that would have *detected* the 2026-10-14 divergence instead of inferring it.
+
+### Part 3 — revert today's four workarounds, then re-run all seven gates
+With a verified-clean store, drop the `<knownKey>_old` skip in `__bareKeys()` and in M21, and put
+`spellcaster_import_backups` back out of the *skip* logic (it legitimately stays in `KNOWN_KEYS` — it is a real
+app key — but the `<key>_old` exclusions are pure symptom-treatment). Re-run web + Windows + Android and confirm
+0 FAIL, which is what proves the guards are strict again rather than merely quiet.
+
+**Order matters: Part 2 before Part 3.** Reverting the exclusions while residue may still be present would just
+re-open today's four failures, and it would be impossible to tell a real regression from the old residue.
+
+**Not in scope:** step 7 (Restore Defaults profile scoping, import progress UI) and promoting the node checks to
+gates.
 - 🔜 **Consider the node checks gates.** `profileBundle.check.mjs` (36), `profileStorage.check.mjs` (26) and
   `check-profile-keys.mjs` need no browser, yet none is in the seven-gate table — so a session can report "all
   gates green" without ever running them. Adding them is a one-line change to the DoD.
