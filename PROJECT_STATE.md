@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (2026-10-14 23:27). **Two commits this evening: `81abd2e`** (PROFILE_SYNC_SPEC step 8 — `e2e/specs/bundle.mjs` Suite I I0–I17, which found a real shipping bug: the missing `await` on `dirname` that broke every import carrying an uploaded file) **and `26b301d`** (the post-run store work — `Close-AppGracefully`, `e2e-snapshot.mjs compare`, empty-uploads pruning). **All seven gates green**, and the store is now **verified from disk** after a Windows phase rather than merely in-page.
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-15 00:05). **Seven commits this session, all pushed, 0 ahead / 0 behind at `481e012`:** `81abd2e` (PROFILE_SYNC_SPEC step 8 — `e2e/specs/bundle.mjs` Suite I I0–I17, which found a real shipping bug: the missing `await` on `dirname` that broke every import carrying an uploaded file) · `dc41795` + `3186538` (claim release, then the agreed plan written down before any code) · `26b301d` (**the post-run store work — `Close-AppGracefully`, `e2e-snapshot.mjs compare`, empty-uploads pruning**) · `df90b51` (release) · `c7b967a` (the two `<key>_old>` guards restored to full strictness) · `481e012` (backup prune 6 → 1). **All seven gates green, and the store is now verified FROM DISK after a Windows phase rather than merely in-page.**
 Previous holder: opencode (released 2026-10-14 20:20). Step 8 shipped as `81abd2e`, all seven gates green.
 Previous holder: opencode (released 2026-10-13 17:50). Steps 3–6 DONE, all seven gates green. Backups pruned 5 → 1, keeping `…-172917` (~159 MB freed, 0 orphans proven in all 5 first). ⚠️ Found and recorded: **Bitdefender quarantined `e2e/e2e-full.ps1` out of ALL FIVE backup folders this session**, including the keeper — which had "not fired" through 15:00 the same day. No data lost (repo copy intact, committed and pushed at `48ad37de`), but the surviving backup is **226/227** and a failed prune is NOT a no-op: the AV write-lock left four partially-deleted shells.
 Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates were green.**
@@ -212,7 +212,26 @@ past decision.
 `PROJECT_STATE.md` up to date* in `AGENTS.md`). Claim it as your first action; release it when the work is
 genuinely finished.
 
-Last updated: **2026-10-14** (opencode). **PROFILE_SYNC_SPEC.md step 8 shipped**: `e2e/specs/bundle.mjs` (Suite I,
+Last updated: **2026-10-15 00:05** (opencode). **The post-run store gap is CLOSED, and the cause was the kill
+itself.** Proven by a controlled A/B — write one marker key, close the app two ways, read the store back from a
+fresh start: `taskkill` on the tree **loses** it (27 keys), `WM_CLOSE` to the window **keeps** it (28 keys).
+**WebView2 commits `localStorage` on window close and commits NOTHING on a kill**, so every "restored and
+verified" this harness ever printed was true of the page and silent about the disk. `e2e-full.ps1` now calls
+`Close-AppGracefully` (post `WM_CLOSE`, wait for the **CDP page target** to disappear — waiting for the *process*
+is the wrong signal, it lingers for tens of seconds), and `e2e-snapshot.mjs` gained a pure-Node `compare` mode
+(exit 7 on any difference) that the runner uses to re-read the store from a fresh start after every Windows phase.
+`restore-uploads` also prunes empty `uploads/<id>/` directories, which accumulated forever because
+`fs:allow-remove-dir` does not exist. **Verified: `Restore verified FROM DISK - the store matches the pre-run
+snapshot exactly`, and `uploads/` prunes to just `p_guardprobe/`.**
+Earlier the same day: **`PROFILE_SYNC_SPEC.md` step 8 shipped** as `e2e/specs/bundle.mjs` (Suite I, I0–I17), the
+shared browser spec for the `.spellcaster` bundle, and **it found a real bug on its first run** — the missing
+`await` on `dirname` in `profileBundle.js`, which broke every import carrying an uploaded file on desktop AND
+Android. A board of shipped sounds has no blobs, so the write loop never ran, which is why the hand-test passed
+and the bug shipped. Also fixed, harness-side: `e2e-snapshot.mjs` now **proves** its `Page.reload` happened
+(marker + new exit 6); `spellcaster_import_backups` joined `KNOWN_KEYS` and the two hand-copied key lists (P31a,
+Q9) now import it instead of duplicating it; `check-profile-keys.mjs` reads `e2e/specs/` from the **directory**;
+`playback.mjs` Z1/Z2 no longer sample a single instant against a 0.576s asset. The two `<key>_old>` exclusions
+added that day were later **reverted** (`c7b967a`) once the store was verifiably clean.
 I0–I17) is the shared browser spec for the `.spellcaster` bundle, wired into both entrypoints; the
 coverage-manifest feature entry flipped `planned` → `shipped`. **It found a real bug on its first run** — the
 missing `await` on `dirname` in `profileBundle.js`, which broke every import carrying an uploaded file on both
@@ -1474,13 +1493,19 @@ of seconds while the window and its profile are already gone. The first version 
 ⚠️ **Part 3 was not in the original plan** — it is the thing the other two were waiting on, and it is the
 actual fix for the gap that has been open since 2026-10-11.
 
-### The residue fallout, now that the store is clean — 🔜 Part 4, not yet done
-With a verified-clean store, the four narrow workarounds from earlier today can be **reverted** and the guards
-put back at full strictness: the `<knownKey>_old` skip in `__bareKeys()`, the same skip in M21, and
-`spellcaster_import_backups` in `KNOWN_KEYS`. ⚠️ **Reverting `spellcaster_import_backups` itself is NOT advised** —
-it is a genuine app key that simply arrived late, and listing it is correct. Only the `<key>_old` exclusions were
-symptom-treatment for residue that no longer exists. Re-run all three E2E gates afterwards and require 0 FAIL,
-which is what proves the guards are strict again rather than merely quiet.
+### The residue fallout — ✅ DONE 2026-10-14 23:40 (`c7b967a`)
+With a verified-clean store, the two `<knownKey>_old` exclusions added earlier the same day were **reverted**
+and the guards put back at full strictness. All three E2E gates re-run: web **225/0/0 exit 0** · Windows
+**239/0/1 exit 1** · Android **229/0/1 exit 1** — **0 FAIL everywhere**, and the Windows run again reported
+`Restore verified FROM DISK`. 💡 **That re-run is the proof, not a formality:** had the store still been dirty,
+removing the exclusions would have brought P14a/P31a/M21 straight back. 0 FAIL says the *environment* was fixed;
+it does not say the assertions were quiet. `spellcaster_import_backups` **stays** in `KNOWN_KEYS` — a real app key
+that arrived late, correctly listed.
+
+⚠️ **A trap in `e2e/lib/page.mjs` worth knowing: the whole `PROFILE_HELPER` block lives inside a JS template
+literal, so a BACKTICK in a comment terminates the string and Node evaluates the rest as code.** It has now bitten
+that file twice on 2026-10-14 (`ReferenceError: knownKey is not defined`), each time costing a four-minute run
+before the failing phase was even reached. There is a warning in the file; read it before editing that block.
 
 **Not in scope:** step 7 (Restore Defaults profile scoping, import progress UI) and promoting the node checks to
 gates.

@@ -3665,3 +3665,66 @@ check-profile-keys OK; profileBundle.check 36/36; profileStorage.check 26/26; we
 snapshot held the previous run's fixture profile, so WebView2's async flush across `taskkill` is the remaining
 suspect and has never been checked from disk. Also: step 7's remainder (Restore Defaults profile scoping, the
 progress/report UI), and the case for promoting the three node checks to gates.
+---
+
+## 2026-10-14 (later) - the E2E restore never worked, and the cause was the kill
+
+**Outcome:** the "restore-to-disk" question that had been open across three sessions and two data-loss incidents
+is closed, with the cause proven by controlled experiment rather than inference. `26b301d`, `df90b51`,
+`c7b967a`, `481e012`, all pushed (0 ahead / 0 behind).
+
+**Where it came from.** The user asked for something that was not on the list: after every E2E run the boards
+should return to their shipped state, rather than relying on the app's *Restore Defaults* button, which is a
+**merge** and therefore leaves sounds the user added. They also suspected it would fix the restore gap. Written
+down as a plan first (`3186538`), before any code, so a cut-off left a resumable plan.
+
+**The A/B that settled it.** Write one marker key in the page. Close the app two ways. Start it fresh and read
+the store back.
+
+    taskkill on the process tree  ->  marker GONE     (27 keys)
+    WM_CLOSE to the app window   ->  marker PRESENT  (28 keys)
+
+**WebView2 commits `localStorage` when the window closes and commits NOTHING when the process is killed.** The
+runner's "graceful" `taskkill` without `/F` was not graceful at all for a GUI process - it terminated it. So
+every "restored and verified" this harness ever printed was a true statement about the PAGE and silence about
+the disk, because the page's data died with the process. Not a flush delay. Not the app re-persisting its boot
+state. Not the reload (that was a genuine separate bug, fixed the same day with a marker + exit 6).
+
+**What changed.**
+- `e2e-full.ps1` - `Close-AppGracefully` posts `WM_CLOSE` to the app's visible windows and waits for the **CDP
+  page target to disappear**, which is the signal the WebView2 profile was disposed and the store committed. Only
+  then does it clear up leftover processes, which can no longer lose anything. The first version waited for the
+  PROCESS to exit and hung ~30s a run: after `WM_CLOSE` the Tauri process lingers while the window and its
+  profile are already gone. **Waiting for the process is the wrong signal.**
+- `e2e-snapshot.mjs` - new `compare <expected> <actual>` mode. Pure Node, no CDP, because it has to work when the
+  app is dead. Key-by-key, exit 7 on any difference. `e2e-full.ps1` now restarts the app after a Windows phase,
+  snapshots again, and compares against the pre-run snapshot, so a restore that did not survive is a **hard
+  failure** with both file paths and the recovery command printed. It fired correctly on its first run and
+  reported `missing (24) / extra (24) / changed (2)` - the entire fixture store.
+- `e2e-snapshot.mjs` - `restore-uploads` prunes EMPTY directories under `uploads/`. `fs:allow-remove-dir` does
+  not exist, so the app can create `uploads/<id>/` but never remove one, and shells accumulated forever. An empty
+  directory holds no bytes and the app mkdirs on demand, so this is safe unconditionally.
+
+**Verified end to end:** suite 239 PASS / 0 FAIL / 1 WARN, "App closed cleanly - the store was committed",
+"Restore verified FROM DISK - the store matches the pre-run snapshot exactly", `uploads/` pruned to just
+`p_guardprobe/` (2 files).
+
+**The exclusions, added and removed the same day.** Earlier that day a dirty store forced two narrow workarounds
+(`<key>_old` skips in `__bareKeys` and M21) so that P14a/P31a/M21 would stop failing on residue. Once the store
+was verifiably clean both were reverted (`c7b967a`) and all three gates re-run: web 225/0/0 exit 0, Windows
+239/0/1 exit 1, Android 229/0/1 exit 1 - **0 FAIL everywhere**. That re-run is the proof, not a formality: had the
+store still been dirty, removing them would have brought the three tests straight back. 💡 **Fix the environment
+before relaxing the assertion.** A skip added to silence a dirty store is a test that can no longer see the thing
+it was written for, and the dirt is usually the actual bug.
+
+**Two traps worth keeping.** (1) The whole `PROFILE_HELPER` block in `e2e/lib/page.mjs` lives inside a JS
+template literal, so a BACKTICK in a comment terminates the string and Node evaluates the rest as code. It bit
+that file twice on 2026-10-14, each time costing a four-minute run. There is a warning in the file now. (2) Never
+rewrite a tracked UTF-8 file with `Get-Content`/`WriteAllLines` in PowerShell 5.1 (it reads as ANSI and mangles
+it), and never `git checkout` a file whose changes are uncommitted and not backed up - that combination destroyed
+this session's and the previous session's PROJECT_STATE.md edits before both were recovered from the backup.
+
+**Backups:** pruned 6 -> 1 at the user's request after the push, keeping `...-20261014-235700`, ~200 MB freed.
+**0 orphans proven in all five** folders (every file matched against `git ls-files` and the working tree) before
+deleting anything. `...-20261013-172917` had 226 files rather than 227: Bitdefender had quarantined
+`e2e/e2e-full.ps1` out of it again.
