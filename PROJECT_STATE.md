@@ -468,11 +468,20 @@ are gated behind `isMobile` so desktop/web stay untouched.
   `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
   `f7f316e` "Added ability to move or copy sounds…".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
-- ✅ **Working tree clean and in sync with origin** as of 2026-10-06 23:31 — with **one expected exception**:
-  `src-tauri/Cargo.toml` shows as modified while containing **no content change**. Its working copy has LF
+- ✅ **Branch `mobile-support`, in sync with `origin/mobile-support` at `085a2b5`** (pushed 2026-10-16 00:20,
+  **0 ahead / 0 behind** verified by comparing `git rev-parse HEAD` and `git rev-parse origin/mobile-support`).
+  That commit is the whole step 7 body: the agreed plan, the per-file import report, the one-shot notice, the
+  `missingBlobsMessage` export fix, the version-stamp fix, `O11`–`O14`, `I18`–`I22`, and the 8 node assertions.
+  - ⚠️ **`PROJECT_STATE.md` is MODIFIED and UNCOMMITTED** — these final corrections (the keeper folder, the
+  hand-test status, and this bullet) were made *after* the `085a2b5` push, deliberately: re-taking a backup for a
+  docs-only touch-up is the folder churn the prune exists to stop. Commit with
+  `git commit -am "Correct the keeper folder and the hand-test status" && git push origin mobile-support`.
+  💡 **Check the subject for a BOM with `git cat-file commit HEAD`, not `git log`** — `git log | Out-File` adds a
+  BOM of its own and fakes the problem.
+- ⚠️ **`src-tauri/Cargo.toml` can show as modified while containing NO content change.** Its working copy has LF
   endings and the committed blob has CRLF, so `git diff` reports nothing and a normalised hash confirms the
-  content is identical. **Do not "fix" it by sweeping it into a commit**; if you want a clean `git status`,
-  change the EOL deliberately and say so in the commit message.
+  content is identical. **Do not "fix" it by sweeping it into a commit**; if you want a clean `git status`, change
+  the EOL deliberately and say so in the commit message.
 - ⚠️ **The `post-commit` git hook is decorative and prints a false "backup" message.** On every commit it
   echoes `=== TTRPG Soundboard Backup Log ===` with `Backup location: %cd%` — i.e. the *project directory*, not
   a backup folder. **No backup is created.** `.git/hooks/post-commit.bat` is 6 lines of `echo` and nothing
@@ -1056,12 +1065,15 @@ converges on one.
 🗑️ Gone: `…-20261013-172917`, `…-20261014-175940`, `…-200929`, `…-20261014-202032`, `…-232715`.
 ⚠️ **`e2e/e2e-full.ps1` was Bitdefender-quarantined out of `…-20261013-172917`** (226 files, not 227) — the same
 containment failure recorded above, and the reason the keeper was taken fresh rather than kept.
-ℹ️ **The keeper is `…-20261015-000122`** (VERIFY OK 228/228, `e2e/e2e-full.ps1` present), taken last at the very
-end of the session. It replaced `…-235700`, which was pruned on 2026-10-15 00:01 because it predated the final
-two commits — keeping it would have meant keeping a rollback point behind the tip. ⚠️ **That backup is one
-docs-only commit behind HEAD, which is the accepted trade:** taking a backup *after* the final edit would
-re-create the very folder churn the prune exists to stop, and "one markdown edit behind" is a perfectly good
-rollback point.
+ℹ️ **The keeper is `…-20261016-002040`** (VERIFY OK 228/228, 40.1 MB, `e2e/e2e-full.ps1` **present**, all **71**
+files in `public/assets`, `src-tauri\gen` absent by design), taken **last** so it matches pushed HEAD `085a2b5`.
+✅ **Pruned 5 → 1 at the user's request on 2026-10-16**, after the push, freeing ~120 MB (240 MB → 40 MB). **0
+orphans proven in all four** before deleting anything — every file matched against `git ls-files` **∪** the working
+tree. Gone: `…-20261015-000122` (the previous keeper), `…-20261015-201927`, `…-20261015-212503`, `…-20261016-001542`.
+⚠️ **Two of those four were taken during this session** (`…-201927` at the start, `…-212503` mid-session, before the
+hand-test findings) — they are why the folder count grows during a long session even though the script never prunes.
+⚠️ **Prune by NAME, never by `LastWriteTime`:** all five reported the *same* mtime (`2026-10-14 20:07`), because
+OneDrive stamps the folder, not the copy. Sorting on mtime would have kept an arbitrary one.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
@@ -1880,26 +1892,22 @@ gates.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
 - `src-tauri/gen/android/Run App.bat` stays gitignored (user's decision) — its port-5173 fix is local-only.
-- 🔜 **`PROFILE_SYNC_SPEC.md` step 8 is the next task: the shared E2E spec.** Steps 3–6 shipped 2026-10-13 and
-  step 7 is partial, but **no browser spec covers export/import**, so the manifest feature entry stays
-  `status: planned` — which is the gate doing its job, not an oversight. The spec is `e2e/specs/profiles.mjs`,
-  imported by **both** entrypoints (wired to one only fails `check-coverage` with `SPEC_NOT_SHARED`), plus a
-  `suites` block and a `--update`.
-  - 💡 **§9.3 is what makes it possible.** `exportBundle`/`importBundle` take and return **bytes**, so a spec can
-    drive the whole round trip in-page and **never open a native dialog** — the only way it could be tested on
-    Android at all (`DOM.setFileInputFiles` kills the Android WebView).
-  - ⚠️ **Pick a free id prefix.** `F` is now taken (Suite F, F1–F12). `I` was the other free candidate on
-    2026-10-11 — re-check `coverage.manifest.json` before choosing, and keep `idPattern` non-overlapping
-    (`AMBIGUOUS_ID`).
-  - ⚠️ **A spec that reloads constantly needs its OWN post-reload helpers.** `window.__setInput` does not survive
-    a reload and `evalJs` swallows the exception, so the failure surfaces much later with a misleading value.
-  - ⚠️ **Step 7's remainder:** Restore Defaults is **not yet proven to act on the active profile only**, and there is
-    no progress dialog or per-file report (§9.2 asks for both). The current UI reports **errors** and deliberately
-    says nothing on success — see the note under Open items.
-- ⚠️ **The user has NOT hand-tested export/import.** Per the DoD this is a **user-facing** feature, so the
-  hand-test bar applies and it has **not** been met. Say so plainly; do not imply otherwise. Only a human can
-  confirm that a native picker opens on each platform, that export → import on a *different* device preserves the
-  board, and that "Replace active" behaves under a real board.
+- ✅ **CLOSED 2026-10-14/15 — step 8 shipped as `e2e/specs/bundle.mjs`** (Suite **I**, now **I0–I22**), wired into
+  **both** entrypoints, registered in the manifest with the feature flipped `planned` → `shipped`. It found a real
+  shipping bug on its first run (the missing `await` on `dirname`). `F` and `I` are both taken as id prefixes;
+  `F1`–`F12` (profiles) and `I0`–`I22` (bundles) — check `coverage.manifest.json` before picking another, and keep
+  `idPattern` non-overlapping (`AMBIGUOUS_ID`).
+  - 💡 **§9.3 is what made it possible.** `exportBundle`/`importBundle` take and return **bytes**, so the spec drives
+    the whole round trip in-page and **never opens a native dialog** — the only way it could be tested on Android at
+    all (`DOM.setFileInputFiles` kills the Android WebView).
+  - ⚠️ **A spec that reloads constantly needs its OWN post-reload helpers.** `window.__setInput` does not survive a
+    reload and `evalJs` swallows the exception, so the failure surfaces much later with a misleading value.
+- ✅ **The user HAS hand-tested export/import — twice.** First on 2026-10-14 (web build → Android build), then again
+  on 2026-10-15 after step 7, where **they saw the new summary banner** and confirmed the round trip works. That
+  hand-test is what found the export refusal naming a `storedName` instead of the sound — see Verification gates.
+  ⚠️ **Still only a human can confirm a cross-*device* round trip** (export on one machine, import on another) and
+  "Replace active" under a real board. The user has exercised export→import on the same machine and across two
+  *builds* of it, which is a different claim and should not be described as the same one.
 - ✅ **Steps 3–6 shipped 2026-10-13.** What follows is what the next session should NOT have to re-derive:
   - **The bundle engine is `src/profileBundle.js`**, a pure-bytes module (§9.3) — `exportBundle(options)` returns
     `{bytes, manifest, data}` and `importBundle(bytes, options)` returns a report. Both take injectable `store` /
