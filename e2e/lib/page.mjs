@@ -217,9 +217,13 @@ export function submitModalExpr(btnText) {
 // when the profile it describes no longer holds what it said it did. Without it
 // here, any Windows run whose store already held one failed P14a and P31a for a
 // key the import feature legitimately owns.
+// 'spellcaster_import_notice' joined it on 2026-10-15 (step 7): the one-shot
+// import summary, parked by importBundle because the remount destroys the modal
+// that would report it, and read-and-removed on the next mount. Also global, and
+// also deliberately absent from a suite's expected key set unless an import ran.
 export const KNOWN_KEYS = [
   'backgroundSettings', 'boxSize', 'ttrpg_characters', 'ttrpg_characters_icon',
   'ttrpg_data_version', 'ttrpg_environment', 'ttrpg_environment_icon',
   'ttrpg_groups', 'ttrpg_themes', 'localStorageMigrationCompleted',
-  'spellcaster_profiles', 'spellcaster_import_backups'
+  'spellcaster_profiles', 'spellcaster_import_backups', 'spellcaster_import_notice'
 ];

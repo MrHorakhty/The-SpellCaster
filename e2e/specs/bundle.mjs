@@ -141,6 +141,32 @@ window.__bk.load = async () => {
   return 'loaded';
 };
 window.__bk.dump = (pid) => { const out = {}; for (const n of window.__keysFor(pid)) out[n] = localStorage.getItem('profile:' + pid + ':' + n); return out; };
+// Delete a blob this spec itself uploaded, to reproduce an ORPHANED REFERENCE: a
+// board that still points at a storedName whose file is gone. That is the state
+// the user's hand-test hit on 2026-10-15, and it is the only way to reach the
+// export refusal from here - the refactor under test is the MESSAGE.
+//
+// ⚠️ Only ever call this with a storedName this run uploaded. The Windows phase
+// snapshots and restores uploads/, so a mistake is recoverable; on web it is a
+// localStorage key. Deleting a name the suite did not create would be a user file.
+window.__bk.deleteOwnBlob = async (pid, storedName) => {
+  try {
+    const fs = await window.__bk.fs();
+    await fs.remove('uploads/' + pid + '/' + storedName, { baseDir: fs.BaseDirectory.AppData });
+    return { ok: true, stillThere: !!(await fs.exists('uploads/' + pid + '/' + storedName, { baseDir: fs.BaseDirectory.AppData })) };
+  } catch (err) {
+    return { ok: false, raw: String(err && err.message ? err.message : err) };
+  }
+};
+// exportProfile, but reporting a refusal instead of throwing it out of the page.
+window.__bk.exportCatching = async (pid, dataVersion) => {
+  try {
+    const r = await window.__bk.exportProfile(pid, dataVersion);
+    return { ok: true, sounds: r.manifest.counts.sounds };
+  } catch (err) {
+    return { ok: false, code: err && err.code, message: String(err && err.message) };
+  }
+};
 window.__bk.profiles = () => { const i = window.__bk.P ? window.__bk.P.readProfileIndex() : JSON.parse(localStorage.getItem('spellcaster_profiles') || 'null'); return { active: i?.activeProfileId || null, count: (i?.profiles || []).length }; };
 // Mirror of the app's own handleExportProfile input assembly: LIVE settings, and
 // the board slices read back out of this profile's own storage.
@@ -178,6 +204,7 @@ window.__bk.makeStore = (resolvePid) => {
     errs,
     async read(n) { return real().read(n); },
     async list() { return real().list(); },
+    async has(n) { return real().has(n); },
     async write(n, bytes) {
       try {
         return await real().write(n, bytes);
@@ -207,7 +234,7 @@ window.__bk.blobShape = (b64, path) => {
     return b ? { ctor: b.constructor.name, len: b.length, byteOffset: b.byteOffset, bufferBytes: b.buffer.byteLength } : 'NO_FILE';
   } catch (err) { return 'ERR ' + String(err && err.message); }
 };
-window.__bk.importBundle = async (b64, mode, target) => {
+window.__bk.importBundle = async (b64, mode, target, setActive) => {
   // The target profile is settled inside importBundle, so the store resolves it
   // lazily: a new import appends the profile to the index, a replace targets the
   // one it was given.
@@ -218,9 +245,10 @@ window.__bk.importBundle = async (b64, mode, target) => {
   });
   try {
     const report = await window.__bk.B.importBundle(window.__bk.unb64(b64), {
-      mode, targetProfileId: target, store, normalize: (k, v) => v, dataVersion: '3'
+      mode, targetProfileId: target, store, normalize: (k, v) => v, dataVersion: '3',
+      setActive: setActive === false ? false : undefined,
     });
-    return { ok: true, profileId: report.profileId, profileName: report.profileName, imported: report.imported, dropped: report.dropped, storeErrors: store.errs };
+    return { ok: true, profileId: report.profileId, profileName: report.profileName, imported: report.imported, skipped: report.skipped, files: report.files, dropped: report.dropped, storeErrors: store.errs };
   } catch (err) {
     // storeErrors rides on the FAILURE path too. importBundle's own report names
     // the file and nothing else, and the underlying reason goes to a console this
@@ -455,12 +483,12 @@ export const bundle = {
         ok(sectionShown === isTauri), `isTauri=${isTauri} sectionRendered=${sectionShown}`);
 
       if (!isTauri) {
-        skip('I3-I17', 'the engine modules are served only by the Vite dev server and the web phase runs a built dist; export/import is Tauri-only by design (§7)');
+        skip('I3-I22', 'the engine modules are served only by the Vite dev server and the web phase runs a built dist; export/import is Tauri-only by design (§7)');
         return;
       }
 
       if (!pid || !storedName || probeBytes === 0) {
-        bail(['I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10', 'I11', 'I12', 'I13', 'I14', 'I15', 'I16', 'I17'],
+        bail(['I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10', 'I11', 'I12', 'I13', 'I14', 'I15', 'I16', 'I17', 'I18', 'I19', 'I20', 'I21', 'I22'],
           `the fixture did not materialise (pid=${pid} storedName=${storedName} bytes=${probeBytes})`);
         return;
       }
@@ -799,6 +827,145 @@ export const bundle = {
           && /format 1\b/.test(future?.message || '')
           && dumpAfterFuture === dumpBeforeRefusal),
         `code=${future?.code} message="${future?.message}" boardUnchanged=${dumpAfterFuture === dumpBeforeRefusal}`);
+
+      // ============================ the per-file report + the notice =========
+      // I15 already imported this bundle into `pid`, so every blob is ALREADY
+      // present there. That makes this the natural place for `skipped` to be real
+      // rather than theoretical: the honest count for a re-import is "nothing to
+      // write", and an implementation that rewrote all of it would say otherwise.
+      const reimport = await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)})`);
+      const manifestCount = exported.manifest.files.length;
+      const statuses = (reimport?.files || []).map(f => f.status);
+      const allLabelled = (reimport?.files || []).every(f => typeof f.label === 'string' && f.label.length > 0);
+
+      log('BUNDLE', 'I18: the report lists every bundle file with a status, and a blob already present is SKIPPED',
+        ok(reimport?.ok === true
+          && reimport?.files?.length === manifestCount
+          && allLabelled
+          && statuses.every(s => s === 'imported' || s === 'skipped')
+          && reimport?.imported + reimport?.skipped === manifestCount
+          && reimport?.skipped === manifestCount
+          && reimport?.imported === 0),
+        `files=${reimport?.files?.length}/${manifestCount} skipped=${reimport?.skipped} imported=${reimport?.imported} statuses=${JSON.stringify([...new Set(statuses)])} labelled=${allLabelled}`);
+
+      // The notice is parked by importBundle precisely because the UI that would
+      // report the import is destroyed by the remount. So it is tied to that
+      // remount: setActive:false - a programmatic import with nothing to show it -
+      // parks NOTHING. That coupling is the design, and this is where it is worth
+      // pinning, because "always park it" would leave a notice behind for a mount
+      // that never comes, and the first real import after it would show a stale
+      // summary. It also means the key cannot be observed from here...
+      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)}, false)`);
+      const quiet = await evalJs(`(() => ({
+        global: localStorage.getItem('spellcaster_import_notice'),
+        scoped: localStorage.getItem('profile:' + ${JSON.stringify(pid)} + ':spellcaster_import_notice'),
+      }))()`);
+
+      log('BUNDLE', 'I19: an import that will not remount parks NO notice - so no stale summary can survive',
+        ok(quiet?.global === null && quiet?.scoped === null),
+        `global=${quiet?.global === null ? 'absent' : 'PRESENT'} scoped=${quiet?.scoped === null ? 'absent' : 'PRESENT'}`);
+
+      // I20 is the "survives the remount" claim, and the honest test is that NO
+      // reload happens: the real import remounts the tree synchronously, so by the
+      // time this reads the page, the banner must already be on screen and the key
+      // already consumed. An earlier version reloaded first and asserted the key
+      // was still there - which failed, because the app had done exactly what it
+      // was built to do.
+      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)})`);
+      await sleep(1500);
+      const shown = await evalJs(`(() => {
+        const b = document.querySelector('[data-import-notice]');
+        return {
+          present: !!b,
+          text: b ? b.textContent.replace(/\\s+/g, ' ').trim().slice(0, 240) : '',
+          keyLeft: localStorage.getItem('spellcaster_import_notice'),
+          // Global for a sharper reason than consistency: an import can CREATE the
+          // profile the notice is about, so a scoped key would be unreadable by the
+          // very mount it exists for. (profileBundle.check.mjs asserts the parked
+          // payload directly; this proves no scoped twin is ever left behind.)
+          scopedTwin: localStorage.getItem('profile:' + ${JSON.stringify(pid)} + ':spellcaster_import_notice'),
+        };
+      })()`);
+
+      log('BUNDLE', 'I20: a real import remounts and the banner is already on screen, global key consumed',
+        ok(shown?.present === true
+          && /Replaced/.test(shown?.text || '')
+          && new RegExp(`${manifestCount} file`).test(shown?.text || '')
+          && /already present/.test(shown?.text || '')
+          && shown?.keyLeft === null
+          && shown?.scopedTwin === null),
+        `banner=${shown?.present} keyLeft=${shown?.keyLeft} scopedTwin=${shown?.scopedTwin} text="${shown?.text}"`);
+
+      // Dismissal only clears local state; the key is already gone, so the notice
+      // cannot come back on a later mount. That is the "one-shot" claim, and it is
+      // checked by actually reloading rather than by asserting the key is absent.
+      //
+      // The click and the read must NOT be in one expression: the click is a React
+      // state update, so reading the DOM in the same tick still sees the banner -
+      // which is what the first version of this did, and it reported STILL_THERE
+      // for a dismissal that had in fact worked.
+      const clicked = await evalJs(`(() => {
+        const b = document.querySelector('[data-import-notice] button[aria-label="Dismiss import summary"]');
+        if (!b) return 'NO_DISMISS_BTN';
+        b.click(); return 'OK';
+      })()`);
+      await sleep(600);
+      const goneNow = await evalJs(`!!document.querySelector('[data-import-notice]')`);
+      await reload();
+      await sleep(1200);
+      await rehydrate();
+      const afterAgain = await evalJs(`!!document.querySelector('[data-import-notice]')`);
+
+      log('BUNDLE', 'I21: the notice is one-shot - dismissed, and gone again after a reload',
+        ok(clicked === 'OK' && goneNow === false && afterAgain === false),
+        `click=${clicked} stillShowing=${goneNow} bannerAfterReload=${afterAgain}`);
+
+      // ---- I22: the orphaned-reference refusal, which the HAND-TEST found ----
+      //
+      // Delete a file the board currently points at, leaving a reference with
+      // nothing behind it - exactly what the user hit on 2026-10-15. The refusal
+      // itself was already correct and already asserted; what was wrong, and what
+      // no test had ever looked at, is that it named a storedName
+      // (`sound_9wy7vtpo_e2e_silence.wav`) instead of the sound. The user could
+      // not tell which card to open and had to delete sounds one at a time.
+      //
+      // ⚠️ The storedName is read from the board NOW, not the one this spec
+      // uploaded. The imports above rewrote every reference to a content-addressed
+      // name, so by this point the original upload is no longer referenced at all -
+      // deleting it changes nothing and the export correctly succeeds. The first
+      // version of this test did exactly that and failed for the right reason.
+      const liveRef = await evalJs(`(() => {
+        const board = JSON.parse(localStorage.getItem('profile:' + ${JSON.stringify(pid)} + ':ttrpg_characters') || '[]');
+        for (const c of board) {
+          for (const s of c.sounds || []) {
+            if (s.name === 'Uploaded Roar') {
+              const ref = (s.files || [])[0];
+              return ref && ref.storedName ? { storedName: ref.storedName, container: c.name } : null;
+            }
+          }
+        }
+        return null;
+      })()`);
+
+      if (!liveRef?.storedName) {
+        log('BUNDLE', 'I22: a board pointing at a deleted file refuses to export, naming the SOUND and its container',
+          'FAIL', `no live reference to 'Uploaded Roar' in ${pid} - the earlier ids must have rewritten the board`);
+      } else {
+        const dropped = await evalJs(`window.__bk.deleteOwnBlob(${JSON.stringify(pid)}, ${JSON.stringify(liveRef.storedName)})`);
+        const refused = await evalJs(`window.__bk.exportCatching(${JSON.stringify(pid)}, '3')`);
+        const msg = refused?.message || '';
+
+        log('BUNDLE', 'I22: a board pointing at a deleted file refuses to export, naming the SOUND and its container',
+          ok(dropped?.ok === true
+            && dropped?.stillThere === false
+            && refused?.ok === false
+            && refused?.code === 'missing-blobs'
+            && /Uploaded Roar/.test(msg)
+            && new RegExp(liveRef.container.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(msg)
+            && !msg.includes(liveRef.storedName)
+            && /upload the audio again/i.test(msg)),
+          `deleted=${JSON.stringify(dropped)} code=${refused?.code} container=${liveRef.container} message="${msg}"`);
+      }
     } catch (err) {
       // Never let this spec unwind main(): that skips the entrypoint's
       // localStorage restore and leaves the fixture in the user's real store.

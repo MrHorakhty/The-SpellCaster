@@ -41,6 +41,7 @@ import {
     assertUint8Array,
     BundleError,
     collectProfileForExport,
+    IMPORT_NOTICE_KEY,
 } from './profileBundle.js'
 
 // Environment detection
@@ -793,18 +794,48 @@ function AppBoard() {
     // load. The three collections below are read from ONE profile id that is
     // fixed for the lifetime of this mount - a profile switch remounts the app
     // (see the Profiles section below), so it can never change underneath them.
-    const [activeProfileId] = useState(() => ensureProfileStore())
+    const [activeProfileId] = useState(() => ensureProfileStore(DATA_VERSION))
 
     const [characters, setCharacters] = useState(() => {
-        return readStoredData(ensureProfileStore(), 'ttrpg_characters', data.characters)
+        return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_characters', data.characters)
     })
 
     const [environmentSounds, setEnvironmentSounds] = useState(() => {
-        return readStoredData(ensureProfileStore(), 'ttrpg_environment', data.environmentSounds)
+        return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_environment', data.environmentSounds)
     })
 
     const [groups, setGroups] = useState(() => {
-        return readStoredData(ensureProfileStore(), 'ttrpg_groups', data.groups)
+        return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_groups', data.groups)
+    })
+
+    // -----------------------------------------------------------------------
+    // The one-shot import notice.
+    //
+    // A successful import REMOUNTS the tree (a new profile activates; a replaced
+    // one calls requestProfileRemount), so the Settings modal unmounts with it and
+    // any message set in it is thrown away. That is why the import used to be
+    // silent on success and why putting the message back in the modal cannot work.
+    //
+    // So importBundle parks the summary in a key and it is read HERE, once, on the
+    // next mount (PROFILE_SYNC_SPEC.md §9.2, step 7 plan). The key is GLOBAL, like
+    // the profile index, for a sharper reason than consistency: an import can
+    // create a brand new profile, so the notice cannot be namespaced under the
+    // profile it just replaced - and it has to be readable before any profile id
+    // is settled.
+    //
+    // Read-and-remove in the same tick, so it is genuinely one-shot: a stale notice
+    // cannot survive a second mount, and dismissing it only clears local state.
+    // -----------------------------------------------------------------------
+    const [importNotice, setImportNotice] = useState(() => {
+        try {
+            const raw = localStorage.getItem(IMPORT_NOTICE_KEY)
+            if (!raw) return null
+            localStorage.removeItem(IMPORT_NOTICE_KEY)
+            const parsed = JSON.parse(raw)
+            return parsed && typeof parsed === 'object' ? parsed : null
+        } catch {
+            return null
+        }
     })
 
     // -----------------------------------------------------------------------
@@ -860,7 +891,11 @@ function AppBoard() {
 
     const handleCreateProfile = () => {
         const name = newProfileName.trim()
-        const id = createProfile(name || 'New Profile')
+        // DATA_VERSION is passed so the new profile is stamped from birth. Omit it
+        // and the profile sits unversioned until something reads it, at which point
+        // readProfileData assumes it predates versioning and leaves a <key>_old
+        // backup of the shipped defaults behind (profileStorage.js createProfile).
+        const id = createProfile(name || 'New Profile', DATA_VERSION)
         if (!id) return
         setNewProfileName('')
         refreshProfiles()
@@ -1066,10 +1101,6 @@ function AppBoard() {
                 dataVersion: DATA_VERSION,
             })
 
-            // No notice on success, and that is deliberate: both modes remount
-            // (a new profile activates, a replaced one asks to be re-read), so
-            // this modal unmounts with the tree and any message set here would
-            // be thrown away. The board visibly changing IS the feedback.
             if (report.dropped.length > 0) {
                 const names = report.dropped.slice(0, 3).map(d => d.name).join(', ')
                 console.warn(`[profiles] import dropped ${report.dropped.length} unresolvable sound(s): ${names}`)
@@ -5065,8 +5096,65 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
         )
     }
 
+    // The import summary the banner below renders. Kept out of the JSX because it
+    // is three sentences of pluralisation, and a bundle with no audio files is a
+    // perfectly normal thing to import (§7 - a board of shipped sounds has none).
+    const importNoticeSummary = (() => {
+        if (!importNotice) return null
+        const added = importNotice.imported || 0
+        const skipped = importNotice.skipped || 0
+        const parts = []
+        parts.push(`${added} file${added === 1 ? '' : 's'} added`)
+        if (skipped > 0) parts.push(`${skipped} already present`)
+        const dropped = (importNotice.dropped || []).length
+        if (dropped > 0) {
+            parts.push(`${dropped} sound${dropped === 1 ? '' : 's'} skipped - this app does not have the audio for ${dropped === 1 ? 'it' : 'them'}`)
+        }
+        if (importNotice.dataVersionSkew) {
+            parts.push(`the bundle's data version (${importNotice.dataVersionSkew.bundle}) was migrated forward to this app's (${importNotice.dataVersionSkew.app})`)
+        }
+        return parts.join('; ') + '.'
+    })()
+
     return (
         <div className="app-container h-screen flex flex-col bg-dark-900 text-slate-200">
+            {/* Import summary. It renders on the mount AFTER the import's remount,
+                because that is the only place a message about it can survive - the
+                Settings modal it was triggered from is gone by then (§9.2). */}
+            {importNotice && (
+                <div role="status" data-import-notice className="shrink-0 flex items-start gap-3 px-4 py-2.5 bg-lime-800 text-white">
+                    <Upload size={18} className="shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                            {importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
+                        </p>
+                        <p className="text-xs opacity-90 break-words">{importNoticeSummary}</p>
+                        {(importNotice.files || []).length > 0 && (
+                            <details className="mt-1 text-xs opacity-90">
+                                <summary className="cursor-pointer select-none">
+                                    {importNotice.files.length} file{(importNotice.files.length === 1 ? '' : 's')} in the bundle
+                                </summary>
+                                <ul className="mt-1 space-y-0.5 break-words">
+                                    {importNotice.files.map(f => (
+                                        <li key={f.path} className="flex gap-2">
+                                            <span className="shrink-0 opacity-75">{f.status}</span>
+                                            <span className="truncate">{f.label || f.path}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </details>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => setImportNotice(null)}
+                        className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-lime-900 transition-colors"
+                        title="Dismiss"
+                        aria-label="Dismiss import summary"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
             {/* Save failure banner - a failed localStorage write is otherwise invisible */}
             {saveError && (
                 <div role="alert" className="shrink-0 flex items-start gap-3 px-4 py-2.5 bg-red-700 text-white">

@@ -414,7 +414,10 @@ Implementation consequences:
    **"Replace active"** this installs into the **live** profile, which is the one place a remount does *not*
    automatically protect — remount afterwards, or verify prefix/state agreement the way the switch does
    (§11 risk 10).
-7. Report per file: imported / skipped (already present) / failed.
+7. Report per file: imported / skipped (already present) / failed. ✅ **Step 7, 2026-10-15:** the report now
+   carries `files: [{ path, label, status }]` and `skipped` is real — a blob already present in the target
+   profile is not rewritten (`blobStore.has()`, existence not content; see §12 step 7 for why). `failed`
+   still aborts the whole import, because the atomicity above depends on it (§12 step 7's plan, half b).
 
 ### Import modes (v1 — two modes)
 
@@ -452,6 +455,12 @@ desktop — reuse that pattern for a "Profiles & Sync" section rather than addin
 
 - **Export profile…** → name, optional "include audio" checkbox, destination picker. No passphrase field (§6).
 - **Import profile…** → source picker, then the mode choice, then a progress + per-file report.
+  ✅ **Revised by the 2026-10-15 step 7 plan: a per-file report with NO progress dialog.** Both modes remount,
+  so the Settings modal unmounts with the tree and a message set in it is discarded — the silence on success is
+  structural, not an oversight. What ships is the per-file status list (§8 step 7) plus a **one-shot notice in a
+  global `spellcaster_import_notice` key**, read on the next mount and shown as a dismissible banner, so the
+  feedback outlives the remount without adding an eighth modal. A progress dialog during the write was
+  considered and declined: a handful of files, under a second, is not worth a second modal.
 - **Reset to starter sounds** → ⚠️ **this already shipped** as `bde7483`: `restoreDefaults` (App.jsx:2959,
   button at App.jsx:6698) backed by `mergeShippedDefaults` (App.jsx:349). It is **not new work** — it needs to
   become profile-scoped (operate on the active profile, and stop merging into whatever the previous profile left
@@ -708,6 +717,47 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
    npm took **2.8.2** against a Rust crate of **2.7.3** and every `tauri dev` printed *"Error Found version
    mismatched Tauri packages"*.
 7. **UI** — profiles modal, Settings section, progress + report. Profile-scoped Restore Defaults (§9.2).
+
+   > ✅ **SHIPPED 2026-10-15.** Both halves are done, and the first one needed **no code at all**.
+
+   > 📋 **PLAN AGREED 2026-10-15 (user + opencode).** Two halves, and the first turned out to be a **proof, not a
+   > change** — read the note below before writing any code for it.
+   >
+   > **(a) "Profile-scoped Restore Defaults" needs NO implementation — it needs a test.** `restoreDefaults`
+   > (App.jsx:3307) only calls `setCharacters` / `setEnvironmentSounds`; it writes no storage itself. And the
+   > three auto-save effects declare `activeProfileId` **fixed for the mount** (App.jsx:4270-4274), so a press
+   > cannot land in another profile's namespace — which is §0.3 decision 2 (switch = full remount) doing the
+   > scoping for us. §9.2's worry ("stop merging into whatever the previous profile left behind") was written
+   > **pre-profiles** and is structurally answered. Nothing asserted it, which is the only reason the §13 row is
+   > unchecked. So: **add `O11`–`O13` to `e2e/specs/reset.mjs`** — capture profile A's keys, create + switch to
+   > profile B, press Restore Defaults on B, assert **A is byte-identical** and **B got the merged defaults**.
+   > 💡 Reuse Suite F's helpers (`__newProfile` / `__switchTo`, profiles.mjs:49-66) and `__keysFor(pid)`
+   > (page.mjs:121) rather than re-deriving them; and keep it **last in the spec** — the switch remounts the tree.
+   >
+   > **(b) The import report — per-file data + a notice that survives the remount.** NOT the full §9.2 wording:
+   > **no progress dialog.** The reason the UI is silent on success today (§9.2's "progress + per-file report") is
+   > structural, not an omission — both modes remount, so the Settings modal unmounts with the tree and any
+   > message set in it is discarded. A dialog *during* the import would be a real second modal for a write that
+   > is typically a handful of files and under a second. What ships instead:
+   > 1. **`importBundle` returns per-file statuses** — `files: [{ path, label, status }]` with
+   >    `status ∈ imported | skipped | failed`, plus counts. Pure, node-covered.
+   > 2. **`skipped` becomes real**: skip the write when the blob is **already present** in the target profile
+   >    (`blobStore.has()`). This is what §8 step 7's "skipped (already present)" has been waiting for — today
+   >    every blob is rewritten unconditionally. ⚠️ **The rule is existence, not content**, and that is a
+   >    deliberate trade: `storedName` is `sound_<rand>_<safeName>`, so a name collision means the *same* upload,
+   >    and `stat` is **not granted** so a size check would mean reading the whole file — which is the cost
+   >    skipping exists to avoid. The residual (a same-named, different-content file would be kept) is recorded
+   >    rather than defended against.
+   > 3. **A one-shot notice survives the remount**: the summary is written to a **global** `spellcaster_import_notice`
+   >    key — global for the same reason `spellcaster_profiles` is, since an import can create a *new* profile —
+   >    and the app reads it once on the next mount and renders a dismissible banner. **Not** re-adding
+   >    per-file progress, and **not** a second modal.
+   > 4. ⚠️ **A new storage key is the known hazard**: it must join `KNOWN_KEYS` in `e2e/lib/page.mjs`, which is
+   >    the single list `P14a`, `P31a` and `Q9` all import. That is the `spellcaster_import_backups` precedent,
+   >    and the reason those three read one list rather than three.
+   >
+   > **Out of scope for step 7**: the §13 rows that need a *second physical device* (Android SAF import,
+   > cross-device round trip), and promoting the node checks to DoD gates.
 8. **E2E shared spec** `e2e/specs/profiles.mjs` + **manifest registration** + docs (README testing section).
    ⚠️ This is not "add a file" any more — see §14. **Register the feature as `planned` in
    `e2e/coverage.manifest.json` when you *start*, not when you finish**: flipping `planned` → `shipped` is
@@ -745,7 +795,9 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [x] 🆕 **A profile switch remounts cleanly (§0.3 decision 2).** → Suite F.
 - [x] 🆕 **A sound's `volume` trim survives the round trip**, including `0` and an absent value. → *"volume rides along verbatim, including the legitimate 0"*.
 - [x] 🆕 **No priming state in the bundle.** → the bundle module has no priming import at all, and `P31a` asserts no key exists.
-- [ ] **Restore Defaults stays idempotent and non-destructive after being profile-scoped** → `specs/reset.mjs` covers the merge contract; ⚠️ the "acts on the active profile only" half is **step 7 work, not done**.
+- [x] **Restore Defaults stays idempotent and non-destructive after being profile-scoped** → `specs/reset.mjs` covers the merge contract; ✅ **the "acts on the active profile only" half shipped 2026-10-15** as **`O11`–`O13`**. 💡 **No app code changed for it** — the scoping is a consequence of §0.3 decision 2 (`activeProfileId` is fixed for the mount, App.jsx:4270-4274), so this row was an *unasserted* property rather than a missing feature. `O12` is the byte-identical capture; `O11` exists because creating a profile already switches and remounts, so there is no second switch to drive.
+- [x] 🆕 **The import report is per-file, with `skipped` real** → **`I18`** + `profileBundle.check.mjs` ("the report lists EVERY manifest file, each with a status", "a blob already present is SKIPPED and its bytes are left alone"). A store without `has()` still imports everything, which is what lets the older injected stores keep working.
+- [x] 🆕 **The summary outlives the remount that destroys the modal** → `I19`/`I20`/`I21` + the node check. `I19` pins the *negative* case (`setActive:false` parks **nothing**, so no stale summary can survive); `I20` asserts the banner is on screen **without a reload**, because the remount is synchronous; `I21` that dismissal survives another reload.
 - [x] **No `fs:scope: ["**"]` and no blanket write scope ships.** → `capabilities/default.json` carries no `fs:scope` entry at all; the only extra reach is the single-file `grant_path`.
 - [x] **The grant is per-file, not per-directory.** → ✅ **measured on real hardware 2026-10-13**, 11/11: an ungranted `Documents` write AND read are refused, the granted file writes and reads byte-exact, and **a sibling in the same folder is still refused for both read and write**. Re-granting is idempotent.
 - [x] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes. → the grant probe wrote 64 bytes to the Desktop and read them back with the zip magic intact; ⚠️ **that was the probe's payload, not a real `exportBundle` result through the picker** — the picker itself has never been opened.
@@ -756,8 +808,8 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [x] The web build is **unchanged** — no export/import controls, and its existing behaviour intact. → the section is gated on `isTauri`; web E2E is 223/0/0.
 - [x] Two profiles side by side have fully independent data, settings and audio. → Suite F.
 - [x] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds; `cargo check` clean. → all three, 2026-10-13.
-- [ ] 🆕 **`node e2e/check-coverage.mjs` is green**, and the `Profile sync and export/import` feature entry has flipped from `planned` to `shipped` **with a non-empty `coveredBy`**. → ⚠️ **checker is green but the feature is still `planned`**, on purpose: no shared spec exists, and a `shipped` feature with no covering suite fails the gate. That is step 8.
-- [ ] E2E: `e2e/specs/profiles.mjs` (seed → export → wipe → import → deep compare) runs from **both** entrypoints, green on web, Windows and Android. → **step 8, not started.**
+- [x] 🆕 **`node e2e/check-coverage.mjs` is green**, and the `Profile sync and export/import` feature entry has flipped from `planned` to `shipped` **with a non-empty `coveredBy`**. → ✅ **2026-10-14, step 8**: the checker is green and the entry is **`status: shipped`** — the flip is what forced `specs/bundle.mjs` to exist. ⚠️ **These two rows were stale until 2026-10-15** and still said "step 8, not started" on a step that had shipped the previous day; corrected here, not in place of the work.
+- [x] E2E: `e2e/specs/bundle.mjs` (seed → export → wipe → import → deep compare) runs from **both** entrypoints, green on web, Windows and Android. → ✅ **2026-10-14, step 8**: Suite **I (I0–I17)**, wired into both entrypoints, **all 17 ids green on Windows and Android**; the web arm is I1 + I2 only, which is correct rather than a gap (§7 — web audio is base64 in localStorage and caps around 5 MB). It found a real shipping bug on its first run (the missing `await` on `dirname`).
 - [x] README documents export/import and states plainly that there is no account and no data leaves the device — including the priming note (§9.2). → ✅ **done 2026-10-13**: Features bullets for Profiles and Profile Export & Import, two Platform Support rows, and an explicit note that web has no export/import *and why*. 💡 **The README had documented neither priming nor profiles either** — both shipped weeks earlier and neither had ever reached it, so this row was less a steps-3-6 chore than a three-feature gap found by it.
 
 ### ⚠️ What is NOT proven, stated plainly

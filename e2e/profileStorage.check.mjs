@@ -48,8 +48,26 @@ ls.setItem('ttrpg_characters_icon', 'Shield')
 ls.setItem('sound_file_abc.mp3', 'data:audio/mp3;base64,AAAA')
 ls.setItem('localStorageMigrationCompleted', 'true')
 
-const id = m.ensureProfileStore()
+const id = m.ensureProfileStore('3')
 ok('first run creates a profile id', () => assert.match(id, /^p_[0-9a-z]+$/))
+
+// The FIRST-RUN profile must be stamped too, and this is the more important of
+// the two stamping paths: it is the one every user takes. An unstamped first
+// profile means the shipped defaults the auto-save effect writes on mount carry
+// no `ttrpg_data_version`, so the user's SECOND launch takes the
+// `storedVersion === null` branch and leaves a `ttrpg_characters_old` backup of
+// the app's own defaults behind, permanently.
+//
+// Caught by the Android restore guard on 2026-10-15: after a *correct* restore it
+// reported `extra: ...ttrpg_characters_old, ...ttrpg_data_version` - the app had
+// recreated both on boot. Every suite was green; the store guard was the only
+// thing looking.
+ok('the first-run profile is version-stamped from birth', () =>
+  assert.equal(ls.getItem(`profile:${id}:ttrpg_data_version`), '3'))
+ok('so a first read of it leaves no <key>_old backup', () => {
+  m.readProfileData(id, 'ttrpg_characters', [], (k, v) => v, '3')
+  assert.equal(ls.getItem(`profile:${id}:ttrpg_characters_old`), null)
+})
 ok('legacy characters adopted into the profile', () =>
   assert.equal(ls.getItem(`profile:${id}:ttrpg_characters`), JSON.stringify([{ id: 'c1', name: 'Legacy Paladin', sounds: [] }])))
 ok('legacy key removed from the global namespace', () => assert.equal(ls.getItem('ttrpg_characters'), null))
@@ -70,6 +88,41 @@ ok('ensureProfileStore is idempotent', () => assert.equal(JSON.stringify(ls.snap
 const bId = m.createProfile('Second Board')
 ok('second profile created', () => assert.notEqual(bId, id))
 ok('new profile starts empty', () => assert.equal(ls.getItem(`profile:${bId}:ttrpg_characters`), null))
+
+// A new profile must be VERSION-STAMPED FROM BIRTH. Without it the app remounts
+// onto the empty profile, the auto-save effect writes the shipped defaults into
+// it, and nothing writes `ttrpg_data_version` - so the next read takes the
+// `storedVersion === null` branch and leaves a `ttrpg_characters_old` backup of
+// the app's own shipped defaults behind. Every profile a user creates collected
+// one, and the `_old` guards (P13/P14a/P31a/O10/M21) fired on it.
+//
+// Found 2026-10-15 on the Android store: `profile:p_b01d9bac:ttrpg_characters_old`.
+const stampedId = m.createProfile('Stamped Board', '3')
+ok('a profile created WITH a dataVersion is stamped from birth', () =>
+  assert.equal(ls.getItem(`profile:${stampedId}:ttrpg_data_version`), '3'))
+ok('and reading that profile leaves no <key>_old backup', () => {
+  m.writeProfileValue(stampedId, 'ttrpg_characters', JSON.stringify([{ id: 's1', name: 'Shipped', sounds: [] }]))
+  m.readProfileData(stampedId, 'ttrpg_characters', [], (k, v) => v, '3')
+  assert.equal(ls.getItem(`profile:${stampedId}:ttrpg_characters_old`), null)
+})
+ok('a profile created WITHOUT one still self-heals via the old migration path', () => {
+  const legacy = m.createProfile('Legacy Board')
+  m.writeProfileValue(legacy, 'ttrpg_characters', JSON.stringify([{ id: 'l1', name: 'Legacy', sounds: [] }]))
+  m.readProfileData(legacy, 'ttrpg_characters', [], (k, v) => v, '3')
+  assert.equal(ls.getItem(`profile:${legacy}:ttrpg_data_version`), '3')
+  assert.ok(ls.getItem(`profile:${legacy}:ttrpg_characters_old`), 'the pre-existing migration path must still snapshot')
+  // Delete both: a fixture profile left behind changes every later assertion
+  // about how many profiles exist. This file tripped over exactly that when these
+  // two checks were added - "the last profile cannot be deleted" failed because
+  // there were now four profiles, not one. Same lesson as reset.mjs O14.
+  m.deleteProfile(legacy)
+  m.deleteProfile(stampedId)
+})
+ok('the version-stamp fixtures cleaned up after themselves', () => {
+  const idx = JSON.parse(ls.getItem('spellcaster_profiles') || 'null')
+  assert.equal((idx.profiles || []).filter(p => p.name === 'Stamped Board' || p.name === 'Legacy Board').length, 0)
+})
+
 m.writeProfileValue(bId, 'ttrpg_characters', JSON.stringify([{ id: 'b1', name: 'B Hero', sounds: [] }]))
 ok('profile A is untouched by a write to B', () =>
   assert.equal(ls.getItem(`profile:${id}:ttrpg_characters`), JSON.stringify([{ id: 'c1', name: 'Legacy Paladin', sounds: [] }])))

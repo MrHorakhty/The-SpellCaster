@@ -3728,3 +3728,110 @@ this session's and the previous session's PROJECT_STATE.md edits before both wer
 **0 orphans proven in all five** folders (every file matched against `git ls-files` and the working tree) before
 deleting anything. `...-20261013-172917` had 226 files rather than 227: Bitdefender had quarantined
 `e2e/e2e-full.ps1` out of it again.
+
+---
+
+## 2026-10-15 → 2026-10-16 — PROFILE_SYNC_SPEC step 7, and the two defects the hand-test found
+
+Claimed 2026-10-15 20:19, released 2026-10-16. The user picked up the profile spec; step 7 was the only
+outstanding build item (step 2 was cut in v1). Agreed the plan with the user before writing code, put it in
+`PROFILE_SYNC_SPEC.md` §12 step 7, then implemented it.
+
+**The plan, and the first finding inside it.** §12 step 7 asks for "profile-scoped Restore Defaults", written
+**pre-profiles**. Reading the code first showed the implementation half was already satisfied by construction:
+`restoreDefaults` (App.jsx:3307) only calls `setState`, and `activeProfileId` is fixed for the mount
+(App.jsx:4270-4274 — §0.3 decision 2), so a press cannot land in another profile's namespace. What was missing
+was any **assertion**. So half (a) shipped as tests only: `reset.mjs` **O11-O13**.
+
+Half (b) — the §9.2 "progress + per-file report" — was narrowed with the user: **no progress dialog** (a handful
+of files, under a second, is not worth a second modal), and instead a per-file report plus a **one-shot notice
+that outlives the remount**, because the remount destroys the Settings modal that would otherwise report it.
+The summary is parked by `importBundle` itself in a **global** `spellcaster_import_notice` key — global for a
+sharper reason than consistency: an import can **create** the profile the notice is about, so a scoped key would
+be unreadable by the very mount it exists for.
+
+**Why the notice write lives in the engine and not the UI.** It was written in `handleImportProfile` first, then
+moved: the UI's copy sits behind a native picker, so it could never be covered by a test at all, whereas in
+`importBundle` it is covered by `profileBundle.check.mjs` and `specs/bundle.mjs` for free. `I19` pins the
+**negative** rule — an import that will not remount (`setActive:false`) parks **nothing**, so no stale summary can
+survive for the next real import.
+
+**Three first-run failures of mine, all the test's fault and all instructive.**
+- `O11` drove a `data-profile-switch` button that is **correctly not there**: `handleCreateProfile` already calls
+  `handleSwitchProfile` (App.jsx:892-899) and the remount takes the modal with it. 💡 **A remount deletes the UI
+  you were driving.**
+- `O12` compared against a capture taken **before** the switch's `flushCurrentProfile()`. Capture *after* the
+  create/remount, or you are measuring the flush.
+- `I19` reloaded and expected the parked key to still be there. It was gone: **`requestProfileRemount` is
+  synchronous**, so the banner had mounted and consumed it before the next line ran. The first time in this project
+  the failures all pointed at the test rather than the app.
+
+### The user's hand-test, and what it found
+
+The user hand-tested export/import and **saw the new banner** — the DoD bar is met. Their report: *"it first
+threw errors because of a test 'sound' you uploaded… I assume that's why the error triggered"*.
+
+🔴 **Defect 1 — the export refusal named a file, not a sound.** A board reference whose file had been deleted
+made `exportBundle` refuse the whole bundle with `...: sound_9wy7vtpo_e2e_silence.wav`. Refusing is **correct**
+(§7: never ship a bundle with a hole in it); naming an internal identifier with a random prefix is not
+actionable. `collectProfileUploads` now carries `soundName` + `where`, plus the **group** name via `groupNameOf`
+because two groups can both have a "Forest" — a category name alone would be ambiguous exactly when the user is
+already stuck. New exported **`missingBlobsMessage()`**; 4 node assertions; **`I22`** rebuilds the state against
+the real store by deleting a blob the spec itself uploaded.
+
+💡 **The lesson is about what the assertions covered.** Every pre-existing check asserted the refusal's `code`
+(`missing-blobs`). None asserted the **text** — the only part a human reads. When a message is user-facing, the
+message is the behaviour.
+
+🔴 **Defect 2 — found by the Android restore guard, with every suite green.** The guard fired (exit 5) after a
+**correct** restore: `extra: profile:p_0f23bbd8:ttrpg_characters_old, profile:p_0f23bbd8:ttrpg_data_version`.
+The app was recreating both **on boot**. `ensureProfileStore()` and `createProfile()` created profiles with **no
+`ttrpg_data_version`**; the app remounts onto the empty one, the auto-save effect writes the shipped defaults into
+it, nothing writes the stamp, and the next read takes `readProfileData`'s `storedVersion === null` branch and
+leaves a `<key>_old` backup of the app's own defaults behind. **That is the first-run path, so it hit every user
+on their second launch.** Both functions now take `dataVersion`, all four App.jsx call sites pass `DATA_VERSION`,
+and 6 node assertions pin the fix plus the untouched pre-existing migration path. The user's store was checked
+and carries no `_old` keys.
+
+💡 **The guard that caught it was added on 2026-10-12 to answer a completely different question** (a restore that
+reported success without reaching disk). It is the strongest argument yet for keeping a check that looks
+redundant: 239 green suites and one store guard found an every-user data-hygiene bug.
+
+### My own test poisoned the next run
+
+`O11` creates "Other Board" and left it **active**. Windows hid that — its restore is verified from disk. Android's
+phase keeps snapshots in `%TEMP%` and restored less well, so the profile survived the run; on the **following**
+run its first read wrote `ttrpg_characters_old`, failing **Q9, P13, P14a and M21** — four suites in another file,
+a day later. **`O14`** now switches back and deletes it, asserting `leftoverKeys=[]`.
+
+💡 **The 2026-10-11 lesson in a new hat: the cost was not in the suite that broke something, it was in the one
+that left the state behind.** And three more traps for any spec that creates a profile, all now in the file's
+header comment: the active profile's row renders **no Switch button** (select the row you are switching away
+from); rows must be selected by **`data-profile-row={id}`**, never by name (the Android store had three profiles
+called "My Board"); and **`window.confirm` must be stubbed in the SAME expression as the click**, because
+`handleDeleteProfile` awaits a file count first and a real native confirm **blocks the page** — Suite F's
+pattern (`profiles.mjs:296`) is the one that works.
+
+Two more of mine, both cheap to record and both easy to repeat: a **`ReferenceError: ok is not defined`** killed a
+whole Android run at `reset.mjs:408` — `reset.mjs` never defined the helper only `bundle.mjs` has, and **eslint
+cannot see it** because the reference is inside a spec object. And selecting rows by name returned the wrong
+profile for the reason above.
+
+⚠️ **The PowerShell UTF-8 trap fired a second time.** `Get-Content -Raw | ... | Set-Content -Encoding UTF8` on
+`e2e/specs/bundle.mjs` re-encoded it: `§` became `Â§` (U+00C2 U+00A7) and a BOM was added. Recovered with
+`git checkout HEAD --` plus re-applying four edits through the editor. 💡 **The failure is completely silent** —
+no error, no U+FFFD, eslint clean, Node parses it. The only tells were a § count that *dropped* and a BOM on a
+file that never had one. This is the second time this project has been bitten, and the first time the corruption
+was invisible to every automated check available.
+
+**Gate numbers (final):** eslint **0 errors / 3** · `vite build` exit 0 · `check-coverage` exit 0 — **40 suites,
+358 tests**, 24/24 shipped features · `profileBundle.check` **46/46** · `profileStorage.check` **32/32** ·
+`check-profile-keys` OK · **web 229/0/0 exit 0** · **Windows 248/0/1 exit 1** (G5) with
+`Restore verified FROM DISK` · **Android 238/0/1 exit 1** (G5), restore clean.
+
+**Emulator hygiene:** the AVD store carried a profile called "Other Board" plus `ttrpg_characters_old` from the
+pre-fix runs. `pm clear com.mrhorakhty.thespellcaster.debug` returned `Success` before the final Android phase.
+The three "My Board" profiles the user saw in **their own** store are **reproduced by the suite itself every
+run** — each spec that clears localStorage (`profiles.mjs` F1, `bundle.mjs`'s fixture) lets
+`ensureProfileStore()` create one. They do not grow past the number of clearing specs and Windows restores
+faithfully, but nothing shrinks them either; the user removed theirs by hand.

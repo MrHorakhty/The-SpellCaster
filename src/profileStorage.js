@@ -147,7 +147,24 @@ function adoptLegacyKey(ls, key, profileId) {
  *
  * Migrates the legacy unprefixed keys into the default profile on first run.
  */
-export function ensureProfileStore() {
+/**
+ * First-run adoption. Returns the active profile id, creating one if the store
+ * has none.
+ *
+ * ⚠️ `dataVersion` must be passed, for exactly the reason `createProfile` takes
+ * one — see the note there. This is the **more important** of the two, because
+ * this is the path *every user* takes on their first launch: an unstamped first
+ * profile means the shipped defaults the auto-save effect writes on mount have no
+ * `ttrpg_data_version`, so the user's **second** launch takes the
+ * `storedVersion === null` branch in `readProfileData` and leaves a
+ * `ttrpg_characters_old` backup of the app's own defaults behind, permanently.
+ *
+ * Found 2026-10-15 by the Android restore guard (exit 5), which reported
+ * `extra: profile:p_0f23bbd8:ttrpg_characters_old, profile:p_0f23bbd8:ttrpg_data_version`
+ * after a *correct* restore — the app had recreated both on boot. Every one of
+ * those suites was green; the store guard was the only thing looking.
+ */
+export function ensureProfileStore(dataVersion) {
     const ls = storage()
     if (!ls) return null
 
@@ -173,6 +190,9 @@ export function ensureProfileStore() {
     }
 
     writeProfileIndex(index)
+    if (dataVersion) {
+        try { ls.setItem(profileScopedKey(id, 'ttrpg_data_version'), dataVersion) } catch { /* quota: the read path repairs it */ }
+    }
     if (moved > 0) {
         console.log(`[profiles] first run: adopted ${moved} existing key(s) into profile ${id}`)
     }
@@ -190,7 +210,28 @@ export function getActiveProfileId() {
     return readProfileIndex().activeProfileId
 }
 
-export function createProfile(name) {
+/**
+ * `dataVersion` is not optional in practice and the app always passes it. It is
+ * here because a new profile must be **version-stamped from birth**.
+ *
+ * 💡 Without it, creating a profile leaves it UNSTAMPED, and that is a real bug
+ * rather than a tidiness one: the app remounts onto the empty profile, the
+ * auto-save effect writes the shipped defaults into it, and **nothing writes
+ * `ttrpg_data_version`**. The next read of that profile then hits the
+ * `storedVersion === null` branch in `readProfileData`, which treats it as "a key
+ * written before versioning" and leaves a `<key>_old` backup behind - of the
+ * shipped defaults the app itself wrote seconds earlier. So every profile a user
+ * ever creates collects a junk backup on its next launch, and the
+ * "no `<key>_old` keys" guards (P13/P14a/P31a/O10/M21) fire on it.
+ *
+ * Found on 2026-10-15: the Android store turned up with
+ * `profile:p_b01d9bac:ttrpg_characters_old` on a profile the E2E suite had
+ * created, and the suite was reading it on the following run.
+ *
+ * Existing unstamped profiles still self-heal with one `_old` each - that path is
+ * the intended migration and is left alone.
+ */
+export function createProfile(name, dataVersion) {
     const ls = storage()
     if (!ls) return null
     const index = readProfileIndex()
@@ -198,6 +239,9 @@ export function createProfile(name) {
     const now = Date.now()
     index.profiles.push({ id, name: String(name || 'New Profile').trim() || 'New Profile', createdAt: now, updatedAt: now })
     writeProfileIndex(index)
+    if (dataVersion) {
+        try { ls.setItem(profileScopedKey(id, 'ttrpg_data_version'), dataVersion) } catch { /* quota: the read path repairs it */ }
+    }
     return id
 }
 

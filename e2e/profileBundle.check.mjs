@@ -411,6 +411,71 @@ await ok('a bundle whose audio is unreadable refuses to export rather than shipp
   }), 'missing-blobs')
 })
 
+// The refusal names the SOUND and its container, not a storedName.
+//
+// This is the one defect the whole E2E suite could not have found, and the user
+// found it on 2026-10-15 by hand: a board holding one orphaned reference (its file
+// had been deleted from under it) could not be exported, and the message named
+// `sound_9wy7vtpo_e2e_silence.wav` - an internal identifier with a random prefix.
+// The user could not tell which card to open and had to delete sounds one at a
+// time. Everything else about export was already asserted; this was not.
+await ok('the export refusal names the SOUND and where it lives, not the storedName', async () => {
+  const gone = 'sound_bb_Thunder.mp3'
+  const store = {
+    async read(n) { return n === gone ? null : blobs.map.get(n) },
+    async write() {}, async list() { return [] },
+  }
+  let message = null
+  try {
+    await bundle.exportBundle({
+      profileId: A, profileName: 'Home Campaign',
+      data: EXPORT_DATA, settings: EXPORT_SETTINGS,
+      store, appVersion: '0.1.3', dataVersion: '3',
+    })
+  } catch (e) { message = e.message }
+
+  assert.ok(message, 'the export should have been refused')
+  assert.ok(message.includes('Muted'), `the message must name the sound, got: ${message}`)
+  assert.ok(message.includes('Human Paladin'), `the message must name the container, got: ${message}`)
+  assert.ok(!message.includes(gone), `the message must not lead with the storedName, got: ${message}`)
+  assert.ok(/upload the audio again/i.test(message), `the message must say what to do, got: ${message}`)
+})
+
+await ok('a missing audio file on a sound INSIDE A GROUP names the group too', async () => {
+  const data = {
+    characters: [],
+    environmentSounds: [],
+    groups: [{
+      id: 'g1', name: 'Tavern Pack',
+      categories: [{ category: 'Tavern', sounds: [{ id: 's9', name: 'Mug Clatter', files: [{ name: 'x.mp3', storedName: 'sound_zz_Clatter.mp3', displayName: 'Clatter.mp3' }] }] }],
+      characters: [],
+      sounds: [],
+    }],
+  }
+  const store = { async read() { return null }, async write() {}, async list() { return [] } }
+  let message = null
+  try {
+    await bundle.exportBundle({ profileId: A, profileName: 'P', data, settings: {}, store, appVersion: '1', dataVersion: '3' })
+  } catch (e) { message = e.message }
+  assert.ok(message.includes('Mug Clatter'), `names the sound: ${message}`)
+  // Two groups can both have a "Forest", so the group name is what makes the
+  // container identifiable - see groupNameOf.
+  assert.ok(message.includes('Tavern Pack'), `names the group: ${message}`)
+})
+
+await ok('a missing ICON is described as an icon, not as audio', () => {
+  const message = bundle.missingBlobsMessage([
+    { kind: 'icon', soundName: 'Fireball', where: 'Human Paladin', storedName: 'icon_cc_Fireball.png' },
+  ])
+  assert.ok(/icon/.test(message), message)
+  assert.ok(/Fireball/.test(message), message)
+})
+
+await ok('the refusal still falls back to the storedName when there is no sound name', () => {
+  const message = bundle.missingBlobsMessage([{ kind: 'audio', storedName: 'sound_orphan_x.mp3' }])
+  assert.ok(message.includes('sound_orphan_x.mp3'), message)
+})
+
 // ---------------------------------------------------------------------------
 // 7. The bytes contract (§7 / §11 risk 8)
 // ---------------------------------------------------------------------------
@@ -422,6 +487,105 @@ await ok('assertUint8Array rejects a plain Array (which desktop silently corrupt
 await ok('bundleFileName is filesystem-safe on every platform', () => {
   const name = bundle.bundleFileName('Home Campaign / Fire & Ice!', new Date(2026, 9, 13, 16, 5))
   assert.match(name, /^home-campaign-fire-ice-20261013-1605\.spellcaster$/)
+})
+
+// ---------------------------------------------------------------------------
+// 8. The per-file report, `skipped`, and the parked notice (§8 step 7, §9.2)
+// ---------------------------------------------------------------------------
+// A store that can answer `has`, and counts writes - the count is what proves
+// "skipped" really skipped rather than writing anyway and reporting otherwise.
+const makeCountingStore = () => {
+  const map = new Map()
+  const s = {
+    map, writes: 0,
+    async read(n) { return map.get(n) || null },
+    async write(n, bytes) { s.writes++; map.set(n, new Uint8Array(bytes)) },
+    async list() { return [...map.keys()] },
+    async has(n) { return map.has(n) },
+  }
+  return s
+}
+
+const manifestPaths = exported.manifest.files.map(f => f.path)
+const basename = p => p.slice(p.lastIndexOf('/') + 1)
+
+await ok('the report lists EVERY manifest file, each with a status', async () => {
+  const s = makeCountingStore()
+  const report = await bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', store: s })
+  assert.equal(report.files.length, manifestPaths.length,
+    `expected one report entry per manifest file: ${report.files.length} vs ${manifestPaths.length}`)
+  assert.deepEqual(report.files.map(f => f.path).sort(), [...manifestPaths].sort())
+  assert.ok(report.files.every(f => ['imported', 'skipped', 'failed'].includes(f.status)),
+    `unexpected status in ${JSON.stringify(report.files.map(f => f.status))}`)
+  assert.ok(report.files.every(f => typeof f.label === 'string' && f.label), 'every row needs a label to show')
+  assert.equal(report.imported + report.skipped, manifestPaths.length, 'counts must add up to the manifest')
+  assert.equal(s.writes, report.imported, 'writes must equal the number of imported files')
+})
+
+await ok('a blob already present is SKIPPED and its bytes are left alone', async () => {
+  const s = makeCountingStore()
+  const already = basename(manifestPaths[0])
+  s.map.set(already, txt('untouched'))
+
+  const report = await bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', store: s })
+  assert.equal(report.skipped, 1, `expected exactly 1 skipped, got ${report.skipped}`)
+  assert.equal(report.imported, manifestPaths.length - 1)
+  assert.equal(s.writes, manifestPaths.length - 1, 'the present blob must not be rewritten')
+
+  const row = report.files.find(f => basename(f.path) === already)
+  assert.equal(row.status, 'skipped')
+  assert.equal(new TextDecoder().decode(s.map.get(already)), 'untouched',
+    'the existing bytes must survive - this is the whole point of skipping')
+})
+
+await ok('a store with no `has` still imports everything (the method is optional)', async () => {
+  const s = { async read() { return null }, async write() {}, async list() { return [] } }
+  const report = await bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', store: s })
+  assert.equal(report.skipped, 0)
+  assert.equal(report.imported, manifestPaths.length)
+  assert.ok(report.files.every(f => f.status === 'imported'))
+})
+
+await ok('the import notice is parked GLOBALLY, not under the profile', async () => {
+  ls.removeItem('spellcaster_import_notice')
+  const s = makeCountingStore()
+  const report = await bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', store: s })
+
+  const raw = ls.getItem('spellcaster_import_notice')
+  assert.ok(raw, 'no notice was parked - the UI would have nothing to show after the remount')
+  const notice = JSON.parse(raw)
+  assert.equal(notice.profileId, report.profileId)
+  assert.equal(notice.profileName, report.profileName)
+  assert.equal(notice.mode, 'new')
+  assert.equal(notice.imported, report.imported)
+  assert.equal(notice.skipped, report.skipped)
+  assert.equal(notice.files.length, report.files.length)
+  // Global for a sharper reason than consistency: an import can CREATE a profile,
+  // so a scoped notice would be unreadable by the very mount it exists for.
+  assert.equal(ls.getItem(`profile:${report.profileId}:spellcaster_import_notice`), null)
+})
+
+await ok('no notice is parked when setActive is false (nothing remounts to show it)', async () => {
+  ls.removeItem('spellcaster_import_notice')
+  await bundle.importBundle(exported.bytes, {
+    mode: 'new', normalize, dataVersion: '3', store: makeCountingStore(), setActive: false,
+  })
+  assert.equal(ls.getItem('spellcaster_import_notice'), null)
+})
+
+await ok('a REFUSED import parks no notice - a failed import has nothing to report', async () => {
+  ls.removeItem('spellcaster_import_notice')
+  const angryStore = {
+    async read() { return null }, async write() { throw new Error('disk is full') },
+    async list() { return [] }, async has() { return false },
+  }
+  const realError = console.error
+  console.error = () => {}
+  try {
+    await bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', store: angryStore })
+  } catch { /* expected */ }
+  console.error = realError
+  assert.equal(ls.getItem('spellcaster_import_notice'), null)
 })
 
 console.log(`\n${pass} passed, ${fail} failed\n`)

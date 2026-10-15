@@ -63,6 +63,13 @@ export const BUNDLE_EXTENSION = '.spellcaster'
 /** Zip chunk size. Large enough to matter, small enough to yield. */
 const CHUNK = 64 * 1024
 
+// Where importBundle parks its summary for the UI to pick up after the remount
+// (§9.2, step 7). Named once, and deliberately exported: the harness pins this
+// exact string in KNOWN_KEYS (e2e/lib/page.mjs), and a typo would fail the
+// key-inventory assertions for a reason nobody could read - which is exactly how
+// spellcaster_import_backups was missed on 2026-10-14.
+export const IMPORT_NOTICE_KEY = 'spellcaster_import_notice'
+
 /** Content-addressed names use this many hex chars of the digest (64 bits). */
 const HASH_PREFIX_LEN = 16
 
@@ -159,17 +166,41 @@ export function classifySoundReferences(sound) {
  * the mandatory dedupe is by CONTENT hash, in `buildBundleBlobs`, because move
  * and copy legitimately let two sounds share one `storedName` and the reverse
  * also happens: the same clip uploaded twice gets two `storedName`s.
+ *
+ * Each entry also carries `soundName` and `where` (the container's label, and the
+ * group name when the container lives in one). They exist for ONE reason: the
+ * export refusal used to name a `storedName`, which is not actionable. A GM
+ * holding "sound_9wy7vtpo_e2e_silence.wav" cannot tell which card to open -
+ * "'Divine Smite' on Human Paladin" they can. Found by the user's hand-test on
+ * 2026-10-15: a board whose file had vanished could not be exported, and the
+ * message left them guessing which sound it was.
  */
 export function collectProfileUploads(data) {
     const byName = new Map()
     for (const container of walkSoundContainers(data)) {
+        const groupName = container.groupId ? groupNameOf(data, container.groupId) : ''
         for (const sound of container.sounds) {
             for (const upload of classifySoundReferences(sound).uploads) {
-                if (!byName.has(upload.storedName)) byName.set(upload.storedName, upload)
+                if (byName.has(upload.storedName)) continue
+                byName.set(upload.storedName, {
+                    ...upload,
+                    soundName: (sound && sound.name) || 'Unnamed sound',
+                    where: groupName ? `${container.label} (in ${groupName})` : container.label,
+                    groupName,
+                })
             }
         }
     }
     return [...byName.values()]
+}
+
+// Group names are not carried on the container (it has the group ID, because that
+// is what the app's own walker uses), and a missing upload is exactly the case
+// where a bare category name would be ambiguous - two groups can both have a
+// "Forest". One lookup, only on the failure path's behalf.
+function groupNameOf(data, groupId) {
+    const group = (data.groups || []).find(g => g && g.id === groupId)
+    return (group && group.name) || ''
 }
 
 /**
@@ -212,6 +243,34 @@ export function walkSoundContainers(data) {
     }
 
     return containers
+}
+
+/**
+ * The export refusal the user actually reads, when a board references audio that
+ * is no longer on disk.
+ *
+ * Refusing is correct and stays (§7: a bundle with a hole in it is worse than no
+ * bundle - the far end would install a board with silently dead sounds). What was
+ * wrong is the *content*: it named `storedName`s, which is an internal identifier
+ * carrying a random prefix, and it gave the user nothing to act on. The 2026-10-15
+ * hand-test hit exactly this - a board holding one orphaned reference could not be
+ * exported and the message left the user guessing which sound it was, which they
+ * could only resolve by trial and error.
+ *
+ * So the message names the sound and where it lives, and says what to do next.
+ * Exported so the assertions can pin the text rather than a regex over prose.
+ */
+export function missingBlobsMessage(missing) {
+    const list = missing.map(entry => {
+        const name = entry.soundName || entry.displayName || entry.storedName
+        const where = entry.where ? ` on ${entry.where}` : ''
+        const noun = entry.kind === 'icon' ? 'icon' : 'audio file'
+        return `"${name}" (${where.replace(/^ on /, '')}) - its ${noun} is missing`
+    })
+    const shown = list.slice(0, 3).join('; ')
+    const more = list.length > 3 ? ` and ${list.length - 3} more` : ''
+    const noun = missing.length === 1 ? 'sound has' : 'sounds have'
+    return `${missing.length} ${noun} an audio file that is no longer on disk, so the export was stopped before it could produce an incomplete bundle: ${shown}${more}. Delete ${missing.length === 1 ? 'it' : 'them'}, or upload the audio again, then export.`
 }
 
 // --- blob IO: Tauri files vs web data-URLs ---------------------------------
@@ -258,6 +317,14 @@ export function defaultBlobStore(profileId) {
                     return []
                 }
             },
+            // Existence only, and that is deliberate (§8 step 7). `stat` is not
+            // granted, so a size check would mean reading the whole file - which is
+            // the cost `skipped` exists to avoid. `storedName` is
+            // sound_<rand>_<safeName>, so a name collision means the same upload.
+            async has(storedName) {
+                const { exists, BaseDirectory } = await import('@tauri-apps/plugin-fs')
+                return exists(profileUploadPath(profileId, storedName), { baseDir: BaseDirectory.AppData })
+            },
         }
     }
 
@@ -276,6 +343,9 @@ function webBlobStore(profileId) {
         },
         async list() {
             return webAudioKeys(profileId)
+        },
+        async has(storedName) {
+            return readProfileValue(profileId, `sound_file_${storedName}`) != null
         },
     }
 }
@@ -364,7 +434,14 @@ export async function buildBundleBlobs(uploads, store) {
     for (const upload of uploads) {
         const bytes = await store.read(upload.storedName)
         if (!bytes) {
-            missing.push(upload.storedName)
+            // Keep the sound and its container, not just the storedName: this is
+            // the whole content of the refusal message the user reads (2026-10-15).
+            missing.push({
+                storedName: upload.storedName,
+                kind: upload.kind,
+                soundName: upload.soundName,
+                where: upload.where,
+            })
             continue
         }
         const digest = sha256Hex(bytes)
@@ -564,10 +641,7 @@ export async function exportBundle({
     const { entries, remap, missing } = await buildBundleBlobs(uploads, { read })
 
     if (missing.length > 0) {
-        throw new BundleError(
-            `${missing.length} uploaded file(s) could not be read, so the bundle would be incomplete: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', …' : ''}`,
-            'missing-blobs'
-        )
+        throw new BundleError(missingBlobsMessage(missing), 'missing-blobs')
     }
 
     const bundleData = buildBundleData({ data, settings, remap })
@@ -867,6 +941,10 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
  *                                             any key is touched
  *   4. commit the keys
  *   5. remount
+ *
+ * The returned report carries a per-file status list (§8 step 7): every manifest
+ * file appears as `imported`, `skipped` or `failed`. `failed` aborts everything
+ * before it, so in practice a returned report has no `failed` entry in it.
  */
 export async function importBundle(bytes, {
     mode = 'new',
@@ -903,15 +981,31 @@ export async function importBundle(bytes, {
     const blobStore = store || defaultBlobStore(profileId)
 
     let written = 0
+    let skipped = 0
     const failed = []
+    const fileReport = []
+    // `has` is optional on an injected store, so a store that predates it (the
+    // node check's fake, a caller supplying their own) simply always writes.
+    const canSkip = typeof blobStore.has === 'function'
     for (const file of manifestFiles) {
         const storedName = file.path.slice(file.path.lastIndexOf('/') + 1)
+        const label = labelOf(file)
         try {
+            if (canSkip && await blobStore.has(storedName)) {
+                // §8 step 7's "skipped (already present)". Re-writing a byte-identical
+                // blob is the common case for "replace active" on a board that came
+                // from its own export, and it is the slowest part of the import.
+                skipped++
+                fileReport.push({ path: file.path, label, status: 'skipped' })
+                continue
+            }
             await blobStore.write(storedName, files.get(file.path))
             written++
+            fileReport.push({ path: file.path, label, status: 'imported' })
         } catch (err) {
-            console.error(`[profiles] could not import ${labelOf(file)}:`, err)
-            failed.push(labelOf(file))
+            console.error(`[profiles] could not import ${label}:`, err)
+            failed.push(label)
+            fileReport.push({ path: file.path, label, status: 'failed' })
         }
     }
 
@@ -944,6 +1038,39 @@ export async function importBundle(bytes, {
         } else {
             setActiveProfile(profileId)
         }
+
+        // Park the summary for the UI, because the remount above destroys the
+        // modal that would otherwise report it (§9.2). This lives here, not in
+        // the UI, for two reasons: the engine is the only thing that knows the
+        // report, and a UI-side write would sit behind a native picker and so
+        // could never be covered by a test at all - whereas this line is covered
+        // by profileBundle.check.mjs and by specs/bundle.mjs for free.
+        //
+        // GLOBAL, like the index and like spellcaster_import_backups above: an
+        // import can create a new profile, so this must not be namespaced under
+        // the profile it just replaced. The app reads and removes it on the next
+        // mount, so it is one-shot.
+        try {
+            const ls = typeof window !== 'undefined' ? window.localStorage : null
+            if (ls) {
+                ls.setItem(IMPORT_NOTICE_KEY, JSON.stringify({
+                    profileId,
+                    profileName: bundleProfileName,
+                    mode,
+                    imported: written,
+                    skipped,
+                    files: fileReport,
+                    dropped,
+                    dataVersionSkew: manifest.dataVersion && dataVersion && manifest.dataVersion !== dataVersion
+                        ? { bundle: manifest.dataVersion, app: dataVersion }
+                        : null,
+                }))
+            }
+        } catch (err) {
+            // A notice that cannot be stored is a lost nicety, never a failed
+            // import - the import itself has already committed by this point.
+            console.warn('[profiles] could not store the import notice:', err)
+        }
     }
 
     return {
@@ -951,6 +1078,8 @@ export async function importBundle(bytes, {
         profileName: bundleProfileName,
         mode,
         imported: written,
+        skipped,
+        files: fileReport,
         dropped,
         dataVersionSkew: manifest.dataVersion && dataVersion && manifest.dataVersion !== dataVersion
             ? { bundle: manifest.dataVersion, app: dataVersion }
