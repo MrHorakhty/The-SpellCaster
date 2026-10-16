@@ -29,10 +29,10 @@ a bug report. Ordered by **unblocking value**, not by size:
 ⚠️ **Adding to this list is expected. Letting it rot is not.** When a row is finished, delete it here and record
 the outcome in `docs/session-history.md` — do not tick it in place, which is how the old header grew to 33 KB.
 
-**Repo:** branch `mobile-support`, HEAD `b188b68`, **0 ahead / 0 behind**. Working tree **NOT clean** — 9 files
-modified and **uncommitted**; nothing has been asked for, so nothing has been committed. See Verification gates.
-**Backups:** the newest is `…-20261017-002244` (VERIFY OK 229/229), alongside the previous keeper. Prune **after**
-a push, keeping the newest.
+**Repo:** branch `mobile-support`, HEAD **`25ac19a`**, **0 ahead / 0 behind**, working tree **clean**. That commit is
+the whole 2026-10-17 body: the Settings copy changes, the Android banner fix, the slider centring, the DoD's new
+gate 5, and the rename of the two Android scripts. **Backups:** exactly **one**, `…-20261017-015650`
+(VERIFY OK 229/229, 40.2 MB) — pruned 7 → 1 on 2026-10-17, so the keeper matches HEAD. See Backups.
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -190,14 +190,15 @@ are gated behind `isMobile` so desktop/web stay untouched.
   `d698d06` "Retire move/copy spec, revise profiles spec, fix kill-ports /emu" ·
   `f7f316e` "Added ability to move or copy sounds…".
 - ✅ `backup-project.ps1`, `AGENTS.md` and the state file are committed.
-- ✅ **Branch `mobile-support`, in sync with `origin/mobile-support` at `085a2b5`** (pushed 2026-10-16 00:20,
-  **0 ahead / 0 behind** verified by comparing `git rev-parse HEAD` and `git rev-parse origin/mobile-support`).
-  That commit is the whole step 7 body: the agreed plan, the per-file import report, the one-shot notice, the
+- ✅ **Branch `mobile-support`, in sync with `origin/mobile-support` at `25ac19a`** (pushed 2026-10-17 02:38,
+  **0 ahead / 0 behind** verified by comparing `git rev-list --left-right --count origin/mobile-support...HEAD`).
+  `25ac19a` is the whole 2026-10-17 body: the Settings copy changes, the Android banner safe-area fix + `I23`,
+  the slider handle centring, the DoD's new **gate 5**, and the rename of the two Android scripts. The previous
+  one, `085a2b5`, was the step 7 body: the agreed plan, the per-file import report, the one-shot notice, the
   `missingBlobsMessage` export fix, the version-stamp fix, `O11`–`O14`, `I18`–`I22`, and the 8 node assertions.
-  - ⚠️ **`PROJECT_STATE.md` is MODIFIED and UNCOMMITTED** — these final corrections (the keeper folder, the
-  hand-test status, and this bullet) were made *after* the `085a2b5` push, deliberately: re-taking a backup for a
-  docs-only touch-up is the folder churn the prune exists to stop. Commit with
-  `git commit -am "Correct the keeper folder and the hand-test status" && git push origin mobile-support`.
+  ✅ **The tree is clean and everything is pushed** — the long-standing *"PROJECT_STATE.md is MODIFIED and
+  UNCOMMITTED"* warning on this bullet is **resolved**, and is left struck through on purpose rather than deleted,
+  because the recurring failure it describes was **real three times** and a reader should still see it.
   💡 **Check the subject for a BOM with `git cat-file commit HEAD`, not `git log`** — `git log | Out-File` adds a
   BOM of its own and fakes the problem.
 - ⚠️ **`src-tauri/Cargo.toml` can show as modified while containing NO content change.** Its working copy has LF
@@ -1025,15 +1026,33 @@ converges on one.
 🗑️ Gone: `…-20261013-172917`, `…-20261014-175940`, `…-200929`, `…-20261014-202032`, `…-232715`.
 ⚠️ **`e2e/e2e-full.ps1` was Bitdefender-quarantined out of `…-20261013-172917`** (226 files, not 227) — the same
 containment failure recorded above, and the reason the keeper was taken fresh rather than kept.
-ℹ️ **The keeper is `…-20261016-002040`** (VERIFY OK 228/228, 40.1 MB, `e2e/e2e-full.ps1` **present**, all **71**
-files in `public/assets`, `src-tauri\gen` absent by design), taken **last** so it matches pushed HEAD `085a2b5`.
-✅ **Pruned 5 → 1 at the user's request on 2026-10-16**, after the push, freeing ~120 MB (240 MB → 40 MB). **0
-orphans proven in all four** before deleting anything — every file matched against `git ls-files` **∪** the working
-tree. Gone: `…-20261015-000122` (the previous keeper), `…-20261015-201927`, `…-20261015-212503`, `…-20261016-001542`.
-⚠️ **Two of those four were taken during this session** (`…-201927` at the start, `…-212503` mid-session, before the
-hand-test findings) — they are why the folder count grows during a long session even though the script never prunes.
+ℹ️ **The keeper is `…-20261017-015650`** (VERIFY OK **229/229**, 40.2 MB, `e2e/e2e-full.ps1` **present**, **72**
+files in `public/assets` = the 71 tracked plus `desktop.ini`, `src-tauri\gen` absent by design), taken **last** so it
+matches pushed HEAD `25ac19a`.
+✅ **Pruned 7 → 1 on 2026-10-17**, after the push, freeing **~241 MB** (281.3 MB → 40.2 MB). 🔴 **The first orphan
+audit was WRONG and said "DO NOT PRUNE"**, which is the correct behaviour of a check that is wrong: it compared each
+backup against `git ls-files` **alone**, and so labelled **every untracked-but-real file** as an orphan — 411 of
+them. The rule is `git ls-files` **∪** the working tree. Redone correctly, the only apparent orphans were **12**,
+and each was resolved by hand rather than waved through:
+| apparent orphan | verdict |
+|---|---|
+| 10 × `.idea/**` | **Not orphans.** They are on disk and gitignored (`.gitignore:193`); the audit's own walk had skipped `.idea`. A false positive caused by the checker, not by the backup |
+| `Launch App Android.bat`, `Run Tauri Android.bat` | **Not orphans, and worth the check.** These are the **pre-rename** names and they existed only in the six older folders. Their content was compared against `HEAD:Run Android.bat` and `HEAD:Build Android.bat` **after un-renaming**: **byte-identical in both cases**, so the backups held nothing git lacks |
+⚠️ **A rename makes the prune audit do real work that it never had to do before.** Six folders held files whose
+names no longer exist in the tree, and the audit is right to call them orphans until someone proves otherwise —
+"it is obviously just the old filename" is exactly the reasoning that deletes the only copy of something.
 ⚠️ **Prune by NAME, never by `LastWriteTime`:** all five reported the *same* mtime (`2026-10-14 20:07`), because
 OneDrive stamps the folder, not the copy. Sorting on mtime would have kept an arbitrary one.
+✅ **Earlier prune: 5 → 1 on 2026-10-16**, after the push, freeing ~120 MB. **0 orphans proven in all four** — every
+file matched against `git ls-files` **∪** the working tree. Gone: `…-20261015-000122` (the previous keeper),
+`…-20261015-201927`, `…-20261015-212503`, `…-20261016-001542`.
+🗑️ **Gone 2026-10-17:** `…-20261016-233323`, `…-20261017-002244`, `…-20261017-010318`, `…-20261017-011104`,
+`…-20261017-012240`, `…-20261017-014433`. ⚠️ **A prune is not a no-op when it fails** — Bitdefender's write-lock
+left four partially-deleted shells on 2026-10-13 — so the keeper was re-verified afterwards as a *kept* artifact:
+both renamed scripts present **and CRLF**, both old names absent, `e2e-full.ps1` survived, 0 zero-byte files.
+⚠️ **Two of the seven were taken during this session** (`…-002244`, `…-010318`, `…-011104`, `…-012240`, `…-014433`
+and `…-015650` = six of the seven), which is why the count grows during a long session even though the script
+never prunes.
 
 ## Known environment facts
 - Rust 1.97.1; SDK `C:\Users\emire\AppData\Local\Android\Sdk`; NDK `30.0.16138531`; JDK = Android Studio
