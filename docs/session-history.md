@@ -4376,3 +4376,49 @@ names to logcat would make it fully diagnosable — **recorded as a candidate, n
 
 **So: `PROFILE_SYNC_SPEC.md` §13 now has ZERO open rows.** The whole checklist is `[x]`, and the only unchecked
 items in the file are the four in the PLANNED section, which are out of v1 by design.
+
+---
+
+## 2026-10-17 00:25 - opencode - session close: spec complete, committed, pushed, pruned
+
+**Committed `458a843` and pushed, 0 ahead / 0 behind. Working tree clean. One backup kept.**
+
+**What this session actually did**, in order: read the project state → retired two shipped specs after archiving
+their residue → corrected a **false fact** the user had to correct me on → ran a five-hypothesis investigation into
+an Android import stall that ended in a **negative result** → shipped the one confirmed fix (the latch guard) →
+split and tracked the Android launch scripts → closed out `PROFILE_SYNC_SPEC.md`.
+
+✅ **The gates, at the point app code last changed (the latch fix + the two scripts):** backup VERIFY OK 226/226 ·
+eslint **0 errors / 3** pre-existing · build **exit 0** · check-coverage **exit 0, 40 suites / 358 tests / 24
+shipped / 0 gaps** · 🆕 **`bundleGuard.check` 20/20** · `profileBundle.check` **46/46** · `profileStorage.check`
+**32/32** · check-profile-keys OK · **web 229/0/0 exit 0** · **Windows 248/0/1 exit 1** (G5) with **`Restore
+verified FROM DISK`** · **Android 238/0/1 exit 1** (G5) — **every count identical to the pre-session baseline.**
+The final commit was **docs only**, so gates 2–7 were correctly not re-run; eslint and check-coverage were re-run as
+sanity checks and both passed.
+
+**✅ `PROFILE_SYNC_SPEC.md` is complete.** §12 steps 0–8 built (step 2 cut by decision), **§13 has zero open rows**,
+and the four remaining unchecked items are the **PLANNED** ones, in dependency order — **timestamps (§4.3) first,
+because Merge and folder/cloud sync are both unsafe without it.** The user decided to **keep the spec** for
+exactly that reason, which is the right call and the reason it is not retirable.
+
+**🗑️ Backups pruned 4 → 1**, keeping `…-20261016-233323` (229 files / 40.2 MB), ~120 MB freed.
+⚠️ **The orphan audit was nearly wrong twice, and both times the naive check was the problem.** Comparing backups
+against `git ls-files` alone reported **57–58 "orphans"** per folder — all identical across folders, and all of
+them stable working-tree junk (`.idea/`, `dev-server.log`, the regenerable `src-tauri/icons/*`, `desktop.ini`).
+Re-run against **git ∪ the working tree**, which is the question that actually matters, there was exactly **one**
+true orphan: `Run App.bat.lnk`, a **dead shortcut** whose target `src-tauri/gen/android/Run App.bat` was deleted
+this session. 💡 **A backup is only a rollback point if nothing in it exists *nowhere else*** — "not in git" is not
+the same as "only in the backup", and conflating them would have blocked a safe prune over a pile of junk.
+
+**Nothing left running:** emulator down, `tauri android dev` killed, **port 5173 freed with the project's own
+`kill-ports.bat`** (a leftover Vite survived killing the CLI, which is exactly the condition that produced the
+false defect report earlier in the session), adb forwards cleared, 0 node/tauri/emulator processes.
+
+**Two things deliberately NOT done**, both recorded rather than silently skipped:
+- **The import stall has no cause.** Five candidates tested and rejected, four of them mine; it never reproduced in
+  a clean environment. **No cause is recorded, because promoting the least-falsified guess into a fact is the
+  exact failure this file keeps recording.** What shipped instead is the guard that makes any future occurrence
+  survivable and self-describing.
+- **`adb logcat` is withdrawn as a diagnostic for it** — the pipeline's stream ran throughout a *successful* round
+  trip and contained no `dialog`, `plugin:fs`, `grant_path` or `content://` output at all. Hours were spent on the
+  plan before that was measured.

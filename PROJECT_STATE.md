@@ -1,8 +1,17 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-17 00:15 — working on: final doc cleanup (collapsing 195 lines of
-superseded stuck-import narrative), then commit, push and prune. Previous holder: opencode (released 2026-10-17
-00:00). ✅ **`PROFILE_SYNC_SPEC.md` IS NOW COMPLETE —
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-17 00:25). ✅ **`PROFILE_SYNC_SPEC.md` IS COMPLETE — §13 has
+ZERO open rows.** Last closed 2026-10-16: the **Android same-device round trip**, verified rather than eyeballed —
+the icon's **SHA256 is identical** on both sides (`cdb55b6e…c526`) **and that hash is the imported filename**,
+4/4 audio files match by size, bundle 262069 bytes, `ttrpg_data_version: 3`, **no `*_old` keys**, notice consumed,
+**and it did not stall**. Only the four **PLANNED** items remain (timestamps → Merge → sync), all out of v1 by
+design. ⚠️ **One recommendation WITHDRAWN: `adb logcat` cannot diagnose an import stall** — neither
+`tauri-plugin-dialog` nor `tauri-plugin-fs` logs there, so a future stall must be diagnosed **in the app** (which
+is what `bundleGuard`'s named steps and **Stop waiting** are for). 💡 **Session's other lesson: a hand-test against
+a POLLUTED dev environment produced a false defect report** — check Vite is alive and only one CLI instance runs
+before trusting any "the app hangs" report. **This session's work is committed (`458a843`) and pushed, 0 ahead / 0
+behind; the working tree is clean; no processes, ports or emulators left running; backups pruned 4 → 1.** Previous
+holder: opencode (released 2026-10-17 00:00).
 §13 has ZERO open rows.** The last one, the **Android same-device round trip**, closed 2026-10-16 and was
 **verified rather than eyeballed**: the user exported to a SAF destination and imported it back on the same
 device; the icon's **SHA256 is identical** on both sides (`cdb55b6e…c526`) **and that hash is the imported
