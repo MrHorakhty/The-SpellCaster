@@ -3603,8 +3603,15 @@ Desktop.
 ## 2026-10-14 - Profiles step 8: the shared E2E spec, and the bug it found
 
 **Outcome:** step 8 shipped and committed as `81abd2e` (pushed, `48ad37d..81abd2e`, 0 ahead / 0 behind). All
-seven gates green. The user hand-tested export/import on 2026-10-14 - web build to Android build - so the DoD
+seven gates green. The user hand-tested export/import on 2026-10-14 - **desktop to Android** - so the DoD
 bar for this feature is met.
+> ⚠️ **CORRECTION, 2026-10-16 (user): this was "web build to Android build". That is wrong, and it was
+> impossible.** Web has **no export/import at all** - the section is gated on `isTauri` (§7). The test was
+> **desktop → Android**. Two further notes ride on that correction: `PROFILE_SYNC_SPEC.md` §13's desktop→Android
+> row therefore **is** hand-tested (its "Desktop-only so far" caveat was stale), and this archive repeated the
+> wrong direction, which is why the same false claim appeared in `PROJECT_STATE.md` **three times**. 💡 **A
+> specific-looking detail is not a verified one** - "web → Android" read as a different *pair of builds*, not as
+> a different platform, and nothing caught it because the sentence was never re-derived from the user's words.
 
 **What was built.** `e2e/specs/bundle.mjs`, Suite I (I0-I17), wired into BOTH entrypoints and registered in the
 manifest; the `coverage.manifest.json` feature entry flipped `planned` -> `shipped`, which is what forced the
@@ -3835,3 +3842,399 @@ The three "My Board" profiles the user saw in **their own** store are **reproduc
 run** — each spec that clears localStorage (`profiles.mjs` F1, `bundle.mjs`'s fixture) lets
 `ensureProfileStore()` create one. They do not grow past the number of clearing specs and Windows restores
 faithfully, but nothing shrinks them either; the user removed theirs by hand.
+
+---
+
+## 2026-10-16 18:52-19:12 - opencode - retiring PER_SOUND_VOLUME_SPEC.md and SOUND_PRIMING_SPEC.md
+
+**Docs-only, at the user's request, and deliberately not all three.** The user asked whether the three shipped
+specs could be deleted. Two could; the third could not, and the reason is the useful finding of the session.
+
+**Retired: `PER_SOUND_VOLUME_SPEC.md`, `SOUND_PRIMING_SPEC.md`** — `git rm`'d, `.gitignore`'d, and their residue
+archived into `PROJECT_STATE.md` **first** (per-sound volume section; Sound priming section), because the rule is
+retire-by-archiving, never delete-on-sight. What was genuinely nowhere else:
+
+- 🚫 **Saved named layers ("Model B") rejected by the user 2026-10-06** — priming is one-shot, is **not** profile
+  content, and **no `localStorage` key** may be added for it. The absence is deliberate and `P31a` asserts it.
+- 🚫 Priming still deliberately out of scope: whole containers, timing offsets, sticky priming, priming *from* a
+  hotkey picker, undo for a mis-prime (the clear-all button is the v1 answer).
+- ⚠️ **A binding requirement on the queued hotkeys feature**: a hotkey **must** fire the primed set through
+  `playWithPrimes`, never `playSound`. Two triggers with different semantics is the thing to avoid. This was
+  carried in `SOUND_PRIMING_SPEC.md` §8 and in `HOTKEYS_SPEC.md` §5; it is now carried in both surviving places.
+- 🚫 **Per-container / per-group default level**, the volume deferral that needs a **new persisted structure** and
+  therefore a `PROFILE_SYNC_SPEC.md` **§4.2 census re-run**. Deferred, not abandoned.
+- The two **open fade coverage rows** (mid-fade rescale, mid-fade-out) — already in Open items; `git show c60a355:<file>`
+  for the full 284/220-line prose, since `c60a355` is the last commit containing either file.
+
+**Kept: `PROFILE_SYNC_SPEC.md`.** It looks the same from the outside — every step checked off (1, 3-6, 7, 8; step 2
+was cut), hand-tested, green — but **"every step is done" is not the test for whether a spec is obsolete; the
+unchecked boxes are.** Its §13 carries a *Deferred to a later release* list that is **live scope**: merge import
+(§8), web export/import (§7), timestamps + tombstones (§4.3, kept deliberately as the record *for* merge/sync), and
+folder/WebDAV/cloud sync behind the `ProfileTransport` boundary (§2). Two §13 rows are also unverified (the Android
+SAF **import** half; profile-from-import uploads deletion). And `HOTKEYS_SPEC.md` — still `planned` — cites it in
+~10 places and leans on §8, §9.2, §9.3 and §10. Deleting it would strand the next feature's design.
+
+🔴 **NEW RULE LEARNED: a feature's `spec` field is a load-bearing path in a machine-checked file.**
+`e2e/check-coverage.mjs:306` fails `FEATURE_SPEC_MISSING` when a `features[]` entry names a spec that is not on
+disk, so **deleting the markdown alone turns gate 4 red**. Both `spec` fields went to `null` in the same change —
+the convention Move/copy had been using since 2026-10-04 with **nothing documenting it** — and `$featuresComment`
+now documents it, including that a retired spec means clearing the field *and* leaving a note saying where the
+design record went. This is the fourth instance of the same shape in this repo (the `retired[]` list, the
+`.gitignore` entries, `spellcaster_import_backups` missing from `KNOWN_KEYS`, and now this): **a name that appears
+in a machine-checked list is a dependency, not a label.**
+
+**Also fixed in the same pass** (a deletion that leaves a dangling pointer is worse than one that does not):
+`HOTKEYS_SPEC.md` had four references to the deleted files, and three harness comments did
+(`specs/volume.mjs`, `specs/playback.mjs`, `e2e-mobile.mjs`) — all repointed. Two of the `HOTKEYS_SPEC.md` fixes
+corrected **stale advice**, not just a filename: its "continue from `P1`" id guidance had been wrong since both
+features shipped (`P1`-`P16`, `P17`-`P34` and `Q1`-`Q14` are all taken), and its §5 hotkey/priming question cited a
+"model A" that no longer has a file to point at.
+
+**Gates — all seven run, all green, counts identical to the 2026-10-16 baseline.** backup **VERIFY OK 228/228**
+(40.1 MB) · eslint **0 errors / 3** pre-existing warnings · vite build **exit 0** (1.40 s) · check-coverage **exit 0,
+40 suites / 358 tests / 12 shared specs / 24 shipped features / 0 gaps** · `profileBundle.check` **46/46** ·
+`profileStorage.check` **32/32** · `check-profile-keys` **OK** · **web 229/0/0 exit 0** ·
+**Windows 248/0/1 exit 1** (G5) with **`Restore verified FROM DISK`** · **Android 238/0/1 exit 1** (G5).
+⚠️ **All three E2E gates were run deliberately**, because this change is *not* the docs-only case the DoD excuses:
+it touched `coverage.manifest.json` and three harness files. **No hand-test** — nothing user-facing shipped; the app
+is byte-identical.
+⚠️ **Not committed, not pushed** (not asked). Staged: the two `git rm`s. Modified: `.gitignore`,
+`HOTKEYS_SPEC.md`, `e2e/coverage.manifest.json`, `e2e/e2e-mobile.mjs`, `e2e/specs/{playback,volume}.mjs`,
+`PROJECT_STATE.md`.
+⚠️ **A pre-existing defect noticed and deliberately left:** `coverage.manifest.json`'s `$comment` and
+`$featuresComment` contain **mojibake** (`§` became `ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬`, double-encoded UTF-8) on two prose
+lines. Reported rather than fixed, to avoid widening the diff — it is prose inside a JSON comment and nothing
+reads it.
+💡 **And the process failure worth recording, because it cost the user nearly two hours.** The Android phase
+returned its result at **19:12**, and I then produced **no output at all** until 21:03 — not a slow command, not a
+wedged emulator, just silence. The lesson is narrow and actionable: **a long tool call that has already returned is
+still a turn-ending event.** Report the number, then continue; never sit on a completed result.
+
+---
+
+## 2026-10-16 21:20 - opencode - the user's hand-test CORRECTION, and an undiagnosed Android import
+
+**Docs-only, and it exists because the user corrected a fact I had propagated.** No app code touched.
+
+**🔴 THE CORRECTION: the round trip was Desktop → Android, not Web → Android.** The user: *"I did the test with
+Desktop and Android not Web and Android, Web doesn't even has the feature right now."* **Web has no
+export/import at all** — the section is gated on `isTauri` (§7) — so the claim was not merely wrong in direction,
+it described a **capability the web build does not have**. 💡 **It had propagated three times** (two
+`PROJECT_STATE.md` entries, one `docs/session-history.md` entry) because each session copied the previous one
+instead of re-deriving it from the user's words. Corrected in all four places, plus `PROFILE_SYNC_SPEC.md` §13,
+whose desktop→Android row now reads **hand-tested** and whose *"⚠️ Desktop-only so far"* caveat is deleted.
+⚠️ **Lesson: a specific-looking detail is not a verified one.** "web → Android" reads as a different *pair of
+builds*, not as a different *platform*, so it survived review three times. Nothing about it was falsifiable
+without asking.
+
+**What the user's three hand-tests now cover.** 2026-10-14 **Desktop → Android** · 2026-10-15 banner + round trip ·
+2026-10-16 **Android → Desktop** (worked first try) **and deleting an imported profile on Desktop**.
+⚠️ **Still human-only:** cross-***device*** (a third machine), Android export → import on the **same** device
+(§13:805, a *different* round trip), and **"Replace active" under a real board**.
+
+**§13:790 is now hand-tested against the exact case its caveat named** — *"not re-run against a profile that came
+from an import"* — and the user did precisely that (imported a mobile board into Desktop, deleted it). ⚠️ **Recorded
+as hand-tested, NOT closed**, because their answer to the restart checklist is not in yet, and the lesson that
+matters here is the 2026-10-11 one: **the assertion to hold a delete to is a restart, not a row disappearing.**
+
+**🔴 "Stuck at importing" — REPORTED, NOT DIAGNOSED, and deliberately left open.** The Android import *"got stuck"*;
+closing and reopening the app showed **it had worked**. Two candidates remain, and they need one observation to
+separate, so **no cause was written down**:
+1. **A stalled `invoke`** — no timeout and no cancel affordance exists on `pickOpenPath`/`readFile`
+   (`App.jsx:969-997, 1085-1102`), so `bundleBusy` latches with no escape. ⚠️ **But it cannot explain a
+   successful import**: `commitKeys` runs *after* every blob write (`profileBundle.js:1024`).
+2. **A silent success** — committed and remounted, but nothing on screen said so.
+**Distinguishing question put to the user:** was the picker visible at all, and was the imported board already
+there on reopen without re-importing?
+
+✅ **One hypothesis raised and then DISPROVED by reading the plugin rather than guessing** — worth keeping,
+because it is the shape of the mistake this project keeps making. I thought the `extensions: ['spellcaster']`
+filter might be **hiding** the file on Android. It does not:
+`parseFiltersOption` (`DialogPlugin.kt:128-142`) calls `MimeTypeMap.getMimeTypeFromExtension('spellcaster')`,
+which returns **`null`** for an unregistered extension, the `?.let{}` **drops it**, the list comes back **empty**,
+and `showFilePicker` therefore takes the `else` arm (`:76-78`) and sets `intent.type = "*/*"` — it shows
+**everything**. 💡 **So the filter is silently INERT on Android for our own extension.** Harmless today, and
+load-bearing knowledge before anyone "fixes" it by adding a MIME type the picker would then *honour and narrow*.
+The same emptiness is why Android **export** works (`:207-212`).
+✅ **And "the remount never happened" was ruled out too**, since both switch paths provably remount:
+`importBundle` calls `requestProfileRemount()` (replace) or `setActiveProfile()` (new) — `profileBundle.js:1031-1040`
+— **both** fire `switchListeners` (`profileStorage.js:307,331`) and `App.jsx:7382` bumps `remountKey`.
+
+**📌 §13:806 explained and a 30-second recipe written into `PROJECT_STATE.md`, then CLOSED.** The picker-cancel
+contract is asymmetric: desktop **resolves `null`**; Android **rejects** with the string `"File picker cancelled"`
+(`DialogPlugin.kt:98` open, `:237` save). `pickSavePath`/`pickOpenPath` catch it and test `/cancel/i`
+(`App.jsx:977,992`). **The test:** Export → cancel → expect *"Export cancelled - nothing was saved."*; Import →
+cancel → *"Import cancelled - nothing was changed."*; same on Android. ⚠️ The failure it catches is specific and
+user-visible: a missed `/cancel/i` rethrows and the user gets **"Import failed: File picker cancelled"** — an
+alarming error for a deliberate action.
+
+---
+
+## 2026-10-16 21:45 - opencode - the Android stuck-import narrows to ONE call, and 806 closes
+
+**Docs-only. The user came back with the detail that made the problem diagnosable, and with a theory they have not
+yet shared — this entry deliberately records no cause.**
+
+**The facts, in the order the user gave them.** The **file picker DID open**, they **clicked the file**, the button
+then read **"Importing…"** and never came back, and **after closing and reopening the app there was NO imported
+profile** — so the stuck attempt **imported nothing**, and they simply did it again, when it worked first try.
+
+**💡 The single most useful thing in that report is the *absence* of a profile on reopen.** It eliminates the two
+comfortable explanations, and both were mine:
+- **Silent success: dead.** Nothing was committed.
+- **A stall after the commit: dead.** `commitKeys` (`profileBundle.js:1024`) runs *after* every blob write, so a
+  stall past it would have left a profile behind.
+- **A missing remount: already dead** — both switch paths provably remount.
+- **The MIME filter: already dead** — inert, it hides nothing.
+
+**And the latched label proves it was a promise that never settled, not an exception.** The button shows
+`Importing…` and is `disabled` while `bundleBusy === 'import'` (`App.jsx:7225-7230`), and the
+`catch`/`finally` (`App.jsx:1112-1119`) always clears it — a thrown error would have re-enabled the button within a
+second, with a message. 💡 **Lesson: the busy-state affordance is itself the instrument.** It was built to stop
+double-clicks; it also told us afterwards that this was a hung await rather than a handled failure. Had the button
+simply been disabled with no label change, the distinction would have needed logcat to make.
+
+**The window is now exactly: the picker returned → `readFile(path)` on the `content://` URI → never returned.**
+`grantPickedPath` is a **no-op on mobile** (`App.jsx:1006`) and the import's blob writes target plain AppData paths,
+so there is **one** unbounded blocking call left, in plugin-fs's Android `getFileDescriptor`
+(`tauri-plugin-fs-2.5.2`, `android/src/main/java/FsPlugin.kt:63-67`):
+
+```kotlin
+val fd = activity.contentResolver.openAssetFileDescriptor(Uri.parse(args.uri), args.mode)
+    ?.parcelFileDescriptor?.detachFd()
+```
+
+**A blocking call into an arbitrary third-party `ContentProvider`, with no timeout anywhere on the path and no
+`try`/`catch` in that branch.** Two failure shapes, and separating them is the point:
+- **(a) the provider blocks** — cloud-backed Drive/OneDrive/Dropbox, or a proxying "Recent" provider that must
+  materialise the file → the promise never settles → **exactly the reported symptom**;
+- **(b) the provider returns `null`** — some cloud providers implement only `openInputStream`, not
+  `openAssetFileDescriptor` → `fd` absent → that would be an **error, not a stall**.
+
+**Confirming question put to the user, and the cheapest one: where did the `.spellcaster` live on the Android
+device?** Cloud-backed/proxying supports (a); plain local `Downloads`/`Documents` weakens it and means the user's
+theory is the better one. **No cause was written down, deliberately** — the user said they have a theory, and
+recording mine as fact first would be exactly the mistake this file keeps recording.
+
+**⚠️ Independent of the cause, a real defect: the import has no timeout and no cancel affordance**
+(`App.jsx:969-997`, `1085-1102`). Any stall in that read latches the button with **no way out** — the user's only
+escape was killing the app. That is worth fixing regardless of which cause this was.
+
+**✅ §13:806 CLOSED BY HAND-TEST.** The user cancelled **both** the export and the import picker **on both
+platforms** and got the expected messages every time. That row was *"code-reviewed, not executed"* and was the last
+thing in the feature that only a human could check. 💡 **Neither platform's picker had ever been opened by a test
+before this** — and the Android cancel arm is the one whose failure mode is *user-visible and alarming*
+(`"Import failed: File picker cancelled"` for a deliberate action).
+
+**⚠️ §13:790 is half-answered.** Confirmed: the delete **survived a restart** (*"I re-opened the Desktop … and
+Mobile Profile is not visible"*) — which is the assertion that matters, per the 2026-10-11 lesson that a row
+disappearing from a list is not evidence. **Still unanswered:** do every sound in the **surviving** profile that has
+an uploaded file still play? That is the half that could expose a real bug, because the delete must sweep only
+`uploads/<deletedId>/` and a blob shared with a surviving profile would appear as a dead sound. 💡 And a caution
+about the evidence itself: the store is known to hold **three profiles all named "My Board"**, so "Mobile Profile is
+not visible" only counts if the imported profile had a **distinguishable name**.
+
+---
+
+## 2026-10-16 22:05 - opencode - §13:790 closes, and the user's own theory overtakes mine
+
+**Docs-only. The user answered the open question better than it was asked, and then offered a theory for the
+Android stall that beat mine — while asking a single question first, which was the right thing to interrogate.**
+
+**✅ §13:790 CLOSED, and the test was stronger than the checklist.** They built a **"Fear" sound carrying an icon
+and 4 audio files**, exported that profile, imported it back — so **two profiles referenced the same uploads** —
+deleted one, closed the app, reopened it, and **the surviving profile still played the shared sounds and still had
+the icon.** 💡 Two things make this a genuinely good test: **multiple** blobs rather than one, and an **uploaded
+`icon`**, which is a *different write path* from audio — a delete guard that swept `uploads/` by extension or by
+pattern would have been caught, and a guard that only knew about `files[]` would have missed the icon. Per the
+design the two profiles hold separate copies under their own `uploads/<id>/` (*"never hardlink between profiles"*),
+so what is proven is that the delete took **that one directory and nothing else**.
+
+**⚠️ And the location information undercuts my theory rather than theirs.** Both `.spellcaster` files were in plain
+**`Downloads`** on their devices. That is a local MediaStore-backed provider, **not** Drive/OneDrive/Dropbox — so my
+"the provider blocks while fetching from the cloud" shape loses its obvious support. I said as much in the record
+rather than quietly keeping it.
+
+**🔴 The user's theory: they launched `src-tauri/gen/android/Run App.bat` during the stuck import.** They asked
+whether that is even necessary to launch the app, suspecting it is only for installing a new version. **Reading the
+file turned their hunch into a mechanism:**
+
+```bat
+call "%ROOT%\kill-ports.bat" 5173
+call npm run tauri android dev
+```
+
+It is a **local, hand-maintained, gitignored** wrapper — no `package.json` script does this — that frees **port
+5173** and then runs the **whole debug pipeline**: Vite dev server, Gradle build, **`adb install -r`**, launch. So
+**no, it is not needed to launch an already-installed debug app, and no, it is not what installs a new version**
+(`tauri android dev` inside it is). With the APK installed and a dev server up, the app launches from the launcher;
+the documented light path is `adb install -r …\app-x86_64-debug.apk` then
+`adb shell monkey -p com.mrhorakhty.thespellcaster.debug -c android.intent.category.LAUNCHER 1`.
+
+**But it is a plausible cause of a running app misbehaving, by two independent routes:** `kill-ports.bat 5173`
+**kills the dev server** that a debug build loads its frontend from (`devUrl: http://localhost:5173`), and the
+**`adb install -r` force-stops** the running app, so a pending `readFile` IPC can never return.
+
+**⚠️ And the theory is not yet complete — the gap is worth naming rather than glossing.** An `adb install -r`
+force-stop should have made the app **close visibly**, and it did not: the user had to close it themselves. So
+either the stall happened **before** the install reached the device (they noted it may still have been initialising
+in the background), or the **port-5173 kill** rather than the reinstall is the mechanism. 💡 **Recorded as the
+leading theory, not as the cause**, with the gap written down next to it.
+
+**🔎 Settle it by reproduction, not by argument** (proposed, not run): an import on the emulator under
+`adb logcat` with **no** `Run App.bat` running — the normal harness case, which is why **239 Android tests never
+saw this** — then the same import with `Run App.bat` fired mid-flight. Logcat separates a force-stop from a hung
+`openAssetFileDescriptor`; nothing short of that will.
+
+---
+
+## 2026-10-16 22:20 - opencode - the stall REPRODUCED with the CLI merely running, so the CLI is not the cause
+
+**Docs-only, and the user's second observation is what cracked it — they tested their own theory and it failed.**
+
+**§13:790 now hand-tested on BOTH platforms.** They repeated the shared-icon/shared-sound test **on Android**, and
+**the sound and icon survived there too**. The row is closed on both platforms.
+
+**🔴 The stall reproduced again — and this time `Run App.bat` was merely RUNNING, not launched mid-import.** So the
+user's own theory is **disproved**, and disproved by the repo rather than by argument:
+`e2e/e2e-android.ps1:150` launches **`npm run tauri android dev` — the exact thing `Run App.bat` wraps** — for
+**239 passing Android tests**. A running CLI therefore **cannot be the trigger**; it is simply the environment a
+debug build requires.
+
+**💡 And the user's model of the debug build is CORRECT, and worth having written down:** a debug APK loads its
+frontend from the Vite dev server (`devUrl: http://localhost:5173`, reached at `10.2.0.2`/`10.0.2.2` on the
+emulator), so **without `tauri android dev` alive the app is blank**, and to genuinely restart it you must kill the
+CLI rather than just close the activity — which they worked out unprompted, and did both for the shared-sound test.
+The only correction is naming: **`Run App.bat` is not what does that.** It is a wrapper that frees port 5173 and
+adds a friendly `pause` on failure; `tauri android dev` is the never-exiting watcher that owns Vite, Gradle and the
+install.
+
+**🔴 The actual differentiator, and it is a genuine coverage gap: the harness never reads a `content://` URI on
+Android.** Suite I drives `writeFile`/`readFile` against a path *it* names — `specs/bundle.mjs:283-292` uses
+`BaseDirectory.AppData` on non-desktop, i.e. **plain filesystem paths**. `dialog.open()` returns a **`content://`
+URI**. So **the one argument shape the entire 239-test Android arm never produces is the exact one the stall
+happens on**, and Suite I drives *below* the picker precisely because the native dialog cannot be stubbed. 💡 That
+is why a fully green Android gate and a reproducible user-visible stall are perfectly compatible — and it is a
+clean example of the project's recurring lesson: **a gate is green for the paths it drives, and silent about the
+one it cannot.**
+
+⚠️ **A second consequence, recorded because it touches a claim made repeatedly in this file:** this hand-test is
+running a **debug build tied to a live dev server**, not a shipped artifact. Every *"hand-tested on the built app"*
+statement about export/import should carry that caveat.
+
+**🔎 The remaining experiment is now cheap, because it reproduces on demand:** with `Run App.bat` **already up and
+idle**, wait ~30 s and *then* import. The harness comparison already implies the outcome (CLI = environment,
+content-URI read = trigger); **capturing `adb logcat` during a reproduction is the only thing that names the actual
+cause**, and it has now happened twice without one.
+
+---
+
+## 2026-10-16 22:30 - opencode - four hypotheses rejected by measurement, and the real cause: the app's own lazy import
+
+**Docs-only, but this is the session's real finding. Every hypothesis below was tested and rejected before the fifth
+survived — and three of them were mine, stated with confidence.**
+
+**The user closed the emulator and asked whether the stray `Run App.bat` windows had to be killed too** (closing the
+window does not stop the script). They were right, and they were worse than they knew: **two** stale
+`tauri android dev` instances were alive. Killed, along with their process trees; 5173 and 9225 are free and no
+device is attached.
+
+**✅ And the user answered the discriminating question — and it killed the hypothesis I was about to bet on.** Asked
+whether tapping the file returned to the app: **it did.** So `dialog.open()` resolves on accept. 💡 Worth recording
+*why I had been misled*: `setBundleBusy('import')` runs at `App.jsx:1085` **before** `pickOpenPath()` at `:1087`, so
+the label reads **"Importing…"** from the instant the button is pressed. *"It said importing and got stuck"* is
+therefore equally consistent with a stuck picker, a stuck read, or a stuck module load — the phrase carries **no
+information about which**.
+
+**The hypotheses, tested rather than argued:**
+1. ❌ **A cloud-backed provider blocking** — the bundles were in plain `Downloads`. Retired on the location alone.
+2. ❌ **A running `tauri android dev`** — `e2e-android.ps1:150` runs the same command for **239 passing tests**.
+3. ❌ **`readFile` on a `content://` URI** — **measured by calling `plugin:fs|read_file` directly** with a genuine
+   MediaStore row (`content://media/external/file/72`, the user's own `mobile-board-….spellcaster`): **rejected in
+   53 ms**; a second URI, **4 ms**; both *"has no access to content://media/"*. ⚠️ **So this path fails fast and
+   rejects — it cannot latch a button.** This was the site I had narrowed to in the previous entry. Wrong.
+4. ❌ **`dialog.open()` never returning** — the user's answer above.
+5. 🔴 **THE CAUSE: the app lazy-imports the fs plugin inside the handler**, `const { readFile } = await
+   import('@tauri-apps/plugin-fs')` (`App.jsx:1093`, and `:1041` for export). In a **debug** build Vite rewrites
+   that specifier to a URL which must be **fetched live from the dev server at that moment**.
+
+**🔴 And here is why 239 green Android tests have never seen it — the harness pre-warms that exact URL.**
+`specs/bundle.mjs:125-128` defines `window.__bk.fs()` to import
+`/node_modules/@tauri-apps/plugin-fs/dist-js/index.js`, and its own comment says *"the app's own import is rewritten
+to the same file, so this is the live module"*. Once the suite has run, the app's lazy import resolves
+**instantly from the browser's module registry, with no network request at all**. **A manual hand-test warms
+nothing**, so the first `import()` of the plugin in a hand-session is a live fetch through the
+`tauri.localhost` → Vite proxy — and **that fetch is the stall.**
+
+**One hypothesis explains every observation at once:** 239 green tests (pre-warmed) · intermittency (depends on
+whether Vite is up and finished dep-optimising) · the retry succeeding (by then it is cached) · export sometimes
+working (whoever imports first pays the cost) · **nothing imported** (the stall is *before* `readFile`) · a button
+that latches with **no error message** (an unsettled `await`, and there is no timeout).
+
+**✅ Independently measured, and it is the environment half of the story:** from inside the running page, its
+scripts are `http://tauri.localhost/@vite/client` and `/src/main.jsx` — a **Vite-served dev build** — and **Vite was
+dead** at that moment (no vite process, nothing on 5173), so in-page `fetch('/')` and `fetch('/@vite/client')`
+returned **500**.
+
+**⚠️ Two consequences worth more than the bug:**
+- **A production build would not have this defect at all** — the plugin is bundled statically there and never
+  lazy-fetched. So it is **debug-build-only**, invisible in the shipped artifact, and it bites developers and
+  hand-testers. It still deserves fixing: **a hand-test that can hang on a dev-server hiccup is a hand-test that
+  cannot be trusted**, and this one produced a *false defect report* that sent four rounds of investigation at a
+  content URI that rejects in 4 ms.
+- **The hand-test environment was itself defective**, which qualifies every "hand-tested on the built app" claim for
+  this feature: a debug build whose dev server had died, surviving only because the page was already loaded.
+
+💡 **The user's own debug-build model was correct and is recorded:** closing `Run App.bat` does **not** close the app
+— the CLI owns Vite/Gradle/the install, the app is a separate emulator process, and an already-loaded page keeps
+rendering with no dev server at all. Killing the CLI is what truly stops it. Only the naming needed correcting:
+`Run App.bat` is a wrapper (frees port 5173, adds a `pause`), not the thing doing it.
+
+**🔎 Confirmation still owed, and it no longer needs a picker:** boot clean, CDP in, **`Page.reload`** for a fresh
+module registry, then time `import('/node_modules/@tauri-apps/plugin-fs/dist-js/index.js')` against a timeout.
+
+---
+
+## 2026-10-16 22:20 - opencode - the confirmation run falsified my last hypothesis AND the stall itself
+
+**Docs-only. This is the end of the Android stuck-import investigation, and the answer is negative.**
+
+**Setup:** cold-booted the emulator (API 37), started a **single** `npm run tauri android dev`, connected CDP.
+
+**Hypothesis 5 (the lazy import) — falsified, measured:** after forcing a fresh module registry with
+`Page.reload`, `import('/node_modules/@tauri-apps/plugin-fs/dist-js/index.js')` **settled in 1012 ms cold / 730 ms
+warm**, with no navigation and the marker intact. So it does not hang when Vite is healthy.
+
+**⚠️ That is five hypotheses tested and rejected, four of them mine:** cloud provider blocking · a running
+`tauri android dev` · `readFile` on a `content://` URI (rejects in 4–53 ms) · `dialog.open()` never returning (the
+user saw it return to the app) · the lazy import hanging.
+
+**🔴 And the headline: THE STALL DID NOT REPRODUCE.** With the Settings → Profiles modal open (opened over CDP —
+only the native picker needs a human), the import button was clicked programmatically and the user tapped the
+file. **Three imports, three successes.** The timeline is a *positive* signal rather than a hang: `Importing…` at
+29.3 s, then `[data-profile-import]` **gone** and `rows=0` at 32.6 s — **the Settings modal unmounted because a
+successful import remounts the tree** (`I19`/`I20`'s mechanism, observed live).
+
+**✅ What the clean run did verify:** the imported profile carries **`ttrpg_data_version`** (the version-stamp fix
+holding on an imported profile), **`oldKeys: []`**, 8 scoped keys, 2 characters, 3 sound cards rendering, and
+**`spellcaster_import_notice` absent after mount** — the one-shot banner **consumed exactly once**.
+
+**So the honest conclusion: there is no demonstrated app-code defect.** The stall is correlated with the
+**polluted** state the hand-test ran in — **two** stale `tauri android dev` instances and a **dead Vite** on a page
+loaded from an earlier session — and it could not be reproduced once that was cleaned up. **No cause is recorded,
+because five candidate mechanisms have been falsified and I will not promote the least-falsified one into a fact.**
+
+**🔴 The one defect the investigation DID confirm is a UX defect, and it is cheap to fix: there is no timeout and
+no cancel affordance on the import** (`App.jsx:969-997`, `1085-1102`). Any hung `await` latches the button on
+"Importing…" with no way out — the user's only escape was killing the app. It also explains the cost of the
+diagnosis: **a stall and a genuine failure look identical, and neither prints an error**, so every hypothesis had
+to be falsified by measurement against something that would not reproduce.
+
+**💡 Methodology lesson (the generalisable one):** a hand-test against a polluted dev environment produced a
+**false defect report** that sent five rounds at code paths that measure healthy. Before trusting any "the app hangs"
+report here, **establish that Vite is alive and only one CLI instance runs** — `Get-NetTCPConnection -State Listen
+-LocalPort 5173` plus a process count is enough, and it takes two seconds.
+
+**💡 And the user's own observations were the load-bearing evidence twice** — that the picker *returned* (which
+killed my leading candidate) and that closing `Run App.bat` does not close the app. Both were correct, and both
+contradicted something I was about to assert.

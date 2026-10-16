@@ -340,3 +340,18 @@ ICON_FEATURE_SPEC.md
 # design rationale (8 settled decisions, invariants, deferred list) is preserved in
 # docs/session-history.md, and the file itself stays in git history.
 MOVE_COPY_SOUND_SPEC.md
+
+# Retired 2026-10-16 at the user's request, both after shipping and hand-testing.
+# SOUND_PRIMING_SPEC.md was already a build record; PER_SOUND_VOLUME_SPEC.md was
+# a record of what was built. Neither was deleted on sight - the residue that
+# existed nowhere else (Model B rejected + "do not add a localStorage key", the
+# still-out-of-scope priming items, the hotkey-must-use-playWithPrimes binding,
+# the per-container default level deferral and its s4.2 census re-run, and the two
+# open fade coverage gaps) was archived into PROJECT_STATE.md first, and
+# e2e/coverage.manifest.json had its two `spec` fields set to null in the same
+# commit - check-coverage.mjs fails FEATURE_SPEC_MISSING on a spec named but absent.
+# PROFILE_SYNC_SPEC.md is deliberately NOT in this list: it still holds deferred
+# v2 scope (merge import, web export/import, timestamps for it, ProfileTransport)
+# and HOTKEYS_SPEC.md depends on it. Do not delete it without reading s12/s13.
+PER_SOUND_VOLUME_SPEC.md
+SOUND_PRIMING_SPEC.md

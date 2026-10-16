@@ -8,7 +8,8 @@
 // The seed is deliberately self-contained: one sound with an explicit 0.5 trim
 // and one with NO `volume` field at all (absent === 100%), both loop:true on a
 // REAL bundled asset so they stay registered (a tiny data: clip loops never
-// engage). Requires per-sound volume support (PER_SOUND_VOLUME_SPEC.md).
+// engage). Requires per-sound volume support - shipped 2026-10-06; the spec is
+// retired (PROJECT_STATE.md, per-sound volume section).
 
 import { KNOWN_KEYS } from '../lib/page.mjs';
 

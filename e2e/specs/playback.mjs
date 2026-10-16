@@ -218,8 +218,9 @@ export const playback = {
     log('PLAY','Z8: a looping sound rewinds at the boundary',dropped && (z8?.min ?? 1) < 0.2?'PASS':'FAIL',
       `duration=${z8?.duration} threshold=${z8?.threshold} reads=${JSON.stringify(z8?.reads)}`);
 
-    // Z9 is the loop-re-entry regression guard PER_SOUND_VOLUME_SPEC.md §8 left
-    // open. On the first boundary crossing the app re-applies the fade-in, and
+    // Z9 is the loop-re-entry regression guard the retired per-sound-volume spec
+    // left open (PROJECT_STATE.md, per-sound volume section). On the first
+    // boundary crossing the app re-applies the fade-in, and
     // it reads the target back off the element (_baseVolume) rather than closing
     // over the level the sound started at. A stale _baseVolume would fade this
     // sound back up to 1.0 instead of whatever the master is on now.

@@ -3,7 +3,10 @@
 > **Status**: **New spec, 2026-10-06.** Design only — **implementation is not authorised.** No app code has been
 > written. Line numbers verified against `src/App.jsx` at **6240 lines** on 2026-10-06; re-verify before editing.
 > **Created**: 2026-10-06
-> **Related**: `PER_SOUND_VOLUME_SPEC.md`, `SOUND_PRIMING_SPEC.md`, `PROFILE_SYNC_SPEC.md`.
+> **Related**: `PROFILE_SYNC_SPEC.md` (live, holds the deferred merge/cloud-sync scope). ⚠️
+> `PER_SOUND_VOLUME_SPEC.md` and `SOUND_PRIMING_SPEC.md` were **deleted 2026-10-16** after shipping; the decisions
+> this spec leans on from them now live in **`PROJECT_STATE.md`** (per-sound volume section; Sound priming section)
+> and in git at `git show c60a355:PER_SOUND_VOLUME_SPEC.md` / `git show c60a355:SOUND_PRIMING_SPEC.md`.
 > ⚠️ **Recommended order: after profiles.** See §1 — the deciding factor is that a hotkey is a *reference to a
 > sound*, and profiles are what force that reference story to exist properly.
 
@@ -150,15 +153,17 @@ dot for unresolved targets.
 ### Decisions to make before coding
 
 - Chords (`Ctrl+Shift+1`) or single keys? **Single keys for v1**, with modifiers reserved (§2).
-- Can one key trigger several sounds? **No** — one binding, one target. Multi-sound triggering is
-  `SOUND_PRIMING_SPEC.md`'s job; don't build it twice.
+- Can one key trigger several sounds? **No** — one binding, one target. Multi-sound triggering is **priming's** job
+  (`playWithPrimes`); don't build it twice. See `PROJECT_STATE.md`, Sound priming.
 - Does the key **toggle** or **trigger**? `playSound` (App.jsx:3256) starts; `stopSound` (3472) stops. Decide
   whether a second press stops the sound, and make it consistent with what clicking the card does.
 - Looping sounds: if the key stops a looping sound, is that a "stop" or a "toggle"? Same question as above.
 - **Does a hotkey respect `editMode`?** `playSound` early-returns when `editMode` is true (App.jsx:3257), so a
   binding pressed in edit mode should do nothing. Keep that behaviour rather than special-casing it.
-- Should a hotkey also fire the sound's **primed** sounds? **Yes** — that is what a user expects, and it is
-  `SOUND_PRIMING_SPEC.md`'s model A.
+- Should a hotkey also fire the sound's **primed** sounds? **Yes** — that is what a user expects, and priming is
+  the shipped one-shot multi-sound mechanism. ⚠️ **Non-negotiable: route it through `playWithPrimes`**, never
+  `playSound` directly. Two triggers with different semantics is the thing to avoid, and this was recorded as a
+  binding requirement before the priming spec was retired.
 
 ---
 
@@ -171,7 +176,10 @@ dot for unresolved targets.
 - ⚠️ Do **not** drive `DOM.setFileInputFiles` — it kills the Android WebView renderer (already documented in
   `e2e-mobile.mjs`); a hotkey target picker is a reason to prefer calling an in-page function, as
   `PROFILE_SYNC_SPEC.md` §9.3 does.
-- New IDs: **continue from `P1`** unless `PER_SOUND_VOLUME_SPEC.md` or `SOUND_PRIMING_SPEC.md` got there first.
+- New IDs: **`P` is taken** — `specs/volume.mjs` holds `P1`–`P16` (per-sound volume), desktop priming took `P17`–`P34`
+  and mobile priming took `Q1`–`Q14`, so **`P35`+ is free but do not reuse a shipped range**. ⚠️ The original
+  advice here ("continue from `P1`") was stale the moment both features shipped. Check `coverage.manifest.json`
+  before picking, and keep `idPattern` non-overlapping or `check-coverage.mjs` reports `AMBIGUOUS_ID`.
 - Test the negatives, they are the real risks: pressing a bound key **while typing in a field** fires nothing;
   pressing it **with a modal open** fires nothing; a **dangling** binding is visible and inert; **`Escape`**
   still closes modals; a **rebound** key fires only the new target.

@@ -915,8 +915,9 @@ async function main() {
   // The desktop suite (e2e-full.mjs Suite Q, P17-P34) drives priming with
   // dispatchMouseEvent (right-click). Touch has no right-click: the ONLY gesture
   // is press-and-hold, and it travels a different path (touch -> pointer), so it
-  // MUST be driven with Input.dispatchTouchEvent. This closes the checklist item
-  // SOUND_PRIMING_SPEC.md §7 left open: "a real press-and-hold on a device".
+  // MUST be driven with Input.dispatchTouchEvent. This closed the checklist item
+  // "a real press-and-hold on a device", open since the priming spec was written
+  // (now retired - see PROJECT_STATE.md, Sound priming).
   console.log(`\n[${LABEL}] === SUITE Q: SOUND PRIMING (touch) ===`);
 
   // Priming is one-shot and session-only, so re-seed to a known board. Same

@@ -36,27 +36,32 @@
     "        `planned` = spec written, not implemented, so it need not be.",
     "gap:    an optional reason a `shipped` feature is knowingly uncovered.",
     "        Reported on every run, not a silent pass.",
+    "spec:   the planning spec that feature came from, or null when it has",
+    "        been retired (deleted). A non-null spec must EXIST on disk -",
+    "        check-coverage.mjs fails FEATURE_SPEC_MISSING otherwise - so",
+    "        deleting a spec means clearing this field in the same commit and",
+    "        leaving a note saying where the design record went.",
     "coveredBy: suite refs as `<file>::<key>`. A missing ref is an error."
   ],
   "features": [
     {
       "name": "Sound priming",
-      "spec": "SOUND_PRIMING_SPEC.md",
+      "spec": null,
       "status": "shipped",
       "coveredBy": [
         "e2e-full.mjs::Q",
         "e2e-mobile.mjs::Q"
       ],
-      "note": "mouse right-click and touch press-and-hold; shipped 2026-10-08, hand-tested 2026-10-10"
+      "note": "mouse right-click and touch press-and-hold; shipped 2026-10-08, hand-tested 2026-10-10. SOUND_PRIMING_SPEC.md was deleted 2026-10-16 once its residue was archived; see PROJECT_STATE.md and `git show c60a355:SOUND_PRIMING_SPEC.md`"
     },
     {
       "name": "Per-sound volume",
-      "spec": "PER_SOUND_VOLUME_SPEC.md",
+      "spec": null,
       "status": "shipped",
       "coveredBy": [
         "specs/volume.mjs::P"
       ],
-      "note": "live card slider; shipped 2026-10-06, hand-tested"
+      "note": "live card slider; shipped 2026-10-06, hand-tested. PER_SOUND_VOLUME_SPEC.md was deleted 2026-10-16 once its residue was archived; see PROJECT_STATE.md and `git show c60a355:PER_SOUND_VOLUME_SPEC.md`"
     },
     {
       "name": "Move / copy sound",
