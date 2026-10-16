@@ -1,15 +1,25 @@
 # Profiles + Sync — Planning Spec
 
-> **Status**: **Steps 3–6 SHIPPED 2026-10-13.** The provenance classifier (§3), the bundle format (§5), atomic
-> import in both v1 modes (§8) and export with its destination pickers (§7, §10) are implemented in
-> `src/profileBundle.js` plus a shared `src-tauri/src/scope.rs`, and carry a 36-assertion node check
-> (`node e2e/profileBundle.check.mjs`, 36/36). The scope grant was then **measured on real desktop hardware**,
-> 11/11. Step 1 shipped earlier as `577505d`; **step 7 (UI) is partially done** — the Export/Import section exists
-> in Settings > Profiles — and **step 8 (the shared E2E spec) has not started**, which is why the feature entry in
-> `e2e/coverage.manifest.json` correctly stays `status: planned`.
-> ⚠️ **No native picker has ever been opened and the user has not hand-tested the built app.** §13 now records
-> exactly which checklist rows are machine-asserted, which are only code-reviewed, and which are unrun.
-> **Revised**: 2026-10-04, 2026-10-06, 2026-10-11, 2026-10-13
+> **Status: v1 is COMPLETE (as of 2026-10-16).** §12's steps 0–8 are all built — step 0 (both platform spikes),
+> step 1 (storage adapter + proven switch, `577505d`), steps 3–6 (classifier, bundle format, atomic import in both
+> v1 modes, export + pickers), **step 7 (UI, 2026-10-15)** and **step 8 (the shared E2E spec `specs/bundle.mjs`,
+> Suite I, 2026-10-14)**. Step 2 (timestamps + tombstones) was **cut from v1 by decision** (§0.3.1), not skipped.
+> The `coverage.manifest.json` feature entry is **`status: shipped`** — the flip on 2026-10-14 is what forced the
+> round-trip tests to exist. The engine is `src/profileBundle.js` (`profileBundle.check.mjs`, **46/46**); the scope
+> grant is `src-tauri/src/scope.rs`, **measured on real desktop hardware 11/11**; the post-picker steps are bounded
+> by `src/bundleGuard.js` (`bundleGuard.check.mjs`, 20/20).
+> ✅ **The user has hand-tested the round trip three times** — Desktop → Android (2026-10-14, 2026-10-16) and
+> Android → Desktop (2026-10-16) — and **both native pickers have been opened on both platforms**, including
+> cancel. ✅ **v1 is COMPLETE: every §13 row is `[x]`.** The last one — the Android same-device round trip — closed
+> 2026-10-16, verified by SHA256 rather than by eye.
+> this spec still needing a human. Everything else unchecked lives in the **PLANNED** section and is out of v1 by
+> design.
+> ⚠️ **This banner was four months stale before 2026-10-16 and said the opposite of all of the above** — it still
+> claimed *"step 8 has not started"*, *"stays `status: planned`"*, *"no native picker has ever been opened"* and
+> *"the user has not hand-tested"*, all after every one of those had been true for days. **A status banner is the
+> first thing a reader trusts and the last thing anyone re-reads**, which is how four separate falsehoods sat at
+> the top of the file. §13's own header had gone stale the same way.
+> **Revised**: 2026-10-04, 2026-10-06, 2026-10-11, 2026-10-13, **2026-10-16 (v1 complete)**
 >
 > **Original status notes (superseded, kept for the reasoning):** Both platform unknowns remain **closed**: Android
 > spiked 2026-10-04, **desktop spiked 2026-10-06** — a user-picked path *is* writable after a one-command runtime
@@ -767,13 +777,21 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 
 ## 13. Verification checklist
 
-> ✅ / ❌ marks below are as of **2026-10-13**, when steps 3–6 shipped. The unchecked ones are either step 7/8 work
-> (UI beyond the minimal wiring, shared E2E spec) or things needing a real second device. **The `node
-> e2e/profileBundle.check.mjs` rows are marked with the check name** rather than ✅, so a reader can tell a
-> machine-run assertion from a claim.
+> ✅ marks are as of **2026-10-16**. **The `node e2e/profileBundle.check.mjs` rows are marked with the check
+> name** rather than ✅, so a reader can tell a machine-run assertion from a claim.
 >
-> ⚠️ **Nothing here is covered by a browser spec yet.** The feature stays `planned` in
-> `e2e/coverage.manifest.json` precisely because of that — step 8 is what turns these into `shipped`.
+> ✅ **State of play: v1 is complete.** §12's steps 0–8 are all done (step 2 was cut by decision, §0.3), the
+> feature entry is **`status: shipped`** in `e2e/coverage.manifest.json`, and the user has hand-tested the round
+> trip **three times**. ⚠️ **The two paragraphs this note used to carry were both stale and both are corrected
+> below**: it said the marks were "as of 2026-10-13, when steps 3–6 shipped", and it said **"nothing here is covered
+> by a browser spec yet — the feature stays `planned`"**. Step 8 shipped on **2026-10-14** as
+> `e2e/specs/bundle.mjs` (**Suite I, I0–I22**), and the manifest entry flipped `planned` → `shipped` **the same
+> day** — which is what forced the round-trip tests to exist at all. 💡 **The block was written once and never
+> revisited through a week of shipping.** That is the whole lesson of it, so it is recorded rather than deleted.
+>
+> **§13 is COMPLETE: every checklist row is `[x]` (as of 2026-10-16, when the Android same-device round trip closed
+> and verified).** Everything else unchecked in this file is in the **PLANNED** section below and is out of v1 **by
+> design** — so the spec has no outstanding work, only deliberate future scope.
 
 - [x] A profile created on desktop exports; imported on Android; **all** characters, categories, groups, sounds, colors, loop/fade settings, theme and box size survive the round trip byte-identically. → *"the imported board deep-compares to the exported one"*, plus a separate boxSize/background/section-icons row. ✅ **HAND-TESTED 2026-10-14 (desktop → Android)** — ⚠️ **this row previously carried the caveat *"Desktop-only so far; the Android half is unverified"*, which was wrong twice over: the user did test desktop → Android, and a note in `PROJECT_STATE.md` had the direction as *web → Android*, which is impossible because **web has no export/import at all** (§7, gated on `isTauri`). Corrected 2026-10-16 on the user's correction.**
 - [x] A bundle is a plain, unencrypted zip — openable with any standard zip tool, with no crypto fields in the manifest. → *"the bundle is a PLAIN zip - PK magic"* and *"assertUint8Array rejects a plain Array"*. 💡 **That second check matters more than it looks:** the Array form really does produce a comma-joined file — reproduced live during the step 6 probe, where a 64-byte payload landed as **189 bytes** of digits with no error.
@@ -808,9 +826,9 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [x] 🆕 **The summary outlives the remount that destroys the modal** → `I19`/`I20`/`I21` + the node check. `I19` pins the *negative* case (`setActive:false` parks **nothing**, so no stale summary can survive); `I20` asserts the banner is on screen **without a reload**, because the remount is synchronous; `I21` that dismissal survives another reload.
 - [x] **No `fs:scope: ["**"]` and no blanket write scope ships.** → `capabilities/default.json` carries no `fs:scope` entry at all; the only extra reach is the single-file `grant_path`.
 - [x] **The grant is per-file, not per-directory.** → ✅ **measured on real hardware 2026-10-13**, 11/11: an ungranted `Documents` write AND read are refused, the granted file writes and reads byte-exact, and **a sibling in the same folder is still refused for both read and write**. Re-granting is idempotent.
-- [x] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes. → the grant probe wrote 64 bytes to the Desktop and read them back with the zip magic intact; ⚠️ **that was the probe's payload, not a real `exportBundle` result through the picker** — the picker itself has never been opened.
+- [x] Desktop: export → **a user-picked path outside AppData** → the file exists with the exact bundle bytes. → the grant probe wrote 64 bytes to the Desktop and read them back with the zip magic intact; ⚠️ **that was the probe's payload, not a real `exportBundle` result through the picker.** ✅ **The picker itself has been opened since (hand-test, 2026-10-14/16)**, so this row's original caveat is retired — though note that the *desktop export* was driven from a debug build, and no `adb logcat` was captured during the one attempt that stalled.
 - [x] **Bytes are handed over as a `Uint8Array`.** → `assertUint8Array` at the single call site, *plus* the app reads the file back off disk after writing and compares size and magic before reporting success.
-- [ ] Android: export → import on the same device via a user-picked SAF location. → the export half was proven 2026-10-04. 🔴 **The user has now exercised the import half twice (2026-10-16) and it STALLS REPRODUCIBLY**: the picker opens, the file is clicked, the button latches on **"Importing…"** forever, and **nothing is imported** (closing and reopening shows no new profile; a later attempt then works first try). **The stall is narrowed to `readFile` on the `content://` URI**, because the latched label proves a hung `await` rather than a thrown error (the `catch`/`finally` would have cleared it), `grantPickedPath` is a no-op on mobile, and the blob writes target plain AppData paths. ⚠️ **Already ruled out:** a silent success (nothing committed), a post-commit stall (`commitKeys` runs after all writes), a missing remount (both switch paths provably remount), the MIME filter (`MimeTypeMap` does not know `.spellcaster`, so the filter resolves to empty and the picker shows `*/*`), and **a running `tauri android dev`** — `e2e-android.ps1:150` runs the same thing for **239 passing tests**. 🔴 **The gap this exposes: the harness never reads a `content://` URI on Android** — `specs/bundle.mjs:283-292` uses `BaseDirectory.AppData` paths — so this is the one line the whole Android arm cannot reach. ⚠️ **No cause recorded; do not invent one.** Capture `adb logcat` during a reproduction: it is the only thing that separates a hung `openAssetFileDescriptor` from anything else, and it has now reproduced twice without one.
+- [x] Android: export → import on the same device via a user-picked SAF location. → ✅ **CLOSED 2026-10-16 — the last open row in this spec.** The user added a new sound with an icon, exported to a SAF destination and imported it back **on the same device**, in a clean environment (one dev pipeline, emulator cold-booted). **Verified, not eyeballed:** the icon's SHA256 is **identical** on both sides (`cdb55b6e…c526`) — **and that hash is the imported filename**, so content-addressing verifies against its own bytes; all 4 audio files match by size; the bundle landed at **262069 bytes**; `storedName` was rewritten to content-addressed names as §5.2 requires; the imported profile carries `ttrpg_data_version: 3`; no `*_old` keys; the one-shot notice was consumed. **It did not stall.** 💡 **And logcat could not have told us why it stalled before** — the pipeline's stream contains no `dialog`/`plugin:fs`/`grant_path`/`content://` output at all, so the long-standing "capture logcat next time" advice is **withdrawn**: those plugins do not log there. The next diagnosis has to come from the app, which is why `bundleGuard` names the failing step and offers **Stop waiting**.
 - [x] ⚠️ **A picker cancel is handled on both platforms, and they differ.** → both arms are handled in `pickSavePath`/`pickOpenPath`: a `/cancel/i` rejection resolves to `null` (Android) and a `null` return is honoured (desktop). ✅ **HAND-TESTED 2026-10-16 — this row was "code-reviewed, not executed" until the user cancelled both the export and the import picker on BOTH platforms and got the expected message every time.** ⚠️ The specific failure it was guarding: if `/cancel/i` had missed Android's `"File picker cancelled"` (`DialogPlugin.kt:98`/`:237`), the catch would have rethrown and the user would have seen **"Import failed: File picker cancelled"**. It does not happen. **Neither platform's picker had ever been opened before this test.**
 - [x] **The dialog permissions are present in `capabilities/default.json`** → ✅ present, and **verified live**: `plugin:dialog|message` was invoked over CDP against a real `tauri dev` and did **not** return "Plugin not found" or "Permissions associated with this command".
 - [x] The web build is **unchanged** — no export/import controls, and its existing behaviour intact. → the section is gated on `isTauri`; web E2E is 223/0/0.
@@ -820,25 +838,54 @@ The dialog could be exercised **without touching `src/App.jsx`**, which is why t
 - [x] E2E: `e2e/specs/bundle.mjs` (seed → export → wipe → import → deep compare) runs from **both** entrypoints, green on web, Windows and Android. → ✅ **2026-10-14, step 8**: Suite **I (I0–I17)**, wired into both entrypoints, **all 17 ids green on Windows and Android**; the web arm is I1 + I2 only, which is correct rather than a gap (§7 — web audio is base64 in localStorage and caps around 5 MB). It found a real shipping bug on its first run (the missing `await` on `dirname`).
 - [x] README documents export/import and states plainly that there is no account and no data leaves the device — including the priming note (§9.2). → ✅ **done 2026-10-13**: Features bullets for Profiles and Profile Export & Import, two Platform Support rows, and an explicit note that web has no export/import *and why*. 💡 **The README had documented neither priming nor profiles either** — both shipped weeks earlier and neither had ever reached it, so this row was less a steps-3-6 chore than a three-feature gap found by it.
 
-### ⚠️ What is NOT proven, stated plainly
+### ✅ What is proven — refreshed 2026-10-16, because this block had gone stale
 
-Steps 3–6 ship a working engine and a real, proven scope grant, and everything that can be asserted without a
-human has been asserted. Three things remain unproven and none of them is covered by the 36 node checks:
+⚠️ **This block said, until 2026-10-16, that "no native picker has ever been opened", that "the cross-device half
+of the round trip is unrun", and that "the user has not hand-tested the built app". All three were true when
+written on 2026-10-13 and all three are now out of date.** Recording the correction here rather than deleting the
+block, because *how* it went stale is the useful part: it was written once and never revisited after a week of
+shipping, which is the same failure mode as the two stale rows at the top of this checklist.
 
-1. **No native picker has ever been opened.** `dialog.save` / `dialog.open` are exercised by code review and by the
-   grant probe, but no test clicks one. §13's per-platform cancel rows are therefore code-reviewed, not executed.
-2. **The cross-device half of the round trip is unrun.** Export → import on a *different* device is the feature's
-   actual purpose and nothing has done it.
-3. **The user has not hand-tested the built app.** Per the DoD this feature needs that before it counts as done —
-   and it is the reason the manifest entry stays `planned`.
+| Claimed unproven | Actual state |
+|---|---|
+| "No native picker has ever been opened" | ✅ **FALSE since 2026-10-16.** The user opened and used **both** pickers on **both** platforms: cancel on export *and* import, desktop *and* Android (§13's cancel row), plus accept-and-write via a real save destination. |
+| "The cross-device half of the round trip is unrun" | ⚠️ **TRUE, and still true — but narrower than it sounds.** What *has* run: **Desktop → Android** (hand-test, 2026-10-14/16) and **Android → Desktop** (hand-test, 2026-10-16). What has **not**: a **third machine**, i.e. the one case where no shared filesystem makes the transfer trivial. |
+| "The user has not hand-tested the built app" | ✅ **FALSE.** Hand-tested **four** times (2026-10-14, 2026-10-15, and twice on 2026-10-16) — and the hand-tests are what found the export refusal naming a `storedName` instead of the sound, plus the profile-versioning bug. ⚠️ **One standing caveat on all of them:** they run a **debug build whose frontend is served by Vite**, not a shipped artifact. |
 
-### Deferred to a later release (not v1)
+**So: v1 is built, tested and hand-verified, and §13 is now fully `[x]`.** The last row — the Android same-device
+round trip — closed on 2026-10-16: the user exported to a SAF destination and imported it back on the same device,
+and the icon's SHA256 is **identical** on both sides (`cdb55b6e…c526`) with that hash **as the imported filename**,
+all 4 audio files matching by size, `ttrpg_data_version: 3` stamped on the imported profile and no `*_old` keys.
+**It did not stall.** ⚠️ **One thing this spec should have said earlier and now can, because it cost hours: `adb
+logcat` cannot diagnose an import stall.** The pipeline's stream was running throughout and contains **no** `dialog`,
+`plugin:fs`, `grant_path` or `content://` output — neither plugin logs there. The long-standing "capture logcat next
+time" advice is therefore **withdrawn**; a future stall has to be diagnosed **in the app**, which is what
+`bundleGuard`'s named steps and **Stop waiting** button are for.
 
-- [ ] Merge import (§8) — id remapping, duplicate names, `updatedAt` conflict rules.
-- [ ] Web export/import (§7) — needs web audio moved out of localStorage first.
-- [ ] Timestamps + tombstones (§4.3) — ✅ **cut from v1** (§0.3 decision 1). Merge and folder/cloud sync both
-      need them; adding them to existing user data at that point is the expensive order, so budget for it there.
-- [ ] Folder / WebDAV / cloud sync (options A and C in §2), enabled behind the same `ProfileTransport` boundary.
+### 📋 PLANNED — deliberately out of v1, in dependency order
+
+⚠️ **These are not unfinished v1 work.** v1 is complete; these were excluded from it by design, and moving them
+here keeps them from reading as a backlog of bugs. **They form a chain, and the chain has a first link:**
+
+```
+  1. Timestamps + tombstones (§4.3)      <- THE PREREQUISITE. Nothing below is safe without it.
+        |                                   Cut from v1 by decision (§0.3), not by accident. Merge and
+        |                                   folder/cloud sync both need conflict resolution, and this has
+        |                                   to be added to EXISTING user data - the expensive order.
+        v
+  2. Merge import (§8)                    id remapping, duplicate names, per-record conflict rules.
+        |                                   v1 ships only "New profile" + "Replace active" on purpose.
+        v
+  3. Folder / WebDAV / cloud sync (§2 A/C)  behind the same `ProfileTransport` boundary the export already
+                                           implies, so it needs no UI change of its own.
+```
+
+- [ ] **1. Timestamps + tombstones (§4.3)** — ✅ **cut from v1** (§0.3 decision 1). §4.3 is kept as the record
+      *for* this work. **Do this first; the other two are unsafe without it.**
+- [ ] **2. Merge import (§8)** — id remapping, duplicate names, `updatedAt` conflict rules. Needs (1).
+- [ ] **3. Folder / WebDAV / cloud sync** (options A and C in §2) — needs (1) and (2).
+- [ ] **Web export/import (§7)** — independent of the chain above. Needs web audio moved out of `localStorage`
+      first; it is base64 data-URLs today and caps around 5 MB, so a web export could only ever be metadata.
 
 ---
 

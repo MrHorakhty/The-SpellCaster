@@ -4295,3 +4295,84 @@ eslint **0 errors / 3** pre-existing · build **exit 0** (827 ms) · check-cover
 which reproduced twice and then never again. **The one thing a hand-test could usefully confirm** is that the amber
 "Still working" strip appears during a normal import and clears afterwards. **Recorded as not done rather than
 implied.** ⚠️ Not committed — the user has not asked.
+
+---
+
+## 2026-10-16 23:35 - opencode - closing out PROFILE_SYNC_SPEC.md: v1 is complete, and the banner said otherwise
+
+**Docs-only. No app code, no harness code — gates 2–7 are unaffected and were not re-run.**
+
+**The user asked what is left in the Profile Spec.** Answer: **nothing in §12 is unbuilt** (step 2 was cut by
+decision), and of §13's checklist exactly **one row is open**. Everything else unchecked is deferred by design.
+
+**🔴 The finding worth keeping: the spec's own status banner was asserting the exact opposite of reality.** It still
+claimed, days after each became false:
+
+- *"step 8 (the shared E2E spec) **has not started**"* — it shipped 2026-10-14 as `specs/bundle.mjs`
+- *"the feature entry correctly stays `status: planned`"* — it is `shipped`, and that flip is what **forced** the
+  round-trip tests to exist
+- *"**No native picker has ever been opened**"* — both pickers, both platforms, including cancel
+- *"the user **has not hand-tested** the built app"* — hand-tested three times
+
+**§13's header had rotted the same way**, still saying *"nothing here is covered by a browser spec yet"*.
+💡 **A status banner is the first thing a reader trusts and the last thing anyone re-reads** — which is how four
+separate falsehoods sat at the top of the file for days while every underlying fact was recorded correctly further
+down. Both blocks are corrected **in place with the old text quoted, not deleted**: the reasoning is worth more
+than the deletion, because the failure mode is the reusable part.
+
+**✅ The deferred items are now a PLANNED section in explicit dependency order**, so they stop reading as a
+backlog of bugs:
+
+```
+1. Timestamps + tombstones (§4.3)  <- THE PREREQUISITE; the other two are unsafe without it
+2. Merge import (§8)                <- needs (1)
+3. Folder / WebDAV / cloud sync     <- needs (1) and (2)
+   (Web export/import is independent — blocked on moving web audio out of localStorage, not on this chain)
+```
+
+**Exactly one row remains open in §13: `:813`, the Android same-device round trip.** And on that — **it is mostly
+me, with two taps from you.** The native picker cannot be driven from CDP (every `window.__TAURI_INTERNALS__`
+property is `writable:false, configurable:false`, and the one writable seam, `chrome.webview.postMessage`, is
+bypassed because Tauri's injected `ipc` captures it in a closure). Everything around it I can do: open the modal,
+click Export/Import, and read logcat, CDP, the store and the written file. **Two native taps is the whole ask.**
+
+---
+
+## 2026-10-16 23:30 - opencode - §13:813 CLOSED: the Android same-device round trip, verified by hash
+
+**The last open row in `PROFILE_SYNC_SPEC.md` is closed, and it is verified rather than eyeballed.**
+
+**Setup:** clean environment confirmed first (0 stray pipelines, port 5173 free, no device), emulator cold-booted,
+one `npm run tauri android dev`. **The user did the two native taps** — the SAF save and the SAF file pick — which
+is the only part no automation can reach. Everything else was measured from outside.
+
+**What the user did:** added a new sound with an icon, exported the profile, imported it back **on the same device**.
+
+**✅ The evidence, strongest first:**
+
+| Check | Result |
+|---|---|
+| **SHA256 of the icon, original vs imported** | **`cdb55b6e02b39846c7c08ba91ccc9c7700f86d98afeb41c6726f9a167e43c526`** — **identical**, and that hash **is the imported filename** |
+| audio bytes | 32876 + 48620 ×3 in both profiles — **sizes match**, 5 files on each side |
+| the exported bundle on disk | `/sdcard/Download/export-test-20261016-2330.spellcaster`, **262069 bytes**, written 23:30 |
+| `storedName` rewrite | `sound_cm2216pn_Daze_1.mp3` → **`44dafa3851c7563f.mp3`** (§5.2 content-addressing, visible in the data) |
+| `ttrpg_data_version` on the imported profile | **3** — the version-stamp fix holds on an import |
+| `*_old` keys | **none** |
+| one-shot notice | consumed (`spellcaster_import_notice` absent after mount) |
+| `spellcaster_import_backups` | 3 entries (the "last 3 kept" snapshot mechanism) |
+| **did it stall?** | **NO.** Two native taps, round trip completed. |
+
+💡 **The filename *is* the hash** is the nicest possible confirmation: content-addressing is not just "a file with a
+hash-ish name", it produced a name that verifies against its own bytes.
+
+**⚠️ And one honest negative, recorded so it is not rediscovered later: logcat CANNOT answer the stall question.**
+The pipeline's logcat stream was running throughout and contains **no** `dialog`, `plugin:fs`, `grant_path` or
+`content://` entries at all — the only match was an unrelated `AutofillManager` line. ⚠️ **So the "capture logcat
+during a stall" plan, which was the standing recommendation for hours, is worthless.** Neither `tauri-plugin-dialog`
+nor `tauri-plugin-fs` logs through `logcat`, and the app's own `console.*` output is not in that stream either.
+💡 **The fix for a future occurrence is therefore in the app, not the harness:** the new `bundleGuard` already
+reports *which* step failed and offers **Stop waiting**, so the next report will name the step. Logging the step
+names to logcat would make it fully diagnosable — **recorded as a candidate, not done.**
+
+**So: `PROFILE_SYNC_SPEC.md` §13 now has ZERO open rows.** The whole checklist is `[x]`, and the only unchecked
+items in the file are the four in the PLANNED section, which are out of v1 by design.
