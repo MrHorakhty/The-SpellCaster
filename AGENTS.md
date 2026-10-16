@@ -28,10 +28,15 @@ Only **regenerable** content is excluded, and each exclusion maps to a rebuild c
 things make the old "rebuilt by `tauri android init`" row wrong (corrected 2026-10-12):
 
 - **50 files under `src-tauri/gen/android/` are tracked in git.** `.gitignore` only excludes specific subpaths
-  (`gen/schemas/`, `Run App.bat`, `local.properties`, `*.keystore`, `*.jks`, `.gradle/`, `build/`, `.cxx/`) — not
+  (`gen/schemas/`, `Run App.bat`, `local.properties`, `*.keystore`, `*.jks`, `.gradle/`, `build/`, `.cxx/`) - not
   the directory. Tracked and hand-maintained among them is
   **`src-tauri/gen/android/app/src/main/java/com/mrhorakhty/thespellcaster/MainActivity.kt`**, which is where the
   Rust plugins are registered, plus `build.gradle.kts` and `AndroidManifest.xml`.
+  ⚠️ **`Run App.bat` is the counter-example, retired 2026-10-16.** It was hand-maintained, lived under `gen/` (which
+  backups exclude) **and** was gitignored — so it existed in exactly one place on one machine, and its comment
+  claimed it "launches the app" while it actually ran the whole build+install pipeline. It is replaced by the two
+  **tracked root** scripts `Run Tauri Android.bat` and `Launch App Android.bat`. 💡 **A hand-maintained file belongs
+  next to the tracked sources, never inside a generated directory** — that is the same rule as the 50 files above.
 - So a fresh `tauri android init` would **not** reproduce them. That is precisely why they are tracked.
 
 The practical consequence: **a backup folder is not a complete checkout of this repo.** It omits 50 tracked

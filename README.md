@@ -141,7 +141,16 @@ Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emu
    ```bash
    npm run tauri android init   # only needed if src-tauri/gen/android is missing
    ```
-   The generated project lives in `src-tauri/gen/android/`. Launch it from Android Studio with the **Run App** configuration, or double-click `src-tauri/gen/android/Run App.bat` on Windows.
+   The generated project lives in `src-tauri/gen/android/`. On Windows use the two helpers in the **project root**:
+
+   | Script | What it does |
+   |---|---|
+   | **`Run Tauri Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
+   | **`Launch App Android.bat`** | **Only opens** the app that is already installed — no build, no install. Fails clearly if no emulator or device is attached. |
+
+   Or use the **Run App** configuration in Android Studio.
+
+   > A **debug** build loads its UI from the Vite dev server, so the app only works properly while `Run Tauri Android.bat` is open. Closing that window stops the pipeline but leaves the app running against a dead server — kill and restart the pipeline to recover.
 
    > If the dev server fails with `Port 5173 is already in use`, a previous Vite process is still running. Free it with the bundled helper from the project root: `kill-ports.bat` (add `/all` to also clear app processes and adb forwards, `/emu` to shut the emulator down).
 
@@ -187,7 +196,7 @@ The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk
 │   ├── capabilities/        # Tauri permissions (filesystem, window, os)
 │   ├── Cargo.toml           # Rust dependencies
 │   ├── icons/               # Application icons
-│   └── gen/android/         # Generated Android project (Gradle, manifest, Run App.bat)
+│   └── gen/android/         # Generated Android project (Gradle, manifest)
 ├── e2e/                     # Test suites and runners
 │   ├── e2e-mobile.mjs       # Android UI suite
 │   ├── e2e-full.ps1         # Windows/web runner

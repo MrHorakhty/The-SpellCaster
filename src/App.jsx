@@ -43,6 +43,7 @@ import {
     collectProfileForExport,
     IMPORT_NOTICE_KEY,
 } from './profileBundle.js'
+import { boundedBundleStep, BUNDLE_STEP_TIMEOUT_MS } from './bundleGuard.js'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
@@ -960,6 +961,35 @@ function AppBoard() {
     const [bundleNotice, setBundleNotice] = useState('')
     const [importMode, setImportMode] = useState('new')          // 'new' | 'replace'
 
+    // A hung Tauri IPC cannot be aborted - there is no handle for it, and
+    // `abort()` is not offered on the plugin calls we make. So the honest fix is
+    // to stop WAITING and to say plainly that the operation may still finish.
+    //
+    // Measured 2026-10-16: a stalled import left the button reading "Importing…"
+    // forever with no error, no way out, and nothing imported. Five candidate
+    // causes were tested and rejected, so the cause is still unknown - which is
+    // exactly why the latch must not depend on finding it. The race itself lives
+    // in src/bundleGuard.js so it can be tested in node; this is only the React
+    // wiring. bundleStalled drives the warning and the stop button, and
+    // bundleCancelRef holds the stop function for the step in flight.
+    const [bundleStalled, setBundleStalled] = useState(false)
+    const bundleCancelRef = useRef(null)
+
+    // Everything AFTER the native picker is bounded. The picker itself is NOT,
+    // because the user is in control of how long they browse for a file, and a
+    // timeout there would fire during ordinary deliberate use.
+    const runBundleStep = (makePromise, what) => {
+        const step = boundedBundleStep(makePromise, {
+            timeoutMs: BUNDLE_STEP_TIMEOUT_MS,
+            what,
+            onPendingChange: setBundleStalled,
+        })
+        bundleCancelRef.current = step
+        return step.promise
+    }
+
+    const handleStopBundleWait = () => bundleCancelRef.current?.cancel()
+
     // The picker contract is ASYMMETRIC and neither platform's behaviour may be
     // assumed for the other (§7, §13):
     //   desktop  save -> a plain absolute path, cancel -> null (resolved)
@@ -1044,11 +1074,13 @@ function AppBoard() {
             // A Uint8Array, always (§11 risk 8): a plain Array is coerced to a
             // comma-joined string by the desktop IPC layer and produces a file
             // ~3x too large with NO error.
-            await writeFile(path, assertUint8Array(bytes))
+            await runBundleStep(
+                () => writeFile(path, assertUint8Array(bytes)),
+                'Writing the bundle')
 
             // Read it back off disk rather than trusting the resolved promise -
             // that is the only check which catches a silently corrupt write.
-            const onDisk = await readFile(path)
+            const onDisk = await runBundleStep(() => readFile(path), 'Reading the bundle back')
             if (onDisk.length !== bytes.length || onDisk[0] !== 0x50 || onDisk[1] !== 0x4b) {
                 throw new BundleError('The file was written but does not look like a valid bundle. Check the destination is writable.', 'corrupt-write')
             }
@@ -1092,14 +1124,14 @@ function AppBoard() {
 
             const { readFile } = await import('@tauri-apps/plugin-fs')
             await grantPickedPath(path)
-            const bytes = await readFile(path)
+            const bytes = await runBundleStep(() => readFile(path), 'Reading the bundle')
 
-            const report = await importBundle(bytes, {
+            const report = await runBundleStep(() => importBundle(bytes, {
                 mode: importMode,
                 targetProfileId: activeProfileId,
                 normalize: normalizeStoredData,
                 dataVersion: DATA_VERSION,
-            })
+            }), 'Importing the bundle')
 
             if (report.dropped.length > 0) {
                 const names = report.dropped.slice(0, 3).map(d => d.name).join(', ')
@@ -7229,6 +7261,25 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <Upload size={16} />
                                                 <span>{bundleBusy === 'import' ? 'Importing…' : 'Import a profile…'}</span>
                                             </button>
+
+                                            {bundleStalled && (
+                                                <div
+                                                    data-bundle-stalled
+                                                    role="status"
+                                                    className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2"
+                                                >
+                                                    <span className="text-xs text-amber-200">
+                                                        Still working. If this does not finish on its own, stop waiting.
+                                                    </span>
+                                                    <button
+                                                        onClick={handleStopBundleWait}
+                                                        data-bundle-stop
+                                                        className="shrink-0 rounded border border-amber-600 px-2 py-1 text-xs text-amber-100 hover:bg-amber-900/50"
+                                                    >
+                                                        Stop waiting
+                                                    </button>
+                                                </div>
+                                            )}
 
                                             {bundleNotice && (
                                                 <p data-bundle-notice role="status" className="text-xs text-slate-300 mt-2">{bundleNotice}</p>

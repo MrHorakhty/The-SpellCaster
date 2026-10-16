@@ -4238,3 +4238,60 @@ report here, **establish that Vite is alive and only one CLI instance runs** —
 **💡 And the user's own observations were the load-bearing evidence twice** — that the picker *returned* (which
 killed my leading candidate) and that closing `Run App.bat` does not close the app. Both were correct, and both
 contradicted something I was about to assert.
+---
+
+## 2026-10-16 22:50 - opencode - A-D (the two Android scripts) plus the import-latch fix
+
+**App code + two new root scripts. All seven gates green, every count identical to baseline.**
+
+**✅ `Run App.bat` is retired and split in two, both now TRACKED in the project root** (the user asked for root,
+next to the existing `Run*.bat` files):
+
+| Script | What it does |
+|---|---|
+| **`Run Tauri Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline. **Refuses to start if another `tauri android dev` is already running**, and **asks before** freeing port 5173, naming the E2E-run risk. |
+| **`Launch App Android.bat`** | **Only opens** the installed app — no build, no install. Fails clearly on no-device / offline / launch-failure, each with its own fix. |
+
+💡 **The reason this was ever a problem, in one line:** the old file's comment claimed it "launches the Android
+app" while it ran `kill-ports 5173` + the whole build/install pipeline (which force-stops the app). That
+misdescription sent the user — and me — down a false path for most of a session. And it was **untracked AND
+gitignored AND under `gen/`**, which backups exclude, so it existed in exactly one place on one machine: the
+opposite of the 50 hand-maintained `gen/android/` files that *are* tracked for precisely this reason.
+The `.gitignore` entry is **kept** — `tauri android init` regenerates the file, and the rule is what stops a
+regenerated copy from showing up as untracked.
+
+**🔴 And the one CONFIRMED defect from the investigation is fixed: the import latch.** New **`src/bundleGuard.js`**
+(`boundedBundleStep`) wraps every step **after** the native picker — `readFile`, `importBundle`, `writeFile`, and
+the export read-back — with a **30 s timeout** and a **"Stop waiting"** button (`[data-bundle-stop]`, with a
+`[data-bundle-stalled]` strip). A hung Tauri IPC can no longer latch the UI forever with no way out.
+- ⚠️ **The native picker is deliberately NOT timed out.** The user controls how long they browse for a file; a
+  timeout there would fire during ordinary, deliberate use. Only post-picker work is bounded.
+- ⚠️ **The timeout message does not claim nothing was written**, because it cannot know that — `importBundle`
+  commits its keys last, so an abandoned wait can still land. It says the device may still be finishing and to
+  reopen the app. **An honest timeout beats a confident wrong one.**
+- 💡 **The race was extracted into its own module rather than left inline in `App.jsx` (already 7444 lines),**
+  because the two paths that matter are exactly the ones a browser spec cannot reach: a promise that **never
+  settles**, and a **cancel that arrives after the work finished**. Suite I drives the engine *below* the UI, so it
+  would never touch the React wiring at all. **`e2e/bundleGuard.check.mjs` — 20/20** — asserts both, plus that a
+  late resolution after a timeout is swallowed rather than surfacing as an unhandled rejection.
+
+**⚠️ Three `cmd` traps hit while writing the scripts, and all three were caught only by RUNNING them:**
+1. **An unescaped `)` inside `echo` text silently ends an `if (...)` block.** `...process(es) found.` produced
+   *"'found.' was unexpected at this time"* and the block died mid-way. **Fix: `goto` labels**, which no echo text
+   can break.
+2. **A quoted path inside a ``for /f`` backtick command cannot be captured** — the same trap `kill-ports.bat` was
+   fixed for on 2026-10-04. The device list now goes through a temp file.
+3. ⚠️ **NEW ONE: `for /f` without `usebackq` reads a quoted path as a literal STRING.** `skip=1` then skipped the only
+   iteration and the loop ran **zero times**, so the script reported "no device attached" while a device was
+   attached. **This one fails silently and looks like a correct answer**, which is the dangerous kind.
+
+**Gates — all seven run, all green, every count identical to baseline:** backup **VERIFY OK 226/226** ·
+eslint **0 errors / 3** pre-existing · build **exit 0** (827 ms) · check-coverage **exit 0, 40 suites / 358 tests /
+24 shipped / 0 gaps** · 🆕 **`bundleGuard.check` 20/20** · `profileBundle.check` **46/46** ·
+`profileStorage.check` **32/32** · check-profile-keys **OK** · **web 229/0/0 exit 0** ·
+**Windows 248/0/1 exit 1** (G5) with **`Restore verified FROM DISK`** · **Android 238/0/1 exit 1** (G5).
+
+🔴 **NO hand-test, and for the timeout path there is honestly none to do** — exercising it requires a real hang,
+which reproduced twice and then never again. **The one thing a hand-test could usefully confirm** is that the amber
+"Still working" strip appears during a normal import and clears afterwards. **Recorded as not done rather than
+implied.** ⚠️ Not committed — the user has not asked.

@@ -1,15 +1,34 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (released 2026-10-16 22:35). **The Android stuck-import investigation is
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-16 23:25). **Two fixes shipped, all seven gates green with
+counts identical to baseline.** 🔴 **The import latch — the one CONFIRMED defect from the stuck-import
+investigation — is fixed**: new **`src/bundleGuard.js`** (`boundedBundleStep`) bounds every step *after* the native
+picker with a 30 s timeout plus a **"Stop waiting"** button, so a hung Tauri IPC can no longer latch the UI
+forever with no way out. ⚠️ **The native picker is deliberately NOT timed out** — the user controls how long they
+browse, so a timeout there would fire during ordinary use. Covered by **`e2e/bundleGuard.check.mjs`, 20/20**,
+including the two paths a browser spec cannot reach: a promise that **never settles**, and a **cancel after
+completion**. The timeout message deliberately does **not** claim nothing was written, because it cannot know that
+(`importBundle` commits keys last, so an abandoned wait can still land). ✅ **`Run App.bat` is retired and split
+into two tracked root scripts** — `Run Tauri Android.bat` (build+install, **refuses to start if another pipeline is
+already running**, asks before freeing port 5173) and `Launch App Android.bat` (opens the installed app only). It
+was untracked, gitignored **and** under `gen/`, which backups exclude — so it existed in one place on one machine.
+⚠️ **No hand-test** — nothing could be hand-tested without a real 30 s hang; say so rather than imply one.
+Previous holder: opencode (released 2026-10-16 22:50). **Two fixes shipped (A-D + the import timeout). All seven
+gates green, counts identical to baseline: web 229/0/0 exit 0 · Windows 248/0/1 exit 1 (G5) · Android 238/0/1
+exit 1 (G5) · eslint 0 errors / 3 · build exit 0 · check-coverage exit 0 (40 suites, 358 tests) ·
+`bundleGuard.check` 20/20 · `profileBundle.check` 46/46 · `profileStorage.check` 32/32 · check-profile-keys OK.
+⚠️ **No user hand-test and none is possible** for the timeout path: exercising it needs a real hang that has
+reproduced only twice, both times unreproducible afterwards. What a hand-test *could* usefully confirm is that the
+amber "Still working" strip appears during a normal import and clears afterwards — **one import, one look.**
+Previous holder (released 2026-10-16 22:50) left this: the Android stuck-import investigation
 CLOSED with a NEGATIVE result: the stall did not reproduce in a clean environment, and five hypotheses were tested
 and rejected — four of them mine** (cloud provider · running `tauri android dev` · `readFile` on a `content://` URI,
 which rejects in 4–53 ms · `dialog.open()` never returning, the user saw it return · the app's lazy import, which
 settles in 1012 ms cold). **Three clean-environment imports succeeded**, and the timeline is positive evidence:
 `Importing…` then the Settings modal **unmounting** = a successful remount. ✅ Verified on the imported profile:
 `ttrpg_data_version` present, **`oldKeys: []`**, and the one-shot notice **consumed exactly once**. ⚠️ **No cause is
-recorded, because nothing reproduced to explain.** 🔴 **The one real, confirmed defect is a UX one and it is cheap:
-the import has no timeout and no cancel affordance** (`App.jsx:969-997`, `1085-1102`), so any hung `await` latches
-"Importing…" with no escape — and a stall is indistinguishable from a failure because neither prints an error.
+recorded, because nothing reproduced to explain.** 🔴 **That one confirmed defect — no timeout and no cancel
+affordance (`App.jsx:969-997`, `1085-1102`) — is now FIXED** by `src/bundleGuard.js` (see the header).
 💡 **Lesson: a hand-test against a polluted dev environment produced a false defect report.** Check Vite is alive
 and only one CLI instance runs before trusting any "the app hangs" report. Previous holder: opencode (released
 2026-10-16 22:30). **MEASURED 2026-10-16 22:30 — four hypotheses tested and rejected, and the real one found. It is the app's own
@@ -708,6 +727,25 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   fake `localStorage`. No browser, so it is worth running for any future change to storage or the uploads plan.
 
 ## Verification gates
+- ✅ **Gates 2026-10-16 22:50–23:20 (the import latch fix + the two Android scripts) — ALL SEVEN GREEN, every count
+  identical to baseline.** The change is **app code** (`src/App.jsx`, new `src/bundleGuard.js`) plus two new root
+  scripts, so nothing was exempt.
+  | Gate | Result |
+  |---|---|
+| `backup-project.ps1` | **VERIFY OK, 226/226** at session start, and again at the end |
+  | `npx eslint .` | **0 errors / 3** pre-existing warnings (`convertFileSrc`, `_`, `ev`) — the accepted baseline |
+  | `npx vite build` | **exit 0** (827 ms) |
+  | `node e2e/check-coverage.mjs` | **exit 0 — 40 suites, 358 tests, 12 shared specs, 24/24 shipped features, 0 gaps** (unchanged: no E2E ids added or removed) |
+  | node checks | 🆕 **`bundleGuard.check` 20/20** · `profileBundle.check` **46/46** · `profileStorage.check` **32/32** · `check-profile-keys` **OK** |
+  | **web E2E** | **229 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261016-230023.log`) |
+  | **Windows E2E** | **248 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-run-20261016-230459.log`) — WARN is G5. **`Restore verified FROM DISK`** again |
+  | **Android E2E** | **238 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-android-20261016-231024.log`) — WARN is G5 |
+  | user hand-test | 🔴 **NOT DONE, and for the timeout path it is not practically possible** — exercising a 30 s timeout needs a real hang, which reproduced twice and then never again. **Say so plainly.** What *is* cheaply confirmable by hand: the amber **"Still working"** strip appears during a normal import and clears afterwards — one import, one look |
+  ⚠️ **The new `bundleGuard` path is covered by a node check, not by Suite I** — Suite I drives `exportBundle`/
+  `importBundle` *directly*, below the UI, so it never touches the React wiring. That is why the race was extracted
+  into `src/bundleGuard.js` rather than left inline in `App.jsx`: **the two paths that matter (a promise that never
+  settles, and a cancel after completion) are exactly the ones a browser spec cannot reach**, and a node check
+  asserts both in under a second.
 - ✅ **Gates 2026-10-16 18:52–19:12 (retiring the two shipped specs) — ALL SEVEN GREEN, counts identical to the
   2026-10-16 baseline.** Nothing shipped and nothing user-facing changed: the diff is two deleted `.md` files, one
   machine-checked JSON field per feature, three **comment-only** edits in `e2e/`, and this file. All three E2E gates
@@ -2004,13 +2042,18 @@ gates.
   there is no supported hook. Only viable via an upstream wry patch or vendoring it. Do not retry blindly.
 - **Debt 7 — `e2e-all.ps1`.** Kept on the books as a reminder (user's decision). Enforced by `.gitignore`
   and documented in `README.md`.
-- ⚠️ **`src-tauri/gen/android/Run App.bat` stays gitignored** (user's decision) — its port-5173 fix is local-only.
-  🔴 **Read it before using it near a running app (2026-10-16).** It is a hand-maintained wrapper that runs
-  **`kill-ports.bat 5173` then `npm run tauri android dev`** — i.e. it frees the Vite port *and* rebuilds,
-  reinstalls and launches. It is **not** required merely to launch an installed debug app, and **not** the thing
-  that installs a new version. But it is a plausible cause of an app that is already running misbehaving: it kills
-  the dev server the debug frontend loads from, and `adb install -r` force-stops the app. See the stuck-import
-  entry in Open items.
+- ✅ **`Run Tauri Android.bat` and `Launch App Android.bat` replace it (2026-10-16) — two TRACKED root scripts.**
+  `Run Tauri Android.bat` **builds + reinstalls + runs** (and *refuses to start* if another `tauri android dev` is
+  already running, and **asks before** freeing port 5173); `Launch App Android.bat` **only opens** the installed app
+  and fails clearly with no device attached. The old `.gitignore` entry stays, because `tauri android init`
+  regenerates the file — the rule is what stops a regenerated copy appearing as untracked.
+  💡 **Three `cmd` traps hit while writing these, all worth remembering because two are documented in this file
+  already:** (1) **an unescaped `)` inside `echo` text silently ends an `if (...)` block** — `process(es) found.`
+  produced *"found. was unexpected at this time"*; the fix is **`goto` labels**, which cannot be broken that way.
+  (2) **a quoted path inside a ``for /f`` backtick command cannot be captured** — the same trap `kill-ports.bat` was
+  fixed for; adb output now goes through a temp file. (3) ⚠️ **`for /f` without `usebackq` reads a quoted path as a
+  literal STRING**, so `skip=1` then skips the only iteration and the loop silently runs **zero** times — that is
+  why device detection found nothing on the first attempt. All three were caught only by **running** the scripts.
 - ✅ **CLOSED 2026-10-14/15 — step 8 shipped as `e2e/specs/bundle.mjs`** (Suite **I**, now **I0–I22**), wired into
   **both** entrypoints, registered in the manifest with the feature flipped `planned` → `shipped`. It found a real
   shipping bug on its first run (the missing `await` on `dirname`). `F` and `I` are both taken as id prefixes;
