@@ -896,6 +896,57 @@ export const bundle = {
           && shown?.scopedTwin === null),
         `banner=${shown?.present} keyLeft=${shown?.keyLeft} scopedTwin=${shown?.scopedTwin} text="${shown?.text}"`);
 
+      // ---- I23: the banner has to be REACHABLE, not merely present ----
+      //
+      // I21 clicks the dismiss button with a synthetic `element.click()`, which
+      // dispatches straight into the DOM. That proves the handler works and
+      // proves nothing about whether a thumb can reach the button. On Android
+      // this app's webview is edge to edge (targetSdk 36), so whatever is FIRST
+      // in the app's flex column is drawn under the status bar, and the status
+      // bar swallows touches. That is how the import banner ended up on screen
+      // with a dismiss button nobody could press - the banner was present, the
+      // click worked, and the user still could not close it.
+      //
+      // A synthetic touch would NOT catch it either: CDP delivers into the
+      // webview and never passes through the Android system UI, so
+      // `Input.dispatchTouchEvent` at the button's coordinates would succeed
+      // against the unfixed layout too. The honest automated check is therefore
+      // geometry, and it is measured against the inset rather than a hard-coded
+      // status-bar height, which differs per device.
+      //
+      // `env()` has no JS API, so it is read through a probe element. On web the
+      // inset is 0 and this assertion is near-vacuous by construction; the
+      // Android arm is the one that carries it, and the user's hand-test is
+      // still the final word on real touch.
+      const geo = await evalJs(`(() => {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+        document.body.appendChild(probe);
+        const safeTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+        probe.remove();
+        const b = document.querySelector('[data-import-notice]');
+        const btn = b && b.querySelector('button[aria-label="Dismiss import summary"]');
+        const r = btn ? btn.getBoundingClientRect() : null;
+        const br = b ? b.getBoundingClientRect() : null;
+        const vv = window.visualViewport;
+        return {
+          safeTop,
+          innerH: window.innerHeight,
+          innerW: window.innerWidth,
+          vvH: vv ? Math.round(vv.height) : null,
+          btn: r ? { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) } : null,
+          banner: br ? { top: Math.round(br.top), bottom: Math.round(br.bottom) } : null,
+        };
+      })()`);
+
+      log('BUNDLE', 'I23: the dismiss button sits inside the screen a thumb can reach, clear of the status bar',
+        ok(geo?.btn !== null
+          && geo.btn.top >= geo.safeTop - 1
+          && geo.btn.bottom <= geo.innerH + 1
+          && geo.btn.left >= -1
+          && geo.btn.right <= geo.innerW + 1),
+        `safeTop=${geo?.safeTop} btn=${JSON.stringify(geo?.btn)} banner=${JSON.stringify(geo?.banner)} layout=${geo?.innerW}x${geo?.innerH} visual=${geo?.vvH}`);
+
       // Dismissal only clears local state; the key is already gone, so the notice
       // cannot come back on a later mount. That is the "one-shot" claim, and it is
       // checked by actually reloading rather than by asserting the key is absent.

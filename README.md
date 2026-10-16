@@ -145,12 +145,12 @@ Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emu
 
    | Script | What it does |
    |---|---|
-   | **`Run Tauri Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
-   | **`Launch App Android.bat`** | **Only opens** the app that is already installed — no build, no install. Fails clearly if no emulator or device is attached. |
+   | **`Build Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
+   | **`Run Android.bat`** | **Opens the app that is already installed** — no build, no reinstall. If nothing is serving port 5173 it **starts a Vite dev server itself**, because a debug build carries no UI of its own; it prints the PID and the `taskkill` to stop it. Fails clearly if no emulator or device is attached. |
 
    Or use the **Run App** configuration in Android Studio.
 
-   > A **debug** build loads its UI from the Vite dev server, so the app only works properly while `Run Tauri Android.bat` is open. Closing that window stops the pipeline but leaves the app running against a dead server — kill and restart the pipeline to recover.
+   > A **debug** build loads its UI from the Vite dev server, so it needs *something* serving port 5173 to load at all — otherwise the app opens to a blank "Failed to request …:5173" page. Both scripts handle that for you: `Run Android.bat` starts its own if none is running, `Build Android.bat` brings one up as part of the pipeline. If you kill a server you started by hand, the app stays open but cannot reload — bring one back up.
 
    > If the dev server fails with `Port 5173 is already in use`, a previous Vite process is still running. Free it with the bundled helper from the project root: `kill-ports.bat` (add `/all` to also clear app processes and adb forwards, `/emu` to shut the emulator down).
 

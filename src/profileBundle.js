@@ -265,7 +265,7 @@ export function missingBlobsMessage(missing) {
         const name = entry.soundName || entry.displayName || entry.storedName
         const where = entry.where ? ` on ${entry.where}` : ''
         const noun = entry.kind === 'icon' ? 'icon' : 'audio file'
-        return `"${name}" (${where.replace(/^ on /, '')}) - its ${noun} is missing`
+        return `"${name}" (${where.replace(/^ on /, '')}), its ${noun} is missing`
     })
     const shown = list.slice(0, 3).join('; ')
     const more = list.length > 3 ? ` and ${list.length - 3} more` : ''
@@ -729,7 +729,7 @@ export function parseBundle(bytes) {
         }
         const actual = sha256Hex(payload)
         if (actual !== file.sha256) {
-            throw new BundleError(`${labelOf(file)} is corrupt (checksum mismatch) - expected ${short(file.sha256)}, got ${short(actual)}. Nothing was imported.`, 'corrupt-payload')
+            throw new BundleError(`${labelOf(file)} is corrupt (checksum mismatch): expected ${short(file.sha256)}, got ${short(actual)}. Nothing was imported.`, 'corrupt-payload')
         }
         files.set(file.path, payload)
     }

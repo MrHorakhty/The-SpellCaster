@@ -155,11 +155,28 @@ body {
   border: none;
 }
 
+/* `margin-top` is what centres the handle on the rail, and it is load-bearing.
+
+   With `appearance: none` Chrome does NOT centre the thumb on a styled
+   runnable-track: it lines the thumb's top edge up with the track's top edge, so
+   a handle taller than its rail hangs below it - which is exactly what every
+   slider in this app looked like before 2026-10-17 ("the handles are hanging
+   down"). The fix is the arithmetic the browser will not do:
+
+       margin-top = (rail height - handle height) / 2
+
+   which is -4px here (3px rail, 11px handle) and -1.5px for the per-card
+   slider (2px rail, 5px handle). Both handles are border-box, so the 2px border
+   on the standard one is inside the 11px and must not be subtracted again.
+
+   Firefox centres the thumb on the track by itself, so the -moz rules below
+   deliberately carry no margin. */
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   height: 11px;
   width: 11px;
+  margin-top: -4px;
   border-radius: 50%;
   background: var(--theme-accent);
   cursor: pointer;
@@ -206,6 +223,7 @@ body {
   appearance: none;
   height: 5px;
   width: 12px;
+  margin-top: -1.5px;
   border-radius: 3px;
   background: var(--theme-accent);
   cursor: pointer;
@@ -247,6 +265,10 @@ body {
 .slider-compact:focus-visible::-webkit-slider-thumb {
   height: 11px;
   width: 11px;
+  /* The rail thickens to 3px in this state, so the centring arithmetic changes
+     with it: (3 - 11) / 2. Carrying over the resting -1.5px would leave the
+     enlarged handle sitting 2.5px low, i.e. off the rail it grew onto. */
+  margin-top: -4px;
   border-radius: 50%;
   background: var(--theme-accent);
   border: 2px solid var(--theme-border);

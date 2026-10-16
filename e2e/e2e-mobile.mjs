@@ -759,10 +759,15 @@ async function main() {
   await waitForReload();
   // The mobile empty states live INSIDE the drawer, so it has to be open to see them.
   await openDrawer();
+  // Matched on the INVARIANT ("No characters/categories yet" + "Edit Mode"), not on
+  // the verb between them - see the same note in e2e-full.mjs Suite V. This used to
+  // enumerate both prose variants by hand ('open Edit Mode' or 'toggle Edit Mode'),
+  // which is the shape of assertion that breaks the first time the copy is reworded.
   const emptyTexts = await evalJs(`(() => {
     const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
     if (!d) return [];
-    const texts = [...d.querySelectorAll('p,div,span')].map(e=>e.textContent.trim()).filter(t=>t.includes('No ') && (t.includes('open Edit Mode') || t.includes('toggle Edit Mode')));
+    const texts = [...d.querySelectorAll('p,div,span')].map(e=>e.textContent.trim())
+      .filter(t=>/^No (characters|categories) yet/.test(t) && t.includes('Edit Mode'));
     return texts.slice(0,3);
   })()`);
   log('STATE','V1: empty-state text present',emptyTexts?.length>=1?'PASS':'FAIL',JSON.stringify(emptyTexts));

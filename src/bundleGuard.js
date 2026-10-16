@@ -68,7 +68,7 @@ export function boundedBundleStep(makePromise, {
         if (timeoutMs > 0) {
             timer = setTimeout(() => finish(reject, new BundleStepError(
                 `${what} did not respond within ${Math.round(timeoutMs / 1000)}s, so the app stopped waiting. ` +
-                'The device may still be finishing in the background - reopen the app to see the result.',
+                'The device may still be finishing in the background. Reopen the app to see the result.',
                 'timeout')), timeoutMs)
         }
 

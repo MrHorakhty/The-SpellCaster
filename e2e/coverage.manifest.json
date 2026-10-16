@@ -1176,7 +1176,7 @@
       "title": "Profile bundles - export / import",
       "file": "specs/bundle.mjs",
       "export": "bundle",
-      "covers": "the .spellcaster format end to end against the real store: the platform gate, Uint8Array not Array, one blob for two references and none for a bundled asset, checksums, settings travel, the app's real grant_path + writeFile + readFile path, the import round trip surviving a reload, the same import sourced from bytes read back off disk, the pre-import snapshot on replace, the corrupt / newer-format refusals leaving the target byte-identical, the per-file report with a real skipped status plus the one-shot import notice that survives the remount (I18-I21), and an orphaned reference refusing the export while naming the SOUND rather than the storedName (I22)",
+      "covers": "the .spellcaster format end to end against the real store: the platform gate, Uint8Array not Array, one blob for two references and none for a bundled asset, checksums, settings travel, the app's real grant_path + writeFile + readFile path, the import round trip surviving a reload, the same import sourced from bytes read back off disk, the pre-import snapshot on replace, the corrupt / newer-format refusals leaving the target byte-identical, the per-file report with a real skipped status plus the one-shot import notice that survives the remount (I18-I21), and an orphaned reference refusing the export while naming the SOUND rather than the storedName (I22), and the notice's dismiss button being inside the screen a thumb can reach rather than under the Android status bar (I23)",
       "platforms": [
         "web",
         "win",
@@ -1200,6 +1200,7 @@
         "I20",
         "I21",
         "I22",
+        "I23",
         "I3",
         "I4",
         "I5",

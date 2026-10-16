@@ -4422,3 +4422,880 @@ false defect report earlier in the session), adb forwards cleared, 0 node/tauri/
 - **`adb logcat` is withdrawn as a diagnostic for it** — the pipeline's stream ran throughout a *successful* round
   trip and contained no `dialog`, `plugin:fs`, `grant_path` or `content://` output at all. Hours were spent on the
   plan before that was measured.
+
+---
+
+## 2026-10-17 — PROJECT_STATE header, superseded
+
+*The claim line and the chain of dated session handovers that used to occupy lines 3 to ~157 of* PROJECT_STATE.md. *They were moved here verbatim on 2026-10-17 rather than deleted: they record why the current state is what it is, which is exactly what this file is for and exactly what a current-state file should not carry. The file itself had reached 2311 lines, 33 KB of it in the header.*
+
+> The header had been appending one dated block per release since 2026-10-06 and was reading as a session log rather than as current state. AGENTS.md says to rewrite sections in place and move superseded material *here*, so that is what happened. 💡 **A status header is the first thing a reader trusts and the last thing anyone re-reads** — the same failure recorded on 2026-10-16 with the two stale banners inPROFILE_SYNC_SPEC.md.
+
+<verbatim>
+
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-17 — working on: Settings UI polish (export/import copy, Legal & Credits position, slider handle alignment, Android notice reachability) + Open-items list. ✅ **`PROFILE_SYNC_SPEC.md` IS COMPLETE — §13 has
+ZERO open rows.** Last closed 2026-10-16: the **Android same-device round trip**, verified rather than eyeballed —
+the icon's **SHA256 is identical** on both sides (`cdb55b6e…c526`) **and that hash is the imported filename**,
+4/4 audio files match by size, bundle 262069 bytes, `ttrpg_data_version: 3`, **no `*_old` keys**, notice consumed,
+**and it did not stall**. Only the four **PLANNED** items remain (timestamps → Merge → sync), all out of v1 by
+design. ⚠️ **One recommendation WITHDRAWN: `adb logcat` cannot diagnose an import stall** — neither
+`tauri-plugin-dialog` nor `tauri-plugin-fs` logs there, so a future stall must be diagnosed **in the app** (which
+is what `bundleGuard`'s named steps and **Stop waiting** are for). 💡 **Session's other lesson: a hand-test against
+a POLLUTED dev environment produced a false defect report** — check Vite is alive and only one CLI instance runs
+before trusting any "the app hangs" report. **This session's work is committed (`458a843`) and pushed, 0 ahead / 0
+behind; the working tree is clean; no processes, ports or emulators left running; backups pruned 4 → 1.** Previous
+holder: opencode (released 2026-10-17 00:00).
+§13 has ZERO open rows.** The last one, the **Android same-device round trip**, closed 2026-10-16 and was
+**verified rather than eyeballed**: the user exported to a SAF destination and imported it back on the same
+device; the icon's **SHA256 is identical** on both sides (`cdb55b6e…c526`) **and that hash is the imported
+filename**, all 4 audio files match by size, the bundle landed at 262069 bytes, `storedName` was rewritten to
+content-addressed names per §5.2, `ttrpg_data_version: 3` is stamped on the imported profile, **no `*_old` keys**,
+the one-shot notice was consumed — and **it did not stall**. Only the four PLANNED items remain, all out of v1 by
+design. ⚠️ **A recommendation is WITHDRAWN, and it cost hours to learn: `adb logcat` cannot diagnose an import
+stall.** The pipeline's stream ran throughout and contains **no** `dialog`, `plugin:fs`, `grant_path` or
+`content://` output — neither plugin logs there, so "capture logcat next time" was wrong. A future stall has to be
+diagnosed **in the app**, which is what `bundleGuard`'s named steps and **Stop waiting** exist for. Previous
+holder: opencode (released 2026-10-16 23:45). **`PROFILE_SYNC_SPEC.md` is closed out as
+v1 COMPLETE.** ⚠️ **Its top-of-file status banner had gone stale and asserted the exact opposite of reality** — it
+still said *"step 8 has not started"*, *"stays `status: planned`"*, *"no native picker has ever been opened"* and
+*"the user has not hand-tested"*, all days after every one was false. §13's header had rotted the same way. Both
+are corrected **in place, with the old text quoted rather than deleted**, because *how* they went stale is the
+useful part: 💡 **a status banner is the first thing a reader trusts and the last thing anyone re-reads.** The four
+deferred items are now a **PLANNED** section in explicit dependency order — **timestamps (§4.3) first, because
+Merge and sync are both unsafe without it** — so they stop reading as a backlog of bugs. **Exactly one §13 row is
+open: the Android same-device round trip.** Previous holder: opencode (released 2026-10-16 23:25). **Two fixes shipped, all seven gates green with
+counts identical to baseline.** 🔴 **The import latch — the one CONFIRMED defect from the stuck-import
+investigation — is fixed**: new **`src/bundleGuard.js`** (`boundedBundleStep`) bounds every step *after* the native
+picker with a 30 s timeout plus a **"Stop waiting"** button, so a hung Tauri IPC can no longer latch the UI
+forever with no way out. ⚠️ **The native picker is deliberately NOT timed out** — the user controls how long they
+browse, so a timeout there would fire during ordinary use. Covered by **`e2e/bundleGuard.check.mjs`, 20/20**,
+including the two paths a browser spec cannot reach: a promise that **never settles**, and a **cancel after
+completion**. The timeout message deliberately does **not** claim nothing was written, because it cannot know that
+(`importBundle` commits keys last, so an abandoned wait can still land). ✅ **`Run App.bat` is retired and split
+into two tracked root scripts** — `Run Tauri Android.bat` (build+install, **refuses to start if another pipeline is
+already running**, asks before freeing port 5173) and `Launch App Android.bat` (opens the installed app only). It
+was untracked, gitignored **and** under `gen/`, which backups exclude — so it existed in one place on one machine.
+⚠️ **No hand-test** — nothing could be hand-tested without a real 30 s hang; say so rather than imply one.
+Previous holder: opencode (released 2026-10-16 22:50). **Two fixes shipped (A-D + the import timeout). All seven
+gates green, counts identical to baseline: web 229/0/0 exit 0 · Windows 248/0/1 exit 1 (G5) · Android 238/0/1
+exit 1 (G5) · eslint 0 errors / 3 · build exit 0 · check-coverage exit 0 (40 suites, 358 tests) ·
+`bundleGuard.check` 20/20 · `profileBundle.check` 46/46 · `profileStorage.check` 32/32 · check-profile-keys OK.
+⚠️ **No user hand-test and none is possible** for the timeout path: exercising it needs a real hang that has
+reproduced only twice, both times unreproducible afterwards. What a hand-test *could* usefully confirm is that the
+amber "Still working" strip appears during a normal import and clears afterwards — **one import, one look.**
+Previous holder (released 2026-10-16 22:50) left this: the Android stuck-import investigation
+CLOSED with a NEGATIVE result: the stall did not reproduce in a clean environment, and five hypotheses were tested
+and rejected — four of them mine** (cloud provider · running `tauri android dev` · `readFile` on a `content://` URI,
+which rejects in 4–53 ms · `dialog.open()` never returning, the user saw it return · the app's lazy import, which
+settles in 1012 ms cold). **Three clean-environment imports succeeded**, and the timeline is positive evidence:
+`Importing…` then the Settings modal **unmounting** = a successful remount. ✅ Verified on the imported profile:
+`ttrpg_data_version` present, **`oldKeys: []`**, and the one-shot notice **consumed exactly once**. ⚠️ **No cause is
+recorded, because nothing reproduced to explain.** 🔴 **That one confirmed defect — no timeout and no cancel
+affordance (`App.jsx:969-997`, `1085-1102`) — is now FIXED** by `src/bundleGuard.js` (see the header).
+💡 **Lesson: a hand-test against a polluted dev environment produced a false defect report.** Check Vite is alive
+and only one CLI instance runs before trusting any "the app hangs" report. Previous holder: opencode (released
+2026-10-16 22:30). **MEASURED 2026-10-16 22:30 — four hypotheses tested and rejected, and the real one found. It is the app's own
+cause is provably NOT the CLI** — the user's own second test killed their theory: it reproduced with `Run App.bat`
+merely running, and `e2e-android.ps1:150` runs that same `npm run tauri android dev` for **239 passing tests**.
+🔴 **The differentiator is a real coverage gap: the harness never reads a `content://` URI on Android**
+(`specs/bundle.mjs:283-292` uses `BaseDirectory.AppData` paths), which is exactly what `dialog.open()` returns and
+exactly where the stall happens. A green Android gate and a reproducible stall are compatible for that reason.
+⚠️ **Also recorded: this hand-test runs a debug build tied to a live dev server**, which belongs on every
+"hand-tested on the built app" claim about this feature. 💡 The user's debug-build model was correct: without
+`tauri android dev` alive the app is blank and must be restarted by killing the CLI — but `Run App.bat` is only a
+wrapper (frees port 5173, adds a `pause`), not the thing doing it. **§13:790 is CLOSED on BOTH platforms.**
+Previous holder: opencode (released 2026-10-16 22:10). **§13:790 is CLOSED by hand-test on BOTH platforms** — two profiles
+sharing an uploaded sound *with an icon*, delete one, restart, and **the survivor still plays every shared sound
+and still has the icon**. ⚠️ **`Run App.bat` is NOT a launcher** despite its name: it runs `kill-ports.bat 5173`
+then `npm run tauri android dev`, so it kills the dev server a running debug app depends on and then
+**reinstalls (force-stopping) it**. That is the user's own theory for the Android stall, and it **overtook mine** —
+both bundles were in plain `Downloads`, not a cloud provider, which removes the support my cloud theory had. The
+theory is recorded as leading, **not** as cause: an `adb install -r` force-stop should have closed the app
+visibly, and it did not, so the stall either predates the install landing or the port-kill is the mechanism.
+**Settle it with logcat, not with argument.** Previous holder: opencode (released 2026-10-16 21:55). **§13:806 is
+CLOSED by hand-test** (cancel
+verified on both platforms, both operations), and the Android **stuck import is narrowed to one call**:
+`ContentResolver.openAssetFileDescriptor` on the picked `content://` URI (`tauri-plugin-fs-2.5.2`,
+`FsPlugin.kt:63-67`) — a blocking call into an arbitrary provider with **no timeout on the path**, which is the only
+reason a hung await latches `Importing…` forever. ⚠️ **No cause is recorded on purpose — the user has a theory and
+has not shared it yet**, and the cheapest confirming question is *where the `.spellcaster` lived on the device*.
+What the missing profile on reopen already killed: silent success, a post-commit stall, a missing remount, and the
+MIME filter. Previous holder: opencode (released 2026-10-16 21:35). **The user's hand-test CORRECTION is recorded:
+the round trip was Desktop → Android, not Web → Android** — and **web has no export/import at all**, so that claim
+had propagated three times through the docs and was falsifiable only by asking. §13's desktop→Android row is now
+hand-tested; §13:790 is **hand-tested but NOT closed** pending the restart answer. ⚠️ **Android's "stuck at importing"
+is recorded WITHOUT a cause** (no timeout/cancel affordance exists; a stalled read cannot explain a successful
+import; both switch paths provably remount), and one hypothesis was **disproved by reading the plugin**: the
+`extensions: ['spellcaster']` filter is silently **inert** on Android. §13:806's 30-second picker-cancel recipe is
+written up. Previous holder: opencode (released 2026-10-16 21:05).
+**`PER_SOUND_VOLUME_SPEC.md` and
+`SOUND_PRIMING_SPEC.md` are DELETED** (residue archived first), `PROFILE_SYNC_SPEC.md` is **deliberately KEPT**,
+and all seven gates are green with counts identical to baseline. ⚠️ **Not committed, not pushed** — the two
+`git rm`s are staged, six files modified; nothing was committed because it was not asked for. 💡 The gate that
+catches this: `check-coverage.mjs:306` fails `FEATURE_SPEC_MISSING` when a feature names a spec that is not on
+disk, so a spec's `spec` field in `coverage.manifest.json` is a **dependency, not a label**. Previous holder:
+opencode (released 2026-10-16 00:20). **`PROFILE_SYNC_SPEC.md` step 7 is DONE, the
+user hand-tested it, and all seven gates are green.** Step 7 was smaller than the spec implied: the "profile-scoped
+Restore Defaults" half needed **no app code at all** (only an assertion — `activeProfileId` is fixed per mount), and
+the progress/report half shipped as a **per-file report with a real `skipped`** plus a **one-shot notice that
+outlives the remount** rather than the §9.2 progress dialog, which the user declined as not worth a second modal.
+**Then the user's hand-test found two real defects the 249 automated tests could not**: the export refusal named a
+`storedName` instead of the sound (fixed, `missingBlobsMessage`), and — via the **Android restore guard, with every
+suite green** — `ensureProfileStore()`/`createProfile()` left new profiles **unversioned**, so every user's second
+launch left a `ttrpg_characters_old` junk key (fixed, both now take `DATA_VERSION`). **+8 ids**
+(`O11`–`O14`, `I18`–`I22`), `profileBundle.check` **36 → 46**, `profileStorage.check` **26 → 32**. ⚠️ **My own
+`O11` left a profile behind that broke four unrelated suites on the *next* run** — `O14` is the fix. ⚠️ **The
+PowerShell UTF-8 trap fired a second time** and corrupted `e2e/specs/bundle.mjs` silently.
+Previous holder: opencode (released 2026-10-15 00:05). **Seven commits that session, all pushed, 0 ahead / 0 behind
+at `481e012`:** `81abd2e` (PROFILE_SYNC_SPEC step 8 — `e2e/specs/bundle.mjs` Suite I I0–I17, which found a real shipping bug: the missing `await` on `dirname` that broke every import carrying an uploaded file) · `dc41795` + `3186538` (claim release, then the agreed plan written down before any code) · `26b301d` (**the post-run store work — `Close-AppGracefully`, `e2e-snapshot.mjs compare`, empty-uploads pruning**) · `df90b51` (release) · `c7b967a` (the two `<key>_old>` guards restored to full strictness) · `481e012` (backup prune 6 → 1). **All seven gates green, and the store is now verified FROM DISK after a Windows phase rather than merely in-page.**
+Previous holder: opencode (released 2026-10-14 20:20). Step 8 shipped as `81abd2e`, all seven gates green.
+Previous holder: opencode (released 2026-10-13 17:50). Steps 3–6 DONE, all seven gates green. Backups pruned 5 → 1, keeping `…-172917` (~159 MB freed, 0 orphans proven in all 5 first). ⚠️ Found and recorded: **Bitdefender quarantined `e2e/e2e-full.ps1` out of ALL FIVE backup folders this session**, including the keeper — which had "not fired" through 15:00 the same day. No data lost (repo copy intact, committed and pushed at `48ad37de`), but the surviving backup is **226/227** and a failed prune is NOT a no-op: the AV write-lock left four partially-deleted shells.
+Previous holder: opencode (released 2026-10-13 17:25). **Steps 3–6 are DONE and all seven gates were green.**
+✅ **STEP 8 IS WRITTEN AND GREEN — and on its first honest run it found a REAL, SHIPPING BUG.** The user **hand-tested export/import on 2026-10-14** (exporting from the **desktop** app and importing into the Android build ⚠️ **corrected 2026-10-16 — this note used to say "web build", and web has no export/import at all**), so the DoD hand-test bar is **met**. New `e2e/specs/bundle.mjs` (**Suite I, I0–I17**), wired into **both** entrypoints and registered in the manifest; the feature entry is now `status: shipped`.
+🔴 **THE BUG: `src/profileBundle.js` called `dirname(fullPath)` WITHOUT `await`.** `dirname` from `@tauri-apps/api/path` is **async** (it is a Tauri command — `dirname(path: string): Promise<string>`), so `dir` was a Promise, `exists()` received an object, and the IPC rejected with *"invalid args `path` for command `exists`: invalid type: map, expected a string"*. **Consequence: EVERY import containing an uploaded audio file failed with `write-failed`, on desktop AND Android.** A bundle of shipped sounds has no blobs, so the write loop never ran — which is exactly why the hand-test passed and this shipped. Fixed with the `await`; the comment in the file names the failure string. 💡 **Lesson: the hand-test and the automated test disagreed, and the hand-test was the one that could not reach the case.**
+🔴 **THE NATIVE PICKER CANNOT BE STUBBED — measured, not assumed.** Every property on `window.__TAURI_INTERNALS__` (`invoke`, `ipc`, `postMessage`, `transformCallback`) is `writable:false, configurable:false`, and so is the object on `window`; the one writable seam (`window.chrome.webview.postMessage`) is bypassed because Tauri's injected `ipc` captures it in a closure. So **any test that clicks Export/Import opens a real `#32770` that wedges the run.** Suite I therefore drives everything *below* the picker — the app's own `grant_path` + `writeFile` + `readFile` sequence against a path the test names — and the two-line handoff of the picker's answer stays with the user's hand-test.
+⚠️ **The engine is reached by importing `/src/profileBundle.js`** — the same module URL the app imported, so it is the *live* instance — which **only the Vite dev server serves**. The web phase runs `vite preview` on a built dist, so Suite I's **web arm is I1 and I2 only**; that is correct, not a gap (§7: export/import is Tauri-only because web audio is base64 in localStorage and caps around 5 MB).
+New `src/profileBundle.js` (provenance classifier, the `.spellcaster` bundle format, atomic import in both v1
+modes, export) + `e2e/profileBundle.check.mjs` (**36/36**). New `src-tauri/src/scope.rs` (the `grant_path`
+command, shared by both entry points), `tauri-plugin-dialog` 2.7.3 registered, `dialog:allow-save`/`allow-open`
+granted, `@tauri-apps/plugin-dialog` added to `package.json` **and pinned to the crate's minor**. Minimal UI in
+Settings > Profiles.
+**The scope grant was measured on real desktop hardware — 11/11**, including the per-file narrowness that is the
+whole reason for choosing it over `fs:scope: ["**"]`.
+⚠️ **Not committed, not pushed.** ⚠️ **Three things are NOT proven**: no native picker has ever been opened, the
+cross-device half of the round trip is unrun, and **the user has not hand-tested the built app**. The
+coverage-manifest feature entry therefore stays `status: planned` — **spec step 8 (the shared E2E spec) is the next
+task**, and step 7 is partial.
+Previous holder: opencode (2026-10-13 16:04). Session, in three parts. **(1)** Closed the two standing
+warnings: the docs were **committed**, and the uploads snapshot guard was **re-verified against a live fixture** in
+`uploads/p_guardprobe/`. Reading the harness found the guard was not merely *vacuous* but **broken** — `save-uploads`
+accepts an empty folder (exit 0) while `restore-uploads` rejects one (exit 4), so a Windows phase in the emptied
+state would have left its residue behind and failed its own restore. Proven three ways, SHA256-verified, including a
+**real Windows phase (222/0/1 exit 1)**. **All seven gates run and green**; no app or harness code was touched.
+**(2)** The 114-file / 18.03 MB E2E snapshot holding the user's deleted audio was **deleted at their explicit
+instruction**, after its inventory was archived to `docs/session-history.md`. Their content is now gone from every
+location. **(3)** **Pushed** (`fd57d3a..a75ce40`, verified 0 ahead / 0 behind) and **pruned the desktop backups
+9 → 1**, freeing ~318 MB after proving 0 orphans in all 9. The survivor is `…-155810`, taken last so it matches
+HEAD.
+**Next task was `PROFILE_SYNC_SPEC.md` steps 3–6 (export/import) — DONE 2026-10-13; the next task is step 8.**
+**Previous session** (opencode, released 2026-10-13 15:15): the user's lost board was investigated and is
+**unrecoverable** (only a dangling `Dungeon`/`Dripping` entry survives, referencing a `drip.mp3` that exists
+nowhere). All of their orphaned upload files were deleted at their own instruction. Three false/stale claims in
+this file were corrected. **No app code was touched.**
+✅ **Step 1 is DONE, committed and pushed.** It shipped as `577505d`; this file was then refreshed in `8032fb7`.
+All seven gates green, the user hand-tested the switch, and the Tauri uploads defect is closed.
+⚠️ **Superseded 2026-10-13:** the two sentences below described the state *then*. Export/import (steps 3–6) **is
+now implemented** — see the header of this file and Open items. It was unbuilt when the user went looking for it
+and correctly found it absent; the complaint is resolved.
+**Next task was `PROFILE_SYNC_SPEC.md` steps 3–6 → DONE; the next task is step 8.**
+
+**Profiles step 1 of 8 — SHIPPED as `577505d`.**
+User authorised implementation 2026-10-11 21:12. Per `PROFILE_SYNC_SPEC.md` §12 step 1: storage adapter + profile
+index + first-run migration + a **proven** profile switch. The handover further down is a **record of finished
+work**, not a to-do list.
+
+✅ **App code (`src/`)**
+- **NEW `src/profileStorage.js`** — the whole storage layer, out of `App.jsx`. Profile-scoped keys
+  (`profile:<id>:<key>`), the `spellcaster_profiles` index, `ensureProfileStore()` first-run adoption, CRUD,
+  `readProfileData()` (the **migrate-never-reset** sibling), and the per-profile upload paths.
+- **NEW `migrateUploadsToProfile()`** — the one-time **file** migration that makes an existing install keep its
+  audio. See the section below; this is the piece that makes step 1 safe for a user with real sounds.
+- `src/App.jsx` — every one of the **27** `localStorage` sites and **4** `uploads/` chokepoints now goes through
+  the adapter; `readStoredData` takes a profile id; `App` split into `AppBoard` + a thin `App` whose only job is
+  the **remount key** (§0.3 decision 2); a Profiles section in the Settings modal (new / switch / rename / delete,
+  with the delete gated on a file count).
+- `src-tauri/capabilities/default.json` — **`fs:allow-rename`** added.
+- Migration is **copy → verify → remove**, so a failure mid-move leaves the user's data in the old key.
+
+✅ **E2E — `e2e/specs/profiles.mjs`, Suite F, F1–F12**, wired into BOTH entrypoints, registered in the manifest
+(features + suites), id prefix **F**. 39 suites / 331 tests.
+✅ **`node e2e/profileStorage.check.mjs` — 26/26** (fast node-level check of the storage logic; no browser).
+✅ **`node e2e/check-profile-keys.mjs` — NEW read-only guard**, and it is not decoration: it caught two real
+regressions (§ below).
+✅ **`cargo check --offline` clean** with the new capability; `gen/schemas/capabilities.json` regenerated with
+`allow-rename` present.
+
+✅ **Gates run this session:** eslint **0 errors / 3** pre-existing warnings · `vite build` exit 0 ·
+`check-coverage` exit 0 · `check-profile-keys` OK · `profileStorage.check` **26/26** ·
+`cargo check --offline` clean ·
+**web 223 PASS / 0 FAIL / 0 WARN exit 0** (`e2e-run-20261011-215918.log`) ·
+**Windows 222 PASS / 0 FAIL / 1 WARN exit 1** (`e2e-run-20261011-221506.log`) ·
+**Android 211 PASS / 1 FAIL / 1 WARN** (`e2e-android-20261011-224642.log`).
+Windows' exit 1 and Android's WARN are both the expected pre-existing **G5** skip, not regressions.
+Suite F is green on **all three platforms** (13 tests each).
+
+### ✅ Android Q11 — SOLVED. It was a paint-timing race in the TEST, not a regression
+
+**Root cause, established by measurement rather than guessed.** The old assertion sampled the DOM at a *single
+instant* (700 ms after the trigger) and reported `NO_STOP_BTN` if the button was not there **at that moment**.
+Replaced with a bounded **poll for the condition** (25 × 100 ms) that reports how long the button took. Result:
+
+```
+PASS Q11  probe:{found:true, ms:209}  stop:OK  n:3  stopped:3
+  live:[{paused:true,ready:4,ct:0} ×3]
+```
+
+The button **does** render — it just took **209 ms** to paint, and on a loaded emulator it sometimes slips past
+the 700 ms sample point. **Android is 212 PASS / 0 FAIL / 1 WARN.**
+
+**What was ruled out first, and how.** The first diagnostic distinguished "the card is gone" from "the button is
+not in the card", and dumped the live state of all three elements:
+
+```
+stop:NO_STOP_BTN  card:true  n:3
+live:[{paused:false,ended:false,error:false,ready:4,ct:0.11} ×3]
+```
+
+So the card was present and **all three elements were genuinely playing** (`readyState 4`, `paused:false`,
+`currentTime` advancing). That eliminated the obvious hypotheses — an audio load error, `cleanupAudio` unregistering
+them, or a missing card — and pointed at paint timing instead.
+
+**Why the Stop button paints late (a real, pre-existing app wart).** `isPlaying` (App.jsx:4254) derives from
+`isSoundPlaying` (3878), which reads the **`audioElementsRef` ref, not state**. The repaint is only triggered
+incidentally, by `setSoundInstances` — state that exists to disable the Stop All button and is never passed to the
+card. So the card's Stop affordance can lag until some unrelated state change renders. The `data-sound-card`
+element does contain the button, so this is not a DOM/ownership problem, and the same markup passes on web and
+Windows where the machine is fast.
+
+⚠️ **Honest accounting:** a latent timing sensitivity that this session's work made visible — the added
+`await ensureUploadsMigrated()` shifts registration slightly later, which on a loaded emulator can push the render
+past a fixed sample point. It is **not** a functional regression (stopping still works; Stop All is unaffected), and
+the underlying ref-derived render is pre-existing. The **test** was the thing that was wrong — it asserted an
+instant rather than a condition. 💡 **Lesson: an async UI assertion that samples once is a race wearing a
+trouser-suit; wait for the condition with a bounded timeout, and make the timeout visible in the failure.**
+
+### ✅ Step 1 is done — and steps 3–6 have since been added (2026-10-13)
+
+All seven gates green, the user hand-tested the switch, and both defects found during it (the Tauri uploads
+migration, and the harness that did not protect `uploads/`) are closed. ⚠️ **This paragraph said export/import
+"remains unimplemented" — that was true when written and is now false.** Steps 3–6 shipped 2026-10-13; the
+`coverage.manifest.json` feature entry still says `status: planned`, but now because **step 8 (the shared E2E spec)
+has not been written**, not because the feature is unbuilt.
+
+✅ **The three open profile design decisions are SETTLED (user, 2026-10-11): timestamps+tombstones CUT from v1,
+profile switch = FULL REMOUNT, `DATA_VERSION` mismatch MIGRATES rather than resets.** Recorded in
+`PROFILE_SYNC_SPEC.md` as **§0.3** and folded into §4.3, §7/§8, §11 risks 7/10/11, §12 and §13. **Now IMPLEMENTED** —
+all three landed in step 1. Consequence recorded: the remount makes the profile switch the thing that validates
+the storage adapter's shape, so §12 step 1 is "adapter + profile index + migration + **a proven switch**", not
+"wrap 27 call sites".
+**Docs session, 2026-10-11 20:49.** `PROFILE_SYNC_SPEC.md` re-verified against `src/App.jsx` @ **6769** lines and
+refreshed: all line numbers, plus **three substantive changes** — (a) the **`uploads/` count is 4 chokepoints, not
+10** (`getTauriStoragePath` App.jsx:2604 has exactly 3 callers), (b) **two new design risks** — the auto-save write
+race on a profile switch, and `DATA_VERSION` resetting *per profile* once namespaced, and (c) **§14 rewritten**
+because the E2E harness was refactored (no `e2e-profiles.mjs`, no `-Suite profiles`). Volume and priming folded in.
+**Still docs only — no app code written, implementation remains unauthorised.** Gates 2–4 green (eslint 0/3,
+vite build ok, check-coverage exit 0).
+**Phase 3 is CLOSED. Everything below is committed and pushed; `origin/mobile-support` is 0 ahead / 0 behind.**
+Phase 3a added the machine-checked coverage gate (`e2e/check-coverage.mjs` + `e2e/coverage.manifest.json`).
+Phase 3c was rescoped by its own audit: "delete `e2e-run.mjs` / `e2e-features.mjs`" turned out to hide **~31
+tests that existed nowhere else**, so it became port-first — `specs/platform.mjs` (**W1–W6**),
+`specs/scroll.mjs` (**R1–R10**), `specs/playback.mjs` (**Z1–Z12**), all run from *both* entrypoints — and only
+then the `git rm`, the `.gitignore` blocks and the `-Suite` `ValidateSet`. Phase 3b added the **definition of
+done** to `AGENTS.md`.
+**Then, later the same session:** a **features registry** (so a `shipped` feature cannot lack tests), a fix to a
+**blind spot in the checker itself** (its category regex excluded digits, hiding the whole `A11Y` keyboard
+suite), and **`specs/reset.mjs`** (**O1–O10**) closing the last uncovered feature.
+**Now: 39 suites, 331 tests, 11 shared specs, 23/23 shipped features covered, zero gaps.**
+**Gates: web 210/0/0 exit 0 · Windows 209/0/1 exit 1 · Android 199/0/1 exit 1 — 0 FAIL on all three**
+(both nonzero exits are the pre-existing G5 skip, by design).
+Previous (Phase 2, opencode, claimed 2026-10-10 22:10, released 23:12): **closed the mobile coverage gaps** by moving five
+more suites out of the entrypoints and into shared specs run from *both* platforms. New:
+`e2e/specs/indicators.mjs` (U1–U7), `sliders.mjs` (B1–B4 box-size), `soundintogroup.mjs` (H1–H2),
+`drag.mjs` (X1–X2), `refcount.mjs` (G1–G5). `lib/driver.mjs` gained `dragFromTo` (mouse vs
+`Input.dispatchTouchEvent`); both ctx objects gained `isTauri`, `navigateTo`, `clickModalOpener`, `upload`,
+`deleteCharacter`, `closeDrawer`/`openDrawer`. `e2e-full.mjs` 1866 → **1565** lines, `e2e-mobile.mjs` 1402 →
+**1466**. **Web 172/0/0 exit 0; Windows 171/0/1 exit 1 (G5); Android 161/0/1 exit 1 (G5) — 0 FAIL on all three.**
+⚠️ **The Android gate is no longer exit 0** — it now carries the same Tauri G5 WARN the Windows phase always
+had, so `e2e-android.ps1` returns 1. Deliberate, not a regression; see Verification gates.
+⚠️ **Not committed, not pushed.** Phase 3 (coverage manifest/checker, AGENTS.md DoD, retire `e2e-run.mjs` /
+`e2e-features.mjs`) is the remainder.
+This session (opencode, claimed 2026-10-10 20:44, released 2026-10-10 21:41): ported **priming**, **per-sound
+volume** and **move/copy** to the mobile suite across three sub-sessions. Added **Suite Q (Q1–Q14)** to
+`e2e-mobile.mjs`, driven by **`Input.dispatchTouchEvent`** (hold / hold+move cancel / edit-mode / consumption /
+clear / reload persistence / three container shapes) — the item `SOUND_PRIMING_SPEC.md` §7 had left open;
+Android → **105 PASS / 0 FAIL / 0 WARN / exit 0**. Then added **Suite P (P1–P16)** (touch, with a real
+`Input.dispatchTouchEvent` tap as P9's trusted gesture) — the gap `PER_SOUND_VOLUME_SPEC.md` §8 tracked;
+Android → **126 PASS**. Then added **Suite M (M1–M22)**, a port of desktop `e2e-full.mjs` Suite M: copy shares
+`files[]`/legacy `file`, ids differ, `Name (copy)` / `(copy 2)` scoped to the destination, move relocates the
+same object and preserves id/settings/files silently, and cross-slice moves into a group category, a group
+character and an environment — all in edit mode via the picker modal; Android now **148 PASS / 0 FAIL / 0 WARN /
+exit 0**. The user **hand-tested priming** on the built app. ⚠️ **Still not committed and not pushed.** Working
+tree: `src/App.jsx`, `e2e/e2e-full.mjs`, `e2e/e2e-mobile.mjs`, `SOUND_PRIMING_SPEC.md`,
+`PER_SOUND_VOLUME_SPEC.md`, `PROJECT_STATE.md`.
+Latest session (opencode, claimed 2026-10-10 21:40, released 2026-10-10 22:07): **refactored the E2E harness
+into a shared-library + shared-specs architecture with zero behavior change.** Phase 0 created `e2e/lib/`
+(`cdp.mjs` CDP connect/sleep/evalJs with fatal socket-exit 3, `report.mjs` createReport/exit-code 2>1>0,
+`page.mjs` SEED/PAGE_HELPERS/INSTRUMENT_AUDIO/CAPTURE_LS/restoreLs/submitModalExpr, `driver.mjs` makeDriver
+`trustedTap`/`centeredCard`/edit-mode enter-exit for mouse and touch, `spec-runner.mjs` runSpecs). Phase 1
+extracted desktop Suite P into `e2e/specs/volume.mjs` (P1–P16 + P9-setup "trusted gesture path available", 21
+`[VOL]` asserts, self-contained seed/helpers) and both `e2e-full.mjs` (~2198→1863 lines) and `e2e-mobile.mjs`
+(~1716→1400 lines) now call `runSpecs(ctx, [volume])`. **Re-verified green on all three gates 2026-10-10
+21:52–21:59: web 172/0/0 exit 0, Windows 171/0/1 (pre-existing G5) exit 1 baseline, Android 148/0/0 exit 0** —
+counts identical to pre-refactor. `npx eslint .` 0 errors/3 pre-existing warnings. ⚠️ **Not committed, not
+pushed.** Working tree adds: `e2e/lib/*`, `e2e/specs/volume.mjs`; modified: `e2e/e2e-full.mjs`,
+`e2e/e2e-mobile.mjs`. Phase 2 (mobile gap ports) and Phase 3 (coverage manifest + AGENTS.md DoD + retire
+legacy suites) remain.
+Previous session (opencode, claimed 2026-10-08 20:52, released 2026-10-09 03:46): implemented **one-shot sound
+priming** (`SOUND_PRIMING_SPEC.md`, E2E ids `P17`–`P34`). **Web E2E 172 PASS / 0 FAIL / 0 WARN; Windows 171 PASS
+/ 0 FAIL / 1 pre-existing `G5` WARN.** ⚠️ **Not committed, not pushed, not hand-tested; Android not run** (no device
+attached). Working tree changes: `src/App.jsx`, `e2e/e2e-full.mjs`, `SOUND_PRIMING_SPEC.md` (now a build record),
+`PROJECT_STATE.md`, plus the usual EOL-only `src-tauri/Cargo.toml` non-diff. Full handover in the *Sound priming*
+section under Verification gates.
+Previous holder: opencode, released 2026-10-06 23:32. **Per-sound volume is DONE and pushed as `10fe6e2`**:
+shipped, hand-tested by the user, and green on all three gates (web 147, Windows 146, Android 85). Profiles and
+hotkeys remain **unauthorised** pending the user's review.
+(Two sessions before that: opencode, docs only, released 2026-10-06 22:18. 20:02-21:00: spiked and closed the last
+open unknown in `PROFILE_SYNC_SPEC.md` §10 — the **desktop** picker-path write — which passes via a ~5-line runtime
+`fs_scope().allow_file` grant, no blanket scope; also falsified the spec's `fs:default`/`read_dir` claim, found
+the missing `dialog:allow-save` capability, and found a silent byte-corruption trap (`Array` vs `Uint8Array`).
+21:12-22:00: wrote three specs for queued features and folded in the user's answers — **priming is one-shot and
+explicitly not profile content**, **per-sound volume is a live card slider**. Pushed as `0a6f346` + `a1f0e8b`.)
+
+</verbatim>
+
+---
+
+## 2026-10-17 — PROJECT_STATE "Last updated" block, superseded
+
+*The ~100 lines that sat between the header and* `## What the project is`, *under a* `Last updated:` *heading, verbatim. They were dated session-by-session prose, and the block closed with* **"Next up: `PROFILE_SYNC_SPEC.md` steps 3–6"** *— which had shipped on 2026-10-13. A current-state file carrying a* *false "Next up" is worse than one carrying none.*
+
+<verbatim>
+
+Last updated: **2026-10-16 00:14** (opencode). **`PROFILE_SYNC_SPEC.md` step 7 is DONE, the user hand-tested it, and
+all seven gates are green.** 🔴 **Two real defects came out of the hand-test, and both were found by things other
+than the test suite.** The user hit an export refusal they could not act on — *"I assume that's why the error
+triggered"* — because the message named `sound_9wy7vtpo_e2e_silence.wav` instead of the sound; refusing is correct
+(§7: never ship a bundle with a hole in it) but an internal identifier is not something a GM can act on, so
+`collectProfileUploads` now carries `soundName` + `where` (with the **group** name, since two groups can both have
+a "Forest") and the new exported **`missingBlobsMessage()`** names the sound, where it lives, and what to do next.
+Covered by 4 node assertions plus **`I22`**, which rebuilds the exact state against the real store.
+💡 **Every existing assertion checked the refusal's `code` and never its `text` — the one thing a human reads was
+the one thing nobody asserted.** Then the **Android restore guard fired on a *correct* restore** with
+`extra: profile:p_0f23bbd8:ttrpg_characters_old, profile:p_0f23bbd8:ttrpg_data_version`: the app was recreating
+both **on boot**. 🔴 **`ensureProfileStore()` and `createProfile()` created profiles with no
+`ttrpg_data_version`** — the app remounts onto the empty profile, the auto-save effect writes the shipped defaults
+into it, nothing writes the stamp, and the **next** read takes the `storedVersion === null` branch and leaves a
+`<key>_old` backup of the app's own defaults behind. **That is the first-run path, so it hit every user on their
+second launch.** Both functions now take `dataVersion`, all four App.jsx call sites pass `DATA_VERSION`, and 6 new
+node assertions pin both the fix and the untouched pre-existing migration path. ⚠️ **The user's store was checked
+and carries no `_old` keys.**
+💡 **The guard that caught it was added on 2026-10-12 to answer a completely different question**, and it caught this
+with **all 239 suites green** — the clearest case yet for keeping a check that looks redundant.
+⚠️ **And my own test caused the failure that led there**: `O11` created a profile called "Other Board" and left it
+**active**. Windows hid it (restore verified from disk); Android's phase does not, so it survived the run and its
+first read on the **next** run wrote `ttrpg_characters_old`, failing **Q9, P13, P14a and M21** — four suites in
+another file, a day later. `O14` now switches back and deletes it, asserting `leftoverKeys=[]`. **The 2026-10-11
+lesson in a new hat: the cost was not in the suite that broke something, it was in the one that left the state
+behind.** Three of my own mistakes are recorded under Verification gates (a `ReferenceError` eslint cannot see, a
+`window.confirm` stub installed after the click instead of with it, and selecting profile rows by name when three
+profiles share one), along with the **second occurrence of the PowerShell UTF-8 trap**, which silently turned `§`
+into `Â§` in `e2e/specs/bundle.mjs` and was recovered by `git checkout` plus re-applying the edits.
+Earlier the same day: the **`PROFILE_SYNC_SPEC.md` step 8 session**, and before it the post-run store gap — **the
+cause was the kill itself.** Proven by a controlled A/B — write one marker key, close the app two ways, read the store back from a
+fresh start: `taskkill` on the tree **loses** it (27 keys), `WM_CLOSE` to the window **keeps** it (28 keys).
+**WebView2 commits `localStorage` on window close and commits NOTHING on a kill**, so every "restored and
+verified" this harness ever printed was true of the page and silent about the disk. `e2e-full.ps1` now calls
+`Close-AppGracefully` (post `WM_CLOSE`, wait for the **CDP page target** to disappear — waiting for the *process*
+is the wrong signal, it lingers for tens of seconds), and `e2e-snapshot.mjs` gained a pure-Node `compare` mode
+(exit 7 on any difference) that the runner uses to re-read the store from a fresh start after every Windows phase.
+`restore-uploads` also prunes empty `uploads/<id>/` directories, which accumulated forever because
+`fs:allow-remove-dir` does not exist. **Verified: `Restore verified FROM DISK - the store matches the pre-run
+snapshot exactly`, and `uploads/` prunes to just `p_guardprobe/`.**
+Earlier the same day: **`PROFILE_SYNC_SPEC.md` step 8 shipped** as `e2e/specs/bundle.mjs` (Suite I, I0–I17), the
+shared browser spec for the `.spellcaster` bundle, and **it found a real bug on its first run** — the missing
+`await` on `dirname` in `profileBundle.js`, which broke every import carrying an uploaded file on desktop AND
+Android. A board of shipped sounds has no blobs, so the write loop never ran, which is why the hand-test passed
+and the bug shipped. Also fixed, harness-side: `e2e-snapshot.mjs` now **proves** its `Page.reload` happened
+(marker + new exit 6); `spellcaster_import_backups` joined `KNOWN_KEYS` and the two hand-copied key lists (P31a,
+Q9) now import it instead of duplicating it; `check-profile-keys.mjs` reads `e2e/specs/` from the **directory**;
+`playback.mjs` Z1/Z2 no longer sample a single instant against a 0.576s asset. The two `<key>_old>` exclusions
+added that day were later **reverted** (`c7b967a`) once the store was verifiably clean.
+I0–I17) is the shared browser spec for the `.spellcaster` bundle, wired into both entrypoints; the
+coverage-manifest feature entry flipped `planned` → `shipped`. **It found a real bug on its first run** — the
+missing `await` on `dirname` in `profileBundle.js`, which broke every import carrying an uploaded file on both
+desktop and Android (fixed). Also fixed, all harness-side and each with a recorded reason:
+`e2e/e2e-snapshot.mjs` now **proves** its `Page.reload` happened instead of swallowing the error (new exit 6);
+`__bareKeys()` no longer counts the app's own deliberate `<key>_old` migration backups;
+`spellcaster_import_backups` joined `KNOWN_KEYS`, and the two hand-copied key lists (P31a, Q9) now import it
+instead of duplicating it; M21 excludes the same narrow `<knownKey>_old` case; `check-profile-keys.mjs` reads
+`e2e/specs/` from the **directory** rather than a hard-coded list; `playback.mjs` Z1 and Z2 no longer sample a
+single instant against a 0.576s asset.
+⚠️ **Not committed, not pushed.** ⚠️ **Android has not been re-run since the Z1 fix** — every other gate is green.
+**Prior entry: 2026-10-13** (opencode, 16:01 → 17:05) — **`PROFILE_SYNC_SPEC.md` steps 3–6 shipped**: the
+provenance classifier, the `.spellcaster` bundle format, atomic import in both v1 modes ("replace active"
+snapshot-first) and export with its destination pickers. New `src/profileBundle.js` +
+`e2e/profileBundle.check.mjs` (**36/36**); new `src-tauri/src/scope.rs` holding the `grant_path` command shared by
+both entry points; `tauri-plugin-dialog` 2.7.3 in **both** `Cargo.toml` and `package.json` (pinned to the crate's
+minor); `dialog:allow-save`/`allow-open` granted; minimal Export/Import UI in Settings > Profiles. **All seven gates
+run and green, and re-run after the last dependency change** — web 223/0/0 exit 0, Windows 222/0/1 exit 1,
+Android 212/0/1 exit 1 (both exit-1s are the G5 skip), eslint 0 errors / 3, build exit 0, check-coverage exit 0,
+cargo check clean, uploads guard re-verified by SHA256. **The scope grant was measured on real desktop hardware
+(11/11)**, which reproduced the §11 risk 8 `Array` trap live and re-confirmed that the grant is per-file.
+⚠️ **Not hand-tested by the user, and no native picker has been opened** — the coverage-manifest feature entry
+stays `planned`, and **step 8 (the shared E2E spec) is the next task**.
+**Prior entry: 2026-10-13 16:04** (session in three parts) — closed the two standing warnings, deleted the
+114-file E2E snapshot holding the user's audio at their explicit instruction (inventory archived to
+`docs/session-history.md` first), pushed, and pruned the desktop backups 9 → 1 (~318 MB freed) after proving
+0 orphans in all 9. Their content is now gone from every location.
+**Prior entry: 2026-10-13** (session: took the claim off a cut-off one; established that the user's lost board
+is **unrecoverable** — the live WebView2 LevelDB holds only one dangling `Dungeon`/`Dripping` entry and **none**
+of their storedNames — and **corrected two false claims in this file** (that the board "survived under a different
+profile id", and that no zip dependency was installed). A copy-out of their upload files was made and then
+**deleted at their instruction**, followed by **all 114 originals** (`uploads/p_09b2806c/` → 0 files). No app code
+touched.
+✅ **The 11 sounds' files are now genuinely gone from every location, as of 2026-10-13 15:56.** Three copies were
+deleted, in this order: the OneDrive copy-out, then the 114 originals (`uploads/p_09b2806c/` → 0 files), and finally
+the **114-file / 18.03 MB E2E harness snapshot** in
+`%LOCALAPPDATA%\opencode\e2e-snapshots\uploads-backup-20261012-170301\`, which had survived the first sweep
+because it was in a location nobody checked. The user authorised that last one explicitly, having been told exactly
+what it held (all **53** of their mp3 + **15** png) and having said they hold their own copies elsewhere. **Its full
+inventory was written to `docs/session-history.md` *before* deletion** — that list is the only surviving record of
+which 11 sounds existed and how many variants each (Daze 8, Warding Sign 8, Force Barrage 7, 4 each of the rest).
+💡 **Lesson kept, because it was the actual finding:** *"deleted everywhere" is a claim about a sweep, and a sweep
+has a list.* Enumerate the **sources that copy** the data — OneDrive sync, the app's `%APPDATA%`, the E2E snapshot
+dir, `%TEMP%` — not the locations you remember deleting from.
+**Prior entry: 2026-10-12, later session** — the E2E verification session that closed the Windows/Android gap,
+fixed the harness that was destroying the user's board, and made the key assertions hermetic.
+⚠️ **`fd57d3a "Bugfixes"` is no longer HEAD** (superseded 2026-10-13 by `d63095c` / `a75ce40`), but it is still the
+commit that **added `fflate@0.8.3` + `@noble/hashes@2.4.0` to `package.json`, and neither package is imported
+anywhere yet** — they are the intended inputs to `PROFILE_SYNC_SPEC.md` steps 3–4. Recorded under Repo state.
+**Next up: `PROFILE_SYNC_SPEC.md` steps 3–6.**
+
+</verbatim>
+
+
+---
+
+## 2026-10-17 00:22–01:20 (opencode) — Settings UI polish, slider handles, and the Android banner
+
+Four user-visible changes plus a rebuild of the "what is left" list. **All seven gates green.** Nothing committed
+or pushed: it was not asked for.
+
+### 1. The Android import/export banner could not be dismissed — a real defect, and the cause was not subtle
+
+The user reported the message going to an **"un-touchable" part of the screen**. It was not a mystery and it was
+not a bug in the banner's logic: on Android the webview is **edge to edge** (`build.gradle.kts` says
+`targetSdk = 36`, and Android 15+ enforces edge-to-edge for anything targeting SDK 35+), so **whatever renders
+first in the app's flex column is drawn under the status bar**, and the status bar swallows touches.
+
+Every other edge of the app already compensates for this — the mobile header's
+`max(env(safe-area-inset-top), 12px)` and both scroll containers' bottom inset, all from `9c2a4c3`
+*"Mobile UI adjustments"* — and **the import banner and the save-error banner were the only two that did not**.
+They are the two elements that render above `<header>`, so they are precisely the two that land under the strip.
+
+**The fix is on one wrapper around both banners, not on either banner.** "Which banner is first" is a runtime
+fact: an import shows the summary with no save error, and a failed write shows the alert with no summary. A
+wrapper is the only place that question is answered once. `env(safe-area-inset-top)` is 0 on desktop, so the
+change is a no-op there.
+
+**Measured on the real emulator by the new `I23`, not inferred:** `safeTop=52`, dismiss button at `top: 54`.
+On Windows the same assertion reports `safeTop=0`, `top: 2` — the pre-fix geometry, and correct there.
+
+⚠️ **What the test can and cannot prove, and why it is a geometry assertion.** `I21` clicks the dismiss button
+with a synthetic `element.click()`, which dispatches straight into the DOM and would have passed against the
+broken layout. `Input.dispatchTouchEvent` is no better: CDP delivers *into the webview* and never passes through
+the Android system UI, so a synthetic touch at the button's coordinates succeeds either way. **No automated test
+in this repo can catch this class of bug**; only geometry can get close, and only a real thumb closes it. That is
+why the hand-test bar still applies even though a test exists.
+
+💡 **The generalisable shape:** *"the first child in an edge-to-edge layout is under the system UI"* is a
+constraint on **layout order**, and it is invisible until an element is added above the thing that was already
+compensated for. The header had carried its inset since August; the banners were added in October and inherited
+nothing.
+
+### 2. The slider handles were hanging below their rails
+
+With `appearance: none`, Chrome lines the thumb's **top** edge up with the runnable track's top edge rather than
+centring it, so the 11px handle on a 3px rail sits 4px low — exactly what the user described. The fix is the
+arithmetic the browser will not do:
+
+    margin-top: (rail height - handle height) / 2
+
+which is `-4px` on `.slider` (3px rail, 11px handle), `-1.5px` on `.slider-compact` (2px rail, 5px handle), and
+`-4px` again on `.slider-compact:active/:focus`, whose rail thickens to 3px. Carrying the resting `-1.5px` into
+that state would leave the enlarged handle 2.5px low on the rail it grew onto.
+
+**Verified by A/B screenshot at 6×, before and after**, with the margins stripped and restored around a rebuild:
+before, the rail cuts across the top of the handle; after, it passes through the centre.
+
+💡 **A pseudo-element cannot be measured from JS, so the margin is invisible to every check this repo has.**
+`getComputedStyle(el, '::-webkit-slider-thumb')` silently returns the **input's own** values — it reported
+`masterThumb: "3px"` for an 11px handle — so a green suite says nothing here. A screenshot is the only
+verification that exists, which is the same conclusion the 2026-10-12 slider work reached by A/B.
+
+### 3. Copy changes, and one that failed a test
+
+Removed, at the user's request: the `Importing a file will:` label, the per-mode description
+("Leaves everything as it is. Safest option." / "Snapshots this profile first…"), and the zip/priming paragraph
+under the Import button. **Legal & Credits** moved from between the background section and Profiles to the very
+foot of Settings, below Close Settings; it carries `data-settings-legal` now, so the position is assertable.
+
+🔴 **Rewording the Export & Import sentence failed Suite V1 on web, and the test was what was wrong.** `V1`
+asserted the empty-state copy by substring, `t.includes('toggle Edit Mode')`. Changing "No characters yet — toggle
+Edit Mode to add one." to "No characters yet. Toggle Edit Mode to add one." broke it while the app behaved
+perfectly. Both entrypoints now match the **invariant** (`/^No (characters|categories) yet/` plus `Edit Mode`),
+because the app has two variants — "Toggle" for an empty section, "Open" for an empty container — and the mobile
+copy had already been forced to enumerate both by hand.
+
+💡 **The first honest sign that a prose assertion is a liability is that it fails the moment you fix the prose.**
+This is the same failure as `missingBlobsMessage` in 2026-10-15 from the opposite direction: there the *text* was
+unasserted and a real message was wrong; here the text was asserted as a literal and correct behaviour was
+reported broken.
+
+**All 11 real em dashes (U+2014) went from `App.jsx` strings**, plus the ASCII ` - ` separators that read
+identically on screen: `bundleNotice` ("Export cancelled, nothing was saved."), the `Exported "X": …` summary, the
+`N sounds skipped: …` clause, the eight empty-state sentences (a **full stop**, not a comma — a comma there is a
+splice), the sound-picker label `${groupName}, ${displayName}`, `bundleGuard`'s timeout text, and two
+`profileBundle` messages. **A colon, not a comma, in the two label→value cases**: the user's instruction was about
+removing dashes, not about forcing commas into positions where a comma makes a run-on.
+
+⚠️ **Scope was agreed out loud before any edit: app UI copy only.** `PROJECT_STATE.md` still carries ~509 em
+dashes; the markdown was deliberately left alone. The four node checks that cover `profileBundle` and
+`bundleGuard` still pass at 46/46 and 20/20, so no assertion was pinned to the old punctuation.
+
+### 4. This file's own header, which was the same failure again
+
+`PROJECT_STATE.md` opened with a **33 KB header**: the claim line followed by ~155 lines of dated session
+handover, one appended per release since 2026-10-06. Directly beneath it sat a **second** block, a
+`Last updated:` session log of ~100 lines whose closing line read **"Next up: `PROFILE_SYNC_SPEC.md` steps 3–6"**,
+which had shipped four days earlier.
+
+Both were archived **verbatim** into `docs/session-history.md` (marked as superseded, nothing deleted) and the
+header replaced with current state plus **the ordered "what is left" table the user asked for**. 2311 → 1993
+lines.
+
+💡 **This is the third time this file has been bitten by the same thing**, and the pattern is now unmistakable:
+two of the three were *status banners that had gone stale while everyone trusted them* — `PROFILE_SYNC_SPEC.md`'s
+top banner on 2026-10-16, and now this. A current-state file that accumulates history stops being current, and
+the accumulated part is always the part nobody re-reads.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `backup-project.ps1` | **VERIFY OK, 229/229** (40.1 MB), start and end |
+| `npx eslint .` | **0 errors / 3** pre-existing warnings — the accepted baseline |
+| `npx vite build` | **exit 0** |
+| `node e2e/check-coverage.mjs` | **exit 0 — 40 suites, 359 tests** (was 358; `I23` registered), 24/24 shipped features, 0 gaps |
+| node checks | `bundleGuard.check` **20/20** · `profileBundle.check` **46/46** · `profileStorage.check` **32/32** · `check-profile-keys` **OK** |
+| **web E2E** | **229 / 0 / 0, exit 0** — exact baseline |
+| **Windows E2E** | **249 / 0 / 1, exit 1** — baseline +1 (`I23`); WARN is G5. `Restore verified FROM DISK` |
+| **Android E2E** | **239 / 0 / 1, exit 1** — baseline +1 (`I23`); WARN is G5 |
+| user hand-test | 🔴 **NOT DONE, and it is owed.** The slider centring, the Legal & Credits position and the Android banner dismissal are all user-visible; the user is the only one who can confirm they feel right |
+
+**Not committed, not pushed.** Nine files modified. Backups: the new `…-20261017-002244` alongside the previous
+keeper; prune after a push, keeping the newest.
+
+---
+
+## 2026-10-17 01:11–01:40 (opencode) — `Launch App Android.bat`, the DoD gate I missed, and a coverage proposal
+
+Three things: fix the script the user reported broken, do the DoD change I had listed but skipped, and answer a
+question about coverage. **Nothing committed or pushed.**
+
+### 1. I listed a debt and then did not pay it
+
+My summary at the start of the previous session said the only real open item was promoting the four node checks
+into the DoD. **I wrote that into the new ordered open-items table and never changed `AGENTS.md`.** The user
+asked, correctly: *"did you do the DoD one you said at the start of this session?"*
+
+It is done: the DoD is now **eight** gates, with gate 5 naming all four checks, their baseline counts, and the
+one-line command, plus the rule that a new `*.check.mjs` must be added to that line in the same commit. The
+reasons it is a gate and not a suggestion are written down where the next agent will read them.
+
+💡 **Listing a debt is not paying it, and writing it into a table makes it look paid** — a struck-through row
+with a date reads as closed work, which is exactly the trap this file keeps setting for itself. The DoD entry
+now records the miss itself, because the failure mode is the lesson.
+
+### 2. `Launch App Android.bat` — the script was fine, the success message was not
+
+Run rather than reasoned: it **exits 0, and the app comes to the foreground** (`mCurrentFocus` =
+`…MainActivity`, process alive, `monkey` → `Events injected: 1`). The app then showed:
+
+```
+Failed to request http://10.2.0.2:5173/: error sending request for url (http://10.2.0.2:5173/)
+```
+
+**The installed APK is a DEBUG build, and a debug build does not contain the UI** — it fetches it from the Vite
+dev server at run time. With nothing listening, the app *cannot* load. The old script launched it anyway and
+printed *"Done. The app is starting on the emulator."*
+
+💡 **That is the same shape as the Android import stall of 2026-10-16**: a cheerful success line over an outcome
+nobody checked. "Started" was true and useless. It is also, precisely, the failure `bundleGuard` was built for —
+*"did not respond within 30 s, so the app stopped waiting"* — applied to a script that could have refused in
+advance.
+
+**The fix is to refuse rather than launch.** A pre-flight looks for a listener on `DEVPORT` (5173, from
+`tauri.conf.json`'s `devUrl`) and, with none, exits **1** explaining that a debug build needs the dev server and
+pointing at `Run Tauri Android.bat`. It still starts nothing — the "open only" contract is unchanged.
+
+**Both paths tested for real**, then **proven end to end**: with a plain `npx vite` on 5173 and no
+`tauri android dev` at all, the script opened the app and the board rendered fully on the emulator. That is a
+useful property in its own right: the script now opens the app **without rebuilding or reinstalling**, which
+`Run Tauri Android.bat` does — and an `adb install -r` force-stops the app you were using.
+
+Details worth keeping:
+- **`netstat` gets away with the `for /f` backtick form** while adb does not, because the documented cmd trap is
+  only about a **quoted path** at the start of the captured command; `netstat` resolves from `PATH`. Tested both
+  ways: no listener → refuse, listener bound → launch.
+- ⚠️ **The check is local-only.** A dev server on another machine is invisible to a local `netstat`. The message
+  says so and says how to dismiss it, rather than pretending the check is complete.
+- ⚠️ **It cannot confirm the app rendered**, only that it was launched. Only a human or a CDP probe can, which is
+  the same limit as `I23`. The script does not claim otherwise.
+- 🔴 **Caught mid-investigation:** `& $adb shell monkey … >nul` is fine in cmd and **wrong in PowerShell**, which
+  opens a real file named `nul` (*"FileStream was asked to open a device that was not a file"*). It killed the
+  relaunch after `am force-stop`, so the first "it works" screenshot showed the **home screen**. 💡 Same class as
+  the UTF-8 trap: the command reports success and the outcome is something else. `cmd /c` the `.bat`, never
+  `>nul` from PowerShell.
+- ✅ **No gate or script references either `.bat`** (verified by grep across the repo), so this cannot have
+  broken one.
+
+### 3. Loop, random play, fade — what is actually covered, and what it costs to fix the rest
+
+Measured against `e2e/specs/playback.mjs` and `src/App.jsx`, not recalled.
+
+**Loop is the best covered of the three.** Z8 asserts the boundary rewind, Z9 asserts re-entry returns to the
+*current* master level (the `_baseVolume` regression guard), Z11/Z12 assert the `#loop` checkbox hydrates and
+persists, U3/U7 assert the loop icon. **The one real gap:** App.jsx:4093 and 4109 re-run `applyFadeIn` on every
+loop re-entry, so **a looping sound with `fadeIn > 0` pulses from silence on every single loop.** That is
+user-visible and unasserted, and it may be a bug rather than a design.
+
+**Random play is the only one with zero behavioural coverage.** `randomPlay` appears in fixtures everywhere and is
+asserted exactly twice — as *surviving a move/copy* (`e2e-full.mjs:907`, `e2e-mobile.mjs:1410`). **Nothing tests
+what it does**: `App.jsx:3970` is `Math.floor(Math.random() * files.length)` when there is more than one file,
+and no test proves it ever picks anything but the first. There is also no `#randomPlay` equivalent of Z11/Z12.
+
+**Fade is half covered, and the recorded blocker for the rest was WRONG.**
+
+| Covered | Not covered |
+|---|---|
+| Z4 fade-in ramps up from near zero · Z5 settles on target | **`fadeOutAudio` (`App.jsx:664`): nothing at all** |
+| Z6/Z7 master drives the live element | **`rescaleAudioTarget`'s fade branch (`App.jsx:715-719`): nothing** — the fiddliest arithmetic in the volume path |
+| | a level change **during** a running fade |
+
+⚠️ **These gaps have been carried for a week on the grounds that *"every fixture finishes before a fade
+completes"*, and that grounds is false.** It was inherited from the per-sound-volume work — which chose
+`Longbow_4.mp3` because it registers reliably and its length is known — and **it was never checked against the
+asset list.** `ffprobe` on the bundled assets:
+
+| asset | duration |
+|---|---|
+| `Longbow_4.mp3` (what everything uses) | **0.6 s** |
+| `Tavern_Music.mp3` | **152.4 s** |
+| `Forest_Ambience.mp3` | **285.9 s** |
+
+**Both long ones are already shipped and already referenced by `src/data.json`.** No new fixture is needed for
+any of this, and the reason it looked blocked was a rationale inherited and never re-examined. 💡 **A blocker
+that was never measured is a story, and stories survive longer than they earn.**
+
+There is also a plausible real bug hiding in `fadeOut`: the fade is scheduled off `sound.duration`
+(`App.jsx:4053`), which is **user-typed metadata**. A duration longer than the real file means the fade never
+runs and the sound just stops at full volume.
+
+### The proposal (NOT built, NOT authorised)
+
+Order by cost, cheapest first:
+
+1. **`fadeOutAudio` + `rescaleAudioTarget`'s fade branch** — additions to the existing shared spec, seeded on
+   `Tavern_Music.mp3`. Assert the ramp reaches zero, that `onComplete` fires (observable as the element
+   unregistering / the play ring clearing — the part that matters, since a never-firing `onComplete` leaves a
+   stuck "playing" state), and that a master change *during* a `fadeIn: 6` is honoured proportionally rather than
+   snapping. **Zero new infrastructure.** This alone closes the two gaps the project has been carrying.
+2. **The `fadeIn`-on-every-loop behaviour** — 1–2 ids, but it needs a **decision from the user**: should a
+   looping sound with `fadeIn > 0` re-fade on each loop? Pinning it as a test also pins the current answer.
+3. **`randomPlay`'s behaviour** — 4 ids. Seed **two distinct uploaded blobs**, trigger 12 times with real
+   trusted taps, assert **≥ 2 distinct `src`** observed; then the negative control, `randomPlay: false`, 12
+   triggers, **exactly 1 distinct**. 💡 **Not flaky:** 12 draws over 2 files gives P(all identical) = 2⁻¹¹ ≈
+   **0.05%**, and the control is deterministic. It needs a two-blob seed helper that works under Tauri, which is
+   the only genuinely new code in this whole list.
+
+⚠️ **The one cost to weigh before starting:** these add wall-clock sampling to **every** gate, three platforms
+each. A 152 s asset left playing would leak into the next spec, which is precisely the cross-spec leak this
+harness has been bitten by before — so whatever is added needs an explicit teardown, not just a long fixture.
+
+### Gates this session
+
+`backup-project.ps1` **VERIFY OK 229/229** (start and end) · `npx eslint .` **0 errors / 3 warnings** ·
+`npx vite build` **exit 0** · `check-coverage.mjs` **exit 0, 40 suites, 359 tests** · **gate 5 now run for real:
+`bundleGuard` 20/20 · `profileBundle` 46/46 · `profileStorage` 32/32 · `check-profile-keys` OK.**
+
+⚠️ **The three E2E phases were NOT run, and the reason is the exemption the DoD already allows: nothing under
+`src/` or `e2e/` changed.** The diff is one root `.bat`, `AGENTS.md`, and `PROJECT_STATE.md`. Those phases drive
+the built app over CDP and cannot observe a Windows batch file. Stated rather than implied. The last real
+figures remain **229 / 249 / 239, 0 FAIL**, from the session 20 minutes earlier.
+
+---
+
+## 2026-10-17 01:45–02:05 (opencode) — `Launch App Android.bat` made self-sufficient
+
+The user's question was *"you are saying Launch App Android.bat needs Run Tauri Android.bat to function? If that's the
+case just running the later would work too no?"* — which is the second time in two sessions that a **script
+question was answered by running the script**.
+
+### The question was right, and the answer was "yes, but not for the reason I gave"
+
+Mechanically, no: `Launch` needs the app installed plus **anything** serving the UI on 5173. A bare `npx vite` is
+enough — proven by screenshot earlier this session. `Run Tauri Android.bat` is simply the thing on this machine
+that *provides* that.
+
+But the user's inference exposed a real problem with my fix: refusing when nothing was serving left the script
+**useless unless you had already started a server** — i.e. it only helped in the case where you did not need it.
+So they chose option (4): make it self-sufficient. **It now starts Vite itself when the port is dead.**
+
+| Path | Behaviour | Verified |
+|---|---|---|
+| nothing on 5173 | starts `node node_modules/vite/bin/vite.js` detached+hidden, waits for the port, launches | ✅ exit 0, **app rendered on the emulator** |
+| something already on 5173 | reuses it, starts nothing | ✅ listener count stayed at 1 |
+| `node_modules` absent | explains, points at `Run Tauri Android.bat` | ✅ exit 1 |
+| Vite starts but never binds | **bounded** ~30 s wait, then explains | ✅ exit 1 at 34 s |
+
+### Three bugs, all found by running it, none by reading it
+
+This is now the **third** batch of `cmd` traps in this repo, and the same three shapes keep recurring:
+
+1. **A `|` inside `for /f` backticks needs `^|`, and the caret then reaches PowerShell as a literal argument.**
+   `Start-Process : A positional parameter cannot be found that accepts argument '^'`. The fix is
+   `@(Start-Process …).Id` with **no pipe** — the form `Run Tauri Android.bat` already used for exactly this
+   reason. 💡 **Prefer the construct that needs no escaping over the one that needs escaping correctly.**
+2. **A missing batch label is not a stop, it is a suggestion.** A `goto haveServer` whose label I had deleted
+   printed `The system cannot find the batch label specified` and **carried straight on**, silently running the
+   wrong path. That is why the first "working" run reported an empty PID and still claimed success.
+3. **`echo.` written as `echo]`** prints **`ECHO is off.`** into the middle of user-facing text. Twice, in two
+   different files, across two sessions. 💡 **A batch script's output is the product**; grep for bare `echo` lines
+   the same way you would grep for a stray `console.log`.
+
+💡 **All three were invisible to review.** The file parses, reads correctly, and every line looks right. Only
+execution finds them — which is what `PROJECT_STATE.md` already said about the 2026-10-16 batch of the same traps,
+and it is now said twice and demonstrated twice.
+
+### Why detached+hidden, and why it says which thing happened
+
+`Start-Process -WindowStyle Hidden` gives Vite its own console, so closing the launcher window does not take the
+server down. `start /b` would have shared this console, and the app would break the moment the window closed —
+the same "closes and leaves it half-alive" class as the old `Run App.bat`.
+
+The script prints the PID and the exact `taskkill /PID … /T /F` **only when it started the server**. When it
+reused an existing one it says *"It is using the dev server that was already running on 5173"* instead. 💡 **A
+script that tells you which of two things it did is trustworthy; one that does not makes you reason.**
+
+### What it still cannot do, and does not pretend to
+
+- A dev server on **another machine** is invisible to a local `netstat`, so it would start a second one.
+- It confirms the app was **launched**, not that it **rendered**. Only a human or a CDP probe can — the same limit
+  as `I23`. It does not claim otherwise.
+- It **does not rebuild anything.** `Run Tauri Android.bat` is still the tool for a Rust/native change, and it
+  reinstalls, which force-stops the app in use.
+
+⚠️ **The launch is refused, not performed, whenever the UI cannot possibly load.** That refusal is the entire
+lesson of the original bug: *"Done. The app is starting on the emulator."* was true and useless.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 229/229** (start and end) · `npx eslint .` **0 errors / 3 warnings** ·
+`npx vite build` **exit 0** · `check-coverage.mjs` **exit 0, 40 suites, 359 tests** ·
+gate 5 **20/20 · 46/46 · 32/32 · OK**.
+
+⚠️ **web / Windows / Android E2E NOT run, same exemption and same reason as the entry before it:** the diff is one
+root `.bat`, and those phases drive the built app over CDP, which cannot observe a Windows batch file. **Named,
+not implied.** Last real figures remain **229 / 249 / 239, 0 FAIL**.
+
+### Also confirmed, because I was asked
+
+The loop / random-play / fade proposal **is** written down — `docs/session-history.md`, heading **"The proposal
+(NOT built, NOT authorised)"**, and `PROJECT_STATE.md`'s open item #2 points at it. Verified by grep rather than
+asserted, because "I noted it" is exactly the kind of claim that deserves a check.
+
+---
+
+## 2026-10-17 02:10–02:35 (opencode) — the user's rename, and the fault the rename exposed
+
+The user renamed the two Android scripts themselves and told me:
+
+- `Launch App Android.bat` → **`Run Android.bat`**
+- `Run Tauri Android.bat` → **`Build Android.bat`**
+
+Which reads far better than the originals — `Run` vs `Build` is the actual distinction, where the old pair
+differed only by the word "Tauri" and a "Launch".
+
+### 🔴 Running it straight away found a fault that had been sitting there all along
+
+`Run Android.bat` immediately failed:
+
+```
+The system cannot find the batch label specified - waitport
+```
+
+…for a label **six lines above** the jump, in a file of 8 KB.
+
+The cause was the **line endings**. `Run Android.bat` was **245 bare LF / 0 CRLF** — and it was the **only**
+LF-only `.bat` in the repo:
+
+| file | bare LF |
+|---|---|
+| `Build Android.bat` | 0 (CRLF) |
+| `kill-ports.bat` | 0 (CRLF) |
+| `Run.bat`, `Build.bat`, `Run Tauri.bat` | 0 (CRLF) |
+| **`Run Android.bat`** | **245** |
+
+My earlier edits to that file had been written with LF. **Proven by A/B on the same bytes:**
+
+| same file, endings only | result |
+|---|---|
+| **CRLF** | ✅ exit 0 — server started (pid 19068), app launched |
+| **bare LF** | 🔴 exit 1 — `cannot find batch label specified - waitport` |
+
+💡 **The rename is what exposed it, and that is the lesson.** The rename shortened every cross-reference by
+4–7 characters and therefore **shifted the file's byte offsets**; cmd's label scan stopped resolving against an
+LF file. The script had worked minutes earlier and would have gone on working until some unrelated edit happened
+to move a byte.
+
+⚠️ **cmd carries on past a failed `goto`** — it prints the error and executes the next line. So a broken label
+does not stop the script, it *silently reroutes* it. In the failing run, `Start-Process` had already launched
+Vite, so the script bailed out while leaving a live dev server behind that the next run then reused. The symptom
+was "the label is missing"; the real symptom was "the script did something else entirely".
+
+💡 **A latent encoding fault lives under a passing test and surfaces on an unrelated change.** The fix therefore
+belongs to the whole class — *check endings on every `.bat` you touch* — not to the commit that tripped it.
+
+### The rename itself: a grep found 16 stale references
+
+Renaming a file is not renaming a thing. The cross-references lived in **four** places, and both scripts' own
+**user-facing messages** named the old sibling — so `Run Android.bat` would have told the user to run a file
+that no longer exists.
+
+| file | references fixed |
+|---|---|
+| `Run Android.bat` | 6 (the other script, in comments **and** in `echo` output) |
+| `Build Android.bat` | 1 |
+| `PROJECT_STATE.md` | 14 |
+| `README.md` | 3 |
+| `.gitignore` | 2 |
+| `AGENTS.md` | 2 |
+
+⚠️ **Two things the sweep deliberately did NOT touch**, both of which look like they should have been:
+
+1. **`Run App.bat`** — the *retired* 2026-10-16 file under `src-tauri/gen/android/`, gitignored and dead. A
+   careless `Run App.bat` → `Run Android.bat` rule would have **rewritten history about a different file** and
+   un-gitignored a file that is supposed to stay ignored.
+2. **`npm run tauri android dev`** — the **npm script**, which happens to contain the string "tauri android".
+   Renaming those calls would have broken the documented commands in `README.md`, `AGENTS.md` and the harness
+   docs. It appears 7 more times in `PROJECT_STATE.md` and 5 in `README.md`.
+
+⚠️ **`docs/session-history.md` keeps the old names deliberately.** It is an append-only archive; entries
+describing what was true on 2026-10-16 said `Run Tauri Android.bat`, and that is simply what the file was
+called then. Rewriting them would falsify the record. The current-state files all use the new names, and
+`PROJECT_STATE.md` carries one explicit note saying so, because **otherwise a reader searching this file for the
+old name finds nothing and concludes the script never existed.**
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 229/229** · `npx eslint .` **0 errors / 3 warnings** · `npx vite build`
+**exit 0** · `check-coverage.mjs` **exit 0, 40 suites, 359 tests** · gate 5 **20/20 · 46/46 · 32/32 · OK**.
+
+⚠️ **web / Windows / Android E2E NOT run** — the rename touched no `src/` or `e2e/` file. Named, not implied.
+Last real figures remain **229 / 249 / 239, 0 FAIL each**, from the code that is being committed unchanged.
+
+⚠️ **The hand-test I still owe:** both scripts were **executed and observed from a shell** — `Run Android.bat`
+self-sufficient path exit 0 with the app rendering, `Build Android.bat` port guard exit 1 leaving nothing
+changed — but **double-clicking them from Explorer is a different code path**. Explorer does not set `%~dp0` the
+way a shell does, and that is exactly the sort of thing that only fails outside a terminal.

@@ -5,7 +5,7 @@ rem
 rem  NOT a plain launcher: this runs the whole debug pipeline - it
 rem  starts Vite, rebuilds the APK and REINSTALLS it, which
 rem  FORCE-STOPS the app. To only open the app that is already
-rem  installed, use "Launch App Android.bat" instead.
+rem  installed, use "Run Android.bat" instead.
 rem
 rem  Why these guards exist (2026-10-16): two copies of the old
 rem  src-tauri\gen\android\Run App.bat were left running at once,

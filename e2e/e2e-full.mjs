@@ -1036,8 +1036,16 @@ async function main() {
   })()`);
   await reloadPage();
   await waitForReload();
+  // Matched on the INVARIANT ("No characters/categories yet" + "Edit Mode"), not on
+  // the verb between them. This used to pin the literal phrase 'toggle Edit Mode',
+  // so rewording the sentence to "No characters yet. Toggle Edit Mode to add one."
+  // failed V1 on a suite that was measuring the right thing. The empty-state copy
+  // now uses a full stop and a capitalised verb, and there are two variants in the
+  // app ("Toggle" for an empty section, "Open" for an empty container); a test
+  // that only survives one of them is testing the prose, not the behaviour.
   const emptyTexts = await evalJs(`(() => {
-    const texts = [...document.querySelectorAll('p,div,span')].map(e=>e.textContent.trim()).filter(t=>t.includes('No ') && t.includes('toggle Edit Mode'));
+    const texts = [...document.querySelectorAll('p,div,span')].map(e=>e.textContent.trim())
+      .filter(t=>/^No (characters|categories) yet/.test(t) && t.includes('Edit Mode'));
     return texts.slice(0,3);
   })()`);
   log('STATE','V1: empty-state text present',emptyTexts?.length>=1?'PASS':'FAIL',JSON.stringify(emptyTexts));

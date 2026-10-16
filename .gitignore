@@ -296,7 +296,7 @@ src-tauri/icons/android/
 src-tauri/icons/ios/
 
 # The Tauri-generated Android launcher, superseded 2026-10-16 by the two
-# TRACKED root scripts "Run Tauri Android.bat" and "Launch App Android.bat".
+# TRACKED root scripts "Build Android.bat" and "Run Android.bat".
 # Kept ignored anyway, because `tauri android init` regenerates this file - the
 # ignore rule is what stops a regenerated copy from showing up as untracked.
 # Why it was retired: its comment claimed it "launches the Android app" while it

@@ -35,7 +35,7 @@ things make the old "rebuilt by `tauri android init`" row wrong (corrected 2026-
   ⚠️ **`Run App.bat` is the counter-example, retired 2026-10-16.** It was hand-maintained, lived under `gen/` (which
   backups exclude) **and** was gitignored — so it existed in exactly one place on one machine, and its comment
   claimed it "launches the app" while it actually ran the whole build+install pipeline. It is replaced by the two
-  **tracked root** scripts `Run Tauri Android.bat` and `Launch App Android.bat`. 💡 **A hand-maintained file belongs
+  **tracked root** scripts `Build Android.bat` and `Run Android.bat`. 💡 **A hand-maintained file belongs
   next to the tracked sources, never inside a generated directory** — that is the same rule as the 50 files above.
 - So a fresh `tauri android init` would **not** reproduce them. That is precisely why they are tracked.
 
@@ -220,12 +220,35 @@ the report you give the user must state each one with its actual number rather t
 | 2 | Lint | `npx eslint .` | **0 errors.** 3 warnings (`convertFileSrc`, `_`, `ev`) are the accepted baseline — do not chase them |
 | 3 | Build | `npx vite build` | completes |
 | 4 | Coverage | `node e2e/check-coverage.mjs` | `OK — manifest, code and platform wiring agree`, exit 0 |
-| 5 | Web E2E | `e2e\e2e-full.ps1 -Phase web -Suite full` | **0 FAIL** |
-| 6 | Windows E2E | `e2e\e2e-full.ps1 -Phase win -Suite full` | **0 FAIL** |
-| 7 | Android E2E | `e2e\e2e-android.ps1 -Suite mobile` | **0 FAIL** |
+| 5 | Node checks | the four `*.check.mjs` / key guard, see below | **every count matches** — each exits non-zero on failure |
+| 6 | Web E2E | `e2e\e2e-full.ps1 -Phase web -Suite full` | **0 FAIL** |
+| 7 | Windows E2E | `e2e\e2e-full.ps1 -Phase win -Suite full` | **0 FAIL** |
+| 8 | Android E2E | `e2e\e2e-android.ps1 -Suite mobile` | **0 FAIL** |
 
-Gates 4–7 are the ones that catch things gates 2–3 cannot. Budget roughly 3 min / 4 min / 5 min with warm
-`node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK.
+Gates 4–8 are the ones that catch things gates 2–3 cannot. Budget roughly 3 min / 4 min / 5 min for the E2E phases
+with warm `node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK. **Gate 5 is
+seconds**, and it is a gate precisely because of what has happened without it.
+
+### Gate 5 — the four node checks, in one line
+
+```powershell
+node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs
+```
+
+Run **all four even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
+`profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**. They need no browser, no
+emulator and no CDP, so there is no excuse for skipping them.
+
+⚠️ **Why this is a gate and not a suggestion — it has already bitten twice.** `bundleGuard.check` is what found the
+import latch (a hung Tauri IPC latching the UI forever with no way out), and it is the **only** coverage that path
+has: the browser spec drives `exportBundle`/`importBundle` *directly*, below the React wiring, so it can never
+reach the two cases that matter — a promise that **never settles**, and a **cancel after completion**. Both are
+asserted in node in under a second. A session can otherwise report "all seven gates green" without ever having run
+them, which is exactly what happened twice. **A check that can be skipped is not a gate.**
+
+💡 **When you add a `*.check.mjs`, add it to this line in the same commit.** A new check file that is not named in
+gate 5 has the same problem the retired spec files had in `coverage.manifest.json`: it looks like coverage and is
+invisible to every process that matters.
 
 ### Read the exit code correctly, or you will "fix" a non-bug
 `report.mjs` maps `fail>0 → 2`, `warn>0 → 1`, else `0`. **Suites G5 (the file-reference guard's negative

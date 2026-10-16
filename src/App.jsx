@@ -1064,7 +1064,7 @@ function AppBoard() {
                 profileIndex.profiles.find(p => p.id === activeProfileId)?.name
             ))
             if (!path) {
-                setBundleNotice('Export cancelled - nothing was saved.')
+                setBundleNotice('Export cancelled, nothing was saved.')
                 return
             }
 
@@ -1086,7 +1086,7 @@ function AppBoard() {
             }
 
             const size = (onDisk.length / 1024).toFixed(0)
-            setBundleNotice(`Exported "${manifest.profile.name}" - ${manifest.counts.sounds} sound(s), ${manifest.counts.files} uploaded file(s), ${size} KB.`)
+            setBundleNotice(`Exported "${manifest.profile.name}": ${manifest.counts.sounds} sound(s), ${manifest.counts.files} uploaded file(s), ${size} KB.`)
         } catch (err) {
             console.error('[profiles] export failed:', err)
             setBundleNotice(err instanceof BundleError
@@ -1118,7 +1118,7 @@ function AppBoard() {
         try {
             const path = await pickOpenPath()
             if (!path) {
-                setBundleNotice('Import cancelled - nothing was changed.')
+                setBundleNotice('Import cancelled, nothing was changed.')
                 return
             }
 
@@ -4996,7 +4996,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                     <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
                         {!hasAnyItems && (
                             <p className="text-center text-xs text-slate-500 px-2 py-4">
-                                {isCharSection ? 'No characters yet — toggle Edit Mode to add one.' : 'No categories yet — toggle Edit Mode to add one.'}
+                                {isCharSection ? 'No characters yet. Toggle Edit Mode to add one.' : 'No categories yet. Toggle Edit Mode to add one.'}
                             </p>
                         )}
                         {source === 'top' ? (
@@ -5112,7 +5112,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                 <div className="flex-1 min-h-0 min-w-0 bg-dark-800 rounded-xl p-4 overflow-y-auto">
                     <h2 className="text-lg font-semibold mb-4 text-slate-200 truncate">
                         {activeItem
-                            ? (activeItem.groupName ? `${activeItem.groupName} — ${activeItem.displayName}` : activeItem.displayName)
+                            ? (activeItem.groupName ? `${activeItem.groupName}, ${activeItem.displayName}` : activeItem.displayName)
                             : (isCharSection ? 'Select Character' : 'Select Category')}
                     </h2>
                     <div className={isMobile ? 'grid grid-cols-2 gap-3' : 'flex flex-wrap gap-4'}>
@@ -5140,7 +5140,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
         if (skipped > 0) parts.push(`${skipped} already present`)
         const dropped = (importNotice.dropped || []).length
         if (dropped > 0) {
-            parts.push(`${dropped} sound${dropped === 1 ? '' : 's'} skipped - this app does not have the audio for ${dropped === 1 ? 'it' : 'them'}`)
+            parts.push(`${dropped} sound${dropped === 1 ? '' : 's'} skipped: this app does not have the audio for ${dropped === 1 ? 'it' : 'them'}`)
         }
         if (importNotice.dataVersionSkew) {
             parts.push(`the bundle's data version (${importNotice.dataVersionSkew.bundle}) was migrated forward to this app's (${importNotice.dataVersionSkew.app})`)
@@ -5150,59 +5150,81 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
     return (
         <div className="app-container h-screen flex flex-col bg-dark-900 text-slate-200">
-            {/* Import summary. It renders on the mount AFTER the import's remount,
-                because that is the only place a message about it can survive - the
-                Settings modal it was triggered from is gone by then (§9.2). */}
-            {importNotice && (
-                <div role="status" data-import-notice className="shrink-0 flex items-start gap-3 px-4 py-2.5 bg-lime-800 text-white">
-                    <Upload size={18} className="shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">
-                            {importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
-                        </p>
-                        <p className="text-xs opacity-90 break-words">{importNoticeSummary}</p>
-                        {(importNotice.files || []).length > 0 && (
-                            <details className="mt-1 text-xs opacity-90">
-                                <summary className="cursor-pointer select-none">
-                                    {importNotice.files.length} file{(importNotice.files.length === 1 ? '' : 's')} in the bundle
-                                </summary>
-                                <ul className="mt-1 space-y-0.5 break-words">
-                                    {importNotice.files.map(f => (
-                                        <li key={f.path} className="flex gap-2">
-                                            <span className="shrink-0 opacity-75">{f.status}</span>
-                                            <span className="truncate">{f.label || f.path}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </details>
-                        )}
-                    </div>
-                    <button
-                        onClick={() => setImportNotice(null)}
-                        className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-lime-900 transition-colors"
-                        title="Dismiss"
-                        aria-label="Dismiss import summary"
-                    >
-                        <X size={18} />
-                    </button>
-                </div>
-            )}
-            {/* Save failure banner - a failed localStorage write is otherwise invisible */}
-            {saveError && (
-                <div role="alert" className="shrink-0 flex items-start gap-3 px-4 py-2.5 bg-red-700 text-white">
-                    <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold">Change not saved</p>
-                        <p className="text-xs opacity-90 break-words">{saveError} It will be lost when you close the app.</p>
-                    </div>
-                    <button
-                        onClick={() => setSaveError(null)}
-                        className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-red-800 transition-colors"
-                        title="Dismiss"
-                        aria-label="Dismiss save error"
-                    >
-                        <X size={18} />
-                    </button>
+            {/* The two top banners, in one wrapper.
+
+                The wrapper exists for one reason: on Android the webview is edge to
+                edge (targetSdk 36), so whatever is FIRST in this flex column is drawn
+                under the status bar. Every other edge of this app compensates for
+                that - the mobile header with max(env(safe-area-inset-top), 12px), the
+                scroll containers with the bottom inset - and these two did not. That
+                put the import banner's Dismiss button in the strip the status bar
+                swallows touches, so on Android it could not be closed at all.
+
+                The padding goes on the wrapper rather than on either banner, because
+                "which one is first" is a runtime fact: an import can show the summary
+                with no save error, and a failed write can show the alert with no
+                summary. One wrapper is the only place that question does not have to
+                be asked twice. It is a no-op on desktop, where the inset is 0. */}
+            {(importNotice || saveError) && (
+                <div
+                    className="shrink-0"
+                    style={isMobile ? { paddingTop: 'env(safe-area-inset-top)' } : undefined}
+                >
+                    {/* Import summary. It renders on the mount AFTER the import's remount,
+                        because that is the only place a message about it can survive: the
+                        Settings modal it was triggered from is gone by then (§9.2). */}
+                    {importNotice && (
+                        <div role="status" data-import-notice className="flex items-start gap-3 px-4 py-2.5 bg-lime-800 text-white">
+                            <Upload size={18} className="shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate">
+                                    {importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
+                                </p>
+                                <p className="text-xs opacity-90 break-words">{importNoticeSummary}</p>
+                                {(importNotice.files || []).length > 0 && (
+                                    <details className="mt-1 text-xs opacity-90">
+                                        <summary className="cursor-pointer select-none">
+                                            {importNotice.files.length} file{(importNotice.files.length === 1 ? '' : 's')} in the bundle
+                                        </summary>
+                                        <ul className="mt-1 space-y-0.5 break-words">
+                                            {importNotice.files.map(f => (
+                                                <li key={f.path} className="flex gap-2">
+                                                    <span className="shrink-0 opacity-75">{f.status}</span>
+                                                    <span className="truncate">{f.label || f.path}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </details>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setImportNotice(null)}
+                                className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-lime-900 transition-colors"
+                                title="Dismiss"
+                                aria-label="Dismiss import summary"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                    )}
+                    {/* Save failure banner: a failed localStorage write is otherwise invisible */}
+                    {saveError && (
+                        <div role="alert" className="flex items-start gap-3 px-4 py-2.5 bg-red-700 text-white">
+                            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold">Change not saved</p>
+                                <p className="text-xs opacity-90 break-words">{saveError} It will be lost when you close the app.</p>
+                            </div>
+                            <button
+                                onClick={() => setSaveError(null)}
+                                className="shrink-0 min-h-[44px] min-w-[44px] -my-2 flex items-center justify-center rounded-lg hover:bg-red-800 transition-colors"
+                                title="Dismiss"
+                                aria-label="Dismiss save error"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
             {/* Header */}
@@ -5889,16 +5911,16 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                                             <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-4 space-y-1.5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}>
                                                 {tabType === 'characters' && characters.length === 0 && (
-                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — open Edit Mode to add one.</p>
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet. Open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'environment' && environmentSounds.length === 0 && (
-                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet. Open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).length === 0 && (
-                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — open Edit Mode to add one.</p>
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet. Open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).length === 0 && (
-                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — open Edit Mode to add one.</p>
+                                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet. Open Edit Mode to add one.</p>
                                                 )}
                                                 {tabType === 'characters' && characters.map(char => (
                                                     <div key={char.id} className="relative">
@@ -6098,16 +6120,16 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                             <div className="space-y-2 flex-1 overflow-y-auto no-scrollbar">
                                 {tabType === 'characters' && characters.length === 0 && (
-                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet. Toggle Edit Mode to add one.</p>
                                 )}
                                 {tabType === 'environment' && environmentSounds.length === 0 && (
-                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet. Toggle Edit Mode to add one.</p>
                                 )}
                                 {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).length === 0 && (
-                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet — toggle Edit Mode to add one.</p>
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No characters yet. Toggle Edit Mode to add one.</p>
                                 )}
                                 {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).length === 0 && (
-                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet — toggle Edit Mode to add one.</p>
+                                    <p className="text-center text-xs text-slate-500 px-2 py-4">No categories yet. Toggle Edit Mode to add one.</p>
                                 )}
                                 {tabType === 'characters' && characters.map(char => (
                                     <div key={char.id} className="relative group">
@@ -7104,20 +7126,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     )}
                                 </div>
 
-                                {/* Legal Section */}
-                                <div className="pt-4 border-t border-dark-700">
-                                    <button
-                                        onClick={() => {
-                                            setShowSettingsModal(false)
-                                            setShowAboutModal(true)
-                                        }}
-                                        className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
-                                    >
-                                        <Info size={16} />
-                                        <span>Legal & Credits</span>
-                                    </button>
-                                </div>
-
                                 {/* Profiles. A section of Settings rather than a seventh modal - the Settings
                                     modal is already a bottom sheet on mobile and a centered dialog on
                                     desktop (PROFILE_SYNC_SPEC.md §9.2). Export/import arrives in a later
@@ -7210,7 +7218,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             <h4 className="text-sm font-medium mb-2">Export &amp; Import</h4>
                                             <p className="text-xs text-slate-400 mb-3">
                                                 Move a board between devices as one file. Nothing is uploaded
-                                                anywhere - the file goes wherever you save it.
+                                                anywhere, the file goes wherever you save it.
                                             </p>
 
                                             <button
@@ -7223,33 +7231,23 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <span>{bundleBusy === 'export' ? 'Exporting…' : 'Export this profile…'}</span>
                                             </button>
 
-                                            <div className="mt-3 mb-2">
-                                                <label className="text-xs text-slate-400 block mb-1">
-                                                    Importing a file will:
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => setImportMode('new')}
-                                                        data-import-mode="new"
-                                                        aria-pressed={importMode === 'new'}
-                                                        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'new' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
-                                                    >
-                                                        Create a new profile
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setImportMode('replace')}
-                                                        data-import-mode="replace"
-                                                        aria-pressed={importMode === 'replace'}
-                                                        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'replace' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
-                                                    >
-                                                        Replace this profile
-                                                    </button>
-                                                </div>
-                                                <p className="text-xs text-slate-500 mt-2">
-                                                    {importMode === 'new'
-                                                        ? 'Leaves everything as it is. Safest option.'
-                                                        : 'Snapshots this profile first so it stays recoverable.'}
-                                                </p>
+                                            <div className="flex gap-2 mt-3 mb-2">
+                                                <button
+                                                    onClick={() => setImportMode('new')}
+                                                    data-import-mode="new"
+                                                    aria-pressed={importMode === 'new'}
+                                                    className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'new' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
+                                                >
+                                                    Create a new profile
+                                                </button>
+                                                <button
+                                                    onClick={() => setImportMode('replace')}
+                                                    data-import-mode="replace"
+                                                    aria-pressed={importMode === 'replace'}
+                                                    className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'replace' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
+                                                >
+                                                    Replace this profile
+                                                </button>
                                             </div>
 
                                             <button
@@ -7284,12 +7282,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             {bundleNotice && (
                                                 <p data-bundle-notice role="status" className="text-xs text-slate-300 mt-2">{bundleNotice}</p>
                                             )}
-
-                                            <p className="text-xs text-slate-500 mt-3">
-                                                An exported profile is an ordinary, unencrypted zip containing the audio
-                                                you added - you are responsible for sharing it lawfully.
-                                                Priming is not saved or exported; it lasts for one trigger per session.
-                                            </p>
                                         </div>
                                     )}
                                 </div>
@@ -7317,6 +7309,23 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                         className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors w-full"
                                     >
                                         Close Settings
+                                    </button>
+                                </div>
+
+                                {/* Legal. Last in the list, below Close: it is the only control
+                                    here that leaves Settings for a different modal, and it is
+                                    not something anyone reaches for mid-task. */}
+                                <div className="pt-4 border-t border-dark-700">
+                                    <button
+                                        onClick={() => {
+                                            setShowSettingsModal(false)
+                                            setShowAboutModal(true)
+                                        }}
+                                        data-settings-legal
+                                        className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
+                                    >
+                                        <Info size={16} />
+                                        <span>Legal &amp; Credits</span>
                                     </button>
                                 </div>
                             </div>
