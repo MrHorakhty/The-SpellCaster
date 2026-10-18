@@ -1,4 +1,4 @@
-// Shared live-playback spec (Suite Z, Z1-Z10).
+// Shared live-playback spec (Suite Z, Z1-Z21).
 //
 // Ported from e2e-features.mjs Suite E (LIVE PLAYBACK), which was the only place
 // the app's actual audio output was asserted — and which was therefore the
@@ -22,6 +22,11 @@
 //
 // The seeded sound carries fadeIn:1 and loop:true on purpose — Z4/Z5 need a ramp
 // and Z8/Z9 need a boundary to cross, and the same element serves both.
+//
+// Z13-Z21 re-seed separately rather than adding cards to that fixture: they need
+// a LONG asset (a fade only runs if the file outlives the fade timer) and two
+// sounds carrying two files each, and perturbing a fixture twelve passing tests
+// already depend on is the wrong trade.
 
 const near = (v, target, tol) => Math.abs((v ?? -999) - target) <= tol;
 
@@ -101,6 +106,74 @@ export const playback = {
         window.Audio = function(...a) { const el = new window.__origAudio(...a); window.__audios.push(el); return el; };
         window.Audio.prototype = window.__origAudio.prototype;
       }
+      return 'ok';
+    })()`;
+
+    // ---- the fixture for Z13-Z21 -------------------------------------------
+    // duration/fadeIn/fadeOut/randomPlay are the four fields under test, so
+    // every sound carries them explicitly rather than relying on absent-means-
+    // default. No `volume` field anywhere: the master stays the only lever, so
+    // the fade arithmetic under test is not perturbed by a per-sound trim.
+    //
+    // The two randomPlay fixtures hold TWO DISTINCT BUNDLED ASSETS rather than
+    // two uploaded blobs. normalizeStoredFileEntry (App.jsx:2940) copies `name`
+    // into `storedName`, but there are no bytes under that key, so the lookup
+    // misses and playSound falls back to /assets/${displayName} - which is
+    // exactly the two-src behaviour under test, with no upload anywhere.
+    const seed2 = `(() => {
+      const probe = (id, name, files, over) => Object.assign({
+        id, name, type:'Test', icon:'', files, color:'#ff0000',
+        duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1
+      }, over);
+      const two = [
+        {name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'},
+        {name:'Longbow_3.mp3', displayName:'Longbow_3.mp3'}
+      ];
+      const long = [{name:'Tavern_Music.mp3', displayName:'Tavern_Music.mp3'}];
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
+        id:'c1', name:'Human Paladin', sounds:[
+          // A 152s asset, because a fade only runs if the file outlives the
+          // timer. duration 3 / fadeOut 2 -> fade scheduled at 1s, ramp to 0
+          // at 3s, then onComplete tears the element down.
+          probe('pb_fadeout','Fade Out Probe', long, { duration:3, fadeOut:2 }),
+          // Same long asset, no duration (so no fade-out timer at all) and a 3s
+          // fade-in to move the master slider inside of.
+          probe('pb_fadein','Fade In Probe', long, { loop:true, fadeIn:3 }),
+          // The negative case: fade scheduled at 5-2=3s, but the FILE is 0.6s.
+          probe('pb_latefade','Late Fade Probe',
+            [{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}], { duration:5, fadeOut:2 }),
+          probe('pb_random','Random Two', two, { randomPlay:true }),
+          probe('pb_seq','Sequential Two', two, { randomPlay:false }),
+          probe('pb_random_one','Random One', [two[0]], { randomPlay:true })
+        ]
+      }]));
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
+      localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
+      return 'seeded';
+    })()`;
+
+    // The Audio wrapper is re-installed after the second reload: a page load
+    // wipes window entirely, so without this the new sounds would be played
+    // into a __audios array that no longer exists.
+    const helpers2 = `(() => {
+      window.__pbMasterRange = () => {
+        const l = [...document.querySelectorAll('input[type=range][title^="Volume:"]')];
+        return l.find(s => s.offsetParent !== null) || l[0] || null;
+      };
+      window.__pbSet = (el, v) => {
+        if (!el) return 'NO_EL';
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, String(v));
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return 'OK';
+      };
+      window.__audios = [];
+      window.__origAudio = window.Audio;
+      window.Audio = function(...a) { const el = new window.__origAudio(...a); window.__audios.push(el); return el; };
+      window.Audio.prototype = window.__origAudio.prototype;
       return 'ok';
     })()`;
 
@@ -286,5 +359,261 @@ export const playback = {
     log('PLAY','Z12: edited loop and fadeIn persist to storage',
       z12?.loop===false && Number(z12?.fadeIn)===2 && z11b==='2'?'PASS':'FAIL',
       `formReadBack=${z11b} stored=${JSON.stringify({loop:z12?.loop,fadeIn:z12?.fadeIn})}`);
+
+    // =====================================================================
+    // Z13-Z21: fade-out, a level change DURING a fade, and random play.
+    //
+    // These close the last three playback gaps the project carried. The
+    // recorded blocker - "every fixture finishes before a fade completes" -
+    // was FALSE. It was inherited from the per-sound-volume work, which picked
+    // a 0.6s clip because it registers reliably, and nobody ever checked it
+    // against the asset list. ffprobe on the bundled assets:
+    //     Longbow_4.mp3      0.6s   (what every previous fixture used)
+    //     Longbow_3.mp3      0.7s
+    //     Tavern_Music.mp3 152.4s   (already bundled, already in src/data.json)
+    // A fade only RUNS if the file outlives the fade timer, and that timer is
+    // scheduled off the sound's own `duration` (App.jsx:4053) - which is
+    // user-typed metadata. So a long asset is required, not optional. It also
+    // self-cleans: fadeOutAudio's onComplete calls cleanupAudio, so a 152s file
+    // is torn down at the end of the ramp and leaks nothing into the next spec.
+    //
+    // A FRESH SEED rather than extra cards on the one above. Twelve passing
+    // tests are worth more than the convenience of a shared fixture.
+    // =====================================================================
+    await evalJs(seed2);
+    await reload();
+    await evalJs(helpers2);
+
+    const stopAll = async () => {
+      await evalJs(`(() => { const b = document.querySelector('button[title="Stop All Sounds"]'); if (!b) return 'NO_BTN'; b.click(); return 'OK'; })()`);
+      await sleep(400);
+    };
+
+    // A single real trigger, then wait for the Audio element to actually exist.
+    // playSound awaits a blob lookup before it constructs the element, so the
+    // element lands a tick after the gesture - the same Q11 race, so poll for
+    // the condition with a bounded wait rather than sampling an instant.
+    const triggerOnce = async (id) => {
+      const c = await driver.centeredCard(`[data-sound-card][data-sound-id="${id}"]`);
+      if (!c) return { ok: false, reason: 'NO_CARD' };
+      await driver.trustedTap(c.x, c.y);
+      for (let i = 0; i < 20; i++) {
+        const n = await evalJs(`(() => (window.__audios||[]).filter(x => x._soundId === '${id}').length)()`);
+        if (n > 0) return { ok: true };
+        await sleep(50);
+      }
+      return { ok: false, reason: 'NO_AUDIO' };
+    };
+
+    // ---- Z13: the fade-out ramp descends to zero -----------------------------
+    // Fixture: Tavern_Music.mp3 (152s) with duration:3, fadeOut:2. The app
+    // schedules the fade at (duration - fadeOut) = 1s and walks it over 2s, so
+    // the plateau-then-descent-then-zero shape below cannot be anything else.
+    await stopAll();
+    const t13 = await triggerOnce('pb_fadeout');
+    const z13 = await evalJs(`(async () => {
+      const els = (window.__audios||[]).filter(x => x._soundId === 'pb_fadeout');
+      const a = els[els.length - 1];
+      if (!a) return 'NO_EL';
+      const base = a._baseVolume;
+      const samples = [];
+      for (let i = 0; i < 45; i++) { samples.push(+a.volume.toFixed(4)); await new Promise(r => setTimeout(r, 100)); }
+      return { base, samples, fadeOutInterval: !!a.fadeOutInterval };
+    })()`);
+    // A ramp, not a snap: count the longest run of consecutive strict decreases.
+    const s13 = Array.isArray(z13?.samples) ? z13.samples : [];
+    let longestDrop = 0, run = 0;
+    for (let i = 1; i < s13.length; i++) {
+      if (s13[i] < s13[i-1] - 1e-6) { run++; if (run > longestDrop) longestDrop = run; }
+      else run = 0;
+    }
+    log('PLAY','Z13: fade-out ramps DOWN from the start level to zero',
+      t13.ok && longestDrop >= 5 && s13[s13.length-1] === 0 ?'PASS':'FAIL',
+      `base=${z13?.base} longestStrictDropRun=${longestDrop} first=${s13[0]} last=${s13[s13.length-1]} samples=${JSON.stringify(s13)}`);
+
+    // ---- Z14: onComplete fires - the element unregisters, the ring clears ---
+    // This is the half that matters. fadeOutAudio's onComplete is what pauses
+    // and calls cleanupAudio (App.jsx:4056-4058); an onComplete that never fired
+    // would leave the card showing "playing" forever with a dead element behind
+    // it. The ring is driven by isSoundPlaying -> audioElementsRef, so it is the
+    // app's own answer to "is this sound still registered".
+    const z14 = await evalJs(`(() => {
+      const c = document.querySelector('[data-sound-card][data-sound-id="pb_fadeout"]');
+      const b = document.querySelector('button[title="Stop All Sounds"]');
+      return { ring: c ? c.className.includes('ring') : null, stopDisabled: b ? b.disabled : null };
+    })()`);
+    log('PLAY','Z14: fade-out onComplete fires - element unregistered, ring cleared',
+      z14?.ring===false && z14?.stopDisabled===true?'PASS':'FAIL',JSON.stringify(z14));
+
+    // ---- Z15: the fade is scheduled off user-typed `duration`, not the file ---
+    // Fixture: Longbow_4.mp3 (0.6s) with duration:5, fadeOut:2. The app
+    // schedules the fade at 3s - long after the file ends at 0.6s - and the
+    // non-looping `ended` handler wins the race, cleaning up and clearing the
+    // timer (cleanupAudio clears audioEl.timer, App.jsx:4029).
+    //
+    // This is not asserting a fix, it is PINNING the documented behaviour, and
+    // it is the negative half of Z13/Z14: without it, those two could pass on a
+    // ramp that had nothing to do with fadeOutAudio. `duration` is a text field
+    // and the app has no way to know the real file length, so a duration longer
+    // than the audio means the fade silently never happens.
+    await stopAll();
+    const t15 = await triggerOnce('pb_latefade');
+    await sleep(4200);
+    const z15 = await evalJs(`(() => {
+      const els = (window.__audios||[]).filter(x => x._soundId === 'pb_latefade');
+      const a = els[els.length - 1];
+      const c = document.querySelector('[data-sound-card][data-sound-id="pb_latefade"]');
+      return { ct: a ? +a.currentTime.toFixed(3) : null, paused: a ? a.paused : null,
+               fadeOutInterval: a ? !!a.fadeOutInterval : null,
+               fadeOutSeconds: a ? a.fadeOutSeconds : null,
+               ring: c ? c.className.includes('ring') : null };
+    })()`);
+    log('PLAY','Z15: a fade-out scheduled past the real file length never runs (duration is user-typed metadata)',
+      t15.ok && z15?.fadeOutInterval===false && z15?.ring===false ?'PASS':'FAIL',
+      `file=0.6s duration=5 fadeOut=2 -> ${JSON.stringify(z15)}`);
+
+    // ---- Z16: a level change DURING a fade preserves the ramp position ------
+    // This is rescaleAudioTarget's fade branch (App.jsx:715-719), the fiddliest
+    // arithmetic in the volume path and previously covered by nothing. With a
+    // fadeIn running, it reads the position within the ramp as
+    // volume/_fadeTargetVolume, retargets, and re-applies at the SAME position -
+    // so a slider move mid-fade is smooth. The else branch would snap the level
+    // flat to the new target, which is the bug this guards.
+    //
+    // Fixture: Tavern_Music.mp3 (152s, so it cannot reach its own end during the
+    // test) with fadeIn:3, loop:true, duration:0 (no fade-out timer). Master is
+    // pinned to 1 first so oldTarget is exactly 1 and the arithmetic is readable.
+    await stopAll();
+    await evalJs(`(() => { const m = window.__pbMasterRange(); return m ? window.__pbSet(m, 1) : 'NO_RANGE'; })()`);
+    await sleep(300);
+    const t16 = await triggerOnce('pb_fadein');
+    const z16 = await evalJs(`(async () => {
+      const els = (window.__audios||[]).filter(x => x._soundId === 'pb_fadein');
+      const a = els[els.length - 1];
+      if (!a) return 'NO_EL';
+      if (!a.fadeInInterval) return 'NO_FADE_IN_RUNNING';
+      // Wait for a mid-ramp sample: step 2 of 20 is ~10% of the way up.
+      for (let i = 0; i < 40 && !(a.volume > 0.02 && a.volume < 0.6); i++) {
+        await new Promise(r => setTimeout(r, 60));
+      }
+      const before = a.volume;
+      const oldTarget = a._fadeTargetVolume;
+      window.__pbSet(window.__pbMasterRange(), 0.2);
+      await new Promise(r => setTimeout(r, 60));
+      const after = a.volume;
+      return { before:+before.toFixed(4), after:+after.toFixed(4),
+               oldTarget:+(oldTarget ?? -1).toFixed(4),
+               newTarget:a._fadeTargetVolume === undefined ? null : +a._fadeTargetVolume.toFixed(4),
+               stillFading: !!a.fadeInInterval, ct:+a.currentTime.toFixed(2) };
+    })()`);
+    // The signature of the fade branch: after ≈ before * 0.2, i.e. the ramp
+    // POSITION carried over, which is far below the new target of 0.2. A snap
+    // would read 0.2. tol 0.03 covers one 300ms ramp step (3.3% of target)
+    // landing between the two reads, which the fixed sample interval cannot rule out.
+    log('PLAY','Z16: a master change mid-fade preserves the ramp position instead of snapping',
+      t16.ok && z16 && z16 !== 'NO_EL' && z16 !== 'NO_FADE_IN_RUNNING'
+        && near(z16.after, z16.before * 0.2, 0.03) && z16.newTarget === 0.2 && z16.stillFading
+        ?'PASS':'FAIL',
+      `before=${z16?.before} after=${z16?.after} expected~${z16 ? (z16.before*0.2).toFixed(4) : '?'} oldTarget=${z16?.oldTarget} newTarget=${z16?.newTarget} stillFading=${z16?.stillFading}`);
+
+    // ---- Z17: the ramp then completes at the NEW target, not the old one -----
+    // The other half of the same branch: _fadeTargetVolume was retargeted, so
+    // applyFadeIn's per-step `audio._fadeTargetVolume ?? targetVolume` reads the
+    // new value and the fade lands on the new level. A stale _fadeTargetVolume
+    // - the exact bug the loop re-entry guard (Z9) exists for on the other path -
+    // would bring this sound back up to 1.
+    const z17 = await evalJs(`(async () => {
+      const els = (window.__audios||[]).filter(x => x._soundId === 'pb_fadein');
+      const a = els[els.length - 1];
+      if (!a) return 'NO_EL';
+      for (let i = 0; i < 90 && a.fadeInInterval; i++) { await new Promise(r => setTimeout(r, 100)); }
+      return { vol:+a.volume.toFixed(4), base:a._baseVolume === undefined ? null : +a._baseVolume.toFixed(4),
+               cleared:a._fadeTargetVolume === undefined, stillFading: !!a.fadeInInterval };
+    })()`);
+    log('PLAY','Z17: the ramp completes at the NEW target level, not the one it started at',
+      z17 && z17 !== 'NO_EL' && z17.stillFading === false && z17.cleared && near(z17.vol, 0.2, 0.02) ?'PASS':'FAIL',
+      JSON.stringify(z17));
+    await stopAll();
+
+    // ---- Z18-Z21: randomPlay -----------------------------------------------
+    // Two DISTINCT bundled assets, NOT two uploaded blobs. The earlier proposal
+    // assumed this needed a two-blob seed helper that works under Tauri and
+    // called that "the only genuinely new code in this whole list" - it does not.
+    // An entry with no storedName resolves through the `/assets/${displayName}`
+    // fallback (App.jsx:3991-3994), so two bundled files give two different
+    // srcs with no upload, no CDP file dialog and no per-platform helper. It is
+    // also the branch that matters: the random pick happens on the normalised
+    // file LIST, before any blob lookup.
+    await stopAll();
+
+    // Tap `times` times, recording the src the app asked for on each trigger.
+    // Coordinates are re-read before EVERY tap - driver.centeredCard costs a
+    // scroll plus 250ms, and a cached coordinate would turn a missed tap into a
+    // silent wrong answer rather than a failure.
+    const tapAndCollect = async (id, times) => {
+      const sel = `[data-sound-card][data-sound-id="${id}"]`;
+      const seen = [];
+      for (let i = 0; i < times; i++) {
+        const c = await driver.centeredCard(sel);
+        if (!c) return { seen, taps: i, reason: 'NO_CARD' };
+        await driver.trustedTap(c.x, c.y);
+        for (let k = 0; k < 15; k++) {
+          const srcs = await evalJs(`(() => (window.__audios||[]).filter(x => x._soundId === '${id}').map(x => (x.src||'').split('/').pop().split('?')[0]))()`);
+          if (Array.isArray(srcs) && srcs.length > seen.length) { seen.push(...srcs.slice(seen.length)); break; }
+          await sleep(50);
+        }
+      }
+      return { seen, taps: seen.length };
+    };
+
+    const TRIGGERS = 12;
+    // Z18: 12 draws over 2 files. P(every draw identical) = 2^-11 = 0.05%, so
+    // this is not a flaky assertion - it is a deliberate near-certain one.
+    const r18 = await tapAndCollect('pb_random', TRIGGERS);
+    const distinct18 = [...new Set(r18.seen)];
+    log('PLAY','Z18: randomPlay with two files picks more than one of them',
+      r18.seen.length >= 2 && distinct18.length >= 2 ?'PASS':'FAIL',
+      `triggers=${r18.seen.length} distinct=${JSON.stringify(distinct18)} seen=${JSON.stringify(r18.seen)}`);
+
+    // Z19: the negative control, and the half that makes Z18 mean anything. The
+    // SAME 12 triggers against randomPlay:false must land on exactly one file -
+    // deterministic, so this can never flake.
+    await stopAll();
+    const r19 = await tapAndCollect('pb_seq', TRIGGERS);
+    const distinct19 = [...new Set(r19.seen)];
+    log('PLAY','Z19: randomPlay OFF plays the first file every time (negative control)',
+      r19.seen.length >= 2 && distinct19.length === 1 ?'PASS':'FAIL',
+      `triggers=${r19.seen.length} distinct=${JSON.stringify(distinct19)}`);
+
+    // Z20: randomPlay ON but only ONE file. The `normalizedFiles.length > 1`
+    // guard (App.jsx:3970) must send this down the deterministic path - a sound
+    // cannot randomly pick a file it does not have.
+    await stopAll();
+    const r20 = await tapAndCollect('pb_random_one', 3);
+    const distinct20 = [...new Set(r20.seen)];
+    log('PLAY','Z20: randomPlay with a single file still plays that file',
+      r20.seen.length >= 2 && distinct20.length === 1 && distinct20[0] === 'Longbow_4.mp3' ?'PASS':'FAIL',
+      `triggers=${r20.seen.length} distinct=${JSON.stringify(distinct20)}`);
+
+    // Z21: every draw resolved to one of the sound's OWN files, and the app
+    // built one element per trigger and registered none of them twice. This is
+    // the leak check the long-asset proposal asked for, made assertable: a
+    // random pick that produced a dangling src, or a trigger that silently
+    // built no element, would both show up here.
+    const z21 = await evalJs(`(() => {
+      const byId = id => (window.__audios||[]).filter(x => x._soundId === id);
+      const rand = byId('pb_random');
+      const seq = byId('pb_seq');
+      const one = byId('pb_random_one');
+      const ok = els => els.every(e => ['Longbow_4.mp3','Longbow_3.mp3'].includes((e.src||'').split('/').pop().split('?')[0]));
+      return { randomTotal: rand.length, seqTotal: seq.length, oneTotal: one.length,
+               randomAllResolvable: ok(rand), seqAllResolvable: ok(seq),
+               randDistinctSrcs: new Set(rand.map(e => e.src)).size };
+    })()`);
+    log('PLAY','Z21: every random draw resolved to one of the sound\'s own files, one element per trigger',
+      z21?.randomTotal === TRIGGERS && z21?.seqTotal === TRIGGERS && z21?.oneTotal === 3
+        && z21?.randomAllResolvable === true && z21?.seqAllResolvable === true ?'PASS':'FAIL',
+      JSON.stringify(z21));
+    await stopAll();
   }
 };

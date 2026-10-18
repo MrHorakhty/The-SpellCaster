@@ -1,6 +1,31 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: opencode (released 2026-10-17 02:35). ✅ **`PROFILE_SYNC_SPEC.md` IS COMPLETE — §13 has
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-18 13:45). ✅ **`FADE_SPEC.md` is WRITTEN and registered
+`status: planned`; design revised 2026-10-18 and now COMPLETE — every open question answered.** Per-file fades,
+**Play Until** (renamed from `stopAfter`), **`audibleEnd = min(fileLength, playUntil)`**, one red state
+(`fadeIn + fadeOut >= audibleEnd`), no ceiling, whole-file timeline, a11y built properly, all three values bundled.
+🔴 **Looping is segment looping + seam fades built TOGETHER**: `playUntil: N` loops `0…N` with `loop: true`, stops
+at N without. **`firstLoopPlay` is removed, so `Z9` must be rewritten deliberately in the same commit** — it will
+otherwise keep passing while asserting the old contract. **No app code written; implementation NOT authorised.**
+The visual mock is at `%TEMP%\opencode\fade-mock.html` — deliberately **outside the repo**, so it costs no gate,
+commit or backup.
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-18 12:50). ✅ **`FADE_SPEC.md` is WRITTEN and registered
+`status: planned`.** Design settled with the user on 2026-10-18: **fades and Play Until become per-file**, capped by
+the **real measured** audio length, a **per-row timeline that doubles as the Play Until scrubber**, **no slider
+ceiling**, a number box beside every slider, and exactly **one** red state —
+`fadeIn + fadeOut >= min(fileLength, playUntil)`. ⚠️ **A persisted-shape change**, and it fixes the four silent
+no-ops `Z15` pins. **No app code written; implementation NOT authorised.** The visual mock is at
+`%TEMP%\opencode\fade-mock.html` — deliberately **outside the repo**, so it costs no gate, commit or backup.
+🔓 UNCLAIMED — last holder: opencode (released 2026-10-18 11:40). ✅ **The playback coverage gaps are CLOSED — `Z13`–`Z21`,
+9 ids, green on all three platforms (+9 each: web 238/0/0 exit 0 · Windows 258/0/1 exit 1 · Android 248/0/1 exit 1).**
+Two inherited blockers turned out to be wrong stories, and both *cheapened* the work: "every fixture finishes before
+a fade completes" was never measured (`Tavern_Music.mp3` is **152.4 s** and already shipped), and "this needs a
+two-blob Tauri seed helper" was false (**two bundled assets give two `src`s with no upload at all**). ⚠️ **`Z15`
+pins a real limitation and needs the user's decision, not a fix** — a fade-out due past the real file length
+silently never happens, because the fade is scheduled off user-typed `duration`. ⚠️ **A claim was WITHDRAWN**: the
+loop re-entry fade does **not** re-run on every loop — a `firstLoopPlay` flag (`App.jsx:4077`) already prevents
+that, so no test was written for it. **The previous holder's header is preserved below, because its claims still stand.**
+✅ **`PROFILE_SYNC_SPEC.md` IS COMPLETE — §13 has
 ZERO open rows.** The last row closed 2026-10-16: the **Android same-device round trip**, verified rather than
 eyeballed — the icon's **SHA256 is identical** on both
 sides (`cdb55b6e…c526`) **and that hash is the imported filename**, 4/4 audio files match by size, bundle
@@ -13,6 +38,12 @@ has to be diagnosed **in the app**, which is what `bundleGuard`'s named steps an
 and **`Run Android.bat`**, not `Run Tauri Android.bat` / `Launch App Android.bat`. See Open items / Verification
 gates.
 
+🆕 **`FADE_SPEC.md` was written 2026-10-18 and is the next feature to build.** The design was settled in
+discussion with the user, not proposed cold: **fades and Play Until become per-file**, capped by the **real
+measured** audio length, with a per-row **timeline that doubles as the Play Until scrubber** and exactly **one** red
+state (`fadeIn + fadeOut >= min(fileLength, playUntil)`). It replaces four silent no-ops that `Z15` now pins. ⚠️ **A
+persisted-shape change**, not just UI. **No app code has been written and implementation is NOT authorised.**
+
 ## 🔜 What is left, in recommended order
 
 **This list is the single source of truth for "what's left".** Every row is unfinished work or a known gap, not
@@ -20,19 +51,21 @@ a bug report. Ordered by **unblocking value**, not by size:
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | ~~**Promote the four node checks into the DoD gate table**~~ ✅ **DONE 2026-10-17** — `AGENTS.md` is now **eight** gates, with gate 5 named and its command given as one line | It had **already bitten twice**, and it **had**: this session listed it as open item #1 and then did not do it, which the user caught. Gate 5 is seconds, and it now carries the four counts. 💡 **Listing a debt is not paying it.** |
-| 2 | 🔴 **Add `*.bat text eol=crlf` to a `.gitattributes`** — ⚠️ **NOT DONE, because it changes line endings on every machine and was not authorised.** Measured: `core.autocrlf = true` and `git ls-files --eol` reports **`i/lf w/crlf`** for every `.bat`, i.e. **the committed blob is LF and CRLF only happens at checkout on this machine.** So the bare-LF `goto` fault is prevented here purely by a local git setting, and a clone with `core.autocrlf=false` or `input` gets the broken script. The repo has **no `.gitattributes` at all**. One line, but a repo-wide effect — hence the user's call, not mine |
-| 3 | **The playback gaps: `randomPlay`'s behaviour, `fadeOutAudio`, `rescaleAudioTarget`'s fade branch, and mid-fade level changes** — **re-costed 2026-10-17, and it is much cheaper than this row used to claim.** ⚠️ **The stated blocker was WRONG.** These gaps were carried on the grounds that *"every fixture finishes before a fade completes"*, which was inherited from the per-sound-volume work and **never checked against the asset list**. Measured: the volume spec picked `Longbow_4.mp3` because it registers reliably and its length is known — but **`Tavern_Music.mp3` is 152.4 s and `Forest_Ambience.mp3` is 285.9 s** (ffprobe), both already bundled and already referenced by `src/data.json`. **No new fixture is needed for any of it.** `fadeOutAudio` (`App.jsx:664`) has **zero** coverage; `rescaleAudioTarget`'s fade branch (`App.jsx:715-719`) has **zero**; `randomPlay`'s behaviour (`App.jsx:3970`) has **zero** — the flag is only ever asserted as *surviving a move/copy*. A proposal is in `docs/session-history.md` (2026-10-17, second session); **not built, not authorised** |
-| 4 | **`HOTKEYS_SPEC.md`** — still `status: planned`, **NOT authorised for implementation** | Deliberately last. It depends on `PROFILE_SYNC_SPEC.md` §8, inherits the reference story rather than solving it twice, and a hotkey **must** fire the primed set through `playWithPrimes`. |
-| 5 | **`PROFILE_SYNC_SPEC.md` §13 deferred, in its own dependency order: timestamps (§4.3) → Merge import (§8) → sync behind `ProfileTransport` (§2)** | Out of v1 by design. ⚠️ **Timestamps come first because Merge and sync are both unsafe without them.** Do not reorder this row. |
+| 1 | 🆕 **`FADE_SPEC.md` — build it.** Design settled 2026-10-18, spec written, registered `status: planned`. **NOT authorised for implementation yet** | It is the **only** row that fixes a **real defect**: `fadeOut` is scheduled off user-typed `duration` (`App.jsx:4053`), which produces **four** distinct silent no-ops that `Z15` now pins. And its cost was **measured, not guessed** — the hard part (reading the real file length) is already paid for by the `<audio>` element the modal renders at `App.jsx:6464` |
+| 2 | ~~**Promote the four node checks into the DoD gate table**~~ ✅ **DONE 2026-10-17** — `AGENTS.md` is now **eight** gates, with gate 5 named and its command given as one line | It had **already bitten twice**, and it **had**: this session listed it as open item #1 and then did not do it, which the user caught. Gate 5 is seconds, and it now carries the four counts. 💡 **Listing a debt is not paying it.** |
+| 3 | 🔴 **Add `*.bat text eol=crlf` to a `.gitattributes`** — ⚠️ **NOT DONE, because it changes line endings on every machine and was not authorised.** Measured: `core.autocrlf = true` and `git ls-files --eol` reports **`i/lf w/crlf`** for every `.bat`, i.e. **the committed blob is LF and CRLF only happens at checkout on this machine.** So the bare-LF `goto` fault is prevented here purely by a local git setting, and a clone with `core.autocrlf=false` or `input` gets the broken script. The repo has **no `.gitattributes` at all**. One line, but a repo-wide effect — hence the user's call, not mine |
+| 4 | ✅ **The playback gaps are CLOSED — 9 ids, `Z13`–`Z21`, built and green on all three platforms 2026-10-18** | `fadeOutAudio`'s ramp **and** its `onComplete` teardown (`Z13`/`Z14`), the fade scheduled off user-typed `duration` (`Z15`), `rescaleAudioTarget`'s fade branch + a level change mid-fade (`Z16`/`Z17`), and `randomPlay`'s behaviour with a negative control (`Z18`–`Z21`). Two inherited premises turned out **wrong**: the "every fixture finishes before a fade completes" blocker was never measured, and the claimed need for a two-blob Tauri seed helper was false — **two bundled assets give two `src`s with no upload at all**. See Verification gates. ⚠️ **The limitation `Z15` pins is now designed for, not merely recorded** — see `FADE_SPEC.md` §1 |
+| 5 | **`HOTKEYS_SPEC.md`** — still `status: planned`, **NOT authorised for implementation** | Deliberately last. It depends on `PROFILE_SYNC_SPEC.md` §8, inherits the reference story rather than solving it twice, and a hotkey **must** fire the primed set through `playWithPrimes`. |
+| 6 | **`PROFILE_SYNC_SPEC.md` §13 deferred, in its own dependency order: timestamps (§4.3) → Merge import (§8) → sync behind `ProfileTransport` (§2)** | Out of v1 by design. ⚠️ **Timestamps come first because Merge and sync are both unsafe without them.** Do not reorder this row. |
 
 ⚠️ **Adding to this list is expected. Letting it rot is not.** When a row is finished, delete it here and record
 the outcome in `docs/session-history.md` — do not tick it in place, which is how the old header grew to 33 KB.
 
-**Repo:** branch `mobile-support`, HEAD **`25ac19a`**, **0 ahead / 0 behind**, working tree **clean**. That commit is
-the whole 2026-10-17 body: the Settings copy changes, the Android banner fix, the slider centring, the DoD's new
-gate 5, and the rename of the two Android scripts. **Backups:** exactly **one**, `…-20261017-015650`
-(VERIFY OK 229/229, 40.2 MB) — pruned 7 → 1 on 2026-10-17, so the keeper matches HEAD. See Backups.
+**Repo:** branch `mobile-support`, HEAD **`ac50d54`**, **0 ahead / 0 behind**. ⚠️ **This line said `25ac19a` until
+2026-10-18** — the prune commit `ac50d54` landed afterwards and nothing updated it. The suite itself recorded
+`25ac19a` correctly; the *state file's* repo line is the stale one, so verify HEAD with `git log --oneline -1`
+rather than trusting it. **Backups:** two, `…-20261017-015650` (VERIFY OK 229/229, 40.2 MB, the pre-session keeper)
+and `…-20261018-103626` (VERIFY OK 229/229, 40.2 MB, taken before this session's first edit). Not yet pruned.
 
 **Read this file first.** It holds only the *current* state. Dated session-by-session detail lives in
 [`docs/session-history.md`](docs/session-history.md) — read that only when you need the reasoning behind a
@@ -141,6 +174,17 @@ are gated behind `isMobile` so desktop/web stay untouched.
   registering in tauri app"*. 💡 **Lesson: `git ls-files` only proves what is in the tree *now*.** The question
   "was this ever committed" needs `git rev-list --objects --all`, or a removed file answers "no" for the wrong
   reason.
+- 🆕 **`scripts/` IS UNTRACKED AND IS FOR A FUTURE SPEC — the user added it 2026-10-18 at 13:07.** Two directories,
+  six files: `Image Pipeline/` (`image_pipeline.py`, `run_image_pipeline.bat`, `How it works.txt`) and
+  `Sound Normalizer/` (`normalize_sounds.py`, `run_normalizer.bat`, `How it works.txt`). **Never committed and not
+  gitignored, so git does not hold them.** They predate the move — `LastWriteTime` runs 2026-08-08 to 2026-08-14,
+  so they were copied in with mtimes preserved. 💡 **They were in exactly one place until the `…-20261018-130808`
+  backup caught them**, which is why that backup reports **236** files where the previous one reported **230**. ⚠️
+  **That backup is currently the only copy git does not also hold, and the standing "clear every backup once pushed"
+  rule would eventually take it. Commit them before anything prunes.**
+  ✅ **Both `.bat` files are pure CRLF, 0 bare LF, and neither uses `goto` or labels** — measured, so the bare-LF
+  `goto` fault of 2026-10-17 cannot reach them. The open `.gitattributes` item is unaffected in substance; note the
+  root now carries **seven** `.bat` files rather than five.
 - ✅ **Docs integrity check 2026-10-12 11:19 — NO DAMAGE from the cut-off session.** The `8032fb7` commit landed
   (00:08:13) and is pushed. Verified: `git status` clean, all **143** tracked files present, none zero-byte, every
   text file strict UTF-8 with **0 U+FFFD / 0 NUL**, `git fsck` shows only the known unreachable blob `3d1fcf15`,
@@ -379,6 +423,93 @@ declined for now since the e2e files are final. 💡 Also disproved: the origina
   fake `localStorage`. No browser, so it is worth running for any future change to storage or the uploads plan.
 
 ## Verification gates
+- ✅ **Gates 2026-10-18 10:36–11:30 (the playback coverage gaps, `Z13`–`Z21`) — ALL EIGHT GREEN, every platform
+  exactly +9.** The change is **test-only** (`e2e/specs/playback.mjs`, `e2e/coverage.manifest.json`); **no app
+  code was touched**, so nothing was exempt — all three E2E phases ran.
+  | Gate | Result |
+  |---|---|
+  | `backup-project.ps1` | **VERIFY OK, 229/229** (40.2 MB) before the first edit, and again at the end |
+  | `npx eslint .` | **0 errors / 3** pre-existing warnings (`convertFileSrc`, `_`, `ev`) — the accepted baseline |
+  | `npx vite build` | **exit 0** (1.34 s; the `INEFFECTIVE_DYNAMIC_IMPORT` notice is pre-existing) |
+  | `node e2e/check-coverage.mjs` | **exit 0 — 40 suites, 368 tests** (was 359; **+9**), 12 shared specs, 24/24 shipped features, 0 gaps |
+  | node checks (gate 5) | **`bundleGuard.check` 20/20** · `profileBundle.check` **46/46** · `profileStorage.check` **32/32** · `check-profile-keys` **OK** |
+  | **web E2E** | **238 PASS / 0 FAIL / 0 WARN, exit 0** (`e2e-run-20261018-104335.log`) — **+9** on the 229 baseline |
+  | **Windows E2E** | **258 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-run-20261018-105121.log`) — **+9** on the 249 baseline; WARN is G5. **`Restore verified FROM DISK`** again |
+  | **Android E2E** | **248 PASS / 0 FAIL / 1 WARN, exit 1** (`e2e-android-20261018-111604.log`) — **+9** on the 239 baseline; WARN is G5. **Store restored cleanly** |
+  | user hand-test | **N/A — not applicable.** Nothing user-facing shipped: the app is byte-identical. The DoD hand-test bar applies to user-facing *features*, so say that plainly rather than implying one happened. ⚠️ **What does need the user is a DECISION, not a test** — see `Z15` below |
+
+- 🔴 **TWO INHERITED PREMISES WERE WRONG, AND BOTH CHEAPENED THE WORK RATHER THAN BLOCKING IT.** This is the
+  third time in this project that a blocker turned out to be a story (the others: `reset.mjs`'s "wipes the fixture
+  every later suite reads", and `Run Android.bat`'s "refuses when nothing serves the UI, which is honest").
+  1. 🔴 **"Every fixture finishes before a fade completes" — never measured.** It was inherited from the
+     per-sound-volume work, which picked a 0.6 s clip *because it registers reliably*. `ffprobe` on the shipped
+     assets: **`Tavern_Music.mp3` 152.4 s**, `Forest_Ambience.mp3` 285.9 s, `Wind.mp3` 304.1 s. All three are
+     referenced by `src/data.json`, so none is an orphan fixture that could be pruned later — **verified, not
+     inherited**, since a fixture nothing ships is a liability.
+  2. 🔴 **"A two-blob seed helper that works under Tauri is the only genuinely new code in this whole list" —
+     false, and it cost the estimate its only hard part.** `normalizeStoredFileEntry` (`App.jsx:2940`) copies
+     `name` into `storedName`, but with **no bytes under that key** the lookup misses and `playSound` falls back
+     to `/assets/${displayName}` (`App.jsx:3991-3994`). So **two bundled assets give two distinct `src`s with no
+     upload, no CDP file dialog and no per-platform helper** — and it is the *same* branch under test, because the
+     random pick happens on the normalised file **list**, before any blob lookup.
+  💡 **A cost estimate that names a hard part is worth re-deriving even when the rest of it is right.** The estimate
+  was correct about the cheap 80% and wrong about the part that decided whether it was cheap at all.
+- ⚠️ **`Z13`'s ramp is the proof the fixture is long enough, and it is exact.** web read
+  `longestStrictDropRun=20` with samples `1 ×11, then 0.95, 0.90 … 0.05, 0`, and Android read `19` with the same
+  ladder. **20 is `fadeOutAudio`'s hardcoded `steps = 20`**, so the descent is the function's own arithmetic and
+  not an artefact of sampling. Android's 19 is a coarser sample cadence on a slower WebView, not a different ramp —
+  every ladder value still lands.
+- ✅ **`Z16`/`Z17` pin `rescaleAudioTarget`'s fade branch to the number.** `before=0.05 after=0.01 expected~0.0100`
+  on all three platforms — the ramp **position** (5% of the old target) carried across to the new one, not a snap
+  to 0.2. That is the whole point of the branch: the `else` would have read `0.2`. And `Z17` then confirms the ramp
+  **lands** on the new target (`vol:0.2, base:0.2, cleared:true`), which is the `_fadeTargetVolume` retarget — the
+  same staleness class of bug as the loop re-entry guard `Z9` exists for on the other path.
+- ✅ **The `randomPlay` negative control is what makes `Z18` mean anything.** `Z18` saw **both** files across 12
+  triggers; `Z19` ran the **same 12 triggers** with `randomPlay:false` and saw **exactly one** — and on every
+  platform it was `Longbow_4.mp3`, i.e. `files[0]`. 💡 **The two runs also disagree about which file came first**
+  (web/Android saw `Longbow_3` first, Windows saw `Longbow_4`), which independently rules out the harness
+  observing an alternation or a default rather than a real random draw. 12 draws over 2 files gives
+  P(all identical) = 2⁻¹¹ ≈ **0.05%**, and the control is deterministic, so **neither assertion can flake.**
+- 🔴 **`Z15` PINS A REAL LIMITATION, IT DOES NOT FIX ONE — and it is the one thing here that needs the user.**
+  The fade is scheduled off `sound.duration` (`App.jsx:4053`), which is **user-typed metadata**. A duration longer
+  than the real file means the non-looping `ended` handler wins the race, `cleanupAudio` clears the timer
+  (`App.jsx:4029`) and **the fade silently never happens**. Measured: `Longbow_4.mp3` (0.6 s) with
+  `duration:5, fadeOut:2` → fade due at 3 s, file over at `ct=0.576`, `fadeOutInterval:false`. **The app has no way
+  to know the real file length**, so this is a design question, not an oversight:
+  - is `duration` meant to be *the file's length* (in which case a fade-out is redundant when it is right)?
+  - or a *playback window* (in which case a fade-out past the end is arguably meaningless and should be silent)?
+  💡 **It is also the negative half of `Z13`/`Z14`.** Without it those two could pass on a ramp that had nothing to
+  do with `fadeOutAudio`; with it, `Z13`'s 20-step ladder and `Z15`'s `ct=0.576` together prove the ramp is the
+  scheduled fade and not the natural end of a short clip.
+- ⚠️ **A stale "it re-fades on every loop" claim is WITHDRAWN — the code already prevents it.** The 2026-10-17
+  analysis said `App.jsx:4093`/`:4109` re-run `applyFadeIn` on **every** loop re-entry, "so a looping sound with
+  `fadeIn > 0` pulses from silence on every single loop". **That is wrong:** a **`firstLoopPlay`** flag
+  (`App.jsx:4077`) guards both call sites and flips to `false` on the first crossing (`:4089`, `:4105`), with the
+  comment *"Fade-in is applied only on the initial play to avoid a volume dip at every loop boundary."* So the fade
+  runs **once**, on the first boundary, not on every one. 💡 **What is actually true** is narrower and was left
+  unpinned: on that **first** boundary the element drops from full volume to 0 and ramps back up, i.e. a
+  **one-time** dip. `Z9` already asserts where that ramp lands. **No id was added for the wrong premise** — a test
+  written against it would have encoded a bug that does not exist. If the first-boundary dip is worth changing, that
+  is a **decision for the user**, not a coverage gap.
+- 🔴 **The first Android attempt CRASHED (exit 3) and was NOT in my change — the recovery is the part to keep.**
+  `e2e-android.ps1` died at **Suite J (EDIT SOUND)**, the **8th** of 20 suites, with
+  `[MOB] FATAL: CDP socket error (unknown). Exit 3.` — the guard's *"the app most likely died"*. **`playback` is
+  the 14th suite (`e2e-mobile.mjs:1505`), so `Z13`–`Z21` never executed**, and the module parsed fine or nothing
+  before J would have run at all.
+  - **Consequence 1, and it is the rule in `PROJECT_STATE.md`'s own history:** the dead app meant the store was
+    **not restored**, so the run's fixture residue would have poisoned the *next* run — the exact 2026-10-15
+    `O14` failure, one suite in a different file, a day later. Recovered per the script's own printed instructions:
+    booted `Pixel_7`, launched the app, `adb forward tcp:9225`, `e2e-snapshot.mjs restore` → **`11 keys match the
+    snapshot exactly`** and `page reloaded (marker gone)`. Then a clean re-run gave the green figure above.
+  - **Consequence 2, which is the reassuring half:** ⚠️ **the user's data was never at risk.** The Android phase
+    drives an AVD whose app data lives inside it; only the **Windows** phase writes to the real `%APPDATA%`. So an
+    Android crash is an emulator problem, never a data-loss event — worth stating because the same message on the
+    Windows phase would be the opposite.
+  - 💡 **The runner's own recovery command was correct and complete.** Nothing had to be invented; follow what it
+    prints. Also: I lost the first run by pointing my own stdout redirect at **the same path the runner computes for
+    its own test log** (`e2e-full.ps1:24`, `%TEMP%\opencode\e2e-run-<ts>.log`) — every `Add-Content` failed with
+    *"being used by another process"* and the phase exited with an empty summary. **Redirect to a different
+    filename, not one shaped like the runner's.**
 - 🔴 **A BARE-LF `.bat` BREAKS `goto`, AND IT ONLY SHOWED UP BECAUSE OF A RENAME. Proven by A/B.**
   The user renamed the two Android scripts on 2026-10-17; running `Run Android.bat` immediately after produced
   **`The system cannot find the batch label specified - waitport`** — for a label that is plainly present 6 lines
@@ -1266,15 +1397,14 @@ Three properties worth remembering:
   that a gate which could not run must be named rather than quietly omitted.
 
 ### Planning specs in the repo root
-**Three specs were written 2026-10-06** for features the user queued; each was meant to be picked up **one per
-fresh session**. They were written against `src/App.jsx` @ 6240 lines — **re-verify any line numbers you inherit**,
-they drift. **Two shipped** (per-sound volume, priming) and were **deleted 2026-10-16** once their residue was
-archived into this file; **only `HOTKEYS_SPEC.md` is still an unbuilt plan**, and it is **not authorised for
-implementation**.
+**Two specs are waiting to be built**, each meant to be picked up in a fresh session. They were written against
+different revisions of `src/App.jsx` (`HOTKEYS_SPEC.md` at 6240 lines, `FADE_SPEC.md` at 7448) — **re-verify any
+line number you inherit**, they drift. **Neither is authorised for implementation.**
 
 | Spec | What it is | Recommended order |
 |---|---|---|
-| `HOTKEYS_SPEC.md` | Keyboard shortcuts to trigger sounds. In-app tier (a `keydown` listener) vs global (`tauri-plugin-global-shortcut`, desktop-only, `main.rs` only — the **reverse** of the dialog rule). ⚠️ a hotkey is a *reference*, and `PROFILE_SYNC_SPEC.md` §8 plus the category-name-as-identity landmine are what make that hard. ⚠️ it must not fire while a text field has focus — this app has many. ⚠️ It must route through `playWithPrimes` so a hotkey also fires the primed set. ⚠️ `P1`–`P16` (volume), `P17`–`P34` (desktop priming) and `Q1`–`Q14` (mobile priming) are all taken | **AFTER profiles** — inherit the reference story instead of solving it twice |
+| `FADE_SPEC.md` | **Per-file fades.** Replaces the sound-level `Duration (s)` / `Fade In (s)` / `Fade Out (s)` number boxes (`App.jsx:6500-6533`) with **per-file** sliders capped by the real audio length, a **per-row timeline that also scrubs Play Until**, and exactly **one** red state. **The one-line model: `audibleEnd = min(fileLength, playUntil)`, and both fades measure back from their end of that.** Fixes the four silent no-ops `Z15` pins. ⚠️ **A persisted-shape change**, not just UI — the fields move off the sound onto each file entry | **Now.** It fixes a real defect and its cost was measured, not guessed |
+| `HOTKEYS_SPEC.md` | Keyboard shortcuts to trigger sounds. In-app tier (a `keydown` listener) vs global (`tauri-plugin-global-shortcut`, desktop-only, `main.rs` only — the **reverse** of the dialog rule). ⚠️ a hotkey is a *reference*, and `PROFILE_SYNC_SPEC.md` §8 plus the category-name-as-identity landmine are what make that hard. ⚠️ it must not fire while a text field has focus — this app has many. ⚠️ It must route through `playWithPrimes` so a hotkey also fires the primed set. ⚠️ `P1`–`P16` (volume), `P17`–`P34` (desktop priming) and `Q1`–`Q14` (mobile priming) are all taken | After fades |
 
 🗑️ **The two shipped specs are gone** (`PER_SOUND_VOLUME_SPEC.md`, `SOUND_PRIMING_SPEC.md`, deleted 2026-10-16 at
 the user's request). What replaced them: the **per-sound volume** and **Sound priming** sections below, which now
@@ -1690,11 +1820,29 @@ before the failing phase was even reached. There is a warning in the file; read 
 gates.
 ## Open items
 
-- 🔜 **Consider the node checks gates.** `profileBundle.check.mjs` (46), `profileStorage.check.mjs` (32),
-  `bundleGuard.check.mjs` (20) and `check-profile-keys.mjs` need no browser, yet none is in the seven-gate table —
-  so a session can report "all gates green" without ever running them. Adding them is a one-line change to the DoD.
-  ⚠️ **This has now bitten twice**: the node checks are what found the `bundleGuard` latch, and they are the only
-  coverage the new post-picker guard has.
+⚠️ **The `Z15` limitation now has a DESIGN, agreed 2026-10-18, and it is not merely recorded.** `FADE_SPEC.md` §1
+enumerates all **four** ways `fadeOut` is silently inert today (`duration: 0` · `duration` past the file ·
+`fadeOut > duration` · `loop: true`), and §2 gives the model that makes three of them unrepresentable:
+**`audibleEnd = min(fileLength, playUntil)`, with all three values per-file and both fades measured back from
+their end of that.**
+🔴 **The fourth changed shape on 2026-10-18 and is now a bigger, better feature than was first drafted.** Looping is
+**segment looping + seam fades, built together** (§7): `playUntil: N` with `loop: true` **loops 0…N forever**, with
+`loop: false` it **stops at N** — one control, two coherent meanings, no new field. `fadeOut` positions the seam and
+`playUntil` positions the loop point, and `audibleEnd` is already the loop point so **no extra rule is needed**.
+**The mechanism is cheaper than "problematic in the past" suggests**: the rewind threshold
+(`max(duration - 0.25, duration * 0.98)`, `App.jsx:4085`) becomes `min(playUntil, duration)`.
+⚠️ **Two consequences a future session must not miss.** (1) **`firstLoopPlay` (`App.jsx:4077`) is REMOVED** — a
+fade-in must run at *every* seam, so the guard's premise is gone. (2) 🔴 **`Z9` must be rewritten deliberately in
+the same commit**, because its fixture assumes once-only behaviour and **will keep passing** on a short clip while
+asserting the old contract. `stopAfter` was renamed **`playUntil`** — free, since nothing shipped under the old
+name. All three values **travel in a bundle**; the timeline draws the **whole file**; ARIA on the bar is **built
+properly**, not deferred. Still **NOT authorised to build**.
+
+- ✅ **Consider the node checks gates — DONE 2026-10-17, and it is gate 5 of the DoD.** This row is deleted rather
+  than ticked: gate 5 exists in `AGENTS.md`, its one-line command carries the four counts, and the row would have
+  sat here claiming open work that has been finished for a day. The reason it is still worth remembering: it
+  **bit twice** — the node checks are what found the `bundleGuard` latch and are the only coverage the post-picker
+  guard has. See the top table, row 1.
 - ✅ **A NEW PROFILE MUST BE VERSION-STAMPED FROM BIRTH — FIXED, and re-verified on a real import 2026-10-16.**
   `ensureProfileStore()` and `createProfile()` take `DATA_VERSION`. Without it the profile is written unversioned by
   the auto-save effect on mount, and the **next** read takes `readProfileData`'s `storedVersion === null` branch and

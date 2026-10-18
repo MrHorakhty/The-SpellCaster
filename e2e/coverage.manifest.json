@@ -270,6 +270,13 @@
       "status": "planned",
       "coveredBy": [],
       "note": "NOT IMPLEMENTED and not authorised. Recommended AFTER profiles."
+    },
+    {
+      "name": "Per-file fades",
+      "spec": "FADE_SPEC.md",
+      "status": "planned",
+      "coveredBy": [],
+      "note": "NOT IMPLEMENTED, not authorised. Design agreed 2026-10-18. Replaces the sound-level Duration/Fade In/Fade Out number boxes with per-file sliders capped by the real audio length, a per-row timeline that also scrubs stop-after, and one red state (fadeIn + fadeOut >= min(fileLength, stopAfter)). Fixes four silent no-ops that specs/playback.mjs Z15 pins; loop fade-out is settled but NOT built."
     }
   ],
   "retired": [
@@ -1087,7 +1094,7 @@
       "title": "Live playback",
       "file": "specs/playback.mjs",
       "export": "playback",
-      "covers": "fade-in ramp, master controls driving live audio, loop boundary and Stop All",
+      "covers": "fade-in ramp, master controls driving live audio, loop boundary and Stop All; plus the fade-OUT ramp and its onComplete teardown (Z13-Z14), the fade scheduled off user-typed duration rather than the file length (Z15), a level change during a running fade preserving the ramp position instead of snapping (Z16-Z17), and randomPlay picking across two files with randomPlay-off as a negative control (Z18-Z21)",
       "platforms": [
         "web",
         "win",
@@ -1099,7 +1106,16 @@
         "Z10",
         "Z11",
         "Z12",
+        "Z13",
+        "Z14",
+        "Z15",
+        "Z16",
+        "Z17",
+        "Z18",
+        "Z19",
         "Z2",
+        "Z20",
+        "Z21",
         "Z3",
         "Z4",
         "Z5",

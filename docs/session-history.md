@@ -5299,3 +5299,205 @@ Last real figures remain **229 / 249 / 239, 0 FAIL each**, from the code that is
 self-sufficient path exit 0 with the app rendering, `Build Android.bat` port guard exit 1 leaving nothing
 changed — but **double-clicking them from Explorer is a different code path**. Explorer does not set `%~dp0` the
 way a shell does, and that is exactly the sort of thing that only fails outside a terminal.
+
+---
+
+## 2026-10-18 10:36–11:30 (opencode) — the playback coverage gaps: `Z13`–`Z21`, all three platforms
+
+Open item 3 of the state file, built. The user opened with *"let's focus on the playback coverage gaps first"*
+and then, mid-run, *"you should also use longer sounds for this tests, there are some inside the shipped
+version"* — which was the same insight the 2026-10-17 analysis had reached and the proposal had already adopted.
+
+### What shipped
+
+9 ids in `e2e/specs/playback.mjs`, test-only, **no app code touched**:
+
+| ids | covers |
+|---|---|
+| `Z13` | `fadeOutAudio` ramps DOWN from the start level to zero (`App.jsx:664`) |
+| `Z14` | its `onComplete` fires — element unregistered, play ring cleared, Stop All re-disabled |
+| `Z15` | a fade-out scheduled past the real file length **never runs** — `duration` is user-typed metadata |
+| `Z16` | a master change **during** a running fade preserves the ramp position (`rescaleAudioTarget`'s fade branch, `App.jsx:715-719`) |
+| `Z17` | …and the ramp then completes at the **new** target, not the one it started at |
+| `Z18` | `randomPlay` with two files picks more than one of them (`App.jsx:3970`) |
+| `Z19` | **negative control** — `randomPlay:false`, the same 12 triggers, exactly one file |
+| `Z20` | `randomPlay` with a *single* file still plays that file (the `length > 1` guard) |
+| `Z21` | every draw resolved to one of the sound's own files; one element per trigger (the leak check) |
+
+### The fixtures, and the two inherited premises that were wrong
+
+`Tavern_Music.mp3` (**152.4 s**) for `Z13`/`Z14`/`Z16`/`Z17`; `Longbow_4.mp3` (0.6 s) for `Z15` **on purpose**;
+`Longbow_4.mp3` + `Longbow_3.mp3` (0.6 / 0.7 s) for `Z18`–`Z21` **on purpose**.
+
+1. **"Every fixture finishes before a fade completes"** — inherited from the per-sound-volume work, which chose a
+   0.6 s clip *because it registers reliably*, and never checked against the asset list. `ffprobe`:
+   `Tavern_Music.mp3` **152.4 s**, `Forest_Ambience.mp3` 285.9 s, `Wind.mp3` 304.1 s. All referenced by
+   `src/data.json` — **verified this session, not inherited**, because a fixture nothing ships is a liability.
+2. **"A two-blob seed helper that works under Tauri is the only genuinely new code in this whole list"** — false.
+   `normalizeStoredFileEntry` (`App.jsx:2940`) copies `name` into `storedName`, but with no bytes under that key the
+   lookup misses and `playSound` falls back to `/assets/${displayName}` (`App.jsx:3991-3994`). **Two bundled
+   assets give two distinct `src`s** with no upload, no CDP file dialog and no per-platform helper — and it is the
+   *same* branch, because the random pick happens on the normalised file **list**, before any blob lookup.
+   💡 The estimate was right about the cheap 80% and wrong about the one part that decided whether it was cheap.
+
+**A long asset is also the *only* way to test a fade at all**, which is the part neither version of the analysis
+said plainly: the fade is scheduled off `sound.duration` (`App.jsx:4053`), so with a 0.6 s file the non-looping
+`ended` handler wins the race and `cleanupAudio` clears the timer (`App.jsx:4029`). The file must outlive the
+timer or `fadeOutAudio` never executes.
+
+### What the numbers say
+
+- **`Z13` is exact.** web: `longestStrictDropRun=20`, samples `1 ×11, 0.95, 0.90 … 0.05, 0`. **20 is
+  `fadeOutAudio`'s hardcoded `steps = 20`**, so the ladder is the function's own arithmetic. Android read `19` —
+  a coarser sample cadence on a slower WebView; every ladder value still lands.
+- **`Z16`/`Z17` pin the branch to the number.** All three platforms: `before=0.05 after=0.01 expected~0.0100`,
+  `newTarget=0.2`, then `vol:0.2, base:0.2, cleared:true`. The ramp **position** carried across (5% of the old
+  target → 5% of the new one); the `else` branch would have read a flat `0.2`.
+- **The control is what gives `Z18` meaning, and it also caught the harness.** `Z19` saw exactly one file on every
+  platform, always `Longbow_4.mp3` = `files[0]`. And the three platforms **disagree about which file `Z18` saw
+  first** (web/Android `Longbow_3`, Windows `Longbow_4`) — independent proof the harness is reading a real random
+  draw and not an alternation or a default. 12 draws over 2 files: P(all identical) = 2⁻¹¹ ≈ **0.05%**.
+
+### Two things I got wrong, both recorded because both are reusable
+
+- 🔴 **The first Android run CRASHED, exit 3 — not in my change.** `[MOB] FATAL: CDP socket error (unknown)` at
+  **Suite J (EDIT SOUND)**, the **8th** of 20 suites; `playback` is the **14th** (`e2e-mobile.mjs:1505`), so
+  `Z13`–`Z21` never ran, and the module parses or nothing before J would have run. The dead app meant the store
+  was **not restored** — the 2026-10-15 `O14` trap exactly: *the suite that leaves the state behind is not the one
+  that breaks*. Recovered using the script's **own printed** command (boot `Pixel_7`, `monkey` launch,
+  `adb forward tcp:9225`, `e2e-snapshot.mjs restore`) → **`11 keys match the snapshot exactly`**,
+  `page reloaded (marker gone)`. Clean re-run: green. ⚠️ **And the reassuring half: the user's data was never at
+  risk** — the Android phase drives an AVD, only the Windows phase writes the real `%APPDATA%`. The same message
+  on the Windows phase would be the opposite and would have been urgent.
+- ⚠️ **I broke the first web run by redirecting stdout onto the runner's own log path.** `e2e-full.ps1:24` computes
+  `%TEMP%\opencode\e2e-run-<ts>.log`; my redirect used the same shape, so every `Add-Content` failed with *"being
+  used by another process"* and the phase exited with an empty summary that looked like a silent pass. **Name your
+  redirect something the runner does not use.**
+
+### The one thing that needs a DECISION, not a test — `Z15`
+
+`Z15` pins rather than fixes. A fade-out due past the real file length silently never happens
+(`ct=0.576`, `fadeOutInterval:false`). The app cannot know the file length, so this is a design question:
+is `duration` meant to be **the file's length** (making a fade-out redundant when it is right), or a
+**playback window** (making a fade-out past the end meaningless, so silence is correct)? **Left for the user.**
+
+### A withdrawn claim
+
+The 2026-10-17 analysis said `App.jsx:4093`/`:4109` re-run `applyFadeIn` on **every** loop re-entry, so a looping
+sound "pulses from silence on every single loop". **Wrong** — a **`firstLoopPlay`** flag (`App.jsx:4077`, flipped
+at `:4089` and `:4105`) means it runs **once**, on the first boundary. **No id was written for it**: a test
+authored against that premise would have encoded a bug that does not exist. What *is* true, and unpinned, is that
+the single first-boundary re-fade drops the element from full volume to 0 and ramps back up — a **one-time** dip,
+whose end state `Z9` already asserts.
+
+### Gates this session — all eight
+
+`backup-project.ps1` **VERIFY OK 229/229** (start and end) · `npx eslint .` **0 errors / 3 warnings** ·
+`npx vite build` **exit 0** · `check-coverage.mjs` **exit 0, 40 suites, 368 tests (+9)** · gate 5
+**20/20 · 46/46 · 32/32 · OK** · **web 238/0/0 exit 0** (+9) · **Windows 258/0/1 exit 1** (+9, G5,
+`Restore verified FROM DISK`) · **Android 248/0/1 exit 1** (+9, G5).
+
+**No user hand-test and none owed** — nothing user-facing shipped, the app is byte-identical, and the DoD's
+hand-test bar applies to user-facing *features*. ⚠️ Stated rather than implied.
+
+---
+
+## 2026-10-18 12:00–13:45 (opencode) — `FADE_SPEC.md`: per-file fades, designed but NOT built
+
+Follow-on from the coverage session. The user opened with *"let's focus on the playback coverage gaps"* → those
+were closed → then *"I'm thinking about making fade into sliders"* with *"don't code anything yet, let's nail these
+down first"*. **Nothing was built.** This is the design record for a feature that does not exist yet.
+
+### The design, and the two inherited premises it killed
+
+Per-file fades capped by the **real measured** audio length, a **per-row timeline that doubles as the Play Until
+scrubber**, and exactly **one** red state. The model is one line:
+
+> **`audibleEnd = min(fileLength, playUntil)`, and both fades measure back from their end of that.**
+
+- 🔴 **"Every fixture finishes before a fade completes" was never measured** — inherited from the per-sound-volume
+  work, which chose a 0.6 s clip because it registers reliably. `Tavern_Music.mp3` is **152.4 s** and already
+  shipped.
+- 🔴 **"A two-blob seed helper that works under Tauri is the only genuinely new code in this whole list" was
+  false.** Two bundled assets give two distinct `src`s with no upload at all, because the random pick happens on
+  the normalised file **list**, before any blob lookup.
+  💡 **An estimate that names a hard part is worth re-deriving even when the rest of it is right.** This one was
+  right about the cheap 80% and wrong about the part that decided whether it was cheap.
+
+### Three places the user overruled me, and was right each time
+
+1. 🔴 **The slider ceiling.** I proposed capping travel at `min(fileLength, 5s)`. **Dropped.** It only ever aimed to
+   keep the slider aimable on long files, and that job was already done twice: the number box gives precision, and
+   the red warning covers the one failure a ceiling would have prevented. A ceiling also smuggles in an opinion about
+   what a reasonable fade is — *exactly the assumption `duration` turned out to be*. **The user decides how long they
+   want.**
+2. **The colour semantics.** I first coloured by "majority of the file is faded". **Rejected**, and the user's own
+   framing was better: a 0.4 s fade on a 2 s door slam is legitimate, and marking it red teaches people to ignore the
+   colour. One red state, `fadeIn + fadeOut >= audibleEnd`, and the label does the arithmetic.
+3. **The stop-after ceiling.** The mock exposed that I had applied the *fade* rule to a **position** control, making
+   "stop after" useless on any long file. **Play Until** was the fix.
+
+💡 **All three were me proposing a safeguard the user did not ask for.** The pattern worth keeping: when the user
+pushes back on an "of course we should" safety rail, check whether an *already-agreed* mechanism covers the same
+failure before defending it.
+
+### The loop section changed shape, and got better
+
+First draft: *"fade out at the end of an iteration, through 0 s of silence, then fade back in."* The user's
+correction — *"it would be: play the sound for the set duration and loop that part"* — is **segment looping**, and
+it is one control with two coherent meanings:
+
+| | meaning |
+|---|---|
+| `playUntil: N`, `loop: false` | play 0…N, then stop |
+| `playUntil: N`, `loop: true` | **loop 0…N forever** |
+
+🔴 **The mechanism is far cheaper than "problematic in the past" suggests**: the rewind threshold
+`max(duration - 0.25, duration * 0.98)` (`App.jsx:4085`) becomes `min(playUntil, duration)`. The rewind was never
+the hard part; the **fade at the seam** is. And `audibleEnd` is already the loop point, so **fade-out measures back
+from the seam with no extra rule**.
+
+Two consequences recorded because one is a trap:
+- **`firstLoopPlay` (`App.jsx:4077`) is REMOVED** — a fade-in must run at *every* seam.
+- 🔴 **`Z9` must be rewritten deliberately in the same commit.** Its fixture (`fadeIn:1, loop:true`) asserts
+  once-only behaviour, and **it will keep passing** — a 0.576 s clip against a 1 s fade-in barely reaches the first
+  seam. 💡 **A green suite asserting the old contract is worse than a red one**, because it looks like the change
+  worked.
+
+### The mock, and what breaking it taught us
+
+`%TEMP%\opencode\fade-mock.html`, deliberately **outside the repo** so it costs no gate, commit or backup. It was
+reported broken three times, and the first two were pure mock mechanics — yet both fed the spec:
+
+| report | mock-only? | what it produced |
+|---|---|---|
+| Caption lines duplicated on every scrub | yes | nothing |
+| Timeline scrubbed exactly once | yes | 🔴 **capture-based drag, not `onClick`** (§5) |
+| Sliders and number boxes dead | yes | nothing — but **blocked all layout judgement** |
+
+- 🔴 The highest-value item came from **reasoning about** the click-once bug, not from the bug: **`touch-action: none`
+  on the timeline is MANDATORY on Android**, or a horizontal drag scrolls the modal instead. One CSS declaration,
+  **invisible on desktop** — it would pass the web and Windows gates and fail only on a real device. 💡 **It was also
+  missing from the mock**, so a phone test would have scrolled.
+- 💡 **The "is reporting mock bugs a waste of time" filter I gave was too coarse.** It sorted "DOM mechanics" below
+  "layout". The line that matters is **"does this stop you judging what the mock is for?"** — two of three controls
+  dead does; a duplicated caption mostly does not.
+
+### `scripts/` — untracked, and briefly in one place
+
+The user added `scripts/Image Pipeline/` and `scripts/Sound Normalizer/` (6 files, for a future spec) mid-session.
+**Never committed, not gitignored**, so git does not hold them; `LastWriteTime` 2026-08-08…08-14 means they were
+copied in with mtimes preserved. 💡 **They were in exactly one place until a backup caught them** — which is why that
+backup reports 236 files where the previous one reported 230. The user's instruction for this session was to keep
+them **out of git**, so they stay untracked and the backup is currently their only copy. **That is a known,
+accepted risk, not an oversight** — recorded here so nobody "tidies" it either way.
+
+✅ Measured while checking them: **both `.bat` files are pure CRLF, 0 bare LF, and neither uses `goto` or labels**,
+so the bare-LF fault of 2026-10-17 cannot reach them.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 236/236** · `npx eslint .` **0 errors / 3 warnings** · `check-coverage.mjs`
+**exit 0** · gate 5 **20/20 · 46/46 · 32/32 · OK**.
+⚠️ **Gates 3 and 6–8 were not re-run** — every change after the coverage session's E2E run was markdown, and the
+three phases drive the built app over CDP and cannot observe a markdown file. Stated rather than implied.
