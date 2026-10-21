@@ -278,7 +278,7 @@
       "coveredBy": [
         "specs/fade.mjs::FADE"
       ],
-      "note": "NOT IMPLEMENTED, not authorised. Design agreed 2026-10-18. Replaces the sound-level Duration/Fade In/Fade Out number boxes with per-file sliders capped by the real audio length, a per-row timeline that also scrubs stop-after, and one red state (fadeIn + fadeOut >= min(fileLength, stopAfter)). Fixes four silent no-ops that specs/playback.mjs Z15 pins; loop fade-out is settled but NOT built."
+      "note": "SHIPPED 2026-10-21 (FADE_SPEC.md). Per-file fadeIn/fadeOut/playUntil on each files[] entry, sliders capped by the real measured audio length (~200 steps), a per-row timeline that also sets Play Until, exactly one red state (fadeIn + fadeOut >= audibleEnd), and a seam hint when a loop has a fade-in but no fade-out. A legacy sound-level fade is copied onto every file entry, so shared fades keep working instead of being lost. Fixes the four silent no-ops that specs/playback.mjs Z15 pins, and firstLoopPlay is removed so the fade-in re-runs at every loop seam."
     },
     {
       "name": "Icon preparation (use as-is / crop to square / silhouette)",
@@ -1140,7 +1140,7 @@
       "title": "Per-file fades",
       "file": "specs/fade.mjs",
       "export": "fade",
-      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, and the clamped fade on a file shorter than playUntil",
+      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, the clamped fade on a file shorter than playUntil, and the loop seam hint that clears once a fade-out is added",
       "platforms": [
         "web",
         "win",
@@ -1154,7 +1154,8 @@
         "FADE4",
         "FADE5",
         "FADE6",
-        "FADE7"
+        "FADE7",
+        "FADE8"
       ],
       "idPattern": "^FADE\\d"
     },

@@ -239,5 +239,31 @@ export const fade = {
     })()`);
     log('FADE','FADE7: per-file fades persist and re-hydrate in the modal',
       f7 && f7.playUntil === '3' && f7.fadeOut === '1' ? 'PASS' : 'FAIL', JSON.stringify(f7));
+
+    // ---- FADE8: the loop seam hint appears and clears -------------------
+    // A loop whose fade-in has no matching fade-out clicks on every repeat
+    // (§7.4). It is a hint, not a graded state, so the file must stay usable -
+    // but the sentence has to track the real values, or it would nag about a
+    // seam the user already fixed.
+    const setLoop = async (on) => {
+      await evalJs(`((on) => {
+        const el = document.querySelector('input[name="loop"]');
+        if (!el) return 'NO_LOOP';
+        if (el.checked !== on) el.click();
+        return 'OK';
+      })(${on})`);
+      await sleep(250);
+    };
+    await setLoop(true);
+    await setPair(2, 0);
+    const f8a = await evalJs(`(() => {
+      const el = document.querySelector('[data-fade-seam]');
+      return el ? el.textContent.trim() : null;
+    })()`);
+    await setPair(2, 1);
+    const f8b = await evalJs(`(() => !!document.querySelector('[data-fade-seam]'))()`);
+    await setLoop(false);
+    log('FADE','FADE8: loop + fade-in with no fade-out warns about the seam, and adding a fade-out clears it',
+      f8a && f8a.length > 0 && f8b === false ? 'PASS' : 'FAIL', `hint=${JSON.stringify(f8a)} afterFadeOut=${f8b}`);
   }
 };

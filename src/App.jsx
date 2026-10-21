@@ -6733,11 +6733,22 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 </div>
                                             )}
 
-                                            {soundFormData.loop && audioFiles.some(f => Number(f.fadeIn || 0) > 0 && Number(f.fadeOut || 0) === 0) && (
-                                                <div className="text-xs text-amber-400 bg-amber-900/10 rounded p-1 border border-amber-900/20 mb-1">
-                                                    {seamSentence(true, 1, 0)}
-                                                </div>
-                                            )}
+                                            {(() => {
+                                                // The hint is derived from a real file rather than
+                                                // from literals, so it cannot claim a seam problem
+                                                // for a sound whose own values are fine.
+                                                const seamFile = soundFormData.loop
+                                                    ? audioFiles.find(f => Number(f.fadeIn || 0) > 0 && Number(f.fadeOut || 0) === 0)
+                                                    : null
+                                                const sentence = seamFile
+                                                    ? seamSentence(true, seamFile.fadeIn, seamFile.fadeOut)
+                                                    : null
+                                                return sentence ? (
+                                                    <div data-fade-seam className="text-xs text-amber-400 bg-amber-900/10 rounded p-1 border border-amber-900/20 mb-1">
+                                                        {sentence}
+                                                    </div>
+                                                ) : null
+                                            })()}
 
                                             {/* Random playback option */}
                                             {audioFiles.length > 1 && (

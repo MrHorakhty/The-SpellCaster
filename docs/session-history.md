@@ -5881,8 +5881,11 @@ The design was settled on 2026-10-18 and the implementation was authorised and f
   `audibleEnd = min(fileLength, playUntil)`, `fadeStep` (~200 steps over the real length), `fadeWarning` (the ONE
   graded state: `fadeIn + fadeOut >= audibleEnd`), `fullVolumeSentence`, `seamSentence`. `e2e/fadeMath.check.mjs`
   is **43/43** and is gate 5's fifth check; `AGENTS.md` gate 5 now names five commands.
-- **`specs/fade.mjs`** is a new shared suite (FADE1, FADE2, FADE3a, FADE3b, FADE4-FADE7) wired into both
+- **`specs/fade.mjs`** is a new shared suite (FADE1, FADE2, FADE3a, FADE3b, FADE4-FADE8) wired into both
   entrypoints after `playback`, and `coverage.manifest.json` flips the **Per-file fades** feature to `shipped`.
+  **FADE8** covers the loop seam hint, which had been rendered from literal arguments (`seamSentence(true, 1, 0)`)
+  rather than from the file it was warning about - the hint now derives from a real `files[]` entry, so it cannot
+  nag about a seam the user already fixed, and the test proves it clears once a fade-out is added.
 - **Loop seams are re-applied at every boundary** - `firstLoopPlay` was removed and `Z9` rewritten in the same
   session, as `FADE_SPEC` required.
 
@@ -5903,9 +5906,9 @@ The design was settled on 2026-10-18 and the implementation was authorised and f
 
 ### Gates (all run, none assumed)
 
-lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 376 tests, 25
-shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 43/43**; **web 246/0/0 exit 0**;
-**Windows 266/0/1 exit 1**; **Android 256/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 377 tests, 25
+shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 43/43**; **web 247/0/0 exit 0**;
+**Windows 267/0/1 exit 1**; **Android 257/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
 
 ### Handover
 

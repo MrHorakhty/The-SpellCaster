@@ -5,7 +5,7 @@
 ✅ **`FADE_SPEC.md` IS SHIPPED (2026-10-21) — per-file fades, Play Until and seam fades, green on all three platforms.**
 - `src/fadeMath.js` (NEW, pure model: `normalizeFadeSeconds`, `fadeStep`, `audibleEnd`, `fadeWarning`,
   `formatLength`, `fullVolumeSentence`, `seamSentence`) + `e2e/fadeMath.check.mjs` (**43/43**, gate 5's fifth check).
-- `e2e/specs/fade.mjs` (NEW, shared Suite FADE — FADE1, FADE2, FADE3a, FADE3b, FADE4–FADE7) runs after `playback` in
+- `e2e/specs/fade.mjs` (NEW, shared Suite FADE — FADE1, FADE2, FADE3a, FADE3b, FADE4–FADE8) runs after `playback` in
   both entrypoints; `coverage.manifest.json` registers the suite and flips feature **Per-file fades** to `shipped`.
 - `App.jsx`: `files[]` entries own `fadeIn`/`fadeOut`/`playUntil`; `migrateSoundFades` copies a legacy sound-level
   fade onto **every** file entry (behaviour-preserving); sound-level `duration`/`fadeIn`/`fadeOut` are gone from the
@@ -17,9 +17,10 @@
   resume left the element **paused** while the fade-in ramped to target — Z9 read a flat `0.2` once for exactly that
   reason. The watchdog rewinds inside continuous playback, so the seam and its per-seam fade-in are deterministic.
   `firstLoopPlay` is **removed**; `Z9` was rewritten in the same commit to assert the per-seam contract.
-- Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** · gate 5
-  **46/46, 32/32, 20/20, OK, 43/43** · **web 246/0/0 exit 0** · **Windows 266/0/1 exit 1 (G5 WARN)** ·
-  **Android 256/0/1 exit 1 (G5 WARN)**. Windows/Android exit 1 is the documented healthy baseline.
+- Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
+  377 tests) · gate 5 **46/46, 32/32, 20/20, OK, 43/43** · **web 247/0/0 exit 0** ·
+  **Windows 267/0/1 exit 1 (G5 WARN)** · **Android 257/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
+  healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
   "done" until the user has used it.
 - ⚠️ `.gitattributes` (`*.bat text eol=crlf`) is **still untracked**; the user has not asked for it to be committed.
@@ -31,7 +32,7 @@ a bug report. Ordered by **unblocking value**, not by size:
 
 | # | Item | Why here |
 |---|---|---|
-| 1 | ~~🆕 **`FADE_SPEC.md` — build it**~~ ✅ **BUILT AND GREEN 2026-10-21** — per-file fades, Play Until, seam fades; `specs/fade.mjs` + `fadeMath.check.mjs`; web 246/0/0, Windows 266/0/1, Android 256/0/1 | It fixed the defect it was written for: `fadeOut` used to be scheduled off user-typed `duration`, which produced **four** silent no-ops that `Z15` now pins. **Only the user's hand-test of the built app is outstanding** — until that happens the feature is green in tests, not done. |
+| 1 | ~~🆕 **`FADE_SPEC.md` — build it**~~ ✅ **BUILT AND GREEN 2026-10-21** — per-file fades, Play Until, seam fades; `specs/fade.mjs` (FADE1–FADE8) + `fadeMath.check.mjs`; web 247/0/0, Windows 267/0/1, Android 257/0/1 | It fixed the defect it was written for: `fadeOut` used to be scheduled off user-typed `duration`, which produced **four** silent no-ops that `Z15` now pins. **Only the user's hand-test of the built app is outstanding** — until that happens the feature is green in tests, not done. |
 | 2 | 🆕 **`ICON_PREP_SPEC.md` — build it.** Written and registered `status: planned` 2026-10-18. **NOT authorised for implementation** | Two **opt-in** operations on sound-icon upload — **Make silhouette** and **Fit to square** (interactive crop) — so nobody needs Python installed. It fixes the measured weakness of `recolorImageToColor` (`App.jsx:536`), which **preserves alpha and can never create it**, so a backgrounded icon becomes a solid block of colour. 💡 **It is second because it is onboarding, not a defect** — unlike row 1. 🔴 **The Python script's algorithm is deliberately NOT reused**: measured on three of the user's own dark-background images it produces an **80% grey slab**. The spec uses an adaptive method chosen by measurement, and colour/photo art is **not** silhouetted at all |
 | 3 | ~~**Promote the four node checks into the DoD gate table**~~ ✅ **DONE 2026-10-17** — `AGENTS.md` is now **eight** gates, with gate 5 named and its command given as one line | It had **already bitten twice**, and it **had**: this session listed it as open item #1 and then did not do it, which the user caught. Gate 5 is seconds, and it now carries the four counts. 💡 **Listing a debt is not paying it.** |
 | 4 | ✅ **The playback gaps are CLOSED — 9 ids, `Z13`–`Z21`, built and green on all three platforms 2026-10-18** | `fadeOutAudio`'s ramp **and** its `onComplete` teardown (`Z13`/`Z14`), the fade scheduled off user-typed `duration` (`Z15`), `rescaleAudioTarget`'s fade branch + a level change mid-fade (`Z16`/`Z17`), and `randomPlay`'s behaviour with a negative control (`Z18`–`Z21`). Two inherited premises turned out **wrong**: the "every fixture finishes before a fade completes" blocker was never measured, and the claimed need for a two-blob Tauri seed helper was false — **two bundled assets give two `src`s with no upload at all**. See Verification gates. ⚠️ **The limitation `Z15` pins is now designed for, not merely recorded** — see `FADE_SPEC.md` §1 |
