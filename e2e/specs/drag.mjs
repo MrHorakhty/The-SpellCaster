@@ -15,7 +15,7 @@
 // suite having added a sound. Names match the old inline suite exactly so a
 // regression stays comparable against an older log.
 
-import { PAGE_HELPERS } from '../lib/page.mjs';
+import { PAGE_HELPERS, awaitBoard } from '../lib/page.mjs';
 
 export const dragReorder = {
   title: 'SUITE X: DRAG REORDER',
@@ -54,6 +54,7 @@ export const dragReorder = {
     // cards are on screen whatever the previous suite navigated to.
     await evalJs(seedX);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed: seedX });
     await evalJs(PAGE_HELPERS);
 
     await driver.enterEditMode();

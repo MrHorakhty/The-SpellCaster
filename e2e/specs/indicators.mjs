@@ -16,7 +16,7 @@
 // PAGE_HELPERS is re-injected: the suites that run after this one still expect
 // __setInput and friends to be present.
 
-import { PAGE_HELPERS, SEED } from '../lib/page.mjs';
+import { PAGE_HELPERS, SEED, awaitBoard } from '../lib/page.mjs';
 
 export const indicators = {
   title: 'SUITE U: CARD INDICATORS',
@@ -25,6 +25,7 @@ export const indicators = {
 
     await evalJs(SEED);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed: SEED });
     await evalJs(PAGE_HELPERS);
 
     const suiteU = await evalJs(`(() => {

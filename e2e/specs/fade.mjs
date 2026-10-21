@@ -16,7 +16,7 @@
 // element.click() is not a user gesture, so live playback is driven with
 // driver.trustedTap (real CDP mouse on desktop, real touch on Android).
 
-import { KNOWN_KEYS } from '../lib/page.mjs';
+import { KNOWN_KEYS, awaitBoard } from '../lib/page.mjs';
 
 export const fade = {
   title: 'SUITE FADE: PER-FILE FADES',
@@ -100,6 +100,7 @@ export const fade = {
 
     await evalJs(seed);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed });
     await evalJs(helpers);
 
     // ------------------------------------------------------------------
@@ -234,6 +235,7 @@ export const fade = {
 
     // ---- FADE7: values survive reload and re-hydrate in the modal ----
     await reload();
+    await awaitBoard(ctx, { min: 1 });
     await evalJs(helpers);
     await driver.enterEditMode();
     await evalJs(`(() => {
@@ -334,6 +336,7 @@ export const fade = {
     const f10a = await submitModal('Save Changes');
     await sleep(1000);
     await reload();
+    await awaitBoard(ctx, { min: 1 });
     await evalJs(helpers);
     await driver.enterEditMode();
     await evalJs(`(() => {

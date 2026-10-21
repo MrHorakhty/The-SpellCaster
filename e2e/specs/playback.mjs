@@ -1,3 +1,4 @@
+import { awaitBoard } from '../lib/page.mjs';
 // Shared live-playback spec (Suite Z, Z1-Z21).
 //
 // Ported from e2e-features.mjs Suite E (LIVE PLAYBACK), which was the only place
@@ -187,6 +188,7 @@ export const playback = {
 
     await evalJs(seed);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed });
     await evalJs(helpers);
 
     // ---- Z1-Z3: a real trusted gesture starts real playback -----------------
@@ -354,6 +356,7 @@ export const playback = {
     // =====================================================================
     await evalJs(seed2);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed: seed2 });
     await evalJs(helpers2);
 
     // A single real trigger, then wait for the Audio element to actually exist.

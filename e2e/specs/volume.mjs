@@ -11,7 +11,7 @@
 // engage). Requires per-sound volume support - shipped 2026-10-06; the spec is
 // retired (PROJECT_STATE.md, per-sound volume section).
 
-import { KNOWN_KEYS } from '../lib/page.mjs';
+import { KNOWN_KEYS, awaitBoard } from '../lib/page.mjs';
 
 export const volume = {
   title: 'SUITE P: PER-SOUND VOLUME',
@@ -81,6 +81,7 @@ export const volume = {
 
     await evalJs(seed);
     await reload();
+    await awaitBoard(ctx, { min: 1, seed });
     await evalJs(volHelpers);
 
     // P1-P4: the control exists on every card, sits OUTSIDE the role="button"

@@ -211,10 +211,14 @@ export const refcount = {
     // G5 negative case above deleted the last one, and an empty board renders
     // an empty state instead of the edit bar.
     await evalJs(`(() => {
-      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{ id:'c1', name:'Human Paladin', sounds:[] }]));
+      localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{ id:'c1', name:'Human Paladin', sounds:[
+        { id:'warm_s1', name:'Warm Up', type:'Test', icon:'', files:[{name:'Tavern_Music.mp3', displayName:'Tavern_Music.mp3'}],
+          color:'#84cc16', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1 }
+      ] }]));
       return 'seeded';
     })()`);
     await reload();
+    await awaitBoard(ctx, { min: 1 });
     await rehydrate();
     await driver.enterEditMode();
     await evalJs(`(() => {
