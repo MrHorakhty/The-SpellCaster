@@ -6180,3 +6180,20 @@ Two fixes, both in the harness:
 💡 **A suite that measures a page has to wait for the page.** A fixed sleep is a bet on how fast the machine is, and
 the emulator lost that bet - with fifteen failures that all pointed at scrolling and sliders, and not one of them
 at the thing that had actually changed.
+
+### And then the Android phase stopped running at all
+
+Two more failures, both looking like app crashes and neither being one. The phase reported `exit=3` and *app
+not reachable on :9225*, with the suite never starting. The tauri log showed a clean install and launch, and Vite was up
+and bound to every interface - and the logcat showed the app's own error: *Failed to request http://10.2.0.2:5173/*.
+
+**The tauri CLI auto-detects the dev-server address and picks the first adapter it finds, which on this machine is
+the ProtonVPN one** - and the emulator's traffic to the VPN address is swallowed by the VPN. The project's own notes
+had this gotcha recorded with a mitigation that assumed the address did not matter (Vite binds `0.0.0.0`, so it
+answers on every adapter) - and that mitigation is **wrong**, because the VPN does not just ignore the
+traffic, it drops it.
+
+`e2e-android.ps1` now starts the CLI with `--host 10.0.2.2`: Android's hard-coded emulator-to-host alias,
+which the VPN does not touch. 💡 `TAURI_DEV_HOST` does **not** help - the CLI rewrites the devUrl from its own detection, and
+the HMR host is a different thing. Two phases had to fail before the cause was visible in the logcat rather
+than in the harness.
