@@ -2563,4 +2563,4 @@ Delete-then-ignore, so they cannot come back:
 ---
 
 ## Dated session detail
-| **`.-20261021-223559`** | **255** (VERIFY OK, 62.8 MB) | **the keeper** as of 2026-10-21, taken after the last commit (`458145b`) so it matches the pushed HEAD. Count it with `Get-ChildItem -Recurse -File -Force`: without `-Force` the hidden `public/assets/desktop.ini` is missed and you get 254 |
+| **`.-20261021-223728`** | **255** (VERIFY OK, 62.8 MB) | **the keeper** as of 2026-10-21, taken after `01c8440` so it matches the pushed HEAD. Count it with `Get-ChildItem -Recurse -File -Force`: without `-Force` the hidden `public/assets/desktop.ini` is missed and you get 254 |
