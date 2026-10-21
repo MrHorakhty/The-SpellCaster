@@ -1510,8 +1510,8 @@ unbounded folder count is not.
 
 | Folder | Files | Note |
 |---|---|---|
-| **`.-20261021-223728`** | **255** (VERIFY OK, 62.8 MB) | **the keeper** as of 2026-10-21, taken after `01c8440` so it matches the pushed HEAD. Count it with `Get-ChildItem -Recurse -File -Force`: without `-Force` the hidden `public/assets/desktop.ini` is missed and you get 254 |
-| ~~10 folders~~ | 253-255 | deleted 2026-10-21, **~603 MB freed** (603 MB -> 62.8 MB) |
+| **`.-20261022-022653`** | **255** (VERIFY OK, 62.9 MB) | **the keeper** as of 2026-10-22, taken after the last commit so it matches the pushed HEAD. Count it with `Get-ChildItem -Recurse -File -Force`: without `-Force` the hidden `public/assets/desktop.ini` is missed and you get 254 |
+| ~~11 folders~~ | 253-255 | deleted 2026-10-21/22, **~666 MB freed** (666 MB -> 62.9 MB) |
 
 **Keeper verified as a kept artifact, not assumed:** `e2e/e2e-full.ps1` present (the AV-sensitive one),
 `ICON_PREP_SPEC.md`, `.gitattributes`, `scripts/Image Pipeline/image_pipeline.py` and both example images present,
