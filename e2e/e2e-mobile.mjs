@@ -36,6 +36,7 @@ import { refcount } from './specs/refcount.mjs';
 import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
+import { fade } from './specs/fade.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -777,7 +778,7 @@ async function main() {
     const snd = (id,name,type,color,opts) => ({ id, name, type, icon:'Icon.png', files:[{name:name.toLowerCase().replace(/\\s+/g,'_')+'.mp3', displayName:name+'.mp3'}], color, duration:0, randomPlay:false, ...opts });
     localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([
       { id:'c1', name:'Human Paladin', sounds:[
-        snd('s1','Smite','Holy','#ff0000',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:true, glowProminence:0.7, files:[{name:'smite.mp3',displayName:'Smite.mp3'}]}),
+        snd('s1','Smite','Holy','#ff0000',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:true, glowProminence:0.7, files:[{name:'Tavern_Music.mp3',displayName:'Tavern_Music.mp3'}]}),
         snd('s2','Shield Bash','Melee','#3b82f6',{loop:false, randomPlay:true, files:[{name:'shield1.mp3',displayName:'Shield1.mp3'},{name:'shield2.mp3',displayName:'Shield2.mp3'}]}),
         snd('s3','Healing Light','Magic','#22c55e',{loop:true, fadeIn:1.5, files:[{name:'heal.mp3',displayName:'Heal.mp3'}]})
       ]},
@@ -1503,6 +1504,7 @@ const qExtraKeys = (qKeys||[]).filter(k => !KNOWN_KEYS.includes(k));
   // Last of the shared specs so the fade sampling is not competing with other
   // suites; refcount re-seeds after it.
   await runSpecs(ctx, [playback]);
+  await runSpecs(ctx, [fade]);
 
   // ================================================================
   //  G: FILE REFCOUNT GUARD (shared spec - see e2e/specs/refcount.mjs)

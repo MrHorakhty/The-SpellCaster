@@ -41,8 +41,8 @@ export const playback = {
       localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
         id:'c1', name:'Human Paladin', sounds:[
           { id:'pb_main', name:'Playback Probe', type:'Test', icon:'',
-            files:[{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}],
-            color:'#ff0000', duration:0, fadeIn:1, fadeOut:0, loop:true, randomPlay:false,
+            files:[{name:'Tavern_Music.mp3', displayName:'Tavern_Music.mp3'}],
+            color:'#ff0000', duration:0, fadeIn:1, fadeOut:0, loop:false, randomPlay:false,
             brightness:1 }
         ]
       }]));
@@ -144,7 +144,11 @@ export const playback = {
             [{name:'Longbow_4.mp3', displayName:'Longbow_4.mp3'}], { duration:5, fadeOut:2 }),
           probe('pb_random','Random Two', two, { randomPlay:true }),
           probe('pb_seq','Sequential Two', two, { randomPlay:false }),
-          probe('pb_random_one','Random One', [two[0]], { randomPlay:true })
+          probe('pb_random_one','Random One', [two[0]], { randomPlay:true }),
+          // Short looping sound with a fade-in: the seam comes every ~0.56s, so
+          // the fade-in re-application at every seam (firstLoopPlay removed,
+          // FADE_SPEC §7.3) is crossed repeatedly during the test.
+          probe('pb_loop','Loop Probe', [two[0]], { loop:true, fadeIn:1 })
         ]
       }]));
       localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
@@ -268,50 +272,6 @@ export const playback = {
     const z7 = await evalJs(`(() => { const a = window.__pbEl(); return a ? { vol:a.volume, base:a._baseVolume, slider: window.__pbMasterRange()?.value, num: window.__pbMasterNumber()?.value ?? null } : null; })()`);
     log('PLAY','Z7: master number input drives the live element to 50%',near(z7?.vol,0.5,0.05) && near(Number(z7?.slider),0.5,0.02)?'PASS':'FAIL',JSON.stringify(z7));
 
-    // ---- Z8-Z9: crossing the loop boundary ---------------------------------
-    // The app does NOT use the native loop: it rewinds in a `timeupdate` handler
-    // once currentTime >= max(duration - 0.25, duration * 0.98). Seeking to
-    // duration - 0.2 does NOT reliably cross that on a short clip, so seek past
-    // 98% instead. The `ended` path rewinds identically, so either route works.
-    //
-    // A rewind is a DROP in currentTime, so detect the drop rather than reading
-    // a single sample: the bundled fixture is short, so one late read can easily
-    // land just past the boundary with nothing to show for it.
-    const z8 = await evalJs(`(async () => {
-      const a = window.__pbEl(); if (!a) return 'NO_EL';
-      if (!Number.isFinite(a.duration) || a.duration <= 0) return 'NO_DURATION';
-      const threshold = Math.max(a.duration - 0.25, a.duration * 0.98);
-      const before = a.currentTime;
-      a.currentTime = threshold + (a.duration - threshold) * 0.9;
-      const reads = [];
-      for (let i = 0; i < 20; i++) { reads.push(+a.currentTime.toFixed(3)); await new Promise(r => setTimeout(r, 50)); }
-      return { before, threshold: +threshold.toFixed(3), duration:+a.duration.toFixed(3), reads, min: Math.min(...reads) };
-    })()`);
-    const dropped = Array.isArray(z8?.reads) && z8.reads.some((v,i,arr) => i > 0 && v < arr[i-1] - 0.05);
-    log('PLAY','Z8: a looping sound rewinds at the boundary',dropped && (z8?.min ?? 1) < 0.2?'PASS':'FAIL',
-      `duration=${z8?.duration} threshold=${z8?.threshold} reads=${JSON.stringify(z8?.reads)}`);
-
-    // Z9 is the loop-re-entry regression guard the retired per-sound-volume spec
-    // left open (PROJECT_STATE.md, per-sound volume section). On the first
-    // boundary crossing the app re-applies the fade-in, and
-    // it reads the target back off the element (_baseVolume) rather than closing
-    // over the level the sound started at. A stale _baseVolume would fade this
-    // sound back up to 1.0 instead of whatever the master is on now.
-    //
-    // The expected level is read back from the master rather than hardcoded, so
-    // this stays honest if Z6/Z7 ever stop driving the master to a fixed value.
-    const z9 = await evalJs(`(async () => {
-      const a = window.__pbEl(); if (!a) return 'NO_EL';
-      const samples = [];
-      for (let i = 0; i < 12; i++) { samples.push(+a.volume.toFixed(4)); await new Promise(r => setTimeout(r, 250)); }
-      return { samples, base:a._baseVolume, master: window.__pbMasterRange()?.value };
-    })()`);
-    const settled = Array.isArray(z9?.samples) ? z9.samples.slice(-3) : [];
-    const masterLevel = Number(z9?.master ?? NaN);
-    log('PLAY','Z9: loop re-entry returns to the CURRENT master level, not the level it started at',
-      settled.length===3 && Number.isFinite(masterLevel) && settled.every(v => near(v, masterLevel, 0.12)) ? 'PASS':'FAIL',
-      `settled=${JSON.stringify(settled)} master=${z9?.master} _baseVolume=${z9?.base}`);
-
     // ---- Z10: Stop All ------------------------------------------------------
     await evalJs(`(() => { const b = document.querySelector('button[title="Stop All Sounds"]'); if (!b) return 'NO_BTN'; b.click(); return 'OK'; })()`);
     await sleep(500);
@@ -321,13 +281,12 @@ export const playback = {
     })()`);
     log('PLAY','Z10: Stop All stops the audio and clears the ring',z10?.paused===true && z10?.ring===false?'PASS':'FAIL',JSON.stringify(z10));
 
-    // ---- Z11-Z12: loop and fadeIn survive the modal round trip -------------
-    // Ported from e2e-features.mjs D11/D12, the last two assertions that only
-    // the legacy suite made. Suite J checks that the modal PREFILLS these fields
-    // and that a sound saves at all; nothing checked that a stored loop/fadeIn
-    // comes back out of the modal and that writing them lands in storage. That
-    // is the hydrate/write pair, and it is the half a field added to the
-    // new-sound allowlist would silently break.
+    // ---- Z11-Z12: loop and per-file fades survive the modal round trip -----
+    // FadeIn/fadeOut/playUntil now live ON THE FILE ENTRY, not the sound
+    // (FADE_SPEC §4). The edit modal hydrates them from each file and writing
+    // them back persists to storage. The modal's number boxes have no `name`
+    // attribute (they are wired per row), so address them by position: index 0
+    // is fade-in, 2 is Play Until.
     await driver.enterEditMode();
     await evalJs(`(() => {
       const c = window.__pbCard();
@@ -336,17 +295,26 @@ export const playback = {
       return 'OK';
     })()`);
     await sleep(800);
-    const z11 = await evalJs(`(() => ({
-      loop: document.querySelector('#loop')?.checked,
-      fadeIn: document.querySelector('input[name="fadeIn"]')?.value
-    }))()`);
-    log('PLAY','Z11: the edit modal hydrates loop and fadeIn from storage',
-      z11?.loop===true && Number(z11?.fadeIn)===1?'PASS':'FAIL',JSON.stringify(z11));
+    const z11 = await evalJs(`(() => {
+      const row = document.querySelector('[data-fade-row]');
+      const boxes = row ? [...row.querySelectorAll('input[type=number]')] : [];
+      return {
+        loop: document.querySelector('#loop')?.checked === true,
+        fadeIn: boxes[0] ? Number(boxes[0].value) : null,
+        playUntil: boxes[2] ? Number(boxes[2].value) : null
+      };
+    })()`);
+    log('PLAY','Z11: the edit modal hydrates loop and per-file fadeIn from storage',
+      z11?.loop===false && z11?.fadeIn===1 ? 'PASS':'FAIL',JSON.stringify(z11));
 
     const z11b = await evalJs(`(() => {
-      const loop = document.querySelector('#loop');
-      if (loop && loop.checked) loop.click();
-      return window.__pbSetField('fadeIn', 2);
+      const boxes = [...document.querySelectorAll('[data-fade-row] input[type=number]')];
+      const b = boxes[2];
+      if (!b) return 'NO_BOX';
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(b, '3');
+      b.dispatchEvent(new Event('input', { bubbles: true }));
+      return b.value;
     })()`);
     await ctx.submitModal('Save Changes');
     await sleep(1000);
@@ -354,11 +322,11 @@ export const playback = {
     const z12 = await evalJs(`(() => {
       const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
       const s = c[0]?.sounds?.find(x => x.id === 'pb_main');
-      return { loop: s?.loop, fadeIn: s?.fadeIn, written: window.__pbSetField ? undefined : 'NO_SETTER' };
+      return { loop: s?.loop, playUntil: s?.files?.[0]?.playUntil, files: s?.files };
     })()`);
-    log('PLAY','Z12: edited loop and fadeIn persist to storage',
-      z12?.loop===false && Number(z12?.fadeIn)===2 && z11b==='2'?'PASS':'FAIL',
-      `formReadBack=${z11b} stored=${JSON.stringify({loop:z12?.loop,fadeIn:z12?.fadeIn})}`);
+    log('PLAY','Z12: edited per-file Play Until persists to storage',
+      z12?.loop===false && z12?.playUntil===3 ? 'PASS':'FAIL',
+      `stored=${JSON.stringify(z12?.files)}`);
 
     // =====================================================================
     // Z13-Z21: fade-out, a level change DURING a fade, and random play.
@@ -384,11 +352,6 @@ export const playback = {
     await reload();
     await evalJs(helpers2);
 
-    const stopAll = async () => {
-      await evalJs(`(() => { const b = document.querySelector('button[title="Stop All Sounds"]'); if (!b) return 'NO_BTN'; b.click(); return 'OK'; })()`);
-      await sleep(400);
-    };
-
     // A single real trigger, then wait for the Audio element to actually exist.
     // playSound awaits a blob lookup before it constructs the element, so the
     // element lands a tick after the gesture - the same Q11 race, so poll for
@@ -404,6 +367,68 @@ export const playback = {
       }
       return { ok: false, reason: 'NO_AUDIO' };
     };
+
+    const stopAll = async () => {
+      await evalJs(`(() => { const b = document.querySelector('button[title="Stop All Sounds"]'); if (!b) return 'NO_BTN'; b.click(); return 'OK'; })()`);
+      await sleep(400);
+    };
+
+    // ---- Z8-Z9: crossing the loop boundary ---------------------------------
+    // pb_loop loops the whole 0.576 s file (playUntil unset), so the seam comes
+    // every ~0.56 s. firstLoopPlay is removed (FADE_SPEC §7.3): the fade-in
+    // re-runs at EVERY seam, and each time it reads the target back off the
+    // element (_baseVolume) rather than closing over a stale level.
+    await stopAll();
+    const t8 = await triggerOnce('pb_loop');
+    // Z8: a looping sound rewinds at the boundary. Poll for the decoded
+    // duration (the element is created asynchronously after the trigger).
+    let z8 = null;
+    for (let i = 0; i < 40 && (!z8 || z8 === 'NO_DURATION'); i++) {
+      z8 = await evalJs(`(async () => {
+        const els = (window.__audios||[]).filter(x => x._soundId === 'pb_loop');
+        const a = els[els.length - 1]; if (!a) return 'NO_EL';
+        if (!Number.isFinite(a.duration) || a.duration <= 0) return 'NO_DURATION';
+        const len = a.duration;
+        const threshold = Math.max(len - 0.25, len * 0.98);
+        a.currentTime = threshold + (len - threshold) * 0.9;
+        const reads = [];
+        for (let i = 0; i < 20; i++) { reads.push(+a.currentTime.toFixed(3)); await new Promise(r => setTimeout(r, 50)); }
+        return { threshold: +threshold.toFixed(3), duration:+len.toFixed(3), reads, min: Math.min(...reads) };
+      })()`);
+      if (z8 === 'NO_DURATION') await sleep(100);
+    }
+    const dropped = Array.isArray(z8?.reads) && z8.reads.some((v,i,arr) => i > 0 && v < arr[i-1] - 0.05);
+    log('PLAY','Z8: a looping sound rewinds at the boundary',t8.ok && dropped && (z8?.min ?? 1) < 0.2?'PASS':'FAIL',
+      `duration=${z8?.duration} threshold=${z8?.threshold} reads=${JSON.stringify(z8?.reads)}`);
+
+    // Z9: master at 1 while looping (fade-in dips at every seam), then move the
+    // master to 0.2. Under the old firstLoopPlay guard the fade-in never re-ran,
+    // so the level would track the master with no dips; now the fade-in re-applies
+    // at every seam to the CURRENT master, so samples show repeated near-zero dips
+    // and never climb back toward the old level 1.0.
+    await evalJs(`(() => { const m = window.__pbMasterRange(); if (m) window.__pbSet(m, 0.2); return 'OK'; })()`);
+    await sleep(400);
+    const z9 = await evalJs(`(async () => {
+      // The LAST element is the live one - the first entry of __audios can belong
+      // to an earlier trigger of the same sound, and sampling a dead element
+      // would report a flat level that no seam could ever move.
+      const live = () => { const e = (window.__audios||[]).filter(x => x._soundId === 'pb_loop'); return e.length ? e[e.length-1] : null; };
+      const samples = [];
+      const state = [];
+      for (let i = 0; i < 14; i++) {
+        const a = live();
+        samples.push(+((a?.volume ?? 0)).toFixed(4));
+        if (i === 0 || i === 7) state.push({ t:+(a?.currentTime ?? -1).toFixed(3), paused:a?.paused, ended:a?.ended, fade:!!a?.fadeInInterval, base:a?._baseVolume, n:(window.__audios||[]).filter(x=>x._soundId==='pb_loop').length });
+        await new Promise(r => setTimeout(r, 200));
+      }
+      return { samples, state };
+    })()`);
+    const z9s = Array.isArray(z9?.samples) ? z9.samples : [];
+    const dipped = z9s.some(v => v < 0.05);
+    const capped = z9s.length > 0 && z9s.every(v => v <= 0.3);
+    log('PLAY','Z9: loop re-entry re-applies the fade-in to the CURRENT master at every seam',
+      t8.ok && z9s.length === 14 && dipped && capped ? 'PASS':'FAIL',
+      `samples=${JSON.stringify(z9s)} state=${JSON.stringify(z9?.state)}`);
 
     // ---- Z13: the fade-out ramp descends to zero -----------------------------
     // Fixture: Tavern_Music.mp3 (152s) with duration:3, fadeOut:2. The app
@@ -445,32 +470,27 @@ export const playback = {
     log('PLAY','Z14: fade-out onComplete fires - element unregistered, ring cleared',
       z14?.ring===false && z14?.stopDisabled===true?'PASS':'FAIL',JSON.stringify(z14));
 
-    // ---- Z15: the fade is scheduled off user-typed `duration`, not the file ---
-    // Fixture: Longbow_4.mp3 (0.6s) with duration:5, fadeOut:2. The app
-    // schedules the fade at 3s - long after the file ends at 0.6s - and the
-    // non-looping `ended` handler wins the race, cleaning up and clearing the
-    // timer (cleanupAudio clears audioEl.timer, App.jsx:4029).
+    // ---- Z15: playUntil past the file length clamps the fade to the start ---
+    // Fixture: Longbow_4.mp3 (0.6s) with playUntil:5 (past the file) and
+    // fadeOut:2. audibleEnd = min(0.6, 5) = 0.6, so fadeStart = max(0, 0.6-2)
+    // = 0: the fade starts at the file's first sample instead of never. Under
+    // the old user-typed `duration` schedule the timer was set for 3s and the
+    // file's own `ended` won the race — the fade silently never ran (Z15's old
+    // contract). Measuring off the real file length makes the no-op
+    // unrepresentable.
     //
-    // This is not asserting a fix, it is PINNING the documented behaviour, and
-    // it is the negative half of Z13/Z14: without it, those two could pass on a
-    // ramp that had nothing to do with fadeOutAudio. `duration` is a text field
-    // and the app has no way to know the real file length, so a duration longer
-    // than the audio means the fade silently never happens.
+    // Sample before the file's natural end at 0.6s, when the ramp is mid-way.
     await stopAll();
     const t15 = await triggerOnce('pb_latefade');
-    await sleep(4200);
+    await sleep(300);
     const z15 = await evalJs(`(() => {
       const els = (window.__audios||[]).filter(x => x._soundId === 'pb_latefade');
       const a = els[els.length - 1];
-      const c = document.querySelector('[data-sound-card][data-sound-id="pb_latefade"]');
-      return { ct: a ? +a.currentTime.toFixed(3) : null, paused: a ? a.paused : null,
-               fadeOutInterval: a ? !!a.fadeOutInterval : null,
-               fadeOutSeconds: a ? a.fadeOutSeconds : null,
-               ring: c ? c.className.includes('ring') : null };
+      return a ? { vol:+a.volume.toFixed(4), fading:!!a.fadeOutInterval, ct:+a.currentTime.toFixed(2) } : null;
     })()`);
-    log('PLAY','Z15: a fade-out scheduled past the real file length never runs (duration is user-typed metadata)',
-      t15.ok && z15?.fadeOutInterval===false && z15?.ring===false ?'PASS':'FAIL',
-      `file=0.6s duration=5 fadeOut=2 -> ${JSON.stringify(z15)}`);
+    log('PLAY','Z15: playUntil past the file clamps fade-out to the file start - it runs instead of never',
+      t15.ok && z15 && z15.fading === true && z15.vol < 1 ? 'PASS':'FAIL',
+      `file=0.6s playUntil=5 fadeOut=2 -> ${JSON.stringify(z15)}`);
 
     // ---- Z16: a level change DURING a fade preserves the ramp position ------
     // This is rescaleAudioTarget's fade branch (App.jsx:715-719), the fiddliest

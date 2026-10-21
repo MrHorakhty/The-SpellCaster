@@ -44,6 +44,14 @@ import {
     IMPORT_NOTICE_KEY,
 } from './profileBundle.js'
 import { boundedBundleStep, BUNDLE_STEP_TIMEOUT_MS } from './bundleGuard.js'
+import {
+    normalizeFadeSeconds,
+    fadeStep,
+    fadeWarning,
+    formatLength,
+    fullVolumeSentence,
+    seamSentence,
+} from './fadeMath.js'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
@@ -290,6 +298,74 @@ const mintId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36)
 // Version for persisted app data. Bump to force a reset to the bundled defaults.
 const DATA_VERSION = '3'
 
+// --- per-file fade fields --------------------------------------------------
+//
+// FADE_SPEC.md §4: fades moved OFF the sound and onto each file entry. These
+// helpers are module-level on purpose - `normalizeStoredData` below is
+// module-level and is the forward-migration entry point, so the migration has to
+// live here too or it would silently not apply to imported bundles.
+
+/** Normalise one `files[]` entry. An absent fade field reads as 0. */
+const normalizeStoredFileEntry = (fileEntry) => {
+    if (!fileEntry || typeof fileEntry !== 'object') {
+        return { name: '', displayName: '', url: '', fadeIn: 0, fadeOut: 0, playUntil: 0 }
+    }
+
+    const storedName = fileEntry.storedName || fileEntry.name || ''
+    const displayName = fileEntry.displayName || fileEntry.originalName || fileEntry.name || ''
+    const url = fileEntry.url || storedName || ''
+
+    return {
+        ...fileEntry,
+        name: storedName,
+        storedName,
+        displayName,
+        url,
+        fadeIn: normalizeFadeSeconds(fileEntry.fadeIn),
+        fadeOut: normalizeFadeSeconds(fileEntry.fadeOut),
+        playUntil: normalizeFadeSeconds(fileEntry.playUntil),
+    }
+}
+
+const normalizeStoredFileList = (files = []) => {
+    if (!Array.isArray(files)) return []
+    return files.map(normalizeStoredFileEntry)
+}
+
+/**
+ * Sound-level fadeIn/fadeOut/duration -> per-file fadeIn/fadeOut/playUntil
+ * (§4 row 3). Behaviour-preserving: a shared sound-level fade is copied onto
+ * EVERY file entry, which is exactly what a shared fade does today. A sound that
+ * already carries per-file values is left alone, and the legacy no-`files[]`
+ * shape is normalised into one file entry rather than dropped (§9).
+ */
+const migrateSoundFades = (sound) => {
+    if (!sound || typeof sound !== 'object') return sound
+    const files = Array.isArray(sound.files) ? sound.files : []
+    const hasPerFile = files.some(f => f && typeof f === 'object'
+        && (f.fadeIn !== undefined || f.fadeOut !== undefined || f.playUntil !== undefined))
+    if (hasPerFile) {
+        return { ...sound, files: files.map(f => (f && typeof f === 'object' ? normalizeStoredFileEntry(f) : f)) }
+    }
+    const fadeIn = normalizeFadeSeconds(sound.fadeIn)
+    const fadeOut = normalizeFadeSeconds(sound.fadeOut)
+    const playUntil = normalizeFadeSeconds(sound.duration)
+    if (fadeIn === 0 && fadeOut === 0 && playUntil === 0) return sound
+    if (files.length > 0) {
+        return {
+            ...sound,
+            files: files.map(f => (f && typeof f === 'object'
+                ? { ...normalizeStoredFileEntry(f), fadeIn, fadeOut, playUntil }
+                : f))
+        }
+    }
+    if (sound.file) {
+        const single = normalizeStoredFileEntry({ name: sound.file, displayName: sound.file, url: sound.file })
+        return { ...sound, files: [{ ...single, fadeIn, fadeOut, playUntil }] }
+    }
+    return sound
+}
+
 // Read an array from the ACTIVE PROFILE's storage only if it matches the
 // current data version. Stale or corrupt data is repaired forward rather than
 // discarded - see readProfileData in ./profileStorage.js, which is where the
@@ -307,7 +383,7 @@ const normalizeStoredData = (key, list) => {
             return isCharData ? { id: '', name: '', sounds: [] } : isGroupData ? { id: '', name: '', categories: [] } : { category: '', sounds: [] }
         }
         const sounds = Array.isArray(entry.sounds)
-            ? entry.sounds.filter(s => s && typeof s === 'object')
+            ? entry.sounds.filter(s => s && typeof s === 'object').map(migrateSoundFades)
             : []
         if (isGroupData) {
             const categories = Array.isArray(entry.categories)
@@ -316,7 +392,7 @@ const normalizeStoredData = (key, list) => {
                     .map(c => ({
                         ...c,
                         sounds: Array.isArray(c.sounds)
-                            ? c.sounds.filter(s => s && typeof s === 'object')
+                            ? c.sounds.filter(s => s && typeof s === 'object').map(migrateSoundFades)
                             : []
                     }))
                 : []
@@ -326,7 +402,7 @@ const normalizeStoredData = (key, list) => {
                     .map(c => ({
                         ...c,
                         sounds: Array.isArray(c.sounds)
-                            ? c.sounds.filter(s => s && typeof s === 'object')
+                            ? c.sounds.filter(s => s && typeof s === 'object').map(migrateSoundFades)
                             : []
                     }))
                 : []
@@ -1235,6 +1311,10 @@ function AppBoard() {
                 if (audio.fadeOutInterval) {
                     clearInterval(audio.fadeOutInterval)
                 }
+                if (audio.loopWatch) {
+                    clearInterval(audio.loopWatch)
+                    audio.loopWatch = null
+                }
                 if (audio.timer) {
                     clearTimeout(audio.timer)
                 }
@@ -1426,9 +1506,6 @@ function AppBoard() {
         randomPlay: false,
         color: '#84cc16',
         brightness: 1,
-        duration: 0,
-        fadeIn: 0,
-        fadeOut: 0,
         loop: false,
         glowEnabled: false,
         glowProminence: 0.5,
@@ -1565,6 +1642,14 @@ function AppBoard() {
 
     // Multiple file upload states
     const [audioFiles, setAudioFiles] = useState([])
+    // Measured real length per file (storedName -> seconds), read from the
+    // <audio> element's loadedmetadata. Never persisted - re-measured on open.
+    // See FADE_SPEC §3: the hard part of this feature is already paid for by
+    // the preview element the modal already renders.
+    const [fileLengths, setFileLengths] = useState({})
+    // Which file's timeline is being dragged, so the scrub follows the pointer
+    // even after it leaves the bar (capture-based drag, per FADE_SPEC §5).
+    const [timelineDrag, setTimelineDrag] = useState(null)
 
     // Load icons for sounds
     useEffect(() => {
@@ -2037,9 +2122,6 @@ function AppBoard() {
             files: [],
             color: '#84cc16',
             brightness: 1,
-            duration: 0,
-            fadeIn: 0,
-            fadeOut: 0,
             loop: defaultLoop,
             randomPlay: false,
             glowEnabled: false,
@@ -2067,7 +2149,13 @@ function AppBoard() {
                 name: file.storedName || file.name,
                 storedName: file.storedName || file.name,
                 displayName: file.displayName || file.name,
-                url: file.url || file.storedName || file.name
+                url: file.url || file.storedName || file.name,
+                // The per-file fade values travel with the entry, not off it, so
+                // the modal must carry them or every edit would silently reset
+                // them to 0.
+                fadeIn: file.fadeIn ?? 0,
+                fadeOut: file.fadeOut ?? 0,
+                playUntil: file.playUntil ?? 0
             })))
             setAudioFiles(existingFiles)
         } else {
@@ -2091,9 +2179,6 @@ function AppBoard() {
             randomPlay: sound.randomPlay || false,
             color: sound.color || '#84cc16',
             brightness: sound.brightness || 1,
-            duration: sound.duration || 0,
-            fadeIn: sound.fadeIn || 0,
-            fadeOut: sound.fadeOut || 0,
             loop: loopValue,
             glowEnabled: sound.glowEnabled || false,
             glowProminence: sound.glowProminence || 0.5,
@@ -2120,13 +2205,18 @@ function AppBoard() {
         }
 
         // Build the persisted file list from audioFiles as the single source of truth
-        // so added/removed files during the modal session are never lost.
+        // so added/removed files during the modal session are never lost. The
+        // per-file fade values ride along here; `length`/`error`/`preview` are
+        // modal-only measurement state and are deliberately NOT persisted.
         const submitFiles = audioFiles.length > 0
             ? normalizeStoredFileList(audioFiles.map(f => ({
                 name: f.storedName || f.name || f.url,
                 storedName: f.storedName || f.name || f.url,
                 url: f.url || f.storedName || f.name,
-                displayName: f.displayName || f.name
+                displayName: f.displayName || f.name,
+                fadeIn: f.fadeIn ?? 0,
+                fadeOut: f.fadeOut ?? 0,
+                playUntil: f.playUntil ?? 0
             })))
             : (soundFormData.files || [])
 
@@ -2156,14 +2246,16 @@ function AppBoard() {
             randomPlay: newSoundData.randomPlay || false,
             color: newSoundData.color,
             brightness: newSoundData.brightness || 1,
-            duration: parseFloat(newSoundData.duration) || 0,
-            fadeIn: parseFloat(newSoundData.fadeIn) || 0,
-            fadeOut: parseFloat(newSoundData.fadeOut) || 0,
             loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups'),
             // This object literal is an explicit allowlist: a field missing here is
             // dropped for every newly created sound, while edits survive it because
             // the edit path spreads. volume has to be listed here or every new sound
             // silently plays at 100%.
+            //
+            // ⚠️ fadeIn/fadeOut/playUntil are PER FILE and live in `files`, not on
+            // the sound. They are normalised by normalizeStoredFileList above, so
+            // a new sound's fades survive without being listed here (FADE_SPEC §4
+            // row 1 was written before the fields moved onto the file entries).
             volume: normalizeSoundVolume(newSoundData.volume)
         }
 
@@ -2259,9 +2351,8 @@ function AppBoard() {
             ...newSoundData,
             iconDisplayName: newSoundData.iconDisplayName || '',
             files: normalizedFiles,
-            duration: parseFloat(newSoundData.duration) || 0,
-            fadeIn: parseFloat(newSoundData.fadeIn) || 0,
-            fadeOut: parseFloat(newSoundData.fadeOut) || 0,
+            // Fades are per file and already normalised into `files`; the
+            // sound-level duration/fadeIn/fadeOut fields are retired.
             loop: newSoundData.loop !== undefined ? newSoundData.loop : false,
             randomPlay: newSoundData.randomPlay || false,
             volume: normalizeSoundVolume(newSoundData.volume)
@@ -2937,29 +3028,6 @@ function AppBoard() {
         return `${prefix}_${randomSuffix}_${safeName}`
     }
 
-    const normalizeStoredFileEntry = (fileEntry) => {
-        if (!fileEntry || typeof fileEntry !== 'object') {
-            return { name: '', displayName: '', url: '' }
-        }
-
-        const storedName = fileEntry.storedName || fileEntry.name || ''
-        const displayName = fileEntry.displayName || fileEntry.originalName || fileEntry.name || ''
-        const url = fileEntry.url || storedName || ''
-
-        return {
-            ...fileEntry,
-            name: storedName,
-            storedName,
-            displayName,
-            url
-        }
-    }
-
-    const normalizeStoredFileList = (files = []) => {
-        if (!Array.isArray(files)) return []
-        return files.map(normalizeStoredFileEntry)
-    }
-
     const handleIconUpload = (e) => {
         const file = e.target.files[0]
         if (file) {
@@ -3119,7 +3187,10 @@ function AppBoard() {
                     name: file.storedName,
                     storedName: file.storedName,
                     url: file.url,
-                    displayName: file.displayName
+                    displayName: file.displayName,
+                    fadeIn: 0,
+                    fadeOut: 0,
+                    playUntil: 0
                 }))]
             }))
 
@@ -3140,10 +3211,46 @@ function AppBoard() {
         return { containerType: found.containerType, containerId: found.containerId, groupId: found.groupId }
     }
 
+    // --- per-file fade field editing ---------------------------------------
+    // Fields live on the audioFiles entries themselves (FADE_SPEC §4), edited
+    // live while dragging/typing and committed to storage on Save.
+
+    const fileLengthSeconds = (storedName) => Number(fileLengths[storedName] || 0)
+
+    const handleFileLengthMeasured = (storedName, duration) => {
+        if (!storedName || !Number.isFinite(duration) || duration <= 0) return
+        setFileLengths(prev => ({ ...prev, [storedName]: duration }))
+    }
+
+    // A file whose metadata never arrives cannot offer fades (FADE_SPEC §9), but
+    // "not measured yet" and "cannot be measured" are NOT the same thing: the
+    // first is a few milliseconds on every file, the second is a broken
+    // reference. Marking the failure explicitly is what lets the row say
+    // "Measuring..." first instead of flashing a scary error at every open.
+    const handleFileLengthFailed = (storedName) => {
+        if (!storedName) return
+        setFileLengths(prev => (typeof prev[storedName] === 'number' ? prev : { ...prev, [storedName]: 'failed' }))
+    }
+
+    const handleFileFadeChange = (storedName, field, value) => {
+        const v = Number(value)
+        if (!Number.isFinite(v) || v < 0) return
+        const len = fileLengthSeconds(storedName)
+        setAudioFiles(prev => prev.map(f =>
+            (f && (f.storedName || f.name) === storedName) ? { ...f, [field]: Math.min(v, len || Infinity) } : f))
+    }
+
+    const handleTimelineChange = (storedName, fraction) => {
+        const len = fileLengthSeconds(storedName)
+        if (!len || fraction < 0 || fraction > 1) return
+        handleFileFadeChange(storedName, 'playUntil', Math.round((len * fraction) * 100) / 100)
+    }
+
     const removeAudioFile = async (index) => {
         const fileToRemove = audioFiles[index]
 
         setAudioFiles(prev => prev.filter((_, i) => i !== index))
+        setFileLengths(prev => { const next = { ...prev }; delete next[fileToRemove.storedName]; return next })
 
         setSoundFormData(prev => ({
             ...prev,
@@ -3159,6 +3266,7 @@ function AppBoard() {
         }
 
         setAudioFiles([])
+        setFileLengths({})
         setSoundFormData(prev => ({ ...prev, files: [] }))
     }
 
@@ -4026,6 +4134,10 @@ function AppBoard() {
             if (audioEl.fadeOutInterval) {
                 clearInterval(audioEl.fadeOutInterval)
             }
+            if (audioEl.loopWatch) {
+                clearInterval(audioEl.loopWatch)
+                audioEl.loopWatch = null
+            }
             if (audioEl.timer) {
                 clearTimeout(audioEl.timer)
             }
@@ -4044,75 +4156,97 @@ function AppBoard() {
             })
         }
 
-        if (sound.fadeIn > 0) {
-            applyFadeIn(audio, baseVolume, sound.fadeIn)
+        if (fileToPlay.fadeIn > 0) {
+            applyFadeIn(audio, baseVolume, fileToPlay.fadeIn)
         }
 
-        if (!sound.loop && sound.duration > 0) {
-            if (sound.fadeOut > 0) {
-                const fadeStartDelay = Math.max(0, sound.duration - sound.fadeOut) * 1000
-
-                audio.timer = setTimeout(() => {
-                    fadeOutAudio(audio, sound.fadeOut, () => {
+        if (!sound.loop) {
+            // Non-looping: stop at the audible end. The fade-out measures back
+            // from audibleEnd = min(real file length, playUntil) (§2.1), so a
+            // fade-out scheduled past the file's own end is unrepresentable —
+            // Z15's four no-ops cannot occur. The length is the element's real,
+            // measured length, never user-typed `duration`.
+            const scheduleStop = () => {
+                const len = Number.isFinite(audio.duration) && audio.duration > 0
+                    ? audio.duration
+                    : null
+                const pu = normalizeFadeSeconds(fileToPlay.playUntil || 0)
+                const end = len ? Math.min(len, pu || len) : (pu > 0 ? pu : null)
+                if (!end) return // nothing to measure against: `ended` tears down naturally
+                if (fileToPlay.fadeOut > 0) {
+                    const fadeStart = Math.max(0, end - fileToPlay.fadeOut)
+                    audio.timer = setTimeout(() => {
+                        fadeOutAudio(audio, fileToPlay.fadeOut, () => {
+                            audio.pause()
+                            cleanupAudio(audioInstanceKey, audio)
+                        })
+                    }, fadeStart * 1000)
+                } else if (pu > 0 && pu < len) {
+                    audio.timer = setTimeout(() => {
                         audio.pause()
+                        audio.currentTime = 0
                         cleanupAudio(audioInstanceKey, audio)
-                    })
-                }, fadeStartDelay)
-            } else {
-                audio.timer = setTimeout(() => {
-                    audio.pause()
-                    audio.currentTime = 0
-                    cleanupAudio(audioInstanceKey, audio)
-                }, sound.duration * 1000)
+                    }, pu * 1000)
+                }
+                // Otherwise the element reaches its natural end and the `ended`
+                // handler below tears it down.
             }
-        }
-
-        if (sound.loop) {
-            // Manual loop: rewind slightly before the end to avoid the pause
-            // native looping causes (decoder flush + re-seek at the boundary).
-            // For very short clips the 0.25s lead-in would cut them down to a
-            // tiny loop, so never rewind before 98% of the full length.
-            // Fade-in is applied only on the initial play to avoid a volume dip
-            // at every loop boundary.
-            let firstLoopPlay = true
-            audio.addEventListener('timeupdate', () => {
+            audio.addEventListener('loadedmetadata', scheduleStop, { once: true })
+            if (Number.isFinite(audio.duration) && audio.duration > 0) scheduleStop()
+            // Natural end also tears the element down (when no timer fired).
+            audio.addEventListener('ended', () => {
+                cleanupAudio(audioInstanceKey, audio)
+            })
+        } else {
+            // Looping: segment loop to `playUntil` (whole file when it is 0),
+            // and fade-in re-runs at every seam — `firstLoopPlay` is removed so
+            // "fade back in" is possible at each loop boundary (§7). The rewind
+            // point is min(playUntil, file length), replacing the old
+            // max(duration - 0.25, duration * 0.98) fixed point.
+            //
+            // The seam is driven by a 50 ms watchdog rather than `timeupdate`.
+            // timeupdate only fires about four times a second, so on a 0.58 s
+            // loop the element can reach its natural end before the event ever
+            // reports a position past the seam; the element then needs a
+            // `play()` to resume, and a refused resume leaves it PAUSED while
+            // the fade-in keeps ramping to the target - a loop that looks fine
+            // but is silent, with no seam left to re-apply the fade. Checking
+            // the clock ourselves keeps the rewind inside continuous playback.
+            const seekTo = () => {
                 if (audio.stopped) {
                     return
                 }
                 if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
                     return
                 }
-                const rewindThreshold = Math.max(audio.duration - 0.25, audio.duration * 0.98)
-                if (audio.currentTime >= rewindThreshold) {
+                const len = audio.duration
+                const pu = normalizeFadeSeconds(fileToPlay.playUntil || 0)
+                const loopPoint = pu > 0 ? Math.min(pu, len) : len
+                if (audio.currentTime >= loopPoint) {
                     audio.currentTime = 0
-                    if (firstLoopPlay && sound.fadeIn > 0) {
-                        firstLoopPlay = false
-                        // Read the target back off the element rather than closing over
-                        // baseVolume: if the card slider moved this sound's level while
-                        // it was already looping, the next loop must start at the new one.
-                        applyFadeIn(audio, audio._baseVolume ?? baseVolume, sound.fadeIn)
+                    if (fileToPlay.fadeIn > 0) {
+                        // Volume forced to 0 then ramped back up at every seam.
+                        // Read the target back off the element so a mid-loop
+                        // master move lands on the next seam too (Z9's guard,
+                        // now per-seam instead of once).
+                        applyFadeIn(audio, audio._baseVolume ?? baseVolume, fileToPlay.fadeIn)
                     }
                 }
-            })
+            }
+            audio.loopWatch = setInterval(seekTo, 50)
 
+            // Backstop only: if the watchdog was starved past the end anyway,
+            // resume rather than let the sound die at the seam.
             audio.addEventListener('ended', () => {
                 if (audio.stopped) {
                     cleanupAudio(audioInstanceKey, audio)
                     return
                 }
                 audio.currentTime = 0
-                if (firstLoopPlay && sound.fadeIn > 0) {
-                    firstLoopPlay = false
-                    // Read the target back off the element rather than closing over
-                    // baseVolume: if the card slider moved this sound's level while
-                    // it was already looping, the next loop must start at the new one.
-                    applyFadeIn(audio, audio._baseVolume ?? baseVolume, sound.fadeIn)
+                if (fileToPlay.fadeIn > 0) {
+                    applyFadeIn(audio, audio._baseVolume ?? baseVolume, fileToPlay.fadeIn)
                 }
                 audio.play().catch(() => {})
-            })
-        } else {
-            audio.addEventListener('ended', () => {
-                cleanupAudio(audioInstanceKey, audio)
             })
         }
 
@@ -4153,6 +4287,10 @@ function AppBoard() {
         if (audio.fadeOutInterval) {
             clearInterval(audio.fadeOutInterval)
             audio.fadeOutInterval = null
+        }
+        if (audio.loopWatch) {
+            clearInterval(audio.loopWatch)
+            audio.loopWatch = null
         }
         if (audio.timer) {
             clearTimeout(audio.timer)
@@ -6458,22 +6596,146 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                         </button>
                                                     </div>
 
-                                                    {audioFiles.map((fileObj, index) => (
-                                                        <div key={fileObj.storedName || fileObj.name || index} className="flex items-center justify-between bg-dark-800 rounded-lg p-2">
-                                                            <div className="flex items-center space-x-2">
-                                                                <audio controls src={fileObj.preview} className="w-32" />
-                                                                <span className="text-xs text-slate-400 truncate max-w-[120px]">{fileObj.displayName || fileObj.name}</span>
+                                                    {audioFiles.map((fileObj) => {
+                                                        const storedName = fileObj.storedName || fileObj.name || ''
+                                                        const len = fileLengthSeconds(storedName)
+                                                        const lengthFailed = fileLengths[storedName] === 'failed'
+                                                        const fadeIn = Number(fileObj.fadeIn || 0)
+                                                        const fadeOut = Number(fileObj.fadeOut || 0)
+                                                        const playUntil = Number(fileObj.playUntil || 0)
+                                                        const red = len ? fadeWarning(len, playUntil, fadeIn, fadeOut).red : false
+                                                        const warn = len ? fadeWarning(len, playUntil, fadeIn, fadeOut).message : null
+                                                        const step = len ? fadeStep(len) : 1
+                                                        const isDragging = timelineDrag && timelineDrag.storedName === storedName
+                                                        const pct = len ? Math.min(100, Math.max(0, playUntil / len * 100)) : 0
+
+                                                        return (
+                                                            <div key={storedName} data-fade-row className="bg-dark-800 rounded-lg p-3 mb-2 space-y-2">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <audio
+                                                                        controls
+                                                                        src={fileObj.preview}
+                                                                        className="w-32"
+                                                                        onLoadedMetadata={(e) => handleFileLengthMeasured(storedName, e.target.duration)}
+                                                                        onError={() => handleFileLengthFailed(storedName)}
+                                                                    />
+                                                                    <span className="text-xs text-slate-400 truncate max-w-[140px]">{fileObj.displayName || fileObj.name}</span>
+                                                                    <span className="text-xs text-slate-500">{len ? formatLength(len) : 'measuring…'}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeAudioFile(audioFiles.findIndex(f => (f.storedName || f.name) === storedName))}
+                                                                        className="text-xs text-red-400 hover:text-red-300 p-1"
+                                                                        title="Remove file"
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                </div>
+
+                                                                {!len ? (
+                                                                    lengthFailed ? (
+                                                                        <div className="text-xs text-amber-400 bg-dark-900/50 rounded p-2" data-fade-unmeasurable>
+                                                                            This file cannot be measured, so fades are unavailable here. Stored fade values are
+                                                                            preserved. Re-upload the file to set fades.
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-slate-500 bg-dark-900/50 rounded p-2">
+                                                                            Measuring this file&hellip;
+                                                                        </div>
+                                                                    )
+                                                                ) : (
+                                                                    <>
+                                                                        {/* Timeline: draws the whole file, tail dimmed past playUntil;
+                                                                                scrubs Play Until via capture-based drag. */}
+                                                                        <div className="relative h-3 mb-1">
+                                                                            <div className="absolute left-0 top-0 bottom-0 bg-dark-700 rounded opacity-40" style={{ width: '100%' }} />
+                                                                            <div className="absolute left-0 top-0 bottom-0 bg-lime-500/70 rounded" style={{ width: `${pct}%` }} />
+                                                                            <div
+                                                                                role="slider"
+                                                                                aria-valuemin="0"
+                                                                                aria-valuemax={len}
+                                                                                aria-valuenow={playUntil}
+                                                                                aria-valuetext={formatLength(playUntil)}
+                                                                                tabIndex={0}
+                                                                                className="absolute -top-1 w-4 h-4 rounded-full bg-white border border-dark-600 shadow"
+                                                                                style={{ left: `calc(${pct}% - 5.5px)`, top: '-6px' }}
+                                                                            />
+                                                                            <div
+                                                                                className="absolute inset-0 bg-transparent cursor-pointer"
+                                                                                onPointerDown={(e) => {
+                                                                                    const el = e.currentTarget
+                                                                                    el.setPointerCapture(e.pointerId)
+                                                                                    setTimelineDrag({ storedName, field: 'playUntil' })
+                                                                                    const rect = el.getBoundingClientRect()
+                                                                                    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                                                                                    handleTimelineChange(storedName, fraction)
+                                                                                }}
+                                                                                onPointerMove={(e) => {
+                                                                                    if (!isDragging) return
+                                                                                    const el = e.currentTarget
+                                                                                    const rect = el.getBoundingClientRect()
+                                                                                    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                                                                                    handleTimelineChange(storedName, fraction)
+                                                                                }}
+                                                                                onPointerUp={() => setTimelineDrag(null)}
+                                                                                onPointerCancel={() => setTimelineDrag(null)}
+                                                                                style={{ touchAction: 'none' }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex justify-between text-xs text-slate-400 mb-2">
+                                                                            <span>0s</span>
+                                                                            <span>{formatLength(len)}</span>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                            {[['fadeIn', 'Fade in'], ['fadeOut', 'Fade out'], ['playUntil', 'Play Until']].map(([field, label]) => {
+                                                                                const value = field === 'fadeIn' ? fadeIn : field === 'fadeOut' ? fadeOut : playUntil
+                                                                                const max = len
+                                                                                return (
+                                                                                    <div key={field} className="space-y-1">
+                                                                                        <label className="text-xs text-slate-400 block">{label}</label>
+                                                                                        <div className="relative">
+                                                                                            <input
+                                                                                                type="range"
+                                                                                                className="slider w-full"
+                                                                                                min="0"
+                                                                                                max={max}
+                                                                                                step={step}
+                                                                                                value={value}
+                                                                                                disabled={!len}
+                                                                                                onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
+                                                                                            />
+                                                                                            <input
+                                                                                                type="number"
+                                                                                                className="w-16 bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
+                                                                                                value={value === 0 ? '' : value}
+                                                                                                onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <p className="text-xs text-slate-500">{field === 'fadeIn' ? 'ramps up from silence' : field === 'fadeOut' ? 'ramps down to silence' : '0 = whole file'}</p>
+                                                                                    </div>
+                                                                                )
+                                                                            })}
+                                                                        </div>
+
+                                                                        {red && warn && (
+                                                                            <div data-fade-warning className="text-xs text-red-400 bg-red-900/10 rounded p-1 border border-red-900/20">
+                                                                                {warn}
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="text-xs text-slate-500">
+                                                                            {fullVolumeSentence(len, playUntil, fadeIn, fadeOut) || <span>&nbsp;</span>}
+                                                                        </div>
+                                                                    </>
+                                                                )}
                                                             </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => removeAudioFile(index)}
-                                                                className="text-xs text-red-400 hover:text-red-300 p-1"
-                                                                title="Remove file"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </div>
-                                                    ))}
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {soundFormData.loop && audioFiles.some(f => Number(f.fadeIn || 0) > 0 && Number(f.fadeOut || 0) === 0) && (
+                                                <div className="text-xs text-amber-400 bg-amber-900/10 rounded p-1 border border-amber-900/20 mb-1">
+                                                    {seamSentence(true, 1, 0)}
                                                 </div>
                                             )}
 
@@ -6493,45 +6755,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                     </label>
                                                 </div>
                                             )}
-                                        </div>
-
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium mb-1">Duration (s)</label>
-                                                <input
-                                                    type="number"
-                                                    name="duration"
-                                                    value={soundFormData.duration}
-                                                    onChange={handleSoundFormChange}
-                                                    min="0"
-                                                    step="0.1"
-                                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-1">Fade In (s)</label>
-                                                <input
-                                                    type="number"
-                                                    name="fadeIn"
-                                                    value={soundFormData.fadeIn}
-                                                    onChange={handleSoundFormChange}
-                                                    min="0"
-                                                    step="0.1"
-                                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-1">Fade Out (s)</label>
-                                                <input
-                                                    type="number"
-                                                    name="fadeOut"
-                                                    value={soundFormData.fadeOut}
-                                                    onChange={handleSoundFormChange}
-                                                    min="0"
-                                                    step="0.1"
-                                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                                                />
-                                            </div>
                                         </div>
 
                                         <div className="flex items-center space-x-3">

@@ -5501,3 +5501,419 @@ so the bare-LF fault of 2026-10-17 cannot reach them.
 **exit 0** · gate 5 **20/20 · 46/46 · 32/32 · OK**.
 ⚠️ **Gates 3 and 6–8 were not re-run** — every change after the coverage session's E2E run was markdown, and the
 three phases drive the built app over CDP and cannot observe a markdown file. Stated rather than implied.
+---
+
+## 2026-10-18 13:16-13:25 — `.gitattributes`: `*.bat text eol=crlf`
+
+**User-authorised.** The open item had been carried for a day with the note *"one line, but a repo-wide effect, hence
+the user's call, not mine"*. The user read the measurements and said add it.
+
+### What shipped
+
+One new root file, one line, no other file touched:
+
+```
+*.bat text eol=crlf
+```
+
+### Why, measured rather than recalled
+
+- `git ls-files --eol` reported **`i/lf w/crlf`** for all 8 tracked `.bat` files: the committed blob is **LF**, and
+  CRLF existed only because of this machine's `core.autocrlf = true`. The repo had **no `.gitattributes` at all**.
+- Every blob dumped and counted: `Run Android.bat` **245 bare LF / 0 CRLF**, `kill-ports.bat` 152, `Build Android.bat`
+  97, `gradlew.bat` 89. **0 CRLF in all of them.**
+- Four use `goto` + labels: `Run Android.bat` (5 goto / 14 labels), `kill-ports.bat` (8/6), `Build Android.bat`
+  (1/4), `gradlew.bat` (2/6).
+- **A second problem, not in the original item.** With no attribute the *stored* form depends on the committer: in a
+  scratch repo with `core.autocrlf=false`, a CRLF working copy is stored as **`i/crlf`**. So the `.bat` blobs were
+  non-deterministic across machines before this.
+
+### The proof: in-repo A/B, both arms actually run
+
+Deleted `Run Android.bat` and re-checked it out with `core.autocrlf=false` forced, which is exactly what an LF
+machine does:
+
+| Working tree | Result |
+|---|---|
+| `.gitattributes` moved aside | **CRLF=0, bareLF=245** - the 2026-10-17 failure condition, reproduced on demand |
+| `.gitattributes` in place | **CRLF=245, bareLF=0** |
+
+**`eol=crlf` beats `core.autocrlf`.** That ordering is the entire value of the line: a config setting is a property of
+one machine, an attribute is a property of the repo.
+
+### Cost: measured both ways, and it was zero here
+
+- `git hash-object --path <f> <f>` == `git rev-parse HEAD:<f>` for **all 8** files -> **no blob changes**, so
+  `git add --renormalize` is not needed and **no `.bat` shows as modified**. `git status` stayed clean.
+- **Counter-case, for whoever does this in another repo:** in a scratch repo whose blob was stale-**CRLF**, the same
+  attribute left the file **dirty** until `git add --renormalize` was run. **The cost depends on whether the committed
+  form already matches** - worth checking before assuming an attribute line is free.
+- **`git add --renormalize --dry-run .` is a useless probe** here: it lists every path in the repo, so it reads as
+  "the whole tree needs renormalising". `git status` + `hash-object` is the honest measurement.
+- Only `*.bat` got a rule. `* text=auto` was deliberately **not** added, to keep the effect narrow and reviewable.
+
+### The part that did not reproduce
+
+Three minimal batch variants, all **bare LF**, all **exit 0**: plain `goto`; `call :sub` then `goto`; and `call :sub`
+inside a 3-iteration loop with the script's own `netstat`/`for /f` pipeline copied in.
+
+So **LF alone does not break a label jump**, and the "N bare LF" count is a **risk indicator, not a cause**. The
+2026-10-17 failure on the real file is a real observation and the file really was 245 bare LF, but its recorded
+explanation - *the rename shifted byte offsets and cmd's label scan stopped resolving* - points at **offset
+sensitivity**, which none of the three variants provoked.
+
+**The item was still worth doing**: the attribute removes the class, and the failure was seen on the real script.
+But **do not cite "LF breaks `goto`" as a proven mechanism** - it is a hypothesis fitting one observation.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 236/236** before the edit and **237/237** after (the 237th file is
+`.gitattributes`) -> `npx eslint .` **0 errors / 3 warnings** (exit 0) -> `npx vite build` **exit 0** (827 ms) ->
+`check-coverage.mjs` **exit 0 - 40 suites, 368 tests, 24/24 shipped features, 0 gaps** -> gate 5 **46/46, 32/32, 20/20,
+OK**.
+
+**Gates 6-8 (web / Windows / Android E2E) were NOT run.** The three phases drive the built app over CDP;
+`.gitattributes` decides how `.bat` files are materialised in a working tree, and the decisive evidence is the
+checkout A/B above, not an app assertion. Stated rather than implied. Last real figures stand: **238 / 258 / 248,
+0 FAIL each**.
+
+**No user hand-test** - nothing user-facing shipped; no app behaviour changed.
+
+### Not committed, not pushed
+
+The user has not asked. Working tree: `.gitattributes` (new), `PROJECT_STATE.md` modified, `scripts/` untracked as
+before. **Until it is committed the protection does nothing for anyone**, including a fresh clone of this repo.
+
+### Backups - three folders, prune deliberately NOT done
+
+`…-20261018-132147` (237, newest, matches final state), `…-20261018-131958` (236, pre-edit),
+`…-20261018-131235` (236, the previous keeper matching pushed HEAD `f6c3fe1`).
+
+Pruning to 1 before the commit would leave the newest folder as the only copy of a file git does not hold. **Prune
+after the commit and push.**---
+
+## 2026-10-18 13:55-14:25 — `ICON_PREP_SPEC.md`, and the Sound Normalizer retired
+
+Two decisions the user made after reading measurements, plus the spec that records them. **No app code was written;
+`ICON_PREP_SPEC.md` is `planned` and NOT authorised for implementation.**
+
+### The two decisions
+
+**1. The Sound Normalizer is CUT.** Not deferred, not kept as a fallback. The app already balances loudness at
+playback via the per-sound volume trim (`_soundVolume`, `App.jsx:4008`, shipped 2026-10-06). The decisive reason is
+harder than that: the script's product is a **re-encoded MP3 at -16 LUFS**, and **no browser has an MP3 encoder**.
+Measuring LUFS in-browser is feasible (`decodeAudioData` + K-weighting); producing the output file is a wall. Its
+only unique value is "the file is genuinely -16 LUFS in other software", worth nothing for a soundboard at a table.
+
+The user's position: the script predates the volume sliders, and a different user would rather balance in-app than
+run an external tool.
+
+**2. The Image Pipeline goes IN THE APP.** The user confirmed the framing: it does not replace the tint, it **removes
+the tint's weakness**, alongside background removal and resizing. Opt-in, not automatic. 256px output.
+
+### The measurement that decided the algorithm
+
+The user supplied a real corpus: `scripts/Test Images/` (11 files) plus `Dark/Light Background Example`. Eleven real
+images, and the script's own method **loses** on three of them.
+
+| input | script | chosen (adaptive) |
+|---|---|---|
+| line art on white (`Spike_Growth_1/2`, `Tavern`) | 20.2-27.3% **ok** | 17.0-22.9% ok |
+| **light art on black** (`_OLD_Murloc`, `_OLD_Phantom Pain 01/02`) | **79.9-82.1% grey slab** | **9.0-19.1% ok** |
+| golden armour, colour/photo x3 | 60-62% mottled | 38-57% still bad |
+| YouTube screenshots x2 (deliberate limit cases) | 61-64% garbage | guard rail must refuse |
+
+Coverage = opaque pixel fraction of the 256 output. Good silhouette 10-30%; ~80% is a solid slab.
+
+The dark-background slab **is** the user's own "a couple with darker bg that I did not implement". Cause: the script
+hardcodes "background is light", so black inverts to ~254 and **stays opaque**. The chosen method (Otsu threshold on
+per-pixel distance from the border median colour) asks only "does this pixel differ from the background", so there is
+**no light/dark branch anywhere in it**.
+
+**Colour/photo is not silhouetted at all** - three methods, three failures, and it is not a tuning problem. That is
+why "Fit to square" exists.
+
+### Two methods I built failed, and both looked fine
+
+1. **Magic-wand flood, drift.** Comparing each candidate to *the pixel that reached it* accumulates tolerance along the
+   path, so the fill random-walks. Coverage collapsed to 0-5% everywhere. A correct magic wand uses one fixed seed.
+2. **The same flood, fixed - a real design flaw.** A *median* border reference breaks when the artwork touches the
+   border: `Spike_Growth_1`'s spikes reach the top edge, so the median becomes navy and the algorithm deletes the
+   artwork and keeps the background. **Coverage went UP and the result got WORSE.**
+
+**Only the coverage number caught either bug.** Both thumbnails looked like plausible icons. Recorded because it is
+the same lesson as the import latch: a metric that cannot go up catches what a screenshot cannot.
+
+### Ground truth found in the repo
+
+The 19 shipped icons in `public/assets` **are this pipeline's output**: 17 of 19 are exactly `(106,106,106)`, all
+512x512 RGBA, transparent corners, 20px margin (= art constrained to 472, centred). The user confirmed running them
+through it while building the app. So a reimplementation can be checked numerically against them.
+
+**`public/assets/Icon.png` is NOT pipeline output** (navy `(29,17,53)`, no padding) - it is the app icon and needs
+excluding by name from any bulk operation.
+
+### Why the app needs this at all
+
+`recolorImageToColor` (`App.jsx:536`) is applied at **render** time (`App.jsx:1616-1643`), preserves each pixel's
+lightness, and **keeps the existing alpha while never creating one**. A white-background icon arrives opaque, every
+pixel is lightness 1.0, and it becomes a solid block of colour. It is also **skipped** when `sound.color ===
+'#84cc16'`, so an untinted sound shows the stored image raw - which is why the silhouette output must be neutral grey.
+
+**Scope is small**: `handleIconUpload` has exactly **one** call site (`App.jsx:6348`, the sound modal). Characters,
+categories and groups use emoji/Lucide via `renderIcon` (`App.jsx:115`). No cross-container work, no five-shape
+problem. A pre-existing gap is recorded though: the tint walks only 2 of the 5 shapes and never visits groups.
+
+**Both operations must be upload-time.** A stored icon is a filename reference; its bytes cannot be read back as
+pixels without the blob-fetch workaround already at `App.jsx:538-550`. "Fit to square" needs pixels in memory to crop,
+so it cannot be an edit action on an existing icon.
+
+### The other thing the user asked for
+
+The in-app preview shows the **unprocessed original on a light and a dark swatch** with a disclaimer, because it
+tells the user which polarity their background is - exactly what the algorithm keys on. The two supplied examples are
+**the same subject at opposite polarity**: a dark coral skeleton on white, a light ghost on black. Documented in the
+spec as well.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 250/250 (66.3 MB)** before the first edit and again at the end - up from 40.3 MB
+because the corpus arrived. Re-verified afterwards that it still holds the deleted `normalize_sounds.py`.
+
+`check-coverage.mjs` **exit 0 - 40 suites, 368 tests, 24/24 shipped features, 0 gaps, 3 planned** (was 2 planned).
+That is the gate that mattered: registering the feature `planned` is what stops it shipping untested with the gate
+still green.
+
+**Gates 2, 3, 5, 6, 7 and 8 were NOT run**, named rather than implied: no JavaScript, no app code, no harness code
+changed. Last real figures stand - eslint 0 errors / 3 warnings, vite build exit 0, node checks 46/46 32/32 20/20 OK,
+E2E 238 / 258 / 248 with 0 FAIL each.
+
+### Deleting the Sound Normalizer safely
+
+`scripts/` is **untracked**, so there is no `git rm` and no `.gitignore` entry. The files existed in exactly two
+places. Order mattered: **backup first, delete second**, and the user holds their own copies elsewhere. The backup was
+re-checked after the deletion and still holds `normalize_sounds.py`.
+
+💡 A real bug in the deleted script, moot but not to be reintroduced: `normalize_sounds.py:56` was
+`normalize_sounds.vpy = normalize_folder()` - leftover junk that *calls* the function, so the normaliser ran twice and
+asked for the folder path twice.
+
+### Not committed, not pushed
+
+`.gitattributes` (from earlier today), `ICON_PREP_SPEC.md` (new), `PROJECT_STATE.md`, `docs/session-history.md` and
+`e2e/coverage.manifest.json` are modified; `scripts/` remains untracked by the user's choice.
+
+### Backups - four folders, prune still deferred
+
+`…-20261018-142328` (250, newest), `…-20261018-131958` (236), `…-20261018-131235` (236, matches pushed HEAD
+`f6c3fe1`), `…-20261018-131958` pre-edit. Prune after the commit and push, never before: `.gitattributes` is still
+uncommitted, so pruning now would leave the newest folder as the only copy of a file git does not hold.---
+
+## 2026-10-18 15:00-15:20 — corpus validation: the threshold, and a measurement error of mine
+
+The user grew `scripts/Test Images/` from 11 files to **51 real icons** (the golden armour and screenshots were
+replaced by actual icon sources) and asked for the component threshold to be tested on them. It was, and two things
+came out: one confirmed, one a correction to a number I had been quoting all session.
+
+### 1. The component threshold is validated, and keep-largest was worse than thought
+
+`keep ≥2% of largest` versus `keep only the largest`, across **51 images**:
+
+- **3334 connected components** found; `≥2%` keeps **552**. Mean coverage **18.3% -> 19.5%**; 25 of 51 gain.
+- A visual pass over **13** images chosen to span the range: **keep-largest wrong on 8, dramatically wrong on 4,
+  never better.** Worst three:
+  | image | components | keep-largest | keep ≥2% |
+  |---|---|---|---|
+  | `_OLD_They Came From BEHIND` | 99 | an amorphous blob | the full emblem |
+  | `Soothe` | 44 | a blob | hands cradling the swirl |
+  | `Light Background Example` | 111 | the shell only | the whole coral |
+  | `Forest`, `Fire_Crackling`, `Daze`, `Dark Background Example` | 4-54 | complete | complete, **no difference** |
+
+💡 **The pattern is exact: keep-largest fails precisely when the artwork is multi-part, and is identical when it is
+one connected mass.** That is why it looked fine on the first two examples tried and broke on the next one — and why
+**the first examples chosen were the wrong ones to validate it on.**
+
+⚠️ **Not proven: that 2% is optimal**, only that it beats largest-only decisively. `≥5%` and `≥10%` are
+near-identical across the whole corpus, so the real decision is **largest-only versus any threshold at all**, and 2%
+is the safer side of it.
+
+⚠️ **Coverage cannot rank thresholds.** Keeping more components widens the bbox, which scales everything down, so the
+metric is **non-monotonic in the threshold** — `Warding_Sign` reads 21.2 / 21.2 / 22.4 / 17.7 across four settings.
+Only the visual pass can rank them.
+
+### 2. The "80% slab" figure was the wrong basis, and I quoted it all session
+
+Coverage is **the opaque fraction of the finished 256x256 canvas**, which includes the 20px transparent margin. The
+§6 table I had been quoting was measured on the **intermediate 512x512 silhouette, before crop and letterbox**. Those
+differ by exactly `x (216/256)^2 = 0.711` for a square image.
+
+Reconciled directly on `_OLD_Murloc`: intermediate **82.1%**, finished **57.1%** — and both code paths produce
+**byte-identical alpha**, so it was never a code difference. Both bases are internally consistent; **I quoted one
+quantity as the other.**
+
+The conclusion held, and on far better evidence. Re-measured on the finished canvas across the full corpus:
+
+| input class | n | script | chosen |
+|---|---|---|---|
+| line art, light background | **40** | 9.8-31.9% | **6.7-34.4%** (agrees within ~6 points) |
+| light art, dark background | **11** | **41.3-63.2%** | **4.7-30.7%** |
+
+So: **the chosen method costs nothing on the happy path and is decisive on the dark one**, and the dark-background
+failure is now **n=11, not n=3**.
+
+💡 **A metric is only meaningful next to the stage it was taken at.** And a number that survives several sessions
+unchallenged is not evidence of correctness — only of nobody re-running the thing that would have broken it. The
+2026-10-16 "stale `Last updated:`" note and this are the same shape: a claim that was true when written, kept being
+copied, and stopped being checked.
+
+### Also settled this round
+
+- **Three options** at upload in two steps: **Use as-is / Crop to square / Make silhouette**, then preview, then
+  confirm or cancel. Use-as-is exists so the feature never *removes* the capability of uploading an unmodified icon.
+- **No quality gating.** My guard-rail proposal was overruled and it was right: the disclaimer plus the preview is the
+  safeguard and the user keeps their agency. Only *operational* failures produce an error.
+- **The example images cost ~16 KB, not 1.7 MB** at 256px (9.6 + 6.4 KB as JPEG q85). My earlier suggestion to reuse
+  the already-shipped icons instead was wrong — they are the pipeline's *output*, so they show what you get, not what
+  you upload.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 248/248** before the spec rewrite and again at the end (the corpus is 51 files and
+~50 MB, so backups have grown accordingly). `check-coverage.mjs` **exit 0**, 3 planned features, 24/24 shipped covered.
+
+**eslint, vite build, the four node checks and the three E2E phases were NOT run** — no JavaScript, app code or harness
+code changed; this session was spec, docs and one deleted untracked folder. Named rather than implied. Last real
+figures stand: eslint 0 errors / 3 warnings, build exit 0, node checks 46/46 32/32 20/20 OK, E2E 238 / 258 / 248 with
+0 FAIL each.
+
+### Not committed, not pushed
+
+`.gitattributes`, `ICON_PREP_SPEC.md`, `PROJECT_STATE.md`, `docs/session-history.md`, `e2e/coverage.manifest.json`
+modified; `scripts/` untracked by the user's choice. Six backup folders now; still not pruning.---
+
+## 2026-10-18 15:30-15:55 — prune 7 to 1, the corpus retired, spec finalised
+
+### The prune, and what the audit caught
+
+Seven backups had accumulated (411 MB). Pruned to **one** — `…-20261018-151255`, 288 files, 91.8 MB — freeing
+**~320 MB**.
+
+Order was the standing rule: **final backup first, delete after, no further backup for the docs-only corrections
+that followed.** One markdown edit behind is an acceptable rollback point; an unbounded folder count is not.
+
+⚠️ **The audit found real orphans in every folder being deleted, and would have destroyed them.** Checked against
+**`git ls-files` ∪ the working tree** — *not* `git ls-files` alone, which is the check that wrongly cried "DO NOT
+PRUNE" on 2026-10-17 and labelled 411 real files as orphans.
+
+- 🔴 **Five test images existed ONLY in backups**: three golden-armour renders and two screenshots, removed from the
+  working tree earlier that day. They are the evidence for `ICON_PREP_SPEC.md` §6.0 (the inputs silhouette mode does
+  not serve). **Preserved to `Masaüstü\output\preserved-test-images\` before deleting**; the author has since deleted
+  those copies too, so **`06_unserved_inputs.png` is now the only record of them.**
+- Three Sound Normalizer files — expected, authorised, with the author's own copies elsewhere.
+
+💡 **"These are obviously old filenames" is not an audit result.** The five images were not stale duplicates; they
+were the last copy of a documented finding. Same shape as the 2026-10-17 rename, where "it is just the old filename"
+would have deleted real content.
+
+**Keeper verified after deleting, not assumed** — a prune is not a no-op when it fails (Bitdefender's write-lock
+left four half-deleted shells on 2026-10-13): `e2e-full.ps1` present, `ICON_PREP_SPEC.md`, `.gitattributes`, the
+pipeline script and both example images present, 0 zero-byte, no stray `__restore_backup`.
+
+### The corpus retired
+
+The 51-file `scripts/Test Images/` corpus was **deleted at the author's instruction**, once its measurements were
+written into the spec. The author holds the originals elsewhere.
+
+⚠️ **The consequence is recorded rather than left to be discovered:** re-validation is no longer possible from this
+repo, so the open question of tuning `≥2%` needs the images back. And the pipeline script can no longer be diffed
+against the corpus — only against the two example images.
+
+✅ **The knowledge is not lost, which is the whole point of doing the measurements first:** every figure lives in
+`ICON_PREP_SPEC.md` §6, and `Masaüstü\output\` holds the contact sheets, the per-image tables and
+`generate_outputs.py`, which reruns against any folder of images.
+
+Kept in `scripts/`: `Image Pipeline/` (3 files, 3.8 KB — the reference to port from) and the **two example images**
+(1.7 MB), because they are needed as app assets. 🔴 **Commit those two downscaled to 256px (~16 KB), not as-is.**
+
+`scripts/` went from **56 files / 51.4 MB to 5 files / 1.7 MB**, and a backup from 91.8 MB back to ~40 MB.
+
+### Declined: exposing the algorithm's constants
+
+The author asked whether a slider could tune the algorithm's percentages, and declined. Recorded in §15.1 so it is
+not re-proposed:
+
+- The **threshold band** would be the meaningful knob, labelled by intent (*remove less ↔ remove more*), because
+  output coverage is non-monotonic in the threshold and a percentage label would confuse.
+- 🔴 **The component ratio must never be exposed** — it is a bug fix, not a taste setting; keep-largest deleted
+  110 of 111 real parts of a drawing.
+- **Why declined:** the recovery path is already free (bad result → cancel → *Use as-is* or *Crop to square*), and a
+  slider introduces a worse failure: a user dialling in a broken silhouette and saving it.
+- 💡 If ever added: **one** slider, collapsed *Fine-tune* disclosure, **session-only**, so no persisted shape.
+
+### Gates
+
+`backup-project.ps1` **VERIFY OK 288/288 (91.8 MB)** before the prune. `check-coverage.mjs` **exit 0**, 3 planned
+features, 24/24 shipped covered.
+
+**eslint, vite build, the four node checks and the three E2E phases were NOT run** — the whole session was markdown,
+one JSON feature entry, and file deletions. Named rather than implied. Last real figures stand: eslint 0 errors /
+3 warnings, build exit 0, node checks 46/46 32/32 20/20 OK, E2E 238 / 258 / 248 with 0 FAIL each.
+
+### Handover
+
+**Not committed, not pushed**: `.gitattributes` (new), `ICON_PREP_SPEC.md` (new), `PROJECT_STATE.md`,
+`docs/session-history.md`, `e2e/coverage.manifest.json`; `scripts/` untracked by the author's choice.
+
+**One backup** (`…-20261018-151255`), and it still contains the retired 51-file corpus — a fallback the author
+declined to rely on, but it is there.
+
+**Next work** is unchanged and in this order: `FADE_SPEC.md` (row 1), then `ICON_PREP_SPEC.md` (row 2), then
+`HOTKEYS_SPEC.md` last. **Neither is authorised for implementation.**
+## 2026-10-21 02:05-12:40 (opencode) - `FADE_SPEC.md` built: per-file fades, Play Until, and the seam that was not looping
+
+The design was settled on 2026-10-18 and the implementation was authorised and finished here. What changed:
+
+- **Per-file fades are real.** `files[]` entries own `fadeIn` / `fadeOut` / `playUntil`; the sound-level
+  `duration` / `fadeIn` / `fadeOut` fields are gone from the schema and the modal. `migrateSoundFades` copies a
+  legacy sound-level fade onto **every** file entry, which is exactly what a shared fade did before, so existing
+  profiles keep their behaviour instead of losing it.
+- **The fade maths is a pure module** (`src/fadeMath.js`) precisely so a node check can reach it:
+  `audibleEnd = min(fileLength, playUntil)`, `fadeStep` (~200 steps over the real length), `fadeWarning` (the ONE
+  graded state: `fadeIn + fadeOut >= audibleEnd`), `fullVolumeSentence`, `seamSentence`. `e2e/fadeMath.check.mjs`
+  is **43/43** and is gate 5's fifth check; `AGENTS.md` gate 5 now names five commands.
+- **`specs/fade.mjs`** is a new shared suite (FADE1, FADE2, FADE3a, FADE3b, FADE4-FADE7) wired into both
+  entrypoints after `playback`, and `coverage.manifest.json` flips the **Per-file fades** feature to `shipped`.
+- **Loop seams are re-applied at every boundary** - `firstLoopPlay` was removed and `Z9` rewritten in the same
+  session, as `FADE_SPEC` required.
+
+### The two failures that were not in the app
+
+- **`J4` read `fadeIn=undefined`.** The shared seed (`e2e/lib/page.mjs`, and its mobile twin) pointed `s1` at
+  `smite.mp3`, which is not a bundled asset, so `loadedmetadata` never fired and the row correctly hid its
+  controls (§9). The fixture was wrong, not the app: both seeds now use `Tavern_Music.mp3`. The row also grew a
+  real **"Measuring this file..."** state, because "no metadata yet" and "cannot be measured" are not the same
+  thing and the scary warning used to flash on every open.
+- **`Z9` read a flat `0.2` with no dips.** The seam was driven by `timeupdate`, which fires ~4x/s; on a 0.58 s
+  loop the element reached its natural `ended` before the event ever reported a position past the seam. Resuming
+  from `ended` needs a `play()` that can be refused, and a refused resume left the element **paused** while the
+  fade-in interval kept ramping to target - a loop that looks alive and makes no sound. The rewind is now a
+  **50 ms watchdog** cleared in `cleanupAudio`, `stopAudioInstance` and the unmount effect; `ended` remains a
+  backstop. Z9 then reported `samples=[0.02,0.06,0.1,0.02,...]` with `paused:false, ended:false` at every probe,
+  twice in a row and again on Windows and Android.
+
+### Gates (all run, none assumed)
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 376 tests, 25
+shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 43/43**; **web 246/0/0 exit 0**;
+**Windows 266/0/1 exit 1**; **Android 256/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
+
+### Handover
+
+**Hand-test of the built app is PENDING.** Per-file fades are user-facing, so the feature is green in tests, not
+done.
+
+Backups this session: `...-20261021-002338`, `...-20261021-005800`, `...-20261021-114603` (253 files, 62.8 MB,
+`VERIFY OK`), plus a final one after the commit.
+
+`.gitattributes` (`*.bat text eol=crlf`) is still untracked - the user has never asked for it to be committed.
+`scripts/` is untracked by the author's choice.

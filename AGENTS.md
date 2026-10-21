@@ -229,15 +229,15 @@ Gates 4–8 are the ones that catch things gates 2–3 cannot. Budget roughly 3 
 with warm `node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK. **Gate 5 is
 seconds**, and it is a gate precisely because of what has happened without it.
 
-### Gate 5 — the four node checks, in one line
+### Gate 5 — the five node checks, in one line
 
 ```powershell
-node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs
+node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs
 ```
 
-Run **all four even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
-`profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**. They need no browser, no
-emulator and no CDP, so there is no excuse for skipping them.
+Run **all five even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
+`profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **43/43**. They
+need no browser, no emulator and no CDP, so there is no excuse for skipping them.
 
 ⚠️ **Why this is a gate and not a suggestion — it has already bitten twice.** `bundleGuard.check` is what found the
 import latch (a hung Tauri IPC latching the UI forever with no way out), and it is the **only** coverage that path

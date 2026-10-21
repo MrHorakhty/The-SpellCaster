@@ -35,6 +35,7 @@ import { refcount } from './specs/refcount.mjs';
 import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
+import { fade } from './specs/fade.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -287,15 +288,21 @@ async function main() {
   })()`);
   await sleep(700);
   log('SOUND','J1: edit modal opened',editBtn==='OK'?'PASS':'FAIL',editBtn);
-  const prefilled = await evalJs(`(() => {
-    const name=document.querySelector('input[name="name"]');
-    const color=document.querySelector('input[name="color"]');
-    const fadeIn=document.querySelector('input[name="fadeIn"]');
-    return { name:name?.value, color:color?.value, fadeIn:fadeIn?.value };
-  })()`);
+  let fadeInBox = undefined;
+  for (let i = 0; i < 40 && fadeInBox === undefined; i++) {
+    fadeInBox = await evalJs(`(() => {
+      const row = document.querySelector('[data-fade-row]');
+      return row ? [...row.querySelectorAll('input[type=number]')][0]?.value : undefined;
+    })()`);
+    if (fadeInBox === undefined) await sleep(100);
+  }
+  const prefilled = await evalJs(`(() => ({
+    name: document.querySelector('input[name="name"]')?.value,
+    color: document.querySelector('input[name="color"]')?.value
+  }))()`);
   log('SOUND','J2: name prefilled (Smite)',prefilled?.name==='Smite'?'PASS':'FAIL',prefilled?.name);
   log('SOUND','J3: color prefilled (#ff0000)',prefilled?.color==='#ff0000'?'PASS':'FAIL',prefilled?.color);
-  log('SOUND','J4: fadeIn prefilled (0.5)',prefilled?.fadeIn==='0.5'||prefilled?.fadeIn===0.5?'PASS':'FAIL',String(prefilled?.fadeIn));
+  log('SOUND','J4: fadeIn prefilled (0.5)',fadeInBox==='0.5'?'PASS':'FAIL',`name=${prefilled?.name} color=${prefilled?.color} fadeIn=${fadeInBox}`);
 
   // Change name + color + toggle glow off
   await evalJs(`window.__setInput('name','Divine Smite'); window.__setInput('color','#00ff00');`);
@@ -1054,7 +1061,7 @@ async function main() {
     const snd = (id,name,type,color,opts) => ({ id, name, type, icon:'Icon.png', files:[{name:name.toLowerCase().replace(/\\s+/g,'_')+'.mp3', displayName:name+'.mp3'}], color, duration:0, randomPlay:false, ...opts });
     localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([
       { id:'c1', name:'Human Paladin', sounds:[
-        snd('s1','Divine Smite','Holy','#00ff00',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:false, glowProminence:0.7, files:[{name:'smite.mp3',displayName:'Smite.mp3'}]}),
+        snd('s1','Divine Smite','Holy','#00ff00',{loop:true, fadeIn:0.5, fadeOut:0.5, glowEnabled:false, glowProminence:0.7, files:[{name:'Longbow_4.mp3',displayName:'Longbow_4.mp3'}]}),
         snd('s2','Shield Bash','Melee','#3b82f6',{loop:false, randomPlay:true, files:[{name:'shield1.mp3',displayName:'Shield1.mp3'},{name:'shield2.mp3',displayName:'Shield2.mp3'}]})
       ]},
       { id:'c2', name:'Elf Sorcerer', sounds:[] }
@@ -1610,6 +1617,7 @@ async function main() {
   // wherever Z7 put it (50%) and needs a quiet page for the fade sampling, so it
   // must not run in the middle of the block. refcount re-seeds after it.
   await runSpecs(ctx, [playback]);
+  await runSpecs(ctx, [fade]);
 
   // ================================================================
   //  F: PROFILES (shared spec - see e2e/specs/profiles.mjs)

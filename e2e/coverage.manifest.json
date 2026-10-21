@@ -274,9 +274,18 @@
     {
       "name": "Per-file fades",
       "spec": "FADE_SPEC.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/fade.mjs::FADE"
+      ],
+      "note": "NOT IMPLEMENTED, not authorised. Design agreed 2026-10-18. Replaces the sound-level Duration/Fade In/Fade Out number boxes with per-file sliders capped by the real audio length, a per-row timeline that also scrubs stop-after, and one red state (fadeIn + fadeOut >= min(fileLength, stopAfter)). Fixes four silent no-ops that specs/playback.mjs Z15 pins; loop fade-out is settled but NOT built."
+    },
+    {
+      "name": "Icon preparation (use as-is / crop to square / silhouette)",
+      "spec": "ICON_PREP_SPEC.md",
       "status": "planned",
       "coveredBy": [],
-      "note": "NOT IMPLEMENTED, not authorised. Design agreed 2026-10-18. Replaces the sound-level Duration/Fade In/Fade Out number boxes with per-file sliders capped by the real audio length, a per-row timeline that also scrubs stop-after, and one red state (fadeIn + fadeOut >= min(fileLength, stopAfter)). Fixes four silent no-ops that specs/playback.mjs Z15 pins; loop fade-out is settled but NOT built."
+      "note": "NOT IMPLEMENTED, not authorised. Three opt-in choices on sound-icon upload, in two steps (choose, preview, confirm or cancel), never automatic: 'Use as-is', 'Crop to square' (interactive crop), 'Make silhouette'. Use-as-is exists so the feature never REMOVES the capability of uploading an unmodified icon. Brings scripts/Image Pipeline/image_pipeline.py into the app so no Python is needed. Fixes the measured weakness of recolorImageToColor (App.jsx:536), which cannot create an alpha channel. The script's method is NOT reused: it produces an 80% grey slab on dark backgrounds, measured on three of the author's own images; the spec uses an adaptive Otsu-on-distance-from-border-colour method chosen by measurement, keeping components >=2% of the largest. Colour/photo art is deliberately NOT silhouetted. NO quality gating: the disclaimer plus the preview is the safeguard and the user keeps agency. Adds NO persisted shape; replaces the icon on confirm. New module src/iconPrep.js, maths split out so a node check can reach it. Intended suite: specs/iconprep.mjs, category ICON, ids IP1..IPn - all 26 single-letter prefixes are taken, so a new category is required, not a new letter."
     }
   ],
   "retired": [
@@ -1124,6 +1133,30 @@
         "Z8",
         "Z9"
       ]
+    },
+    {
+      "key": "FADE",
+      "cat": "FADE",
+      "title": "Per-file fades",
+      "file": "specs/fade.mjs",
+      "export": "fade",
+      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, and the clamped fade on a file shorter than playUntil",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "ids": [
+        "FADE1",
+        "FADE2",
+        "FADE3a",
+        "FADE3b",
+        "FADE4",
+        "FADE5",
+        "FADE6",
+        "FADE7"
+      ],
+      "idPattern": "^FADE\\d"
     },
     {
       "key": "O",
