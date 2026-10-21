@@ -191,8 +191,45 @@ export function restoreLs(captured) {
   return `(() => { const o = ${o}; localStorage.clear(); for (const k in o) localStorage.setItem(k, o[k]); return 'restored'; })()`;
 }
 
-// ---- modal submit ------------------------------------------------------------
+// ---- waiting for the board ---------------------------------------------------
+//
+// A spec that seeds the store and reloads cannot assume the app came up with
+// it. Two things can go wrong, and both have bitten this suite:
+//
+//   - the reload is SLOW. The Android WebView takes seconds to re-render, and
+//     a spec that sleeps a fixed time and then measures can be looking at a
+//     page that has not drawn yet - zero cards, and every assertion after it
+//     fails for a reason that has nothing to do with the thing under test.
+//   - the reload does not happen at all. The project's own notes call
+//     `Page.reload` unreliable on that AVD, and a page that did not reload is
+//     still showing the PREVIOUS board - which, if the previous suite emptied
+//     it, is an empty board.
+//
+// So: wait for the cards to appear, and if they never do, seed and reload
+// once more. Waiting for the thing you are about to assert on is the whole
+// difference between a flaky suite and a broken one.
+export async function awaitBoard(ctx, { min = 1, timeoutMs = 15000, seed = null, settleMs = 1200 } = {}) {
+    const { evalJs, sleep, reload } = ctx;
+    const count = async () => {
+        const n = await evalJs(`document.querySelectorAll('[data-sound-card]').length`);
+        return typeof n === 'number' ? n : 0;
+    };
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const cards = await count();
+        if (cards >= min) return cards;
+        await sleep(400);
+    }
+    if (seed) {
+        await evalJs(seed);
+        await reload();
+        await sleep(settleMs);
+        return count();
+    }
+    return 0;
+}
 
+// ---- modal submit ------------------------------------------------------------
 // Submit the bg-lime-600 submit button whose text matches (and is not disabled).
 export function submitModalExpr(btnText) {
   return `(() => {

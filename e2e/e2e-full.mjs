@@ -80,6 +80,21 @@ async function main() {
   async function reloadPage(waitMs = 3500) {
     await cdp('Page.reload', { ignoreCache: true });
     await sleep(waitMs);
+    // Then check the app actually MOUNTED, and give it a moment more if it
+    // has not. A page that has not rendered yet looks exactly like an empty
+    // board, and a spec that measures it then fails for a reason that has
+    // nothing to do with the thing under test - which is how the Android phase
+    // produced fifteen failures about scrolling and sliders on an app that was
+    // fine. The check comes AFTER the settle, not before: polling during the
+    // navigation burns the whole timeout on every reload.
+    for (let i = 0; i < 20; i++) {
+      let mounted = false;
+      try {
+        mounted = await evalJs(`!!(document.querySelector('#root') && document.querySelector('#root').children.length > 0)`);
+      } catch (e) { mounted = false; }
+      if (mounted) break;
+      await sleep(250);
+    }
     await evalJs(PAGE_HELPERS);
   }
 
@@ -106,11 +121,14 @@ async function main() {
   await run('NAV', 'helpers', () => evalJs(PAGE_HELPERS));
 
   // Helper: upload WAV via CDP
-  async function uploadWav() {
+  // copies sets the same file N times: setting a file input to a value it
+  // already holds fires NO change event, so a second upload of the same file
+  // would be silently ignored. Two copies become two separate stored files.
+  async function uploadWav(copies = 1) {
     for (let i = 0; i < 10; i++) {
       const doc = await cdp('DOM.getDocument', { depth: 1 });
       const qr = await cdp('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: 'input[type="file"][accept*=".mp3"]' });
-      if (qr.result?.nodeId) return cdp('DOM.setFileInputFiles', { nodeId: qr.result.nodeId, files: [WAV] });
+      if (qr.result?.nodeId) return cdp('DOM.setFileInputFiles', { nodeId: qr.result.nodeId, files: Array(copies).fill(WAV) });
       await sleep(400);
     }
     return null;
@@ -155,7 +173,7 @@ async function main() {
     driver,
     isTauri: EXPECT_TAURI,
     submitModal: (t) => evalJs(submitModalExpr(t)),
-    upload: () => uploadWav(),
+    upload: (n) => uploadWav(n),
     closeDrawer: async () => {},
     navigateTo: async (text) => {
       const r = await evalJs(`(() => {

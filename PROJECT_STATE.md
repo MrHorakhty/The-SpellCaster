@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: the hand-test found three gaps (the mock's timeline, the unreadable percentage box, the loop's fade-out) and then a fourth (environment sounds had no fade controls at all, because of the legacy single-`file` shape - and fixing that exposed an export-breaking provenance bug). All four are fixed, committed (`bd919ec`, `85fe2d9`) and green on all three platforms. **Waiting on the user's re-test.**
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: the hand-test found four gaps in a row (the mock's timeline, the unreadable percentage box, the loop's fade-out, environment sounds having no fade controls) and then the export refusal caused by removing audio. All are fixed and green; **waiting on the user's re-test, and on their recovery of the two sounds whose audio is already gone from disk.**
 
 ✅ **`FADE_SPEC.md` IS SHIPPED (2026-10-21) — per-file fades, Play Until and seam fades, green on all three platforms.**
 - `src/fadeMath.js` (NEW, pure model: `normalizeFadeSeconds`, `fadeStep`, `audibleEnd`, `fadeWarning`,
@@ -54,10 +54,26 @@
   `files[]` list exists. FADE12 and FADE13 pin it. 💡 `M9` ("copy keeps legacy file field") was asserting the
   presence of an empty `file: ""` key - an artifact of the old save, not a contract - and now asserts that the copy
   MIRRORS the source.
-- Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
-  384 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 254/0/0 exit 0** ·
-  **Windows 274/0/1 exit 1 (G5 WARN)** · **Android 264/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
-  healthy baseline, not a regression.
+- 🔴 **Removing audio no longer orphans a sound's file (the export error the user hit).** The bytes were released in
+  two wrong ways. (a) The reference check excluded the whole **CONTAINER** of the sound being edited, so a **sibling
+  copy in the same container** - what the copy feature produces - was invisible to it, and the bytes were deleted
+  while the sibling still pointed at them. (b) The bytes were deleted the moment **Remove** was clicked, before
+  anything was saved, so closing the modal without saving left the sound pointing at a file that no longer existed.
+  Either way the sound went silent and the profile bundle **refused to export** ("those files not being present").
+  Now the check excludes the edited **SOUND** (by id) so siblings count, and the bytes are released when the change
+  is **committed** (Save), not when the row is removed. G6–G7b in `specs/refcount.mjs` pin it, using **real uploaded
+  files** so the guard runs on all three platforms (under Tauri the audio is a physical file, and a seeded
+  localStorage key proves nothing there).
+- 🔴 **The E2E harness now waits for the page instead of sleeping a fixed time.** The Android phase produced **15
+  failures** in the scroll and sliders suites ("0 cards on the page") on an app that was fine - every other suite in
+  the same run passed. `reloadPage()` slept 3.5 s and then measured, and the Android WebView can take longer than
+  that; a page that has not painted looks exactly like an empty board. `reloadPage()` now waits for the app to
+  **mount** (`#root` has children), and the new `awaitBoard()` (`lib/page.mjs`) waits for the expected cards and
+  re-seeds once if they never arrive. R0 and B0 report it when the board does not come up.
+- Gate results, 2026-10-21/22: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
+  391 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 260/0/0 exit 0** ·
+  **Windows 278/0/3 exit 1 (G5/G6b/G7b WARN)** · **Android 257/0/3 exit 1 (same WARNs)**. The exit 1s are the
+  documented healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
   "done" until the user has used it. **The first hand-test (2026-10-21) found three real gaps**, all now fixed and
   green: the timeline was a plain scrubber instead of the mock's segmented bar, the percentage box was unreadable,

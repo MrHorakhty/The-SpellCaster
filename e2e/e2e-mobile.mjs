@@ -59,6 +59,21 @@ async function main() {
   async function reloadPage(waitMs = 3500) {
     await cdp('Page.reload', { ignoreCache: true });
     await sleep(waitMs);
+    // Then check the app actually MOUNTED, and give it a moment more if it
+    // has not. A page that has not rendered yet looks exactly like an empty
+    // board, and a spec that measures it then fails for a reason that has
+    // nothing to do with the thing under test - which is how the Android phase
+    // produced fifteen failures about scrolling and sliders on an app that was
+    // fine. The check comes AFTER the settle, not before: polling during the
+    // navigation burns the whole timeout on every reload.
+    for (let i = 0; i < 20; i++) {
+      let mounted = false;
+      try {
+        mounted = await evalJs(`!!(document.querySelector('#root') && document.querySelector('#root').children.length > 0)`);
+      } catch (e) { mounted = false; }
+      if (mounted) break;
+      await sleep(250);
+    }
     await evalJs(PAGE_HELPERS);
   }
 
@@ -88,7 +103,9 @@ async function main() {
   // WebView rejects it as a bad IPC message ("Terminating renderer for bad IPC message,
   // reason 2") which kills the renderer and then the whole app, so the run dies silently.
   // Build the WAV in the page and hand it to the input via DataTransfer instead.
-  async function uploadWav() {
+  // `copies` adds the file N times: the app stores one entry per file the
+  // input carries, and a DataTransfer can hold the same file twice.
+  async function uploadWav(copies = 1) {
     return evalJs(`(() => {
       const input = document.querySelector('input[type="file"][accept*=".mp3"]') || document.querySelector('input[type="file"]');
       if (!input) return 'NO_INPUT';
@@ -100,7 +117,7 @@ async function main() {
       v.setUint32(24,rate,true); v.setUint32(28,rate,true); v.setUint16(32,1,true);
       v.setUint16(34,16,true); w(36,'data'); v.setUint32(40,dataLen,true);
       const file = new File([buf], 'e2e_silence.wav', { type: 'audio/wav' });
-      const dt = new DataTransfer(); dt.items.add(file);
+      const dt = new DataTransfer(); for (let i = 0; i < ${copies}; i++) dt.items.add(file);
       input.files = dt.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
       return 'OK files=' + input.files.length;
@@ -143,7 +160,7 @@ async function main() {
     driver,
     isTauri: EXPECT_TAURI,
     submitModal: (t) => evalJs(submitModalExpr(t)),
-    upload: () => uploadWav(),
+    upload: (n) => uploadWav(n),
     closeDrawer,
     openDrawer,
     navigateTo: async (text) => {

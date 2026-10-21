@@ -6105,3 +6105,78 @@ shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 2
 The user's board still holds the duplicated file entries from the bug. The modal now shows ONE row per file and the
 next save rewrites the list, so **opening the sound once and saving it repairs that sound** - but the user may
 prefer to delete the duplicates by hand.
+## 2026-10-21 23:00-23:50 (opencode) - "I removed some audio and now the export says those files are not present"
+
+The user's report: they removed some audio while testing, and the profile bundle then refused to export, naming
+**Caustic Blast** and **Frostbite** in the **Mobile Sorc** profile. Both are multi-file sounds, and they had kept
+one file in each.
+
+### What the app was doing wrong
+
+The reference-count guard that decides whether a stored file may be deleted had **two** flaws, and either one
+produces exactly that error:
+
+1. **The exclusion was the CONTAINER, not the sound.** Removing a file from a sound excluded that sound's whole
+   container from the check - the intent was "the sound being edited still lists this file, so do not let it block
+   the delete". But the copy feature puts **copies in the SAME container sharing one storedName**, so the copies
+   were invisible to the check: the bytes were deleted while a sibling still pointed at them.
+2. **The bytes were released when "Remove" was clicked, not when the change was saved.** Closing the modal
+   without saving therefore left the sound pointing at a file that no longer existed.
+
+Both end the same way: the sound resolves `/assets/<name>` instead of its own audio (silent), and the bundle
+export refuses, because a sound that points at a file the profile does not have is a hole in the bundle.
+
+### The fix
+
+- The check now excludes the edited **SOUND** (`excludeSoundId`), so its siblings in the same container count and
+  keep the bytes alive.
+- The bytes are released when the change is **committed** - in `handleSoundFormSubmit`, for the files that left the
+  sound in this modal session, and only if no other sound still points at them. The custom icon follows the same
+  rule. `editingSoundContainerRef()` is gone with it.
+
+### The tests, and proving they bite
+
+`specs/refcount.mjs` gains **G6, G6b, G6c, G7, G7b**. They use a **real uploaded file** (two of them, uploaded
+through the app's own path) rather than a seeded localStorage key, because under Tauri the audio is a physical file
+and a key proves nothing there - and Tauri is where the user hit it. **G6c** is the platform-agnostic guard: a
+sound whose bytes are gone falls back to `/assets/<name>`, a sound whose bytes are there does not.
+
+💡 **The tests were checked against the broken code**, because a guard that passes on the broken app is not a
+guard: with the deletion made unconditional, **G6b** failed (`key=false`) and **G6c** failed with the sibling's src
+pointing at `/assets/Shared%20Test.mp3` - the exact "file not present" state the user's export error was describing.
+Both passed again with the fix in place.
+
+### Gates
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK**; gate 5
+**46/46, 32/32, 20/20, OK, 46/46, 20/20**; **web 260/0/0 exit 0**; **Windows 278/0/3 exit 1**; **Android 257/0/3
+exit 1** - the exit 1s are the documented G5 WARN baseline, and the extra WARNs are the Tauri key-check skips that
+G6b and G7b now declare.
+
+💡 **The mobile phase earned its keep immediately**: the first Android run died on `ReferenceError: copies is not
+defined` - the new upload helper's copy count was wired into one entrypoint's signature and not the other's. The web
+and Windows phases could not have caught that; Android ran the helper the web phase never touches.
+## 2026-10-22 00:00-00:50 (opencode) - the harness measured a page that had not painted yet
+
+The Android phase failed with **15 failures** in the scroll and sliders suites - "0 cards on the page" - on an app
+that was demonstrably fine (every other suite in the same run passed, including the ones that seed and reload).
+
+The cause was the harness, not the app:
+
+- `reloadPage()` slept a fixed 3.5 s and then injected the page helpers. On the Android WebView the reload can take
+  longer than that, so the spec measured a page that had not drawn yet. A page that has not painted looks exactly
+  like an empty board, and every assertion after it fails for a reason that has nothing to do with what it is
+  testing.
+- The project's own notes already say `Page.reload` is unreliable on that AVD, and a page that did not reload at all
+  would still be showing the PREVIOUS board - which, after the empty-states suite, was empty.
+
+Two fixes, both in the harness:
+
+- `reloadPage()` now waits for the app to **MOUNT** (`#root` has children) before the fixed settle, polling for up
+  to 15 s. One place, so every spec benefits.
+- `awaitBoard()` (new, in `lib/page.mjs`) waits for the expected cards to be on screen and, if they never arrive,
+  seeds and reloads once more. The scroll and sliders specs use it, because they measure the board itself.
+
+💡 **A suite that measures a page has to wait for the page.** A fixed sleep is a bet on how fast the machine is, and
+the emulator lost that bet - with fifteen failures that all pointed at scrolling and sliders, and not one of them
+at the thing that had actually changed.

@@ -15,7 +15,7 @@
 // The seed is re-applied first so boxSize starts from its default regardless of
 // what earlier suites left behind (SEED removes the key).
 
-import { PAGE_HELPERS, SEED } from '../lib/page.mjs';
+import { PAGE_HELPERS, SEED, awaitBoard } from '../lib/page.mjs';
 
 export const sliders = {
   title: 'SUITE B: SLIDERS & PERSISTENCE',
@@ -24,6 +24,13 @@ export const sliders = {
 
     await evalJs(SEED);
     await reload();
+    // Wait for the board rather than assuming the reload painted it - see
+    // awaitBoard in lib/page.mjs. This spec measures a card's width, so an
+    // empty page would fail every assertion for the wrong reason.
+    const seededCards = await awaitBoard(ctx, { min: 3, seed: SEED });
+    if (seededCards < 3) {
+        log('SLIDER', 'B0: the seeded board came up', 'FAIL', `cards=${seededCards} expected=3`);
+    }
     await evalJs(PAGE_HELPERS);
 
     // React tracks the range's value on the DOM node, so assigning .value is

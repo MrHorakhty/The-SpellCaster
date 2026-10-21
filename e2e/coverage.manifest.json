@@ -967,6 +967,7 @@
         "android"
       ],
       "ids": [
+        "B0",
         "B1",
         "B2",
         "B3",
@@ -1016,7 +1017,7 @@
       "title": "File reference guard",
       "file": "specs/refcount.mjs",
       "export": "refcount",
-      "covers": "a copy shares storedName, so deleting the source container must not delete the file",
+      "covers": "a copy shares storedName, so deleting the source container must not delete the file; removing a file from one of two sounds that share it keeps the bytes the sibling uses (checked against a real uploaded file, and by proving the sibling still resolves its own audio instead of the /assets fallback, on every platform); and removing a file and closing without saving keeps the reference and the bytes",
       "platforms": [
         "web",
         "win",
@@ -1027,7 +1028,12 @@
         "G2",
         "G3",
         "G4",
-        "G5"
+        "G5",
+        "G6",
+        "G6b",
+        "G6c",
+        "G7",
+        "G7b"
       ],
       "idPattern": "^G\\d"
     },
@@ -1085,6 +1091,7 @@
       ],
       "idPattern": "^R\\d",
       "ids": [
+        "R0",
         "R1",
         "R10",
         "R2",

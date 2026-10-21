@@ -23,6 +23,8 @@
 // that silently stops overflowing stops testing anything — R3 is the guard that
 // says so out loud.
 
+import { awaitBoard } from '../lib/page.mjs';
+
 export const scroll = {
   title: 'SUITE R: SINGLE-VIEW SCROLL',
   async run(ctx) {
@@ -48,6 +50,15 @@ export const scroll = {
 
     await evalJs(seed);
     await reload();
+
+    // The board has to be ON SCREEN before anything about scrolling it means
+    // anything. A slow or missed reload leaves an empty page, and every
+    // assertion here would then be measuring the reload rather than the
+    // scroll containment. See awaitBoard in lib/page.mjs.
+    const seededCards = await awaitBoard(ctx, { min: 60, seed });
+    if (seededCards < 60) {
+        log('SCROLL', 'R0: the seeded board came up', 'FAIL', `cards=${seededCards} expected=60`);
+    }
 
     // A settle beat: the grid has to lay out 60 cards before scrollHeight means
     // anything. Sizing can also settle a frame late after the reload.

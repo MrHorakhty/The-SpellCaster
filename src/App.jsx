@@ -2207,7 +2207,7 @@ function AppBoard() {
         }))
     }
 
-    const handleSoundFormSubmit = (e) => {
+    const handleSoundFormSubmit = async (e) => {
         e.preventDefault()
 
         const hasFiles = audioFiles.length > 0 || soundFormData.files?.length > 0 || soundFormData.file
@@ -2250,6 +2250,29 @@ function AppBoard() {
             updateSound(editingSound.id, payload)
         } else {
             addSound(payload)
+        }
+
+        // Commit the removals. A file that left the sound in this modal session
+        // gives up its bytes NOW - when the change is actually saved - and only
+        // if no OTHER sound still points at them. The edited sound is excluded
+        // by id (its old list still names the file until the state lands), but
+        // its SIBLINGS in the same container are counted: the copy feature puts
+        // copies in one container sharing one storedName, and hiding them
+        // deleted the bytes they still used, leaving a silent sound and a
+        // profile bundle that refused to export.
+        if (editingSound) {
+            const submittedNames = new Set(submitFiles.map(f => f.storedName).filter(Boolean))
+            const removedNames = (editingSound.files || [])
+                .map(f => f.storedName)
+                .filter(Boolean)
+                .filter(name => !submittedNames.has(name))
+            for (const name of removedNames) {
+                await removeFileIfUnreferenced(name, null, editingSound.id)
+            }
+            // The same for a custom icon that was cleared or replaced.
+            if (editingSound.icon && editingSound.icon !== payload.icon) {
+                await removeFileIfUnreferenced(editingSound.icon, null, editingSound.id)
+            }
         }
 
         setShowSoundModal(false)
@@ -2758,17 +2781,27 @@ function AppBoard() {
         return excludeRef.containerType === 'groupTop' && container.groupId === excludeRef.containerId
     }
 
-    const isFileReferencedElsewhere = (storedName, excludeRef) => {
+    // `excludeSoundId` is the ONE sound whose claim is ending. It is the right
+    // granularity for a file removed in the edit modal: the sound being edited
+    // still lists the file until it is saved, so it has to be ignored - but its
+    // SIBLINGS in the same container must NOT be. The copy feature puts copies
+    // of a sound in the SAME container, sharing one storedName, and excluding
+    // the whole container hid them: removing a file from one copy deleted the
+    // bytes the other copies still pointed at, leaving a sound whose audio was
+    // gone - silent, and a profile bundle that refused to export.
+    const isFileReferencedElsewhere = (storedName, excludeRef, excludeSoundId) => {
         if (!storedName) return false
         return allSoundContainers().some(container =>
             !isExcludedContainer(container, excludeRef) &&
-            container.sounds.some(sound => soundReferencesFile(sound, storedName))
+            container.sounds.some(sound =>
+                sound.id !== excludeSoundId &&
+                soundReferencesFile(sound, storedName))
         )
     }
 
-    const removeFileIfUnreferenced = (storedName, excludeRef) => {
+    const removeFileIfUnreferenced = (storedName, excludeRef, excludeSoundId) => {
         if (!storedName) return
-        if (isFileReferencedElsewhere(storedName, excludeRef)) return
+        if (isFileReferencedElsewhere(storedName, excludeRef, excludeSoundId)) return
         return removeFileFromLocalStorage(storedName)
     }
 
@@ -3224,17 +3257,6 @@ function AppBoard() {
         }
     }
 
-    // The container of the sound currently open in the modal. Detaching a file or
-    // an icon from that sound ends ITS claim on the bytes, so its own container is
-    // excluded from the reference check - otherwise every removal would be blocked
-    // by the still-saved copy of the sound and leak storage.
-    const editingSoundContainerRef = () => {
-        if (!editingSound) return null
-        const found = findSoundContainer(editingSound.id)
-        if (!found) return null
-        return { containerType: found.containerType, containerId: found.containerId, groupId: found.groupId }
-    }
-
     // --- per-file fade field editing ---------------------------------------
     // Fields live on the audioFiles entries themselves (FADE_SPEC §4), edited
     // live while dragging/typing and committed to storage on Save.
@@ -3270,7 +3292,7 @@ function AppBoard() {
         handleFileFadeChange(storedName, 'playUntil', Math.round((len * fraction) * 100) / 100)
     }
 
-    const removeAudioFile = async (index) => {
+    const removeAudioFile = (index) => {
         const fileToRemove = audioFiles[index]
 
         setAudioFiles(prev => prev.filter((_, i) => i !== index))
@@ -3281,23 +3303,22 @@ function AppBoard() {
             files: prev.files.filter((_, i) => i !== index)
         }))
 
-        await removeFileIfUnreferenced(fileToRemove.name, editingSoundContainerRef())
+        // The BYTES are not deleted here. The file leaves the sound's list
+        // immediately, but the sound is not saved until Save is pressed - and
+        // deleting the bytes at that moment meant that closing the modal
+        // without saving left the sound pointing at a file that no longer
+        // existed: the sound was silent and the profile bundle refused to
+        // export. The bytes go when the change is committed (see
+        // handleSoundFormSubmit).
     }
 
-    const clearMultipleAudioUpload = async () => {
-        for (const file of audioFiles) {
-            await removeFileIfUnreferenced(file.name, editingSoundContainerRef())
-        }
-
+    const clearMultipleAudioUpload = () => {
         setAudioFiles([])
         setFileLengths({})
         setSoundFormData(prev => ({ ...prev, files: [] }))
     }
 
-    const clearIconUpload = async () => {
-        if (soundFormData.icon) {
-            await removeFileIfUnreferenced(soundFormData.icon, editingSoundContainerRef())
-        }
+    const clearIconUpload = () => {
         setIconPreview('')
         setSoundFormData(prev => ({ ...prev, icon: '', iconDisplayName: '' }))
     }
@@ -6504,6 +6525,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 </h2>
                                 <button
                                     onClick={() => setShowSoundModal(false)}
+                                    data-sound-modal-close
                                     className="p-1 hover:bg-dark-700 rounded-lg"
                                 >
                                     <X size={20} />
