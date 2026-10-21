@@ -1,13 +1,21 @@
 # Per-file Fades — Planning Spec
 
-> **Status**: **Design agreed with the user 2026-10-18. Implementation is NOT authorised.** No app code has been
-> written. Line numbers verified against `src/App.jsx` at **7448 lines** on 2026-10-18; re-verify before editing.
+> **Status**: **BUILT 2026-10-21** (design agreed 2026-10-18, implemented and green on all three platforms).
+> `src/fadeMath.js` (the pure model), `e2e/fadeMath.check.mjs` (gate 5's fifth check) and `e2e/specs/fade.mjs`
+> (FADE1–FADE10) carry it. Line numbers verified against `src/App.jsx` at **7448 lines** on 2026-10-18; re-verify
+> before editing.
 > **Design revised 2026-10-18 after first draft**: looping sounds became **segment looping + seam fades built
 > together** (§7), `stopAfter` was renamed **`playUntil`**, and §9's open questions were all answered.
+> **Revised again 2026-10-21, after the hand-test**: §7.4 gained the mirror case (a fade-out with no fade-in), and
+> the seam's fade-out half was actually built, so the advice in §7.4 is now true. §5's line saying looping sounds
+> disable both fades is **superseded by §7** and is marked as such below.
 > **Created**: 2026-10-18
 > **Related**: `PROFILE_SYNC_SPEC.md` (live, §13 deferred scope), `HOTKEYS_SPEC.md` (the other unbuilt plan).
 > A throwaway visual mock lives at `%TEMP%\opencode\fade-mock.html` — **outside the repo**, deliberately, so it
 > costs no gate, no commit and no backup churn. Rev 2 reflects every decision in §2; open it to re-judge the layout.
+> 💡 **The mock is the design, and the first implementation was not it.** The build shipped a plain scrubber where
+> the mock drew a segmented bar (fade-in ramp, full-volume plateau, fade-out ramp, hatched tail, stop marker). The
+> hand-test caught it, and FADE9 now pins the segments so it cannot come back.
 
 ---
 
@@ -237,9 +245,17 @@ Tavern Music (1 file, loop off)
   and the box follows. Both clamp to the file length on input so an out-of-range value can never be typed.
 - **Slider max = file length, step = ~200 steps.** No ceiling (§2.3).
 - **The slider is per-file, and so is the timeline.** No shared control anywhere.
-- **A looping sound shows both fade controls disabled** with a plain sentence saying why (§7).
+- ⚠️ **A looping sound shows both fade controls disabled** with a plain sentence saying why (§7). 🔴 **SUPERSEDED
+  by §7 (2026-10-21)**: §7 was the later and more specific decision, and it needs the fades ENABLED on a loop -
+  the fade-out positions the seam and the fade-in ramps back up after it. The controls stay enabled, and the seam
+  sentence (§7.4) is the plain sentence that takes this row's place. **This row is the reason the spec looked
+  self-contradictory**, and the user was right to ask about it.
 - **Red is one state.** A red border and a red sentence under the pair. ⚠️ **Do not tint the slider track** — a red
   thumb on a dark background is easy to miss and it fights the lime accent.
+- 🔴 **The number box must carry NO `min`, `max` or `step`.** They are HTML5 validation attributes, and a value the
+  slider cannot represent (`0.5` on a file whose step is `1`) becomes a **step mismatch**, which makes the browser
+  **silently refuse to submit the form** — the sound never saves, the modal never closes, and every suite after it
+  runs against stacked modals. The clamping belongs in the change handler, not in the markup. FADE10 pins this.
 
 ### ⚠️ The sliders are not free CSS
 
@@ -350,6 +366,19 @@ apply once, at the start of the sound, gets a cut per repeat. So:
 
 A plain sentence, not a red warning and not a block. ⚠️ **The DoD's governing rule applies: tell the user what will
 happen, do not grade their choice.** This is the same precedent as the loop-disables-fades case.
+
+🔴 **The mirror case, added 2026-10-21 after the hand-test.** §7.2 says a loop's `fadeOut` measures back from the
+**loop point**, so with a fade-out and no fade-in the level ramps down into silence and then jumps straight back to
+full - the same click, in the other direction. The first build forced the volume to 0 at the seam and ignored the
+fade-out entirely, which made the sentence above advice the code did not honour. Now:
+
+- the loop's `fadeOut` **ramps down into the seam** (it is scheduled from `loopPoint - fadeOut`, and it re-arms every
+  cycle);
+- the loop's `fadeIn` **ramps back up** after the rewind;
+- a fade-out with no fade-in gets its own plain sentence: **"Fade-out reaches silence at every loop. Add a fade-in to
+  bring the level back."**
+
+Both sentences are in `seamSentence` (`src/fadeMath.js`) and both are pinned by `fadeMath.check.mjs` and FADE8.
 
 ### 7.5 Deferred
 

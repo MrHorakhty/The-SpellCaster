@@ -5924,3 +5924,81 @@ the hand-test is done.
 
 `.gitattributes` (`*.bat text eol=crlf`) is still untracked - the user has never asked for it to be committed.
 `scripts/` is untracked by the author's choice.
+## 2026-10-21 19:20-20:40 (opencode) - the hand-test found three things the E2E could not
+
+The user hand-tested the built app and reported three problems. All three were real, and one of them had been
+hiding behind a green suite.
+
+### 1. The timeline was not the mock
+
+The throwaway mock at `%TEMP%\opencode\fade-mock.html` (rev 2, which the user had seen) draws ONE 34 px bar
+carrying the fade-in ramp, the full-volume plateau, the fade-out ramp, the hatched never-played tail and the stop
+marker, with the caption `0s | never - whole file plays | 2m 32s`, and the three controls as label | slider | number
+rows. What shipped was a plain 12 px scrubber with a lime fill. The user's words: "the timeline feature we discussed
+previously isn't implemented".
+
+It is now the mock's timeline (`src/index.css` gained `.fade-tl` and friends), plus keyboard operation (arrows,
+Home, End) on the bar, because the spec required a real `role="slider"` control. **FADE9** pins the segments, the
+tail and the caption.
+
+### 2. The percentage text spilled out of the edit modal
+
+`input[type=number]` carries the browser's spin buttons INSIDE its content box. The 3-character box was too narrow
+for "100" plus the spinner, so the digits were pushed past the modal's edge and could not be read. The fix is a
+`.no-spin` utility (spinner hidden, arrow keys still step the value) and a slightly wider box. 💡 The width was never
+the real problem - the spinner was.
+
+### 3. The loop's fade-out was never built, so the advice was a lie
+
+`FADE_SPEC` §7.2 says a loop's `fadeOut` measures back from the **loop point**, so it ramps down into the seam.
+The first build forced the volume to 0 at the seam and ignored `fadeOut` entirely - which made §7.4's plain sentence
+("Fade-in dips on every loop. Add a fade-out to soften the seam") advice the code did not honour.
+
+The seam now ramps down into the loop point and re-arms every cycle, and the fade-in ramps back up after the
+rewind. The mirror case is warned about too: a fade-out with no fade-in reaches silence and jumps back, so
+`seamSentence` has a second sentence. **Z22** pins the ramp; **FADE8** pins both sentences.
+
+The user also asked whether loops were in scope at all. They were: §7 says the segment loop and the seam fades are
+ONE feature, `firstLoopPlay` had to go, and `Z9` had to be rewritten in the same commit. The confusion is
+understandable - §5 still said "a looping sound shows both fade controls disabled", which §7 supersedes. That row
+is now marked SUPERSEDED rather than left to contradict §7.
+
+### The one that was NOT a fade problem: 42 failures, no fades involved
+
+The first run of the new timeline produced **42 failures** across suites that have nothing to do with fades
+(character CRUD, groups, settings, move/copy). The app was not crashing: the edit modal simply never closed, so
+every later suite ran against stacked modals.
+
+Cause: the new number inputs carried `min`, `max` and `step`. Those are HTML5 **validation** attributes. A value
+the slider cannot represent - `0.5` on a file whose step is `1` - is a **step mismatch**, and the browser then
+**silently refuses to submit the form**. Nothing threw, no error was logged, the click "succeeded", and the sound
+never saved. The number boxes now carry no validation attributes at all; the clamping lives in the change handler.
+**FADE10** pins it: a fade the slider cannot represent still saves and comes back.
+
+💡 The lesson is bigger than the bug: a form that fails validation does not fail loudly, it fails SILENTLY, and in a
+suite that means every test after it fails for a reason that has nothing to do with the change.
+
+### Two more things I broke and fixed, worth remembering
+
+- **Mojibake**: editing `src/App.jsx` with PowerShell `Get-Content`/`Set-Content` re-encoded the file and turned
+  657 characters into `â€”`-style garbage (`Get-Content` read the BOM-less UTF-8 file as Windows-1252). Repaired
+  with a CP1252 -> UTF-8 round trip. **Now an operational warning in `PROJECT_STATE.md`: never edit a source file
+  with PowerShell's file cmdlets.**
+- **Z13/Z14 were timing-fragile on Android**: they sampled for a fixed 4.5 s and assumed the ramp had finished. On
+  the emulator the file's metadata arrives ~1.8 s late, so the ramp ended just after the window closed. They now
+  poll until the ramp reaches silence / the ring clears. The app's behaviour was right; the test's window was not.
+
+### Gates (all re-run on the final code)
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 380 tests, 25
+shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46**; **web 250/0/0 exit 0**;
+**Windows 270/0/1 exit 1**; **Android 260/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
+
+### Handover
+
+**The hand-test found real gaps, so it was worth doing.** The three above are fixed and green, but the user has not
+re-tested yet - the next hand-test is what tells us whether the timeline now looks like the mock and whether the
+loop dip is audible in the hand.
+
+`FADE_SPEC.md` was updated: status BUILT, §5's "fades disabled on loop" marked SUPERSEDED by §7, §7.4 given the
+mirror case, and the number-box validation trap written down where the next implementer will hit it.

@@ -45,6 +45,7 @@ import {
 } from './profileBundle.js'
 import { boundedBundleStep, BUNDLE_STEP_TIMEOUT_MS } from './bundleGuard.js'
 import {
+    audibleEnd,
     normalizeFadeSeconds,
     fadeStep,
     fadeWarning,
@@ -4212,6 +4213,33 @@ function AppBoard() {
             // the fade-in keeps ramping to the target - a loop that looks fine
             // but is silent, with no seam left to re-apply the fade. Checking
             // the clock ourselves keeps the rewind inside continuous playback.
+            // The seam, per �7.2: `fadeOut` measures back from the LOOP POINT,
+            // not from the file end, so a loop with a fade-out ramps down INTO
+            // the seam instead of being cut off by it. `fadeIn` ramps back up
+            // after the rewind. Without the fade-out half, �7.4's advice to
+            // "add a fade-out to soften the seam" would be advice the code
+            // does not honour - the seam would cut to silence either way.
+            const seamTarget = () => audio._baseVolume ?? baseVolume
+            const atSeam = () => {
+                audio.currentTime = 0
+                audio._seamFadeOut = false
+                if (audio.fadeOutInterval) {
+                    clearInterval(audio.fadeOutInterval)
+                    audio.fadeOutInterval = null
+                }
+                if (fileToPlay.fadeIn > 0) {
+                    // Volume forced to 0 then ramped back up at every seam.
+                    // Read the target back off the element so a mid-loop
+                    // master move lands on the next seam too (Z9's guard,
+                    // now per-seam instead of once).
+                    applyFadeIn(audio, seamTarget(), fileToPlay.fadeIn)
+                } else {
+                    // A fade-out with no fade-in must not end the sound: the
+                    // seam faded down to silence, so the level has to come
+                    // back, or the loop would be silent from the first repeat.
+                    audio.volume = seamTarget()
+                }
+            }
             const seekTo = () => {
                 if (audio.stopped) {
                     return
@@ -4222,15 +4250,19 @@ function AppBoard() {
                 const len = audio.duration
                 const pu = normalizeFadeSeconds(fileToPlay.playUntil || 0)
                 const loopPoint = pu > 0 ? Math.min(pu, len) : len
-                if (audio.currentTime >= loopPoint) {
-                    audio.currentTime = 0
-                    if (fileToPlay.fadeIn > 0) {
-                        // Volume forced to 0 then ramped back up at every seam.
-                        // Read the target back off the element so a mid-loop
-                        // master move lands on the next seam too (Z9's guard,
-                        // now per-seam instead of once).
-                        applyFadeIn(audio, audio._baseVolume ?? baseVolume, fileToPlay.fadeIn)
+                const fo = normalizeFadeSeconds(fileToPlay.fadeOut || 0)
+                if (fo > 0 && !audio._seamFadeOut) {
+                    const fadeStart = Math.max(0, loopPoint - fo)
+                    if (audio.currentTime >= fadeStart) {
+                        // Ramp down over the time that is actually left, so the
+                        // ramp lands ON the seam rather than past it. The
+                        // 20 ms of slack covers the watchdog's own granularity.
+                        audio._seamFadeOut = true
+                        fadeOutAudio(audio, Math.max(0.05, loopPoint - audio.currentTime - 0.02), null)
                     }
+                }
+                if (audio.currentTime >= loopPoint) {
+                    atSeam()
                 }
             }
             audio.loopWatch = setInterval(seekTo, 50)
@@ -4242,10 +4274,7 @@ function AppBoard() {
                     cleanupAudio(audioInstanceKey, audio)
                     return
                 }
-                audio.currentTime = 0
-                if (fileToPlay.fadeIn > 0) {
-                    applyFadeIn(audio, audio._baseVolume ?? baseVolume, fileToPlay.fadeIn)
-                }
+                atSeam()
                 audio.play().catch(() => {})
             })
         }
@@ -5435,7 +5464,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                         e.currentTarget.blur()
                                     }
                                 }}
-                                className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                className="no-spin text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
                                 title={`Volume: ${Math.round(masterVolume * 100)}%`}
                             />
                             <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
@@ -5480,7 +5509,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                         e.currentTarget.blur()
                                     }
                                 }}
-                                className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                className="no-spin text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
                                 title={`Box Size: ${Math.round(boxSize * 100)}%`}
                             />
                             <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
@@ -6607,7 +6636,13 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                         const warn = len ? fadeWarning(len, playUntil, fadeIn, fadeOut).message : null
                                                         const step = len ? fadeStep(len) : 1
                                                         const isDragging = timelineDrag && timelineDrag.storedName === storedName
-                                                        const pct = len ? Math.min(100, Math.max(0, playUntil / len * 100)) : 0
+                                                        const end = audibleEnd(len, playUntil)
+                                                        const pct = (v) => (len ? Math.min(100, Math.max(0, v / len * 100)) : 0)
+                                                        const fiEnd = Math.min(fadeIn, end)
+                                                        const foLen = Math.min(fadeOut, end)
+                                                        const foStart = Math.max(0, end - foLen)
+                                                        const mid = Math.max(0, end - fiEnd - foLen)
+                                                        const tail = Math.max(0, len - end)
 
                                                         return (
                                                             <div key={storedName} data-fade-row className="bg-dark-800 rounded-lg p-3 mb-2 space-y-2">
@@ -6644,74 +6679,91 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                                     )
                                                                 ) : (
                                                                     <>
-                                                                        {/* Timeline: draws the whole file, tail dimmed past playUntil;
-                                                                                scrubs Play Until via capture-based drag. */}
-                                                                        <div className="relative h-3 mb-1">
-                                                                            <div className="absolute left-0 top-0 bottom-0 bg-dark-700 rounded opacity-40" style={{ width: '100%' }} />
-                                                                            <div className="absolute left-0 top-0 bottom-0 bg-lime-500/70 rounded" style={{ width: `${pct}%` }} />
-                                                                            <div
-                                                                                role="slider"
-                                                                                aria-valuemin="0"
-                                                                                aria-valuemax={len}
-                                                                                aria-valuenow={playUntil}
-                                                                                aria-valuetext={formatLength(playUntil)}
-                                                                                tabIndex={0}
-                                                                                className="absolute -top-1 w-4 h-4 rounded-full bg-white border border-dark-600 shadow"
-                                                                                style={{ left: `calc(${pct}% - 5.5px)`, top: '-6px' }}
-                                                                            />
-                                                                            <div
-                                                                                className="absolute inset-0 bg-transparent cursor-pointer"
-                                                                                onPointerDown={(e) => {
-                                                                                    const el = e.currentTarget
-                                                                                    el.setPointerCapture(e.pointerId)
-                                                                                    setTimelineDrag({ storedName, field: 'playUntil' })
-                                                                                    const rect = el.getBoundingClientRect()
-                                                                                    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-                                                                                    handleTimelineChange(storedName, fraction)
-                                                                                }}
-                                                                                onPointerMove={(e) => {
-                                                                                    if (!isDragging) return
-                                                                                    const el = e.currentTarget
-                                                                                    const rect = el.getBoundingClientRect()
-                                                                                    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-                                                                                    handleTimelineChange(storedName, fraction)
-                                                                                }}
-                                                                                onPointerUp={() => setTimelineDrag(null)}
-                                                                                onPointerCancel={() => setTimelineDrag(null)}
-                                                                                style={{ touchAction: 'none' }}
-                                                                            />
+                                                                        {/* Timeline: one bar draws the whole file at once. The fade-in
+                                                                            ramp, the full-volume plateau, the fade-out ramp, the hatched
+                                                                            part past Play Until and the stop marker are all the same
+                                                                            object, so the shape explains itself without a legend. It
+                                                                            doubles as the Play Until scrubber. */}
+                                                                        <div
+                                                                            className="fade-tl"
+                                                                            role="slider"
+                                                                            aria-label={`Play Until for ${fileObj.displayName || fileObj.name}`}
+                                                                            aria-valuemin={0}
+                                                                            aria-valuemax={len}
+                                                                            aria-valuenow={playUntil}
+                                                                            aria-valuetext={playUntil > 0 ? `stop at ${formatLength(end)}` : 'whole file'}
+                                                                            tabIndex={0}
+                                                                            onPointerDown={(e) => {
+                                                                                const el = e.currentTarget
+                                                                                el.setPointerCapture(e.pointerId)
+                                                                                setTimelineDrag({ storedName, field: 'playUntil' })
+                                                                                const rect = el.getBoundingClientRect()
+                                                                                const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                                                                                handleTimelineChange(storedName, fraction)
+                                                                            }}
+                                                                            onPointerMove={(e) => {
+                                                                                if (!isDragging) return
+                                                                                const el = e.currentTarget
+                                                                                const rect = el.getBoundingClientRect()
+                                                                                const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                                                                                handleTimelineChange(storedName, fraction)
+                                                                            }}
+                                                                            onPointerUp={() => setTimelineDrag(null)}
+                                                                            onPointerCancel={() => setTimelineDrag(null)}
+                                                                            onKeyDown={(e) => {
+                                                                                // The bar is focusable, so the keyboard has to be able
+                                                                                // to move it - otherwise it is a control a keyboard user
+                                                                                // can reach and cannot operate.
+                                                                                const delta = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? step
+                                                                                    : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -step : 0
+                                                                                let next = null
+                                                                                if (delta) next = playUntil + delta
+                                                                                else if (e.key === 'Home') next = 0
+                                                                                else if (e.key === 'End') next = len
+                                                                                if (next === null) return
+                                                                                e.preventDefault()
+                                                                                handleFileFadeChange(storedName, 'playUntil',
+                                                                                    Math.max(0, Math.min(len, Math.round(next / step) * step)))
+                                                                            }}
+                                                                        >
+                                                                            <div className="fade-seg fade-seg-tail" style={{ left: `${pct(end)}%`, right: 0, display: tail > 0 ? '' : 'none' }} />
+                                                                            <div className="fade-seg fade-seg-fi" style={{ left: 0, width: `${pct(fiEnd)}%`, display: fadeIn > 0 ? '' : 'none' }} />
+                                                                            <div className="fade-seg fade-seg-fo" style={{ left: `${pct(foStart)}%`, width: `${pct(foLen)}%`, display: fadeOut > 0 ? '' : 'none' }} />
+                                                                            <div className="fade-seg fade-seg-mid" style={{ left: `${pct(fiEnd)}%`, width: `${pct(mid)}%`, display: mid > 0 ? '' : 'none' }} />
+                                                                            <div className="fade-seg fade-seg-over" style={{ left: 0, width: '100%', display: red ? '' : 'none' }} />
+                                                                            <div className="fade-stop" style={{ left: `${pct(end)}%` }} />
                                                                         </div>
-                                                                        <div className="flex justify-between text-xs text-slate-400 mb-2">
+                                                                        <div className="flex justify-between text-[11px] text-slate-500 mb-3" data-fade-caption>
                                                                             <span>0s</span>
+                                                                            <span>{playUntil > 0 ? `stop at ${formatLength(end)}` : 'never - whole file plays'}</span>
                                                                             <span>{formatLength(len)}</span>
                                                                         </div>
 
-                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                        <div className="space-y-1.5">
                                                                             {[['fadeIn', 'Fade in'], ['fadeOut', 'Fade out'], ['playUntil', 'Play Until']].map(([field, label]) => {
                                                                                 const value = field === 'fadeIn' ? fadeIn : field === 'fadeOut' ? fadeOut : playUntil
-                                                                                const max = len
+                                                                                const inputId = `fade-${field}-${storedName}`
                                                                                 return (
-                                                                                    <div key={field} className="space-y-1">
-                                                                                        <label className="text-xs text-slate-400 block">{label}</label>
-                                                                                        <div className="relative">
-                                                                                            <input
-                                                                                                type="range"
-                                                                                                className="slider w-full"
-                                                                                                min="0"
-                                                                                                max={max}
-                                                                                                step={step}
-                                                                                                value={value}
-                                                                                                disabled={!len}
-                                                                                                onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
-                                                                                            />
-                                                                                            <input
-                                                                                                type="number"
-                                                                                                className="w-16 bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
-                                                                                                value={value === 0 ? '' : value}
-                                                                                                onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <p className="text-xs text-slate-500">{field === 'fadeIn' ? 'ramps up from silence' : field === 'fadeOut' ? 'ramps down to silence' : '0 = whole file'}</p>
+                                                                                    <div key={field} className="grid grid-cols-[74px_1fr_84px] items-center gap-2">
+                                                                                        <label htmlFor={inputId} className="text-xs text-slate-400">{label}</label>
+                                                                                        <input
+                                                                                            id={inputId}
+                                                                                            type="range"
+                                                                                            className="slider w-full"
+                                                                                            min="0"
+                                                                                            max={len}
+                                                                                            step={step}
+                                                                                            value={value}
+                                                                                            aria-valuetext={`${value}s`}
+                                                                                            onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
+                                                                                        />
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            aria-label={`${label} in seconds`}
+                                                                                            className="no-spin w-full bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-lime-500"
+                                                                                            value={value === 0 ? '' : value}
+                                                                                            onChange={(e) => handleFileFadeChange(storedName, field, e.target.value)}
+                                                                                        />
                                                                                     </div>
                                                                                 )
                                                                             })}
@@ -6736,18 +6788,18 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             {(() => {
                                                 // The hint is derived from a real file rather than
                                                 // from literals, so it cannot claim a seam problem
-                                                // for a sound whose own values are fine.
-                                                const seamFile = soundFormData.loop
-                                                    ? audioFiles.find(f => Number(f.fadeIn || 0) > 0 && Number(f.fadeOut || 0) === 0)
-                                                    : null
-                                                const sentence = seamFile
-                                                    ? seamSentence(true, seamFile.fadeIn, seamFile.fadeOut)
-                                                    : null
-                                                return sentence ? (
+                                                // for a sound whose own values are fine. It covers
+                                                // both directions: a fade-in with no fade-out, and a
+                                                // fade-out with no fade-in.
+                                                if (!soundFormData.loop) return null
+                                                const seamFile = audioFiles.find(f => seamSentence(true, Number(f.fadeIn || 0), Number(f.fadeOut || 0)))
+                                                if (!seamFile) return null
+                                                const sentence = seamSentence(true, Number(seamFile.fadeIn || 0), Number(seamFile.fadeOut || 0))
+                                                return (
                                                     <div data-fade-seam className="text-xs text-amber-400 bg-amber-900/10 rounded p-1 border border-amber-900/20 mb-1">
                                                         {sentence}
                                                     </div>
-                                                ) : null
+                                                )
                                             })()}
 
                                             {/* Random playback option */}
@@ -6811,7 +6863,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                             setSoundVolumeFocused(false)
                                                             setSoundVolumePercent(soundVolumeInput)
                                                         }}
-                                                        className="text-xs text-slate-400 bg-transparent w-[3ch] p-0 text-right shrink-0"
+                                                        className="no-spin text-xs text-slate-400 bg-transparent w-[4ch] p-0 text-right shrink-0"
                                                     />
                                                     <span className="text-xs text-slate-400 shrink-0 -ml-1">%</span>
                                                 </div>

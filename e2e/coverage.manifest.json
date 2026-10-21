@@ -1103,7 +1103,7 @@
       "title": "Live playback",
       "file": "specs/playback.mjs",
       "export": "playback",
-      "covers": "fade-in ramp, master controls driving live audio, loop boundary and Stop All; plus the fade-OUT ramp and its onComplete teardown (Z13-Z14), the fade scheduled off user-typed duration rather than the file length (Z15), a level change during a running fade preserving the ramp position instead of snapping (Z16-Z17), and randomPlay picking across two files with randomPlay-off as a negative control (Z18-Z21)",
+      "covers": "fade-in ramp, master controls driving live audio, loop boundary and Stop All; plus the fade-OUT ramp and its onComplete teardown (Z13-Z14), the fade scheduled off user-typed duration rather than the file length (Z15), a level change during a running fade preserving the ramp position instead of snapping (Z16-Z17), randomPlay picking across two files with randomPlay-off as a negative control (Z18-Z21), and a loop's fade-out ramping INTO the seam rather than being cut off by it (Z22)",
       "platforms": [
         "web",
         "win",
@@ -1125,6 +1125,7 @@
         "Z2",
         "Z20",
         "Z21",
+        "Z22",
         "Z3",
         "Z4",
         "Z5",
@@ -1140,7 +1141,7 @@
       "title": "Per-file fades",
       "file": "specs/fade.mjs",
       "export": "fade",
-      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, the clamped fade on a file shorter than playUntil, and the loop seam hint that clears once a fade-out is added",
+      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, the clamped fade on a file shorter than playUntil, the loop seam hint in both directions (a fade-in without a fade-out, and a fade-out without a fade-in), and the timeline that draws the fade-in ramp, the full-volume plateau, the never-played tail and the stop marker",
       "platforms": [
         "web",
         "win",
@@ -1148,6 +1149,7 @@
       ],
       "ids": [
         "FADE1",
+        "FADE10",
         "FADE2",
         "FADE3a",
         "FADE3b",
@@ -1155,7 +1157,8 @@
         "FADE5",
         "FADE6",
         "FADE7",
-        "FADE8"
+        "FADE8",
+        "FADE9"
       ],
       "idPattern": "^FADE\\d"
     },

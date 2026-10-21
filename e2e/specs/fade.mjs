@@ -1,4 +1,4 @@
-// Shared per-file fades spec (Suite FADE, FADE1-FADE7).
+// Shared per-file fades spec (Suite FADE, FADE1-FADE10).
 //
 // Runs from BOTH entrypoints (web + win via e2e-full.mjs, android via
 // e2e-mobile.mjs). It drives the sound modal's per-file fade rows, which only
@@ -244,7 +244,8 @@ export const fade = {
     // A loop whose fade-in has no matching fade-out clicks on every repeat
     // (§7.4). It is a hint, not a graded state, so the file must stay usable -
     // but the sentence has to track the real values, or it would nag about a
-    // seam the user already fixed.
+    // seam the user already fixed. The mirror case (a fade-out with no
+    // fade-in) fades to silence and jumps back, so it warns too.
     const setLoop = async (on) => {
       await evalJs(`((on) => {
         const el = document.querySelector('input[name="loop"]');
@@ -254,16 +255,87 @@ export const fade = {
       })(${on})`);
       await sleep(250);
     };
-    await setLoop(true);
-    await setPair(2, 0);
-    const f8a = await evalJs(`(() => {
+    const seamHint = async () => evalJs(`(() => {
       const el = document.querySelector('[data-fade-seam]');
       return el ? el.textContent.trim() : null;
     })()`);
+    await setLoop(true);
+    await setPair(2, 0);
+    const f8a = await seamHint();
+    await setPair(0, 2);
+    const f8b = await seamHint();
     await setPair(2, 1);
-    const f8b = await evalJs(`(() => !!document.querySelector('[data-fade-seam]'))()`);
+    const f8c = await seamHint();
     await setLoop(false);
-    log('FADE','FADE8: loop + fade-in with no fade-out warns about the seam, and adding a fade-out clears it',
-      f8a && f8a.length > 0 && f8b === false ? 'PASS' : 'FAIL', `hint=${JSON.stringify(f8a)} afterFadeOut=${f8b}`);
+    log('FADE','FADE8: the loop seam hint appears for a fade-in without a fade-out, mirrors for a fade-out without a fade-in, and clears when both are set',
+      f8a && /dips on every loop/.test(f8a) && f8b && /reaches silence/.test(f8b) && !f8c ? 'PASS' : 'FAIL',
+      `fadeInOnly=${JSON.stringify(f8a)} fadeOutOnly=${JSON.stringify(f8b)} both=${JSON.stringify(f8c)}`);
+
+    // ---- FADE9: the timeline draws the file, not just a scrubber ------
+    // The bar is the design's centrepiece: the fade-in ramp, the full-volume
+    // plateau, the fade-out ramp, the hatched part past Play Until and the
+    // stop marker. A bar that only showed the played portion would look the
+    // same whether or not the fades existed.
+    const setUntil = async (v) => {
+      await evalJs(`((v) => {
+        const row = window.__fadeRow('Tavern_Music.mp3');
+        const c = window.__fadeControl(row, 'playUntil');
+        window.__setRange(c.box, v);
+        return 'OK';
+      })(${v})`);
+      await sleep(300);
+    };
+    const readBar = async () => evalJs(`(() => {
+      const row = window.__fadeRow('Tavern_Music.mp3');
+      const bar = row?.querySelector('.fade-tl');
+      if (!bar) return null;
+      const vis = (sel) => { const el = bar.querySelector(sel); return el ? getComputedStyle(el).display !== 'none' : null; };
+      return { fi: vis('.fade-seg-fi'), mid: vis('.fade-seg-mid'), tail: vis('.fade-seg-tail'),
+               over: vis('.fade-seg-over'), stop: !!bar.querySelector('.fade-stop'),
+               caption: (row.querySelector('[data-fade-caption]')?.textContent || '').trim() };
+    })()`);
+    await setPair(2, 0);
+    await setUntil(0);
+    const f9a = await readBar();
+    await setUntil(10);
+    const f9b = await readBar();
+    await setPair(100, 100);
+    const f9c = await readBar();
+    log('FADE','FADE9: the timeline draws the fade-in ramp, the full-volume plateau, the never-played tail and the stop marker',
+      f9a && f9a.fi === true && f9a.mid === true && f9a.tail === false && f9a.stop === true && f9a.over === false
+        && /never - whole file plays/.test(f9a.caption)
+        && f9b && f9b.tail === true && /stop at/.test(f9b.caption)
+        && f9c && f9c.over === true ? 'PASS' : 'FAIL',
+      `wholeFile=${JSON.stringify(f9a)} until10=${JSON.stringify(f9b)} overlapped=${JSON.stringify(f9c)}`);
+
+    // ---- FADE10: a value off the slider's step grid still saves ---------
+    // A trap that cost a whole E2E run: a number input carrying `step` (or
+    // `max`) turns any value the slider cannot represent into an HTML5
+    // step mismatch, and the browser then SILENTLY refuses to submit the form.
+    // The sound's name never changed, the modal never closed, and every suite
+    // after it ran against stacked modals. The slider here steps by whole
+    // seconds over a 152 s file, so 0.5 s is not on its grid - and it still
+    // has to save, because the number box is the authority.
+    await setPair(0.5, 0);
+    await setUntil(0);
+    const f10a = await submitModal('Save Changes');
+    await sleep(1000);
+    await reload();
+    await evalJs(helpers);
+    await driver.enterEditMode();
+    await evalJs(`(() => {
+      const c = document.querySelector('[data-sound-card][data-sound-id="fade_probe"]');
+      const b = c?.parentElement?.querySelector('button[title="Edit Sound"]');
+      if (b) b.click();
+      return 'OK';
+    })()`);
+    await sleep(900);
+    const f10b = await evalJs(`(() => {
+      const r = window.__fadeRow('Tavern_Music.mp3');
+      const c = window.__fadeControl(r, 'fadeIn');
+      return c.box ? c.box.value : null;
+    })()`);
+    log('FADE','FADE10: a fade value the slider cannot represent still saves and comes back',
+      f10a === 'OK' && f10b === '0.5' ? 'PASS' : 'FAIL', `submit=${f10a} fadeIn=${f10b}`);
   }
 };

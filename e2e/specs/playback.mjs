@@ -148,7 +148,11 @@ export const playback = {
           // Short looping sound with a fade-in: the seam comes every ~0.56s, so
           // the fade-in re-application at every seam (firstLoopPlay removed,
           // FADE_SPEC §7.3) is crossed repeatedly during the test.
-          probe('pb_loop','Loop Probe', [two[0]], { loop:true, fadeIn:1 })
+          probe('pb_loop','Loop Probe', [two[0]], { loop:true, fadeIn:1 }),
+          // A loop whose fade-out measures back from the LOOP POINT (§7.2), so
+          // it ramps down into the seam instead of being cut off by it. The
+          // file is 0.576 s, so the seam comes every ~0.58 s.
+          probe('pb_loopfo','Loop Fade Out Probe', [two[0]], { loop:true, fadeOut:0.2 })
         ]
       }]));
       localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
@@ -430,6 +434,43 @@ export const playback = {
       t8.ok && z9s.length === 14 && dipped && capped ? 'PASS':'FAIL',
       `samples=${JSON.stringify(z9s)} state=${JSON.stringify(z9?.state)}`);
 
+    // ---- Z22: a loop's fade-out ramps INTO the seam (§7.2) ----------------
+    // A loop with a fade-out and no fade-in: the level must ramp DOWN towards
+    // the loop point (a fade, not a cut) and then come back, so the loop keeps
+    // making sound instead of dying silent at the first seam.
+    await stopAll();
+    const t22 = await triggerOnce('pb_loopfo');
+    const z22 = await evalJs(`(async () => {
+      const els = (window.__audios||[]).filter(x => x._soundId === 'pb_loopfo');
+      const a = els[els.length - 1]; if (!a) return 'NO_EL';
+      const samples = [];
+      for (let i = 0; i < 50; i++) { samples.push(+a.volume.toFixed(4)); await new Promise(r => setTimeout(r, 50)); }
+      return { samples, base: a._baseVolume };
+    })()`);
+    const s22 = Array.isArray(z22?.samples) ? z22.samples : [];
+    const base22 = Number.isFinite(z22?.base) && z22.base > 0 ? z22.base : 1;
+    // The shape that proves a RAMP rather than a cut: several consecutive
+    // strictly-decreasing samples that start near full level and end near
+    // silence. Judged against the element's own base, not a hard-coded 1,
+    // because the master has been moved by an earlier test in this session.
+    let run22 = 0, runStart22 = -1, best22 = { len: 0, start: 0, end: 0 };
+    for (let i = 1; i < s22.length; i++) {
+      if (s22[i] < s22[i-1] - 1e-6) {
+        if (run22 === 0) runStart22 = i - 1;
+        run22++;
+        if (run22 > best22.len) best22 = { len: run22, start: s22[runStart22], end: s22[i] };
+      } else {
+        run22 = 0;
+      }
+    }
+    const min22 = s22.length ? Math.min(...s22) : 1;
+    const max22 = s22.length ? Math.max(...s22) : 0;
+    const ramp22 = best22.len >= 3 && best22.start > base22 * 0.6 && best22.end < base22 * 0.3;
+    const back22 = max22 > base22 * 0.8;
+    log('PLAY','Z22: a loop fades DOWN into the seam and comes back, instead of being cut off',
+      t22.ok && s22.length === 50 && ramp22 && back22 ? 'PASS':'FAIL',
+      `base=${base22} longestDropRun=${best22.len} ramp=${JSON.stringify(best22)} min=${min22} max=${max22} samples=${JSON.stringify(s22.slice(8,20))}`);
+
     // ---- Z13: the fade-out ramp descends to zero -----------------------------
     // Fixture: Tavern_Music.mp3 (152s) with duration:3, fadeOut:2. The app
     // schedules the fade at (duration - fadeOut) = 1s and walks it over 2s, so
@@ -442,7 +483,16 @@ export const playback = {
       if (!a) return 'NO_EL';
       const base = a._baseVolume;
       const samples = [];
-      for (let i = 0; i < 45; i++) { samples.push(+a.volume.toFixed(4)); await new Promise(r => setTimeout(r, 100)); }
+      // Sample until the ramp reaches silence, with a generous cap, instead of
+      // for a fixed 4.5 s. The fade is scheduled from the moment the file's
+      // metadata arrives, and on a cold emulator that can be a second or two
+      // after the trigger - so a fixed window ended before the ramp finished
+      // and the test failed for a reason that had nothing to do with the app.
+      for (let i = 0; i < 120; i++) {
+        samples.push(+a.volume.toFixed(4));
+        if (a.volume <= 0.0001 && samples.length > 5) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
       return { base, samples, fadeOutInterval: !!a.fadeOutInterval };
     })()`);
     // A ramp, not a snap: count the longest run of consecutive strict decreases.
@@ -462,11 +512,19 @@ export const playback = {
     // would leave the card showing "playing" forever with a dead element behind
     // it. The ring is driven by isSoundPlaying -> audioElementsRef, so it is the
     // app's own answer to "is this sound still registered".
-    const z14 = await evalJs(`(() => {
-      const c = document.querySelector('[data-sound-card][data-sound-id="pb_fadeout"]');
-      const b = document.querySelector('button[title="Stop All Sounds"]');
-      return { ring: c ? c.className.includes('ring') : null, stopDisabled: b ? b.disabled : null };
-    })()`);
+    // The teardown happens on the fade's onComplete, which is when the ramp
+    // reaches zero - so wait for the ring to clear rather than reading it at a
+    // fixed moment (the ramp's end is the app's timing, not the test's).
+    let z14 = null;
+    for (let i = 0; i < 40; i++) {
+      z14 = await evalJs(`(() => {
+        const c = document.querySelector('[data-sound-card][data-sound-id="pb_fadeout"]');
+        const b = document.querySelector('button[title="Stop All Sounds"]');
+        return { ring: c ? c.className.includes('ring') : null, stopDisabled: b ? b.disabled : null };
+      })()`);
+      if (z14?.ring === false && z14?.stopDisabled === true) break;
+      await sleep(150);
+    }
     log('PLAY','Z14: fade-out onComplete fires - element unregistered, ring cleared',
       z14?.ring===false && z14?.stopDisabled===true?'PASS':'FAIL',JSON.stringify(z14));
 

@@ -1,11 +1,11 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: `FADE_SPEC` is built, committed (`7881134`, `c036c84`) and pushed; all eight gates green. **Waiting on the user's hand-test of the built app** before this can be called done.
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: the user's hand-test found three gaps (the mock's timeline, the unreadable percentage box, and the loop's fade-out never being built); all three are fixed, committed and green on all three platforms. **Waiting on the user's re-test.**
 
 ✅ **`FADE_SPEC.md` IS SHIPPED (2026-10-21) — per-file fades, Play Until and seam fades, green on all three platforms.**
 - `src/fadeMath.js` (NEW, pure model: `normalizeFadeSeconds`, `fadeStep`, `audibleEnd`, `fadeWarning`,
   `formatLength`, `fullVolumeSentence`, `seamSentence`) + `e2e/fadeMath.check.mjs` (**43/43**, gate 5's fifth check).
-- `e2e/specs/fade.mjs` (NEW, shared Suite FADE — FADE1, FADE2, FADE3a, FADE3b, FADE4–FADE8) runs after `playback` in
+- `e2e/specs/fade.mjs` (NEW, shared Suite FADE — FADE1, FADE2, FADE3a, FADE3b, FADE4–FADE10) runs after `playback` in
   both entrypoints; `coverage.manifest.json` registers the suite and flips feature **Per-file fades** to `shipped`.
 - `App.jsx`: `files[]` entries own `fadeIn`/`fadeOut`/`playUntil`; `migrateSoundFades` copies a legacy sound-level
   fade onto **every** file entry (behaviour-preserving); sound-level `duration`/`fadeIn`/`fadeOut` are gone from the
@@ -14,15 +14,33 @@
   "Measuring this file..." state that only becomes the unmeasurable warning on a real `error` event (§9).
 - `App.jsx` loop seam: the rewind is now a **50 ms watchdog**, not `timeupdate`. `timeupdate` fires ~4x/s, so a 0.58 s
   loop reached its natural `ended` first; resuming from `ended` needs a `play()` that can be refused, and a refused
-  resume left the element **paused** while the fade-in ramped to target — Z9 read a flat `0.2` once for exactly that
+  resume left the element **paused** while the fade-in ramped to target - Z9 read a flat `0.2` once for exactly that
   reason. The watchdog rewinds inside continuous playback, so the seam and its per-seam fade-in are deterministic.
   `firstLoopPlay` is **removed**; `Z9` was rewritten in the same commit to assert the per-seam contract.
+- 🔴 **The timeline is the MOCK's timeline now.** The first build shipped a plain scrubber; the hand-test showed the
+  bar did not draw the fades. It is now one 34 px bar carrying the fade-in ramp, the full-volume plateau, the
+  fade-out ramp, the hatched never-played tail and the stop marker, with the caption `0s | never - whole file plays
+  | 2m 32s`, and the three controls as label | slider | number rows. FADE9 pins the segments. The mock is still at
+  `%TEMP%\opencode\fade-mock.html`.
+- 🔴 **A number box must carry no `min`, `max` or `step`.** They are HTML5 validation attributes: a value the slider
+  cannot represent (`0.5` on a file whose step is `1`) is a **step mismatch**, and the browser then **silently
+  refuses to submit the form** - the sound never saves, the modal never closes, and every suite after it runs
+  against stacked modals. It cost a whole E2E run (42 failures that had nothing to do with fades). FADE10 pins it.
+- 🔴 **The loop's fade-out now really ramps into the seam** (§7.2): `fadeOut` measures back from the loop point and
+  re-arms every cycle, `fadeIn` ramps back up after the rewind. The first build forced the volume to 0 and ignored
+  the fade-out, which made §7.4's "add a fade-out to soften the seam" advice the code did not honour. The seam
+  sentence now has **two** directions (a fade-in without a fade-out, and a fade-out without a fade-in). Z22 pins the
+  ramp; FADE8 pins both sentences.
+- The percentage number boxes lost the browser's spin buttons (`.no-spin` in `index.css`): the spinner ate the
+  width of the 3-character box and the digits spilled past the modal's edge, unreadable.
 - Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
-  377 tests) · gate 5 **46/46, 32/32, 20/20, OK, 43/43** · **web 247/0/0 exit 0** ·
-  **Windows 267/0/1 exit 1 (G5 WARN)** · **Android 257/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
+  380 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46** · **web 250/0/0 exit 0** ·
+  **Windows 270/0/1 exit 1 (G5 WARN)** · **Android 260/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
   healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
-  "done" until the user has used it.
+  "done" until the user has used it. **The first hand-test (2026-10-21) found three real gaps**, all now fixed and
+  green: the timeline was a plain scrubber instead of the mock's segmented bar, the percentage box was unreadable,
+  and the loop's fade-out had never been built. **The user has not re-tested yet.**
 - ⚠️ `.gitattributes` (`*.bat text eol=crlf`) is **still untracked**; the user has not asked for it to be committed.
 
 ## 🔜 What is left, in recommended order
@@ -321,6 +339,14 @@ are gated behind `isMobile` so desktop/web stay untouched.
   the comment at App.jsx:2060-2069.
 
 ## ⚠️ Operational warnings for agents
+- 🔴 **Never edit a source file with PowerShell `Get-Content`/`Set-Content`.** On this machine `Get-Content`
+  reads a UTF-8 file **without a BOM as Windows-1252**, and `Set-Content -Encoding UTF8` writes the mojibake back -
+  so every em dash, ellipsis and curly quote in the file becomes `â€”`, `â€¦`. It happened to `src/App.jsx` on
+  2026-10-21 and silently rewrote 657 characters. The repair is a round trip: read as UTF-8, encode with
+  `[System.Text.Encoding]::GetEncoding(1252)`, decode as UTF-8, write **without** a BOM.
+  💡 **Use the edit/write tools for source files.** For a surgical multi-file rewrite, use
+  `[System.IO.File]::ReadAllText`/`WriteAllText` with an explicit encoding - and check the first bytes afterwards
+  (`EF BB BF` is a BOM, `69 6D 70` is `imp`).
 - **`npm run tauri android dev` never exits** (watches for rebuilds, streams logcat). It will hang the tool
   call. Use `adb shell logcat` / `adb devices` for read-only checks, or launch it detached via `Start-Process`.
 - **Never create `e2e/e2e-all.ps1`.** Bitdefender permanently hard-blocks that exact filename at the

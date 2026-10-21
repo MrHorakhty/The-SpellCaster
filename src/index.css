@@ -317,3 +317,90 @@ body {
 .drawer-slide {
   animation: drawerSlideIn 0.2s ease-out;
 }
+
+/* Percentage number boxes: hide the spinner, keep the value readable.
+
+   A `type="number"` input carries the browser's spin buttons (~16px) INSIDE its
+   content box. These boxes are sized to about three characters, so the digits
+   were pushed past the container edge - the "100" in the edit modal's Sound
+   Volume row ended up outside the panel and could not be read. The width was
+   never the real problem, the spinner was; the arrow keys still step the value
+   with no button to click. */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spin {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Per-file fade timeline (FADE_SPEC §5).
+
+   One bar draws the whole file at once: the fade-in ramp, the full-volume
+   plateau, the fade-out ramp, the part past Play Until (hatched, never played)
+   and the stop marker. The colours are the accent at three opacities, so the
+   shape reads without a legend; red hatching appears only for the one graded
+   state, when the two fades overlap or meet exactly. */
+.fade-tl {
+  position: relative;
+  height: 34px;
+  border-radius: 7px;
+  background: #11151c;
+  border: 1px solid #2f3745;
+  overflow: hidden;
+  margin: 0 0 4px;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+.fade-tl:focus-visible {
+  outline: 2px solid #84cc16;
+  outline-offset: 2px;
+}
+.fade-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.fade-seg-fi {
+  background: linear-gradient(90deg, rgba(132, 204, 22, 0.12), rgba(132, 204, 22, 0.45));
+}
+.fade-seg-fo {
+  background: linear-gradient(90deg, rgba(132, 204, 22, 0.45), rgba(132, 204, 22, 0.12));
+}
+.fade-seg-mid {
+  background: rgba(132, 204, 22, 0.26);
+}
+.fade-seg-tail {
+  background: repeating-linear-gradient(45deg, #1a1f28, #1a1f28 5px, #151920 5px, #151920 10px);
+}
+.fade-seg-over {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(239, 68, 68, 0.5),
+    rgba(239, 68, 68, 0.5) 5px,
+    rgba(239, 68, 68, 0.22) 5px,
+    rgba(239, 68, 68, 0.22) 10px
+  );
+}
+.fade-stop {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #e6e9ef;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.fade-stop::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #e6e9ef;
+}

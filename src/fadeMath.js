@@ -106,12 +106,20 @@ export const fullVolumeSentence = (fileLength, playUntil, fadeIn, fadeOut) => {
 
 /**
  * The seam sentence (§7.4). A loop with a fade-in and no fade-out clicks on
- * every repeat; tell the user rather than grading their choice.
+ * every repeat; tell the user rather than grading their choice. The mirror
+ * case matters too now that a loop's fade-out really does ramp into the seam
+ * (§7.2): a fade-out with no fade-in fades to silence and then jumps back to
+ * full volume, which is the same click in the other direction.
  */
 export const seamSentence = (loop, fadeIn, fadeOut) => {
     if (!loop) return null
-    if (normalizeFadeSeconds(fadeIn) > 0 && normalizeFadeSeconds(fadeOut) <= 0) {
+    const fi = normalizeFadeSeconds(fadeIn)
+    const fo = normalizeFadeSeconds(fadeOut)
+    if (fi > 0 && fo <= 0) {
         return 'Fade-in dips on every loop. Add a fade-out to soften the seam.'
+    }
+    if (fo > 0 && fi <= 0) {
+        return 'Fade-out reaches silence at every loop. Add a fade-in to bring the level back.'
     }
     return null
 }
