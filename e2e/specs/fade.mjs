@@ -245,6 +245,15 @@ export const fade = {
       return 'OK';
     })()`);
     await sleep(800);
+    // The sliders only exist once the file's LENGTH is known, and the emulator
+    // takes longer than a fixed sleep to deliver it. Wait for the measurement
+    // rather than for the clock - otherwise this asserts on a row that is
+    // still saying "Measuring this file...".
+    let f7len = null;
+    for (let i = 0; i < 60 && !(f7len && f7len > 0); i++) {
+      f7len = await evalJs('window.__measuredLength("Tavern_Music.mp3")');
+      if (!f7len || f7len <= 0) await sleep(200);
+    }
     const f7 = await evalJs(`(() => {
       const r = window.__fadeRow('Tavern_Music.mp3');
       const c = window.__fadeControl(r, 'playUntil');
@@ -346,6 +355,12 @@ export const fade = {
       return 'OK';
     })()`);
     await sleep(900);
+    // Same wait as FADE7: the number box only exists once the length is known.
+    let f10len = null;
+    for (let i = 0; i < 60 && !(f10len && f10len > 0); i++) {
+      f10len = await evalJs('window.__measuredLength("Tavern_Music.mp3")');
+      if (!f10len || f10len <= 0) await sleep(200);
+    }
     const f10b = await evalJs(`(() => {
       const r = window.__fadeRow('Tavern_Music.mp3');
       const c = window.__fadeControl(r, 'fadeIn');
@@ -455,6 +470,11 @@ export const fade = {
       return 'OK';
     })()`);
     await sleep(900);
+    let f13len = null;
+    for (let i = 0; i < 60 && !(f13len && f13len > 0); i++) {
+      f13len = await evalJs('window.__measuredLength("Forest_Ambience.mp3")');
+      if (!f13len || f13len <= 0) await sleep(200);
+    }
     const f13a = await evalJs(`(() => {
       const rows = [...document.querySelectorAll('[data-fade-row]')].filter(r => r.textContent.includes('Forest_Ambience.mp3'));
       const c = window.__fadeControl(rows[0], 'fadeIn');

@@ -221,12 +221,17 @@ export const refcount = {
     await awaitBoard(ctx, { min: 1 });
     await rehydrate();
     await driver.enterEditMode();
+    // "Add Sound" lives in the DRAWER on the phone and in the edit bar on the
+    // desktop, so open the drawer where there is one and look in both places.
+    if (typeof ctx.openDrawer === 'function') await ctx.openDrawer();
     await evalJs(`(() => {
-      const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Add Sound');
+      const d = document.querySelector('[role="dialog"][aria-label="Navigation"]');
+      const b = (d ? [...d.querySelectorAll('button')] : []).find(x => x.textContent.trim() === 'Add Sound')
+             || [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Add Sound');
       if (b) b.click();
       return 'OK';
     })()`);
-    await sleep(800);
+    await sleep(700);
     await upload(2);
     await sleep(800);
     await evalJs(`window.__setInput('name','Upload Probe')`);
