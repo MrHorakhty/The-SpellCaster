@@ -6204,3 +6204,39 @@ traffic, it drops it.
 which the VPN does not touch. 💡 `TAURI_DEV_HOST` does **not** help - the CLI rewrites the devUrl from its own detection, and
 the HMR host is a different thing. Two phases had to fail before the cause was visible in the logcat rather
 than in the harness.
+
+## 2026-10-22 02:30-02:45 (opencode) - session close: the hand-test came back, and it brought one NEW defect
+
+The user re-tested the built app and reported:
+
+- ✅ **The timeline is there** (the mock's segmented bar) and the **percentage box is readable**.
+- ✅ **The loop dip is audible** - "I can hear the dip now".
+- ✅ **The environment sounds have their fade and Play Until controls** (the legacy single-`file` shape was the cause,
+  not the loop work).
+- ✅ **The duplicated sound is gone** - they restored **Caustic Blast** and **Frostbite** (the two sounds whose audio
+  the orphan bug had taken) and the duplication no longer happens.
+- 🔴 **NEW DEFECT, deferred by the user to a later session: editing a sound's fade values makes the profile bundle
+  export refuse, naming that sound as missing an audio file.**
+
+The new defect is open item 2 in `PROJECT_STATE.md`, with where to look and the three ways it can happen. It is
+**not** reproduced by the E2E - the bundle spec is green on all three platforms and FADE10b pins that an edited sound
+stays a BUNDLED asset - so it needs the real board, not a fixture. The one piece of context only the user has is
+**which sound**, and whether the file it points at is one of their own uploads or a bundled asset.
+
+### State at the end of the session
+
+Everything is **committed and pushed** on `mobile-support` (`10d0930`), the working tree is clean apart from the
+three deliberately untracked items (`.gitattributes`, `ICON_PREP_SPEC.md`, `scripts/`), and there is **one** backup
+folder (`…-20261022-022653`, VERIFY OK 255/255, 62.9 MB) taken after the last commit - so it is one docs-only
+commit behind, which is the accepted end state.
+
+**Gates on the final code**: lint **0 errors / 3 baseline warnings**; build exit 0; coverage **OK** (41 suites, 391
+tests, 25 shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20**; **web 260/0/0
+exit 0**; **Windows 278/0/3 exit 1**; **Android 268/0/3 exit 1** - the exit 1s and the three WARNs are the
+documented baseline.
+
+### Next session, in order
+
+1. **The export refusal after a fade edit** (open item 2) - the user's own board is the only reproduction.
+2. `ICON_PREP_SPEC.md` (open item 3) - still not authorised for implementation.
+3. `HOTKEYS_SPEC.md` (open item 5) - last, by design.
