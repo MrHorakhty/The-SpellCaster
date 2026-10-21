@@ -40,18 +40,20 @@ export const fade = {
             color:'#00ff00', loop:false, randomPlay:false, brightness:1 }
         ]
       }]));
-      // An ENVIRONMENT sound in the LEGACY shape: the single "file" field,
-      // which is how every shipped environment sound is stored. It has to get
-      // the same per-file row as a character sound, or it has no fades and no
-      // Play Until at all.
-      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([{
-        id:'e1', category:'Probe', sounds:[
-          { id:'env_probe', name:'Env Probe', type:'Test', icon:'',
-            file:'Tavern_Music.mp3',
-            color:'#00ff00', duration:0, fadeIn:0, fadeOut:0, loop:true,
-            randomPlay:false, brightness:1 }
-        ]
-      }]));
+      // The REAL shipped environment data, not a fixture: two categories keyed
+      // by NAME (no id), seven sounds in the legacy single-"file" shape. The
+      // user's board looks like this, and a save here has to edit the sound it
+      // opened rather than append a copy.
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([
+        { category:'Background Music', sounds:[
+          { id:'env_1', name:'Forest Ambience', type:'Nature', icon:'Forest.png', file:'Forest_Ambience.mp3', color:'#499c12', duration:0, fadeIn:0, fadeOut:0, loop:true, isEnvironmental:true },
+          { id:'env_2', name:'Tavern Music', type:'Music', icon:'Tavern.png', file:'Tavern_Music.mp3', color:'#499c12', duration:0, fadeIn:0, fadeOut:0, loop:true, isEnvironmental:true },
+          { id:'env_3', name:'Dungeon Ambience', type:'Nature', icon:'Dungeon.png', file:'Dungeon_Ambience.mp3', color:'#499c12', duration:0, fadeIn:0, fadeOut:0, loop:true, isEnvironmental:true }
+        ]},
+        { category:'Environmental Effects', sounds:[
+          { id:'env_4', name:'Rain', type:'Nature', icon:'Rain.png', file:'Rain.mp3', color:'#499c12', duration:0, fadeIn:0, fadeOut:0, loop:true, isEnvironmental:true }
+        ]}
+      ]));
       localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
       localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
       localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
@@ -382,8 +384,10 @@ export const fade = {
       return 'OK';
     })()`);
     await sleep(700);
+    // Open the FIRST environment sound of the first category - the one the
+    // user would have clicked. Its file is Forest_Ambience.mp3.
     await evalJs(`(() => {
-      const c = document.querySelector('[data-sound-card][data-sound-id="env_probe"]');
+      const c = document.querySelector('[data-sound-card][data-sound-id="env_1"]');
       const b = c?.parentElement?.querySelector('button[title="Edit Sound"]');
       if (b) b.click();
       return 'OK';
@@ -391,18 +395,18 @@ export const fade = {
     await sleep(900);
     let f11len = null;
     for (let i = 0; i < 40 && !(f11len && f11len > 0); i++) {
-      f11len = await evalJs('window.__measuredLength("Tavern_Music.mp3")');
+      f11len = await evalJs('window.__measuredLength("Forest_Ambience.mp3")');
       if (!f11len || f11len <= 0) await sleep(100);
     }
     const f11row = await evalJs(`(() => {
-      const r = window.__fadeRow('Tavern_Music.mp3');
+      const r = window.__fadeRow('Forest_Ambience.mp3');
       if (!r) return null;
       const c = window.__fadeControl(r, 'fadeIn');
       return { hasRow: true, box: c.box ? c.box.value : null };
     })()`);
     // Set a fade and a Play Until, then save.
     await evalJs(`(() => {
-      const r = window.__fadeRow('Tavern_Music.mp3');
+      const r = window.__fadeRow('Forest_Ambience.mp3');
       window.__setRange(window.__fadeControl(r, 'fadeIn').box, 2);
       window.__setRange(window.__fadeControl(r, 'playUntil').box, 30);
       return 'OK';
@@ -413,17 +417,56 @@ export const fade = {
     const f11store = await evalJs(`(() => {
       const cats = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
       let found = null;
-      for (const cat of cats) for (const s of (cat.sounds||[])) if (s.id === 'env_probe') found = s;
-      if (!found) return null;
+      let count = 0;
+      let ids = [];
+      for (const cat of cats) for (const s of (cat.sounds||[])) { count++; ids.push(cat.category+'/'+s.id+':'+s.name); if (s.id === 'env_1') found = s; }
+      if (!found) return { count, ids };
       const f = (found.files||[])[0] || null;
-      return { file: found.file || null, hasFiles: (found.files||[]).length,
+      return { count, ids, file: found.file || null, hasFiles: (found.files||[]).length,
                fadeIn: f ? f.fadeIn : null, playUntil: f ? f.playUntil : null,
                storedName: f ? (f.storedName || '') : null, name: f ? f.name : null };
     })()`);
     log('FADE','FADE11: an environment sound (the legacy single-file shape) gets a file row, its fades save, and it stays a bundled asset',
       f11row && f11row.hasRow === true && f11len > 0 && f11save === 'OK'
         && f11store && f11store.hasFiles === 1 && f11store.fadeIn === 2 && f11store.playUntil === 30
-        && f11store.storedName === '' && f11store.file === 'Tavern_Music.mp3' ? 'PASS' : 'FAIL',
+        && f11store.storedName === '' && f11store.name === 'Forest_Ambience.mp3' ? 'PASS' : 'FAIL',
       `row=${JSON.stringify(f11row)} len=${f11len} submit=${f11save} store=${JSON.stringify(f11store)}`);
+    // Saving must EDIT the sound, not append a second one. The environment tab
+    // keys its categories by NAME while the other tabs key by id, and the two
+    // halves of that used to disagree - which is how a save could add a copy
+    // instead of editing the one that was open.
+    log('FADE','FADE12: saving an environment sound edits it - it does not append a second copy',
+      f11store && f11store.count === 4 ? 'PASS' : 'FAIL', `sounds=${f11store?.count} ids=${JSON.stringify(f11store?.ids)}`);
+
+    // ---- FADE13: the modal shows ONE row for the file, and re-opening it
+    // does not accumulate copies -------------------------------------------
+    // The bug the user hit: the legacy `file` field AND the files[] entry
+    // described the SAME file, so the modal built a second row for it - one
+    // edited, one vanilla - and every save appended another. The row is the
+    // sound as far as a player is concerned, so a second row for the same
+    // file is a second sound.
+    await evalJs(`(() => {
+      const c = document.querySelector('[data-sound-card][data-sound-id="env_1"]');
+      const b = c?.parentElement?.querySelector('button[title="Edit Sound"]');
+      if (b) b.click();
+      return 'OK';
+    })()`);
+    await sleep(900);
+    const f13a = await evalJs(`(() => {
+      const rows = [...document.querySelectorAll('[data-fade-row]')].filter(r => r.textContent.includes('Forest_Ambience.mp3'));
+      const c = window.__fadeControl(rows[0], 'fadeIn');
+      return { rows: rows.length, fadeIn: c.box ? c.box.value : null };
+    })()`);
+    await submitModal('Save Changes');
+    await sleep(1000);
+    const f13b = await evalJs(`(() => {
+      const cats = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+      let found = null;
+      for (const cat of cats) for (const s of (cat.sounds||[])) if (s.id === 'env_1') found = s;
+      return { files: (found?.files||[]).length, legacyFile: found?.file ?? null };
+    })()`);
+    log('FADE','FADE13: the sound keeps ONE row for its file, and saving retires the legacy file field instead of duplicating it',
+      f13a && f13a.rows === 1 && f13a.fadeIn === '2' && f13b && f13b.files === 1 && f13b.legacyFile === null ? 'PASS' : 'FAIL',
+      `rows=${JSON.stringify(f13a)} store=${JSON.stringify(f13b)}`);
   }
 };

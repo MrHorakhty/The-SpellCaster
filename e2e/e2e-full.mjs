@@ -856,7 +856,14 @@ async function main() {
       copyFound:!!copy,
       idsDiffer: !!copy && !!src[0] && src[0].sound.id !== copy.id,
       sharedFile: !!copy && !!src[0] && JSON.stringify(copy.files)===JSON.stringify(src[0].sound.files),
-      legacyKept: copy ? ('file' in copy) : false,
+      // The copy must neither INVENT nor drop the legacy single-file field:
+      // it mirrors the source. It used to assert the field's presence
+      // outright, which passed only because the save wrote an empty
+      // file:"" onto a sound that had no legacy field at all - an artifact,
+      // not the contract. The legacy field is now retired when a sound is
+      // saved with a files[] list, so the meaningful assertion is that the
+      // copy MIRRORS the source.
+      legacyKept: copy ? (('file' in copy) === ('file' in src[0].sound)) : false,
       fileKeys: (() => { let n=0; for(let i=0;i<localStorage.length;i++){ if((localStorage.key(i)||'').startsWith('profile:'+window.__pid()+':sound_file_')) n++; } return n; })()
     };
   })()`);

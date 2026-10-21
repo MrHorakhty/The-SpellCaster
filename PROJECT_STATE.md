@@ -38,16 +38,25 @@
   **legacy single-`file` shape**, and the modal's rows come from `files[]`, so those sounds opened with no file
   rows at all - and no file rows means no per-file controls. `openEditSoundModal` now synthesises the entry the
   legacy shape implies (`legacyFileEntry`, no `storedName`), and the legacy `file` field survives the save.
-- 🔴 **The provenance rule is fixed: `storedName` is COPIED, never derived.** The normaliser used to copy `name`
+- 🔴 **The PROVENANCE rule is fixed: `storedName` is COPIED, never derived.** The normaliser used to copy `name`
   into `storedName`, and `storedName` means "this is an UPLOAD" - so **editing any sound with bundled files turned
   those bundled assets into fake uploads**, and the profile bundle export then tried to carry them, could not find
   them, and **refused to export**. A board that had been edited could no longer be backed up. The normalisers moved
   to `src/soundFiles.js` so a node check can pin the rule: `e2e/soundFiles.check.mjs` (**20/20**, gate 5's sixth
   check). FADE10b pins the end-to-end case (an edited character sound stays bundled) and FADE11 pins the
   environment sound (gets a row, saves its fades, stays bundled).
+- 🔴 **A legacy sound no longer grows a copy of itself on every save.** The synthesis above synthesised the legacy
+  entry **even when the sound already had a `files[]` entry for the same file**, and the save kept the legacy
+  `file` field *and* wrote a `files[]` entry - so the same file was described twice, the modal opened with a second
+  row for it (one edited, one vanilla), and every save appended another row. Now: the legacy entry is synthesised
+  **only when the sound has no `files[]` at all**; the modal keeps **one row per file** (the first wins, so a board
+  already corrupted by the bug self-heals on the next save); and a save **retires the legacy `file` field** once a
+  `files[]` list exists. FADE12 and FADE13 pin it. 💡 `M9` ("copy keeps legacy file field") was asserting the
+  presence of an empty `file: ""` key - an artifact of the old save, not a contract - and now asserts that the copy
+  MIRRORS the source.
 - Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
-  382 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 252/0/0 exit 0** ·
-  **Windows 272/0/1 exit 1 (G5 WARN)** · **Android 262/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
+  384 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 254/0/0 exit 0** ·
+  **Windows 274/0/1 exit 1 (G5 WARN)** · **Android 264/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
   healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
   "done" until the user has used it. **The first hand-test (2026-10-21) found three real gaps**, all now fixed and
@@ -1461,9 +1470,10 @@ five backups existed at 21 741 B each, the file was present and the right size, 
     deleted nothing.**
 
 ## Backups
-🔴 **ONE folder, as of 2026-10-18.** The prune is **done**, and it was done in the correct order: the final backup was
-taken **first**, then the rest were deleted, then **no further backup was taken for the docs-only corrections after
-it**. One markdown edit behind is a perfectly good rollback point; an unbounded folder count is not.
+🔴 **ONE folder, as of 2026-10-21.** The prune is **done**, and it was done in the correct order: the final backup was
+taken **first**, then the rest were deleted. **Nine folders (~540 MB) were pruned to one on 2026-10-21**, at the
+author's request, after the work was pushed. One markdown edit behind is a perfectly good rollback point; an
+unbounded folder count is not.
 
 ⚠️ **The audit found real orphans and would have destroyed them.** Before deleting, every folder was checked against
 **`git ls-files` ∪ the working tree** — *not* `git ls-files` alone, which is the check that wrongly cried
@@ -1476,7 +1486,7 @@ it**. One markdown edit behind is a perfectly good rollback point; an unbounded 
 | Folder | Files | Note |
 |---|---|---|
 | **`…-20261018-151255`** | **288** (VERIFY OK, 91.8 MB) | **the keeper.** 91.8 MB because the 51-file test corpus was still in `scripts/`. **It still holds that corpus** — the corpus was removed from the working tree *after* this backup was taken, so this folder remains a fallback copy |
-| ~~6 folders~~ | 236-250 | deleted 2026-10-18, **~320 MB freed** (411 MB → 91.8 MB) |
+| ~~8 folders~~ | 253-255 | deleted 2026-10-21, **~477 MB freed** (540 MB -> 62.8 MB) |
 
 **Keeper verified as a kept artifact, not assumed:** `e2e/e2e-full.ps1` present (the AV-sensitive one),
 `ICON_PREP_SPEC.md`, `.gitattributes`, `scripts/Image Pipeline/image_pipeline.py` and both example images present,
@@ -2553,4 +2563,4 @@ Delete-then-ignore, so they cannot come back:
 ---
 
 ## Dated session detail
-→ [`docs/session-history.md`](docs/session-history.md)
+| **`.-20261021-214238`** | **255** (VERIFY OK, 62.8 MB) | **the keeper** as of 2026-10-21. Taken after the environment-sound fix, so it is one commit behind the current HEAD |

@@ -6055,3 +6055,53 @@ shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 2
 ### Handover
 
 The user has NOT re-tested the environment sounds yet - that is the open item. The claim stays held.
+## 2026-10-21 22:00-22:40 (opencode) - "it adds a new unmodified sound" - a legacy sound that grew a copy of itself
+
+The user's third hand-test: **saving an environment sound added a new sound to the category**, and it kept going on
+like that. Character sounds were unaffected.
+
+### What was actually happening
+
+It was **my bug from the previous round**, and it was mine to own:
+
+1. To give a legacy environment sound a file row, `openEditSoundModal` synthesises an entry from the legacy
+   single-`file` field.
+2. I wrote that synthesis to run **unconditionally** - including for a sound that ALREADY had a `files[]` entry
+   for the very same file.
+3. The save wrote the `files[]` list **and kept the legacy `file` field**, so the sound described the same file
+   twice.
+4. So the next open built **two rows for one file** - one edited, one vanilla - and the next save wrote **both**,
+   plus another synthesised one. The file list grew on every save, and each extra entry is another playable copy
+   of the same sound. That is the "new unmodified sound" the user saw.
+
+**The fix, in three parts:**
+- the legacy entry is synthesised **only when the sound has no `files[]` at all**;
+- the modal keeps **one row per file** (the first wins), so a board already corrupted by the bug **self-heals** on
+  the next open and save;
+- a save **retires the legacy `file` field** once a `files[]` list exists (`file: undefined`, which JSON drops), so
+  the two shapes can never describe the same file again.
+
+**FADE12** (a save edits the sound, it does not append a copy) and **FADE13** (one row per file, legacy field
+retired) pin it, against the REAL shipped environment data - two categories keyed by name, seven sounds in the
+legacy shape - rather than a one-sound fixture, because the fixture is what let the bug through the first time.
+
+💡 `M9` ("copy keeps legacy file field") turned out to assert the presence of an **empty `file: ""` key** - an
+artifact of the old save, not a contract. It now asserts that the copy **mirrors** the source, which is what the
+test was always trying to say.
+
+### Backups pruned
+
+At the author's request: **nine folders (~540 MB) pruned to one**, keeping **`.-20261021-214238`** (VERIFY OK,
+255 files, 62.8 MB). The prune came after the push, which is the order that keeps a rollback point.
+
+### Gates (all re-run on the final code)
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 384 tests, 25
+shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20**; **web 254/0/0 exit 0**;
+**Windows 274/0/1 exit 1**; **Android 264/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
+
+### Handover
+
+The user's board still holds the duplicated file entries from the bug. The modal now shows ONE row per file and the
+next save rewrites the list, so **opening the sound once and saving it repairs that sound** - but the user may
+prefer to delete the duplicates by hand.

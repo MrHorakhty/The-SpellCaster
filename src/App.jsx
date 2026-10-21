@@ -2126,9 +2126,27 @@ function AppBoard() {
         // because those are per-file controls. Synthesise the entry the legacy
         // shape implies, so a legacy sound is editable exactly like a modern
         // one (it carries no `storedName`: a bundled asset is not an upload).
-        const legacyFile = legacyFileEntry(sound.file)
-        const normalizedFiles = normalizeStoredFileList(sound.files || [])
+        //
+        // ONLY when the sound has no files[] at all. A sound that has both (the
+        // legacy field AND the array, which is what a legacy sound becomes once
+        // it has been saved) would otherwise get a SECOND row for the very same
+        // file - one edited, one vanilla - and every save added another.
+        const storedFiles = normalizeStoredFileList(sound.files || [])
+        const legacyFile = storedFiles.length === 0 ? legacyFileEntry(sound.file) : null
+        // One row per FILE, not per entry. A sound whose file list somehow
+        // holds the same file twice (which is what an earlier save bug
+        // produced) would otherwise open with two rows for one file - one
+        // edited, one vanilla - and React would see two rows with the same
+        // key. The first entry wins, because that is the one the user edited.
+        const seenFiles = new Set()
+        const normalizedFiles = storedFiles
             .concat(legacyFile ? [legacyFile] : [])
+            .filter(file => {
+                const identity = file.storedName || file.name
+                if (seenFiles.has(identity)) return false
+                seenFiles.add(identity)
+                return true
+            })
 
         setIconPreview('')
 
@@ -2217,6 +2235,16 @@ function AppBoard() {
             : (soundFormData.files || [])
 
         const payload = { ...soundFormData, files: submitFiles }
+
+        // The legacy single-`file` field is superseded by the files[] array, so
+        // it is dropped once the array exists. Keeping both meant the modal
+        // synthesised a SECOND row for the same file on the next open - one
+        // edited, one vanilla - and every save added another one, so the
+        // sound's file list grew on every save. `file: undefined` is dropped
+        // by JSON.stringify, so nothing is written at all.
+        if (submitFiles.length > 0) {
+            payload.file = undefined
+        }
 
         if (editingSound) {
             updateSound(editingSound.id, payload)

@@ -1141,7 +1141,7 @@
       "title": "Per-file fades",
       "file": "specs/fade.mjs",
       "export": "fade",
-      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, the clamped fade on a file shorter than playUntil, the loop seam hint in both directions (a fade-in without a fade-out, and a fade-out without a fade-in), the timeline that draws the fade-in ramp, the full-volume plateau, the never-played tail and the stop marker, a fade value the slider cannot represent still saving, and an ENVIRONMENT sound in the legacy single-file shape getting the same row while staying a bundled asset",
+      "covers": "the per-file fade model: measured length, sliders capped by file length, the single red state (fadeIn+fadeOut >= audibleEnd), Play Until per file, fade-out measuring back from the audible end, the clamped fade on a file shorter than playUntil, the loop seam hint in both directions (a fade-in without a fade-out, and a fade-out without a fade-in), the timeline that draws the fade-in ramp, the full-volume plateau, the never-played tail and the stop marker, a fade value the slider cannot represent still saving, and an ENVIRONMENT sound in the legacy single-file shape getting the same row while staying a bundled asset - plus the guarantee that saving an environment sound EDITS it (one row per file, the legacy file field retired) instead of appending a copy",
       "platforms": [
         "web",
         "win",
@@ -1152,6 +1152,8 @@
         "FADE10",
         "FADE10b",
         "FADE11",
+        "FADE12",
+        "FADE13",
         "FADE2",
         "FADE3a",
         "FADE3b",
