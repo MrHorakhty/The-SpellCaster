@@ -72,7 +72,8 @@
   re-seeds once if they never arrive. R0 and B0 report it when the board does not come up.
 - Gate results, 2026-10-21/22: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
   391 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 260/0/0 exit 0** ·
-  **Windows 278/0/3 exit 1 (G5/G6b/G7b WARN)** · **Android 257/0/3 exit 1 (same WARNs)**. The exit 1s are the
+  **Windows 278/0/3 exit 1** · **Android 268/0/3 exit 1** - the exit 1s and the WARNs are the documented healthy baseline
+  (G5, G6b and G7b are the Tauri key-check skips), not a regression.
   documented healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
   "done" until the user has used it. **The first hand-test (2026-10-21) found three real gaps**, all now fixed and

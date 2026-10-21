@@ -6153,6 +6153,13 @@ lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` *
 exit 1** - the exit 1s are the documented G5 WARN baseline, and the extra WARNs are the Tauri key-check skips that
 G6b and G7b now declare.
 
+### Gates (final, on the final code)
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 391 tests, 25 shipped
+features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20**; **web 260/0/0 exit 0**;
+**Windows 278/0/3 exit 1**; **Android 268/0/3 exit 1** - the exit 1s and the three WARNs are the documented baseline
+(G5, G6b and G7b are the Tauri key-check skips).
+
 💡 **The mobile phase earned its keep immediately**: the first Android run died on `ReferenceError: copies is not
 defined` - the new upload helper's copy count was wired into one entrypoint's signature and not the other's. The web
 and Windows phases could not have caught that; Android ran the helper the web phase never touches.
