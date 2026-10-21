@@ -1485,7 +1485,7 @@ unbounded folder count is not.
 
 | Folder | Files | Note |
 |---|---|---|
-| **`…-20261018-151255`** | **288** (VERIFY OK, 91.8 MB) | **the keeper.** 91.8 MB because the 51-file test corpus was still in `scripts/`. **It still holds that corpus** — the corpus was removed from the working tree *after* this backup was taken, so this folder remains a fallback copy |
+| **`.-20261021-223728`** | **255** (VERIFY OK, 62.8 MB) | **the keeper** as of 2026-10-21, taken after `01c8440` so it matches the pushed HEAD. Count it with `Get-ChildItem -Recurse -File -Force`: without `-Force` the hidden `public/assets/desktop.ini` is missed and you get 254 |
 | ~~10 folders~~ | 253-255 | deleted 2026-10-21, **~603 MB freed** (603 MB -> 62.8 MB) |
 
 **Keeper verified as a kept artifact, not assumed:** `e2e/e2e-full.ps1` present (the AV-sensitive one),
