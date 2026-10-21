@@ -53,6 +53,11 @@ import {
     fullVolumeSentence,
     seamSentence,
 } from './fadeMath.js'
+import {
+    normalizeStoredFileEntry,
+    normalizeStoredFileList,
+    legacyFileEntry,
+} from './soundFiles.js'
 
 // Environment detection
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
@@ -301,37 +306,12 @@ const DATA_VERSION = '3'
 
 // --- per-file fade fields --------------------------------------------------
 //
-// FADE_SPEC.md §4: fades moved OFF the sound and onto each file entry. These
-// helpers are module-level on purpose - `normalizeStoredData` below is
-// module-level and is the forward-migration entry point, so the migration has to
-// live here too or it would silently not apply to imported bundles.
-
-/** Normalise one `files[]` entry. An absent fade field reads as 0. */
-const normalizeStoredFileEntry = (fileEntry) => {
-    if (!fileEntry || typeof fileEntry !== 'object') {
-        return { name: '', displayName: '', url: '', fadeIn: 0, fadeOut: 0, playUntil: 0 }
-    }
-
-    const storedName = fileEntry.storedName || fileEntry.name || ''
-    const displayName = fileEntry.displayName || fileEntry.originalName || fileEntry.name || ''
-    const url = fileEntry.url || storedName || ''
-
-    return {
-        ...fileEntry,
-        name: storedName,
-        storedName,
-        displayName,
-        url,
-        fadeIn: normalizeFadeSeconds(fileEntry.fadeIn),
-        fadeOut: normalizeFadeSeconds(fileEntry.fadeOut),
-        playUntil: normalizeFadeSeconds(fileEntry.playUntil),
-    }
-}
-
-const normalizeStoredFileList = (files = []) => {
-    if (!Array.isArray(files)) return []
-    return files.map(normalizeStoredFileEntry)
-}
+// FADE_SPEC.md §4: fades moved OFF the sound and onto each file entry. The
+// normalisers live in `src/soundFiles.js` - module-level on purpose, because
+// `normalizeStoredData` below is module-level and is the forward-migration
+// entry point, so the migration has to live here too or it would silently not
+// apply to imported bundles. They are in their own module so a node check can
+// reach the PROVENANCE rule, which is subtle and has already broken once.
 
 /**
  * Sound-level fadeIn/fadeOut/duration -> per-file fadeIn/fadeOut/playUntil
@@ -361,7 +341,8 @@ const migrateSoundFades = (sound) => {
         }
     }
     if (sound.file) {
-        const single = normalizeStoredFileEntry({ name: sound.file, displayName: sound.file, url: sound.file })
+        const single = legacyFileEntry(sound.file)
+        if (!single) return sound
         return { ...sound, files: [{ ...single, fadeIn, fadeOut, playUntil }] }
     }
     return sound
@@ -2139,7 +2120,15 @@ function AppBoard() {
 
     const openEditSoundModal = async (sound) => {
         const loopValue = sound.loop !== undefined ? sound.loop : tabType === 'environment'
+        // A legacy sound - every shipped ENVIRONMENT sound still uses the single
+        // `file` field rather than `files[]` - would otherwise open with no file
+        // rows at all, and no file rows means no fades and no Play Until,
+        // because those are per-file controls. Synthesise the entry the legacy
+        // shape implies, so a legacy sound is editable exactly like a modern
+        // one (it carries no `storedName`: a bundled asset is not an upload).
+        const legacyFile = legacyFileEntry(sound.file)
         const normalizedFiles = normalizeStoredFileList(sound.files || [])
+            .concat(legacyFile ? [legacyFile] : [])
 
         setIconPreview('')
 
@@ -2147,8 +2136,11 @@ function AppBoard() {
             const existingFiles = await Promise.all(normalizedFiles.map(async file => ({
                 file: null,
                 preview: await getFileFromLocalStorage(file.storedName || file.name) || `/assets/${file.displayName || file.name || file.url}`,
-                name: file.storedName || file.name,
-                storedName: file.storedName || file.name,
+                name: file.name || file.storedName,
+                // PROVENANCE, copied not derived: a bundled entry must not gain a
+                // storedName, or editing the sound would turn its bundled file
+                // into a fake upload and break the profile bundle export.
+                storedName: file.storedName || '',
                 displayName: file.displayName || file.name,
                 url: file.url || file.storedName || file.name,
                 // The per-file fade values travel with the entry, not off it, so
@@ -2211,8 +2203,11 @@ function AppBoard() {
         // modal-only measurement state and are deliberately NOT persisted.
         const submitFiles = audioFiles.length > 0
             ? normalizeStoredFileList(audioFiles.map(f => ({
-                name: f.storedName || f.name || f.url,
-                storedName: f.storedName || f.name || f.url,
+                name: f.name || f.storedName || f.url,
+                // PROVENANCE, copied not derived. Inventing it here is what
+                // turned every bundled file into a fake upload and broke the
+                // profile bundle export for any sound the user had edited.
+                storedName: f.storedName || '',
                 url: f.url || f.storedName || f.name,
                 displayName: f.displayName || f.name,
                 fadeIn: f.fadeIn ?? 0,
@@ -5790,7 +5785,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     <div className="w-px h-2 bg-dark-600"></div>
                                     <div className="flex flex-col items-center gap-1.5">
                                         <button
-                                            onClick={() => switchTab('characters')}
+                                            data-tab="characters"
+                            onClick={() => switchTab('characters')}
                                             className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
                                                 }`}
                                             title="Characters"
@@ -5798,7 +5794,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             {renderIcon(charSectionIcon, { size: 18, fallback: <User size={18} /> })}
                                         </button>
                                         <button
-                                            onClick={() => switchTab('environment')}
+                                            data-tab="environment"
+                            onClick={() => switchTab('environment')}
                                             className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg transition-colors ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-400 hover:bg-dark-600'
                                                 }`}
                                             title="Environment"
@@ -5918,7 +5915,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             <div className="p-3">
                                                 <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar flex-nowrap">
                                                     <button
-                                                        onClick={() => switchTab('characters')}
+                                                        data-tab="characters"
+                            onClick={() => switchTab('characters')}
                                                         className={`shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
@@ -5928,7 +5926,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                         </span>
                                                     </button>
                                                     <button
-                                                        onClick={() => switchTab('environment')}
+                                                        data-tab="environment"
+                            onClick={() => switchTab('environment')}
                                                         className={`shrink-0 px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                             }`}
                                                     >
@@ -6201,7 +6200,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                             <div ref={desktopTabBarRef} className={`flex space-x-2 mb-4 overflow-x-auto flex-nowrap ${desktopTabBarScrollable ? '' : 'no-scrollbar'}`}>
                                 <button
-                                    onClick={() => switchTab('characters')}
+                                    data-tab="characters"
+                            onClick={() => switchTab('characters')}
                                     className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'characters' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >
@@ -6211,7 +6211,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     </span>
                                 </button>
                                 <button
-                                    onClick={() => switchTab('environment')}
+                                    data-tab="environment"
+                            onClick={() => switchTab('environment')}
                                     className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium ${tabType === 'environment' ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                         }`}
                                 >

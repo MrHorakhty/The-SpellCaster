@@ -33,9 +33,21 @@
   ramp; FADE8 pins both sentences.
 - The percentage number boxes lost the browser's spin buttons (`.no-spin` in `index.css`): the spinner ate the
   width of the 3-character box and the digits spilled past the modal's edge, unreadable.
+- 🔴 **ENVIRONMENT (and group) sounds now get the same per-file row.** The user found that only CHARACTER sounds
+  had fade and Play Until controls. The cause was not the fades: every shipped environment sound is stored in the
+  **legacy single-`file` shape**, and the modal's rows come from `files[]`, so those sounds opened with no file
+  rows at all - and no file rows means no per-file controls. `openEditSoundModal` now synthesises the entry the
+  legacy shape implies (`legacyFileEntry`, no `storedName`), and the legacy `file` field survives the save.
+- 🔴 **The provenance rule is fixed: `storedName` is COPIED, never derived.** The normaliser used to copy `name`
+  into `storedName`, and `storedName` means "this is an UPLOAD" - so **editing any sound with bundled files turned
+  those bundled assets into fake uploads**, and the profile bundle export then tried to carry them, could not find
+  them, and **refused to export**. A board that had been edited could no longer be backed up. The normalisers moved
+  to `src/soundFiles.js` so a node check can pin the rule: `e2e/soundFiles.check.mjs` (**20/20**, gate 5's sixth
+  check). FADE10b pins the end-to-end case (an edited character sound stays bundled) and FADE11 pins the
+  environment sound (gets a row, saves its fades, stays bundled).
 - Gate results, 2026-10-21: lint **0 errors / 3 baseline warnings** · build exit 0 · coverage **OK** (41 suites,
-  380 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46** · **web 250/0/0 exit 0** ·
-  **Windows 270/0/1 exit 1 (G5 WARN)** · **Android 260/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
+  382 tests) · gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20** · **web 252/0/0 exit 0** ·
+  **Windows 272/0/1 exit 1 (G5 WARN)** · **Android 262/0/1 exit 1 (G5 WARN)**. The exit 1s are the documented
   healthy baseline, not a regression.
 - ⚠️ **The hand-test of the built app is still PENDING** — per-file fades are user-facing, so the feature is not
   "done" until the user has used it. **The first hand-test (2026-10-21) found three real gaps**, all now fixed and

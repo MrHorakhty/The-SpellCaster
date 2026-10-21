@@ -6002,3 +6002,56 @@ loop dip is audible in the hand.
 
 `FADE_SPEC.md` was updated: status BUILT, §5's "fades disabled on loop" marked SUPERSEDED by §7, §7.4 given the
 mirror case, and the number-box validation trap written down where the next implementer will hit it.
+## 2026-10-21 20:45-21:45 (opencode) - "only the sounds under Characters have fade buttons" - and the export bug behind it
+
+The user's second hand-test: the timeline and the percentage box were fine, but **only the sounds under Characters
+had fade and Play Until controls**. They guessed it might be because the environment sounds loop natively and the
+loop fades were not part of this build. They were not - §7 (segment looping + seam fades) is one feature and it is
+built. The real cause was the DATA.
+
+### Why environment sounds had no controls at all
+
+Every shipped **environment** sound is stored in the **legacy single-`file` shape**:
+
+    { id:'env_s', name:'Forest Ambience', file:'Forest_Ambience.mp3', loop:true, ... }
+
+while every shipped **character** sound uses `files: [...]`. The edit modal builds its per-file rows from `files[]`,
+so an environment sound opened with **no file rows at all** - and no file rows means no fades and no Play Until,
+because those are per-file controls. The legacy shape is not a fade problem at all.
+
+`openEditSoundModal` now synthesises the entry the legacy shape implies (`legacyFileEntry` in the new
+`src/soundFiles.js`), so a legacy sound opens with a real row, measures its own file, and saves per-file fades.
+The legacy `file` field survives the save, so the sound ends up with both shapes and plays exactly as before.
+
+### The export bug this uncovered, and why it had to be fixed first
+
+To save a legacy sound as a `files[]` entry, the entry has to know whether its file is an **upload** or a
+**bundled asset**. That is what `storedName` means - presence means upload, absence means bundled, and the bundle
+export relies on it to decide what it has to carry.
+
+The normaliser was **inventing** it: it copied `name` into `storedName`. So **editing any sound with bundled files
+turned those bundled assets into fake uploads**, and the profile bundle export then tried to carry them, could not
+find them in the uploads store, and **refused to export the profile**. A board the user had touched could no longer
+be backed up. It had been live since the per-file model landed, and nothing caught it: the bundle suite builds its
+own fixtures, so no test ever edited a shipped sound and then exported.
+
+The rule is now **copied, never derived** - `storedName` is copied when it is there and left empty when it is not,
+and every reader already falls back to `name`. The normalisers moved into `src/soundFiles.js` so a node check can
+reach the rule instead of it living inside a 7000-line component:
+
+- `e2e/soundFiles.check.mjs` - **20/20**, now gate 5's **sixth** check (AGENTS.md updated in the same commit)
+- **FADE10b** - an edited character sound with a bundled file stays a BUNDLED asset
+- **FADE11** - an environment sound gets the row, its fades save, and it stays bundled
+
+💡 The general lesson: **provenance that is derived instead of declared will eventually be wrong**, and the
+derivative has to be pinned by a test in the same place as the rule, or it will be "fixed" by nobody.
+
+### Gates (all re-run on the final code)
+
+lint **0 errors / 3 baseline warnings**; `vite build` exit 0; `check-coverage` **OK** (41 suites, 382 tests, 25
+shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 46/46, 20/20**; **web 252/0/0 exit 0**;
+**Windows 272/0/1 exit 1**; **Android 262/0/1 exit 1** - the exit 1s are the documented G5 WARN baseline.
+
+### Handover
+
+The user has NOT re-tested the environment sounds yet - that is the open item. The claim stays held.

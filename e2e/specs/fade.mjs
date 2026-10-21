@@ -40,7 +40,18 @@ export const fade = {
             color:'#00ff00', loop:false, randomPlay:false, brightness:1 }
         ]
       }]));
-      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([]));
+      // An ENVIRONMENT sound in the LEGACY shape: the single "file" field,
+      // which is how every shipped environment sound is stored. It has to get
+      // the same per-file row as a character sound, or it has no fades and no
+      // Play Until at all.
+      localStorage.setItem(window.__pk('ttrpg_environment'), JSON.stringify([{
+        id:'e1', category:'Probe', sounds:[
+          { id:'env_probe', name:'Env Probe', type:'Test', icon:'',
+            file:'Tavern_Music.mp3',
+            color:'#00ff00', duration:0, fadeIn:0, fadeOut:0, loop:true,
+            randomPlay:false, brightness:1 }
+        ]
+      }]));
       localStorage.setItem(window.__pk('ttrpg_groups'), JSON.stringify([]));
       localStorage.setItem(window.__pk('ttrpg_themes'), JSON.stringify([]));
       localStorage.setItem(window.__pk('ttrpg_data_version'), '3');
@@ -335,7 +346,84 @@ export const fade = {
       const c = window.__fadeControl(r, 'fadeIn');
       return c.box ? c.box.value : null;
     })()`);
+    // The saved sound is the other half of the provenance rule: a CHARACTER
+    // sound with a BUNDLED file must still be a bundled asset after an edit.
+    // The normaliser used to copy the file's name into `storedName`, which
+    // means "upload" - and the profile bundle export then tried to carry the
+    // bundled file as an upload, could not find it, and refused to export.
+    const f10c = await evalJs(`(() => {
+      const chars = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      let found = null;
+      for (const c of chars) for (const s of (c.sounds||[])) if (s.id === 'fade_probe') found = s;
+      const f = (found?.files||[])[0] || null;
+      return f ? { name: f.name, storedName: f.storedName || '', fadeIn: f.fadeIn } : null;
+    })()`);
     log('FADE','FADE10: a fade value the slider cannot represent still saves and comes back',
       f10a === 'OK' && f10b === '0.5' ? 'PASS' : 'FAIL', `submit=${f10a} fadeIn=${f10b}`);
+    log('FADE','FADE10b: an edited sound with a bundled file stays a BUNDLED asset, so the profile can still be exported',
+      f10c && f10c.storedName === '' && f10c.name === 'Tavern_Music.mp3' ? 'PASS' : 'FAIL', JSON.stringify(f10c));
+
+    // ---- FADE11: an ENVIRONMENT sound gets the same per-file row ---------
+    // The user's hand-test found that only CHARACTER sounds had fade and Play
+    // Until controls. The cause was not the fades: every shipped environment
+    // sound is stored in the LEGACY shape (a single `file` field, not a
+    // `files[]` array), and the modal's rows come from `files[]` - so an
+    // environment sound opened with no file rows at all, and no file rows
+    // means no per-file controls.
+    //
+    // This also pins the PROVENANCE rule: a legacy sound is a BUNDLED asset, so
+    // editing it must not give its file a `storedName` (which means "upload"),
+    // or the profile bundle export would try to carry a bundled file as an
+    // upload and refuse to export.
+    await driver.enterEditMode();
+    await evalJs(`(() => {
+      const b = document.querySelector('button[data-tab="environment"]');
+      if (b) b.click();
+      return 'OK';
+    })()`);
+    await sleep(700);
+    await evalJs(`(() => {
+      const c = document.querySelector('[data-sound-card][data-sound-id="env_probe"]');
+      const b = c?.parentElement?.querySelector('button[title="Edit Sound"]');
+      if (b) b.click();
+      return 'OK';
+    })()`);
+    await sleep(900);
+    let f11len = null;
+    for (let i = 0; i < 40 && !(f11len && f11len > 0); i++) {
+      f11len = await evalJs('window.__measuredLength("Tavern_Music.mp3")');
+      if (!f11len || f11len <= 0) await sleep(100);
+    }
+    const f11row = await evalJs(`(() => {
+      const r = window.__fadeRow('Tavern_Music.mp3');
+      if (!r) return null;
+      const c = window.__fadeControl(r, 'fadeIn');
+      return { hasRow: true, box: c.box ? c.box.value : null };
+    })()`);
+    // Set a fade and a Play Until, then save.
+    await evalJs(`(() => {
+      const r = window.__fadeRow('Tavern_Music.mp3');
+      window.__setRange(window.__fadeControl(r, 'fadeIn').box, 2);
+      window.__setRange(window.__fadeControl(r, 'playUntil').box, 30);
+      return 'OK';
+    })()`);
+    await sleep(400);
+    const f11save = await submitModal('Save Changes');
+    await sleep(1200);
+    const f11store = await evalJs(`(() => {
+      const cats = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+      let found = null;
+      for (const cat of cats) for (const s of (cat.sounds||[])) if (s.id === 'env_probe') found = s;
+      if (!found) return null;
+      const f = (found.files||[])[0] || null;
+      return { file: found.file || null, hasFiles: (found.files||[]).length,
+               fadeIn: f ? f.fadeIn : null, playUntil: f ? f.playUntil : null,
+               storedName: f ? (f.storedName || '') : null, name: f ? f.name : null };
+    })()`);
+    log('FADE','FADE11: an environment sound (the legacy single-file shape) gets a file row, its fades save, and it stays a bundled asset',
+      f11row && f11row.hasRow === true && f11len > 0 && f11save === 'OK'
+        && f11store && f11store.hasFiles === 1 && f11store.fadeIn === 2 && f11store.playUntil === 30
+        && f11store.storedName === '' && f11store.file === 'Tavern_Music.mp3' ? 'PASS' : 'FAIL',
+      `row=${JSON.stringify(f11row)} len=${f11len} submit=${f11save} store=${JSON.stringify(f11store)}`);
   }
 };
