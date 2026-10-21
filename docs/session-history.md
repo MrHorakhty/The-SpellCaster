@@ -5915,8 +5915,12 @@ shipped features covered, 2 planned); gate 5 **46/46, 32/32, 20/20, OK, 43/43**;
 **Hand-test of the built app is PENDING.** Per-file fades are user-facing, so the feature is green in tests, not
 done.
 
-Backups this session: `...-20261021-002338`, `...-20261021-005800`, `...-20261021-114603` (253 files, 62.8 MB,
-`VERIFY OK`), plus a final one after the commit.
+Two commits, both pushed on `mobile-support`: `7881134` (the implementation) and `c036c84` (the seam hint derived
+from the real file, plus FADE8).
+
+Backups this session: `...-20261021-002338`, `...-20261021-005800`, `...-20261021-114603`,
+`...-20261021-123231`, `...-20261021-125406` (253 files, 62.8 MB, `VERIFY OK` each). Prune all but the newest once
+the hand-test is done.
 
 `.gitattributes` (`*.bat text eol=crlf`) is still untracked - the user has never asked for it to be committed.
 `scripts/` is untracked by the author's choice.

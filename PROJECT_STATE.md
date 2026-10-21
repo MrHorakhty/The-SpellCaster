@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — resuming my own mid-work session (I released it at 00:50) — working on: finishing FADE_SPEC implementation, starting from the one remaining web E2E failure (J4).
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: `FADE_SPEC` is built, committed (`7881134`, `c036c84`) and pushed; all eight gates green. **Waiting on the user's hand-test of the built app** before this can be called done.
 
 ✅ **`FADE_SPEC.md` IS SHIPPED (2026-10-21) — per-file fades, Play Until and seam fades, green on all three platforms.**
 - `src/fadeMath.js` (NEW, pure model: `normalizeFadeSeconds`, `fadeStep`, `audibleEnd`, `fadeWarning`,
