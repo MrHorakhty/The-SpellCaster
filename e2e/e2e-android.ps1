@@ -147,7 +147,14 @@ try {
     Assert-NotTimedOut -Minutes 25
 
     "`tLaunching tauri android dev (Rust compile + install) ..." | Add-Content $Script:TestLog
-    $tauriProc = Start-Process 'npm.cmd' @('run','tauri','android','dev') `
+    # --host 10.0.2.2: the CLI otherwise auto-detects the dev-server address and
+    # picks the FIRST network adapter it finds, which on this machine is the
+    # ProtonVPN one (10.2.0.2). The emulator's traffic to the VPN address is
+    # swallowed by the VPN, so the app loads nothing ("Failed to request
+    # http://10.2.0.2:5173/") and dies before the suite starts. 10.0.2.2 is
+    # Android's hard-coded emulator-to-host alias, and Vite binds 0.0.0.0
+    # (vite.config.js), so it answers there.
+    $tauriProc = Start-Process 'npm.cmd' @('run','tauri','android','dev','--','--host','10.0.2.2') `
         -WorkingDirectory $proj `
         -RedirectStandardOutput  "$tmp\e2e-android-tauri.log" `
         -RedirectStandardError   "$tmp\e2e-android-tauri.err.log" `

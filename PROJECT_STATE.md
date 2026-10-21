@@ -1448,6 +1448,14 @@ never prunes.
   `10.2.0.2` and `192.168.1.102` alike and the wrong guess stops mattering. Added in **`9c2a4c3`**
   (2026-10-11-verified: *"Mobile UI adjustments"*, 2026-08-31). `e2e-full.ps1:296` additionally clears
   `TAURI_DEV_HOST` in cleanup so detection cannot leak between runs.
+  🔴 **But the 0.0.0.0 mitigation does NOT cover the VPN address after all** (2026-10-22): the emulator's
+  traffic to `10.2.0.2` is swallowed by the VPN, so the app loads nothing - *Failed to request
+  http://10.2.0.2:5173/* - and **dies before the suite starts** (the phase reports `exit=3`, app not reachable
+  on :9225). It looks like a crash and is not one: the tauri log shows a clean install and launch, and Vite was
+  up and bound to every interface. The address DOES matter, because of the VPN.
+  **Fix: `e2e-android.ps1` now starts the CLI with `--host 10.0.2.2`** - Android's hard-coded
+  emulator-to-host alias, which the VPN does not touch. 💡 `TAURI_DEV_HOST=192.168.1.105` does **not** help:
+  the CLI rewrites the devUrl from its OWN detection, and the HMR host is a different thing.
 - 💡 **The raw logs of (1) are still on the Desktop and are NOT junk** — `~/Desktop/emu-out.log`,
   `emu-err.log`, `tauri-dev-stdout.log`, `tauri-dev-stderr.log`, all dated **2026-08-31**, ~30 KB total, i.e.
   the same day as the `9c2a4c3` fix. `tauri-dev-stderr.log` holds the detection lines quoted above and
