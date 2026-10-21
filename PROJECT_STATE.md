@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: the user's hand-test found three gaps (the mock's timeline, the unreadable percentage box, and the loop's fade-out never being built); all three are fixed, committed and green on all three platforms. **Waiting on the user's re-test.**
+🔒 CURRENT HOLDER: opencode — claimed 2026-10-21 02:05 — working on: the hand-test found three gaps (the mock's timeline, the unreadable percentage box, the loop's fade-out) and then a fourth (environment sounds had no fade controls at all, because of the legacy single-`file` shape - and fixing that exposed an export-breaking provenance bug). All four are fixed, committed (`bd919ec`, `85fe2d9`) and green on all three platforms. **Waiting on the user's re-test.**
 
 ✅ **`FADE_SPEC.md` IS SHIPPED (2026-10-21) — per-file fades, Play Until and seam fades, green on all three platforms.**
 - `src/fadeMath.js` (NEW, pure model: `normalizeFadeSeconds`, `fadeStep`, `audibleEnd`, `fadeWarning`,
