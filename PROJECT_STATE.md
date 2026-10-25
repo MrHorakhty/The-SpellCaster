@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-25 20:45 — working on: commit completed work, verify push, audit and prune older backups
+🔓 UNCLAIMED — last holder: Codex (2026-10-25 20:59)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -23,6 +23,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 |---|---|---|
 | 1 | [Icon preparation](ICON_PREP_SPEC.md) | Planned, **not authorized for implementation**. Opt-in use-as-is / crop-to-square / silhouette, with preview and confirmation. Use the measured adaptive algorithm in the spec, not the old Python thresholding. Colour/photo art is not silhouetted. |
 | 2 | [Hotkeys](HOTKEYS_SPEC.md) | Planned, **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
+| Repository health | Missing historical local Git blob | `git rev-list --objects origin/mobile-support` fails on `3d1fcf151b7e70470a24f58c83cd6d6b42a64182`; host-side cat-file confirms it is missing locally. Current commit archives and coverage validate, and push is verified. Audit/repair historical objects separately; no history was rewritten. Backup pruning did not rely on the missing history: every differing older version was preserved. |
 | Separate defect | New-sound glow persistence | Earlier investigation remains valid: `addSound` at `src/App.jsx:2297` omits `glowEnabled` and `glowProminence` from its explicit save allowlist, although the editor carries them. Verified from source during cleanup; not fixed or newly exercised in the UI. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
@@ -38,14 +39,13 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Branch `mobile-support`, HEAD **`a3d474c`**. Local tracking comparison is **0 ahead / 0 behind**
-  `origin/mobile-support` after an explicit fetch for the finishing workflow. Commit/push is in progress.
-- **Uncommitted tracked files**: `AGENTS.md`, `PROJECT_STATE.md`, `docs/session-history.md`,
-  `src/App.jsx`, `src/soundFiles.js`, `e2e/soundFiles.check.mjs`, `e2e/specs/fade.mjs`,
-  `e2e/coverage.manifest.json`. These include the completed fade-export repair and this documentation cleanup.
-- Commit scope includes the eight completed tracked changes above plus `ICON_PREP_SPEC.md`: the existing
-  manifest requires this spec, so leaving it untracked breaks coverage validation on a fresh checkout.
-  `.gitattributes` and `scripts/` remain unrelated untracked work and are excluded.
+- Branch `mobile-support`. Completed fix/handover commit **`8eda985`** was pushed and independently
+  verified on `origin/mobile-support`. Final finishing records are committed separately; use `git log`
+  for the latest bookkeeping commit rather than treating an embedded hash as the current HEAD.
+- Fix, regression tests, state consolidation and permanent finishing instructions are committed.
+  `ICON_PREP_SPEC.md` is now tracked because the manifest requires it; implementation remains unauthorized.
+- **Remaining untracked work**: `.gitattributes` and `scripts/`. They were intentionally excluded.
+  No unrelated changes were discarded.
 - `.gitattributes` contains only `*.bat text eol=crlf`, user-authorized but still untracked.
   It overrides `core.autocrlf` locally; other clones get no protection until it is committed.
   Existing committed BAT blobs are LF, so this rule did not need renormalization.
@@ -215,7 +215,7 @@ is **2026-10-25**, after the fade-export repair; the user's export/re-import han
 
 | Gate | Latest result | Exit |
 |---|---|---|
-| Backup before fix | 255/255 verified, 62.9 MB (`…-20261025-194436`) | 0 |
+| Backup before fix (historical; later pruned) | 255/255 verified, 62.9 MB (`…-20261025-194436`) | 0 |
 | Lint | 0 errors / 3 accepted warnings: `convertFileSrc`, `_`, `ev` | 0 |
 | Vite build | Success; existing ineffective-dynamic-import warning | 0 |
 | Coverage | 41 suites / 393 registered tests; 25/25 shipped features covered, 0 gaps; 2 planned | 0 |
@@ -297,15 +297,20 @@ by the cleanup. Lint, build, six Node checks and all three E2E phases were not r
 - Correct OneDrive desktop path must be constructed as
   `'C:\Users\emire\OneDrive\Masa' + [char]0x00FC + 'st' + [char]0x00FC`;
   do not type/guess accented characters or use capital Ü. Count hidden files with `-Force`.
-- Backups accumulate; **no pruning was requested/performed here**. Keep the newest.
+- Backups accumulate; prune only after verified push. Keep the newest.
   Before later pruning, compare **git tracked paths ∪ working-tree paths**, including untracked files;
   preserve backup-only orphans first. Check what remains after a failed deletion. Sort backup names, not OneDrive mtimes.
   Take the final backup before pruning; do not create another just for the prune's documentation.
-- Final instruction-update backup: **`…-20261025-204358`, VERIFY OK 255/255, 62.9 MB, exit 0**. Only closure notes/claim release postdate it.
-- Instruction-update backup: **`…-20261025-204242`, VERIFY OK 255/255, 62.9 MB, exit 0** (before the change).
-- Final cleanup backup: **`…-20261025-203908`, VERIFY OK 255/255, 62.9 MB, exit 0**. Only this closure record and claim release postdate it.
-- Latest completed-fix backup: **`…-20261025-202901`, VERIFY OK 255/255, 62.9 MB, exit 0**.
-  Pre-cleanup backup: **`…-20261025-203055`, VERIFY OK 255/255, 62.9 MB, exit 0**.
+- **Current keeper: `…-20261025-204821`, VERIFY OK 255/255, 62.9 MB, exit 0**; every file SHA256-checked
+  against the working tree before pruning and rechecked against the audit afterward. Only final finishing
+  documentation postdates it. **8 older folders removed, 1 remains; 527,461,955 bytes (~503 MiB) freed.**
+- **Preserved older versions**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-8eda985.zip`
+  (2,702,716 bytes). It holds 23 distinct file contents representing 38 older versions; `manifest.json`
+  maps original folder/path to each `objects/<sha256>` entry. All entries round-trip/hash verified.
+  ZIP SHA256: `9036930ba1b369e1e6816288f743069b141d766de2824323f83e285d36312951`.
+  Adjacent `audit-before-prune-8eda985.json` and `prune-result-8eda985.json` retain the complete audit.
+  The audit found zero path orphans; it conservatively preserved changed versions instead of relying on
+  incomplete local historical Git objects. Do not delete this recovery archive as ordinary backup clutter.
 - Raw pre-fade-repair user storage + uploads: `%LOCALAPPDATA%/opencode/e2e-snapshots/pre-fade-repair-20261025-195722`,
   **25 SHA256-verified files**. Keep it as the rollback point preceding startup normalization.
   It is separate from project backups and ordinary runner retention.
