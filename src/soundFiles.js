@@ -23,6 +23,29 @@
 
 import { normalizeFadeSeconds } from './fadeMath.js'
 
+/**
+ * Repair the editor's old icon provenance bug. It copied a bundled icon's
+ * filename into iconDisplayName, which marks an upload to the bundle engine.
+ * Only repair that exact pair against the shipped catalogue; missing uploads
+ * and their display names must remain uploads, even when their bytes are gone.
+ */
+export const normalizeIconDisplayName = (sound, bundledIcons) => {
+    const displayName = sound.iconDisplayName || ''
+    return displayName === sound.icon && bundledIcons.has(sound.icon) ? '' : displayName
+}
+
+/** Repair the older audio marker bug using catalogue membership as evidence. */
+export const repairBundledAudioReferences = (sound, bundledAudio) => {
+    if (!Array.isArray(sound.files)) return sound
+    let changed = false
+    const files = sound.files.map(file => {
+        if (!file || !file.storedName || file.storedName !== file.name || !bundledAudio.has(file.storedName)) return file
+        changed = true
+        return { ...file, storedName: '' }
+    })
+    return changed ? { ...sound, files } : sound
+}
+
 /** Normalise one `files[]` entry. An absent fade field reads as 0. */
 export const normalizeStoredFileEntry = (fileEntry) => {
     if (!fileEntry || typeof fileEntry !== 'object') {

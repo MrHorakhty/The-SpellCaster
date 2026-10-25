@@ -21,13 +21,13 @@ import { KNOWN_KEYS, awaitBoard } from '../lib/page.mjs';
 export const fade = {
   title: 'SUITE FADE: PER-FILE FADES',
   async run(ctx) {
-    const { log, evalJs, sleep, reload, submitModal, driver } = ctx;
+    const { log, evalJs, sleep, reload, submitModal, driver, isTauri } = ctx;
 
     const seed = `(() => {
       localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify([{
         id:'c1', name:'Human Paladin', sounds:[
           // Long file: a fade only runs if the file outlives the fade timer.
-          { id:'fade_probe', name:'Fade Probe', type:'Test', icon:'',
+          { id:'fade_probe', name:'Fade Probe', type:'Test', icon:'Caustic_Blast_Acid.png',
             files:[{name:'Tavern_Music.mp3', displayName:'Tavern_Music.mp3',
                      fadeIn:0, fadeOut:0, playUntil:0}],
             color:'#ff0000', loop:false, randomPlay:false, brightness:1 },
@@ -491,5 +491,52 @@ export const fade = {
     log('FADE','FADE13: the sound keeps ONE row for its file, and saving retires the legacy file field instead of duplicating it',
       f13a && f13a.rows === 1 && f13a.fadeIn === '2' && f13b && f13b.files === 1 && f13b.legacyFile === null ? 'PASS' : 'FAIL',
       `rows=${JSON.stringify(f13a)} store=${JSON.stringify(f13b)}`);
+
+    // Audio-only provenance checks missed the icon marker the editor invented.
+    // Check both real bundled icon shapes after editing and saving fades. On
+    // Tauri also run the actual exporter against the saved profile (no picker).
+    const exportEdited = async () => evalJs(`(async () => {
+      const read = k => JSON.parse(localStorage.getItem(window.__pk(k)) || '[]');
+      const data = { characters: read('ttrpg_characters'), environmentSounds: read('ttrpg_environment'), groups: read('ttrpg_groups') };
+      const sounds = [...data.characters, ...data.environmentSounds].flatMap(c => c.sounds || []);
+      const probes = sounds.filter(s => s.id === 'fade_probe' || s.id === 'env_1');
+      const result = { icons: probes.map(s => ({ icon: s.icon, marker: s.iconDisplayName || '' })),
+        audioMarkers: probes.flatMap(s => (s.files || []).map(f => f.storedName || '')), exported: null };
+      if (${!!isTauri}) {
+        try {
+          const B = await import('/src/profileBundle.js');
+          const out = await B.exportBundle({ profileId: window.__pid(), profileName: 'Fade regression', data, settings: {}, appVersion: 'e2e', dataVersion: '3' });
+          result.exported = out.bytes instanceof Uint8Array;
+        } catch (e) { result.exported = false; result.error = e.code + ': ' + e.message; }
+      }
+      return result;
+    })()`);
+    const f14 = await exportEdited();
+    log('FADE','FADE14: saving fades preserves bundled ICON provenance and the edited profile exports',
+      f14 && f14.icons?.length === 2 && f14.icons.every(i => i.icon && !i.marker)
+        && (!isTauri || f14.exported === true) ? 'PASS' : 'FAIL', JSON.stringify(f14));
+
+    // Simulate a profile already saved by the faulty editor, then cold-reload
+    // through the app's real normalization and autosave paths.
+    await evalJs(`(() => {
+      for (const key of ['ttrpg_characters', 'ttrpg_environment']) {
+        const rows = JSON.parse(localStorage.getItem(window.__pk(key)) || '[]');
+        for (const row of rows) for (const s of (row.sounds || []))
+          if (s.id === 'fade_probe' || s.id === 'env_1') {
+            s.iconDisplayName = s.icon;
+            for (const f of (s.files || [])) f.storedName = f.name;
+          }
+        localStorage.setItem(window.__pk(key), JSON.stringify(rows));
+      }
+      return 'seeded damaged markers';
+    })()`);
+    await reload();
+    await awaitBoard(ctx, { min: 1 });
+    await sleep(1000);
+    const f15 = await exportEdited();
+    log('FADE','FADE15: loading an affected profile repairs bundled audio and icon markers and restores export',
+      f15 && f15.icons?.length === 2 && f15.icons.every(i => i.icon && !i.marker)
+        && f15.audioMarkers?.length === 2 && f15.audioMarkers.every(marker => !marker)
+        && (!isTauri || f15.exported === true) ? 'PASS' : 'FAIL', JSON.stringify(f15));
   }
 };

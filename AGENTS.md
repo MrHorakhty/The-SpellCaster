@@ -237,7 +237,7 @@ node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bu
 
 Run **all six even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
 `profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
-`soundFiles` **20/20**. They
+`soundFiles` **32/32**. They
 need no browser, no emulator and no CDP, so there is no excuse for skipping them.
 
 ⚠️ **Why this is a gate and not a suggestion — it has already bitten twice.** `bundleGuard.check` is what found the
@@ -297,3 +297,32 @@ them.
 - `.\backup-project.ps1` again, so the backup matches the final state rather than the pre-change one.
 - `PROJECT_STATE.md` updated and the claim **released** — see the release protocol above.
 - If you changed a plan, record **why the plan changed**, not just the new plan.
+
+## Permanent instruction: session finishing workflow — commit, push, prune backups
+
+Run this workflow **once the requested subject matter is complete**, including the applicable verification
+gates and user hand-test, **or when the user explicitly requests the finishing workflow**. It is not a
+per-turn action: do not trigger it at progress checkpoints, on tool completion, context compaction, quota
+exhaustion, or interruption. It applies prospectively; installing this rule does not itself trigger it.
+Housekeeping edits made by the workflow do not trigger another run.
+
+1. **Prepare the handover.** Update `PROJECT_STATE.md` and `docs/session-history.md` with the actual outcome,
+   verification results, remaining work and running processes/ports. Take the final verified project backup
+   **before pruning**, following the existing backup rules. Release the claim only when work is truly complete.
+2. **Commit the intended changes.** Review the working tree, untracked files and staged diff first. Include
+   the completed subject's code, tests and documentation; do not sweep unrelated or pre-existing work into
+   the commit. Do not discard unrelated changes to make the tree clean.
+3. **Push and verify.** Push the intended branch and verify that the remote branch contains the new commit.
+   A local commit or a successful-looking command alone is not proof that the work is on the remote.
+4. **Audit and prune older backups.** Only after the push is verified, compare older backup contents against
+   **git-tracked paths ∪ the working tree**, including untracked files. Preserve any unique backup-only content
+   before deletion. **Keep the newest verified backup regardless**; choose by backup name, not OneDrive mtime.
+   Verify the keeper and remaining folders after pruning. Do not create another backup merely to record the
+   prune; final housekeeping notes may postdate the keeper.
+5. **Report the result.** State the commit hash, pushed branch and remote verification, how many backups were
+   removed and which verified backup remains. Report any remaining uncommitted files or unfinished work.
+
+If any step fails or cannot be verified, **stop the dependent steps** and report what remains; in particular,
+never prune after a failed or unverified push. Do not force-push or rewrite history as part of routine finishing.
+An explicit finishing request does **not** make unfinished work complete, waive verification, or justify
+releasing an active claim: document the real status and preserve the existing claim/release rules.

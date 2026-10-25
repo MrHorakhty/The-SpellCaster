@@ -57,6 +57,8 @@ import {
     normalizeStoredFileEntry,
     normalizeStoredFileList,
     legacyFileEntry,
+    normalizeIconDisplayName,
+    repairBundledAudioReferences,
 } from './soundFiles.js'
 
 // Environment detection
@@ -304,6 +306,12 @@ const mintId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36)
 // Version for persisted app data. Bump to force a reset to the bundled defaults.
 const DATA_VERSION = '3'
 
+const bundledSounds = [...data.characters, ...data.environmentSounds].flatMap(container => container.sounds || [])
+const bundledSoundIcons = new Set(bundledSounds.map(sound => sound.icon).filter(Boolean))
+const bundledSoundAudio = new Set(bundledSounds.flatMap(sound =>
+    [sound.file, ...(sound.files || []).map(file => file.name)].filter(Boolean)
+))
+
 // --- per-file fade fields --------------------------------------------------
 //
 // FADE_SPEC.md §4: fades moved OFF the sound and onto each file entry. The
@@ -322,6 +330,12 @@ const DATA_VERSION = '3'
  */
 const migrateSoundFades = (sound) => {
     if (!sound || typeof sound !== 'object') return sound
+    // Repair profiles already saved by the editor that invented this upload
+    // marker. Catalogue membership proves these are shipped icons; no missing
+    // uploaded file is silently reclassified or discarded.
+    const iconDisplayName = normalizeIconDisplayName(sound, bundledSoundIcons)
+    if (iconDisplayName !== (sound.iconDisplayName || '')) sound = { ...sound, iconDisplayName }
+    sound = repairBundledAudioReferences(sound, bundledSoundAudio)
     const files = Array.isArray(sound.files) ? sound.files : []
     const hasPerFile = files.some(f => f && typeof f === 'object'
         && (f.fadeIn !== undefined || f.fadeOut !== undefined || f.playUntil !== undefined))
@@ -2184,7 +2198,9 @@ function AppBoard() {
             name: sound.name,
             type: sound.type,
             icon: sound.icon || '',
-            iconDisplayName: sound.iconDisplayName || sound.icon || '',
+            // This field marks an UPLOAD to the bundle engine. Copy it only;
+            // falling back to a bundled icon's filename breaks profile export.
+            iconDisplayName: sound.iconDisplayName || '',
             file: sound.file || '',
             files: normalizedFiles,
             randomPlay: sound.randomPlay || false,
