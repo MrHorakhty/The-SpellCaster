@@ -36,6 +36,7 @@ import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
 import { fade } from './specs/fade.mjs';
+import { iconprep } from './specs/iconprep.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -166,6 +167,7 @@ async function main() {
   // the sidebar shows every container at once, so "go to a board" is a click on
   // a sidebar leaf and there is no drawer to open.
   const ctx = {
+    cdp, cdpInput,
     label: LABEL,
     log, run,
     evalJs,
@@ -1643,6 +1645,7 @@ async function main() {
   // must not run in the middle of the block. refcount re-seeds after it.
   await runSpecs(ctx, [playback]);
   await runSpecs(ctx, [fade]);
+  await runSpecs(ctx, [iconprep]);
 
   // ================================================================
   //  F: PROFILES (shared spec - see e2e/specs/profiles.mjs)

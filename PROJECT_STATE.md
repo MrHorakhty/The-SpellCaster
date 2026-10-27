@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-25 20:59)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 21:02 — working on: user accepted icon preparation; commit, push verification and backup audit/prune
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -21,8 +21,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| 1 | [Icon preparation](ICON_PREP_SPEC.md) | Planned, **not authorized for implementation**. Opt-in use-as-is / crop-to-square / silhouette, with preview and confirmation. Use the measured adaptive algorithm in the spec, not the old Python thresholding. Colour/photo art is not silhouetted. |
-| 2 | [Hotkeys](HOTKEYS_SPEC.md) | Planned, **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
+| 1 | [Hotkeys](HOTKEYS_SPEC.md) | Planned, **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
 | Repository health | Missing historical local Git blob | `git rev-list --objects origin/mobile-support` fails on `3d1fcf151b7e70470a24f58c83cd6d6b42a64182`; host-side cat-file confirms it is missing locally. Current commit archives and coverage validate, and push is verified. Audit/repair historical objects separately; no history was rewritten. Backup pruning did not rely on the missing history: every differing older version was preserved. |
 | Separate defect | New-sound glow persistence | Earlier investigation remains valid: `addSound` at `src/App.jsx:2297` omits `glowEnabled` and `glowProminence` from its explicit save allowlist, although the editor carries them. Verified from source during cleanup; not fixed or newly exercised in the UI. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
@@ -43,8 +42,8 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
   verified on `origin/mobile-support`. Final finishing records are committed separately; use `git log`
   for the latest bookkeeping commit rather than treating an embedded hash as the current HEAD.
 - Fix, regression tests, state consolidation and permanent finishing instructions are committed.
-  `ICON_PREP_SPEC.md` is now tracked because the manifest requires it; implementation remains unauthorized.
-- **Remaining untracked work**: `.gitattributes` and `scripts/`. They were intentionally excluded.
+  Icon preparation and refinements are user accepted (2026-10-27); its spec is archived/retired and the manifest spec reference is null.
+- **Completed icon work being finalized**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes` and `scripts/`; preserve/exclude them from the feature commit.
   No unrelated changes were discarded.
 - `.gitattributes` contains only `*.bat text eol=crlf`, user-authorized but still untracked.
   It overrides `core.autocrlf` locally; other clones get no protection until it is committed.
@@ -58,6 +57,20 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
   to 256 px before committing them. The working batch pipeline is not retired.
 - The user's preferred local launch is the root BAT files. No standalone EXE was requested or built for the fix.
   Do not make an installer merely to enable a hand-test.
+
+## Finishing status
+
+User accepted the complete refined app on 2026-10-27 (“Everything seems to be in order”). The one-time
+mobile silhouette pass remains observed/accepted, not an open defect. Final design archived before spec retirement.
+App/test/asset content matches the tested snapshot in **126/126 SHA256 comparisons**; only docs, ignore rules
+and registry metadata changed for finishing. Static coverage and whitespace checks passed again (exit 0).
+The existing full lint/build/Node/web/Windows/Android results below remain valid; no new runtime runs are implied.
+
+Branch mobile-support; intended feature commit and verified push pending, then audit/prune older project backups.
+Claim retained through housekeeping. Unrelated .gitattributes and scripts/ remain untracked and preserved.
+Windows hand-test app is now closed. Last process inspection found Vite PID 39292 and a Tauri Android
+android-studio-script --target armv7 process PID 39288; left untouched because they may belong to the user's build.
+No emulator or automated E2E runner was active. Re-check these process facts before claiming current port ownership.
 
 ## Project and code map
 
@@ -75,6 +88,7 @@ There is no account, server or automatic cloud sync.
 | Post-picker timeout/cancel | `src/bundleGuard.js` |
 | Fade model and wording | `src/fadeMath.js` |
 | File normalization and bundled-provenance recovery | `src/soundFiles.js` |
+| Icon preparation | `src/iconPrep.js` (pure segmentation/crop + canvas wrapper), `src/IconPrepDialog.jsx` (staged upload dialog) |
 | Native entry points | Tauri 2 / Rust: `src-tauri/src/main.rs` (desktop), `lib.rs` (mobile), shared `scope.rs` |
 | Android entry/config | 50 tracked files under `src-tauri/gen/android/`, including hand-maintained `MainActivity.kt`, Gradle config and manifest |
 | App identifiers | Windows/native storage: `com.mrhorakhty.thespellcaster`; Android debug: `com.mrhorakhty.thespellcaster.debug`. |
@@ -109,6 +123,29 @@ There is no account, server or automatic cloud sync.
   Exclude only the edited sound for that check; exclude a whole container only when deleting that container.
 - Real sound deletion requires confirmation. Transfer removal is the scoped half of a **silent move**;
   do not merge these paths. Copies append to the destination and get “(copy)” names unique within that destination.
+
+### Icon preparation — shipped and user accepted 2026-10-27
+
+- Sound-icon upload only: three opt-in choices, no default — Use as-is / Crop to square / Make silhouette.
+  Selections/previews stay temporary; Confirm awaits successful storage before updating the editor.
+  Save commits the reference and removes an old upload only if no other sound refers to it. Cancel keeps the saved sound.
+  No persisted sound fields were added; iconDisplayName continues to mark uploaded provenance for bundles.
+- Use-as-is preserves exact bytes/type. Crop makes a 256px PNG with original colours. Silhouette uses border-median
+  distance, Otsu/smoothstep and four-neighbour components ≥2% of the largest, neutral RGB 106 and 20px padding.
+  Respect existing alpha; transparent borders reuse it. A valid empty result is still confirmable; no quality gate.
+- Crop draws a persistent canvas from one decoded File; no decode/PNG encode during gestures, no preview unmount
+  or dialog-height jump. Encode only on Confirm. Dimmed crop exclusions plus a 48px card-size result preview.
+  Zoom 100–800% shares one state across slider, buttons, wheel/pinch and keyboard. No inherited card drag/prime behavior.
+- Weak per-File cache handles StrictMode replay. Silhouette output is reused after Back and URLs revoked on unmount.
+  Initial silhouette generation still performs pixel processing/encoding; user observed and accepted the mobile wait.
+  Desktop synthetic segmentation median 45.87 → 6.38 ms (7.19×), 17 masks unchanged; no phone multiplier promised.
+- Code: src/iconPrep.js:71 (segmentation), :130 (decode cache), :152 (crop drawing), :161 (wrapper);
+  src/IconPrepDialog.jsx:4; App.jsx:3115 (confirm) / :3169 (strict storage). ICON IP0–28 and iconPrep 35/35 cover it.
+- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; scripts/Image Pipeline/ remains
+  a working batch tool. Group-nested tint/load coverage remains a pre-existing gap. Existing-icon editing, gradient
+  removal, classifiers, algorithm-tuning controls and bulk conversion remain outside this feature.
+- Complete design and measurements: docs/session-history.md, “Accepted icon preparation: final design archive”.
+  ICON_PREP_SPEC.md is retired and ignored; do not resurrect it. Coverage manifest spec is null.
 
 ### Per-sound volume
 
@@ -151,7 +188,7 @@ There is no account, server or automatic cloud sync.
   On load, the exact older bad markers are repaired only against the shipped audio/icon catalogue;
   unknown/missing user uploads remain uploads. See `soundFiles.js:32`, `:38` and `App.jsx:2203`.
 - Icon recolouring happens at render time and preserves lightness/alpha; it cannot remove an opaque background.
-  This is the limitation the planned icon-preparation workflow addresses.
+  Upload-time icon preparation addresses this with an opt-in silhouette; user accepted 2026-10-27.
 - The fade-edit export defect is fixed and **user accepted** (2026-10-25). FADE14/15 cover saving edits and
   repairing affected profiles; native phases perform actual export. The user's current board also exported
   and parsed in memory: **366,906 bytes / 19 sounds / 7 uploaded files / format 1**.
@@ -178,13 +215,13 @@ There is no account, server or automatic cloud sync.
 ## Test harnesses
 
 - `e2e/e2e-full.ps1 -Phase web|win -Suite full`; `e2e/e2e-android.ps1 -Suite mobile`.
-  Entry points: `e2e-full.mjs` / `e2e-mobile.mjs`; 13 shared specs plus `e2e/lib/` plumbing.
+  Entry points: `e2e-full.mjs` / `e2e-mobile.mjs`; 14 shared specs plus `e2e/lib/` plumbing.
   Old `run` / `features` suite flags are retired.
 - Coverage has **suite and feature registries**. Register new work as planned when starting;
   shipped features need coverage or an explicit visible gap. After test-ID edits run
   `node e2e/check-coverage.mjs --update` and review the ID diff. Check used prefixes before choosing new ones.
   Add new Node checks to AGENTS gate 5 in the same change.
-- Run all six Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
+- Run all seven Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
   or a cancel after completion; `bundleGuard.check` supplies that coverage.
 - **Windows tests touch the user's real storage and uploads**, shared by installed/dev app.
   Runner snapshots uploads before launch, restores afterward, gracefully closes WebView2, restarts
@@ -210,32 +247,26 @@ There is no account, server or automatic cloud sync.
 
 ## Verification gates
 
-Full ordered commands and reporting rules live in [AGENTS.md](AGENTS.md). Latest app-changing validation
-is **2026-10-25**, after the fade-export repair; the user's export/re-import hand-test also passed.
+Commands and reporting rules live in [AGENTS.md](AGENTS.md). These are the **crop-feedback refinement**
+results for 2026-10-27; earlier complete results are archived in session history and do not validate this revision.
 
-| Gate | Latest result | Exit |
+| Gate | Current refinement result | Exit |
 |---|---|---|
-| Backup before fix (historical; later pruned) | 255/255 verified, 62.9 MB (`…-20261025-194436`) | 0 |
-| Lint | 0 errors / 3 accepted warnings: `convertFileSrc`, `_`, `ev` | 0 |
-| Vite build | Success; existing ineffective-dynamic-import warning | 0 |
-| Coverage | 41 suites / 393 registered tests; 25/25 shipped features covered, 0 gaps; 2 planned | 0 |
-| Node checks | profileBundle 46/46; profileStorage 32/32; bundleGuard 20/20; profile keys OK; fadeMath 46/46; soundFiles 32/32 | All 0 |
-| Web E2E | 262 PASS / 0 FAIL / 0 WARN | 0 |
-| Windows E2E | 280 PASS / 0 FAIL / 3 baseline WARN | 1 |
-| Android E2E | 270 PASS / 0 FAIL / 3 baseline WARN | 1 |
+| Final accepted backup | `…-20261027-210819`, VERIFY OK 260/260, 63 MB; source count fell by one because the archived spec was retired | 0 |
+| Lint | 0 errors / 3 accepted warnings | 0 |
+| Build | Success; existing ineffective-dynamic-import warning | 0 |
+| Coverage | 42 suites / 422 registered IDs; 26/26 implemented features covered; one planned, no gaps | 0 |
+| Node checks | profileBundle 46/46; profileStorage 32/32; bundleGuard 20/20; profile keys OK; fadeMath 46/46; soundFiles 32/32; iconPrep 35/35 | Each 0 |
+| Web E2E | **290 PASS / 0 FAIL / 0 WARN**; `e2e-run-20261027-203041.log` | 0 |
+| Windows E2E | **307 PASS / 0 FAIL / 3 baseline WARN**, restore restart-verified; `e2e-run-20261027-203657.log` | 1 |
+| Android E2E | **297 PASS / 0 FAIL / 3 baseline WARN**; `e2e-android-20261027-204405.log`; 9 keys restored and verified | 1 |
+| User hand-test | **PASS — user accepted the refined app on 2026-10-27**; one-time mobile silhouette wait observed/accepted | Accepted |
 
-Native warnings are G5/G6b/G7b localStorage checks inapplicable to physical Tauri files.
-**0 FAIL is the healthy signal**; retain explicit WARNs rather than silently skipping.
-Logs in `%TEMP%/opencode/`: `e2e-run-20261025-195615.log` (web),
-`e2e-run-20261025-200236.log` (Windows), `e2e-android-20261025-201046.log`.
-Windows restore was restart-verified; Android restore verified 9 keys and completed cleanup.
-No app/test code changed in this documentation cleanup; runtime gates are not re-run for prose edits.
-Do not represent prior passing counts as new executions.
-
-Cleanup checks: the complete archived snapshot matches the pre-cleanup backup (SHA256 recorded in history);
-253/253 non-documentation files match it; 7/7 document links resolve; exactly one claim line;
-static coverage check exit 0 and diff whitespace check exit 0. No test/development processes were started
-by the cleanup. Lint, build, six Node checks and all three E2E phases were not repeated for documentation-only changes.
+Focused ICON: **28 PASS / 0 FAIL**, exit 0. IP23–28 cover the reported regressions: slider synchronization,
+stable canvas/dialog dimensions, zero encode/decode during slider gestures, card-size preview/dimmed crop frame,
+and reusing decoded/prepared images. Pixel-loop optimization matched 17 old masks exactly; desktop median
+45.87 → 6.38 ms on the same synthetic 512px workload, not a claim about phone speed.
+Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Operational warnings and known environment facts
 
@@ -283,12 +314,13 @@ by the cleanup. Lint, build, six Node checks and all three E2E phases were not r
 
 ## Backups
 
+- **Newest verified backup: `…-20261027-210819`, 260/260 files, 63 MB, VERIFY OK, exit 0.** Final accepted source, tests, assets and design retirement. Only finishing-result bookkeeping may postdate it; this is the keeper for the pending audited prune.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
   **gen is not wholly regenerable**: backups omit 50 tracked Android files, including MainActivity.
   Git/pushed copies protect them; do not put new hand-maintained files only in generated/ignored locations.
-- `public/assets` has **71 tracked files (52 audio / 19 images)**, ~29 MB. They were clone/build-verified after
+- `public/assets` has **73 tracked files after this feature is committed (52 audio / 21 images)**, ~29 MB. They were clone/build-verified after
   the ignore fix `ba57282`. Runtime user uploads are not tracked. User's shipped-content budget is under 100 MB.
 - Bitdefender can quarantine `e2e/e2e-full.ps1` from backup folders even after a successful copy.
   The repo e2e folder is excluded from scanning; OneDrive is not (user declined a broad exclusion).
@@ -301,9 +333,9 @@ by the cleanup. Lint, build, six Node checks and all three E2E phases were not r
   Before later pruning, compare **git tracked paths ∪ working-tree paths**, including untracked files;
   preserve backup-only orphans first. Check what remains after a failed deletion. Sort backup names, not OneDrive mtimes.
   Take the final backup before pruning; do not create another just for the prune's documentation.
-- **Current keeper: `…-20261025-204821`, VERIFY OK 255/255, 62.9 MB, exit 0**; every file SHA256-checked
+- **Previous pushed/pruned baseline: `…-20261025-204821`, VERIFY OK 255/255, 62.9 MB, exit 0**; every file SHA256-checked
   against the working tree before pruning and rechecked against the audit afterward. Only final finishing
-  documentation postdates it. **8 older folders removed, 1 remains; 527,461,955 bytes (~503 MiB) freed.**
+  documentation postdates it. **At that earlier prune, 8 older folders were removed and 1 remained; 527,461,955 bytes (~503 MiB) freed.** New icon-work backups have since accumulated; none have been pruned.
 - **Preserved older versions**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-8eda985.zip`
   (2,702,716 bytes). It holds 23 distinct file contents representing 38 older versions; `manifest.json`
   maps original folder/path to each `objects/<sha256>` entry. All entries round-trip/hash verified.
@@ -328,6 +360,7 @@ Detailed designs, decisions and inventories are preserved in session history and
 | Generated `src-tauri/gen/android/Run App.bat` | Root Build Android / Run Android scripts. Old generated path stays ignored. |
 | `MOVE_COPY_SOUND_SPEC.md` | Shipped behavior above; full design in history (`f7f316e`). |
 | `PER_SOUND_VOLUME_SPEC.md`, `SOUND_PRIMING_SPEC.md` | Current sections above; complete prose at `git show c60a355:<file>`. Their manifest `spec` fields are null; deleting a named spec without updating the registry fails coverage. |
+| `ICON_PREP_SPEC.md` | User accepted 2026-10-27; complete final design archived in session history; modules/tests own the shipped behavior. |
 | `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md` | Shipped starter-merge and icon behavior; implementation/history retain design. |
 | `TESTING_REPORT.md`, `TESTING_REPORT_FOLLOWUP.md`, `EDGE_TO_EDGE_REPORT.md` | Resolved audit records in git/history. |
 | Untracked `scripts/Sound Normalizer/` | Deleted at user's request; playback volume trim supplies the wanted behavior. Do not resurrect a duplicate loudness key/feature without a new design. User retained source copies. |

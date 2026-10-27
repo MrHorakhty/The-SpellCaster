@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import IconPrepDialog from './IconPrepDialog.jsx'
 /* global __APP_VERSION__ */
 import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
@@ -1492,6 +1493,10 @@ function AppBoard() {
 
     // Modal and form states
     const [showSoundModal, setShowSoundModal] = useState(false)
+    const [pendingIconFile, setPendingIconFile] = useState(null)
+    useEffect(() => {
+        if (!showSoundModal) setPendingIconFile(null)
+    }, [showSoundModal])
     const [editingSound, setEditingSound] = useState(null)
     const [soundFormData, setSoundFormData] = useState({
         name: '',
@@ -3103,15 +3108,19 @@ function AppBoard() {
 
     const handleIconUpload = (e) => {
         const file = e.target.files[0]
-        if (file) {
-            const storedName = toStoredFileName('icon', file.name)
-            if (soundFormData.icon) {
-                revokeObjectUrl(soundFormData.icon)
-            }
-            setIconPreview(getObjectUrlForBlob(storedName, file))
-            setSoundFormData(prev => ({ ...prev, icon: storedName, iconDisplayName: file.name }))
-            storeFileInLocalStorage(storedName, file)
-        }
+        e.target.value = '' // Re-selecting the same file must fire change again.
+        if (file) setPendingIconFile(file)
+    }
+
+    const confirmPreparedIcon = async (blob, displayName) => {
+        const storedName = toStoredFileName('icon', displayName)
+        // Do not point the editor at bytes until the write has actually succeeded.
+        await storeFileInLocalStorage(storedName, blob, { throwOnError: true })
+        setTintedPreview('')
+        setLoadedFormIcon('')
+        setIconPreview(getObjectUrlForBlob(storedName, blob))
+        setSoundFormData(prev => ({ ...prev, icon: storedName, iconDisplayName: displayName }))
+        setPendingIconFile(null)
     }
 
     // Reuse a single object URL per file name so blob: URLs don't accumulate
@@ -3157,7 +3166,7 @@ function AppBoard() {
         }
     }
 
-    const storeFileInLocalStorage = async (fileName, file) => {
+    const storeFileInLocalStorage = async (fileName, file, { throwOnError = false } = {}) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
@@ -3176,7 +3185,7 @@ function AppBoard() {
                 await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
             } else {
                 // Web environment - fallback to localStorage, under this profile
-                return new Promise((resolve, reject) => {
+                return await new Promise((resolve, reject) => {
                     const reader = new FileReader()
                     reader.onload = (e) => {
                         try {
@@ -3197,6 +3206,9 @@ function AppBoard() {
             }
         } catch (error) {
             console.error('Failed to save file locally:', error)
+            // Web writes already rejected before the strict icon path was
+            // added. Preserve that behaviour for existing audio callers too.
+            if (throwOnError || !isTauri) throw error
         }
     }
 
@@ -6531,8 +6543,13 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
             </div>
 
             {/* Sound Modal */}
+            {showSoundModal && pendingIconFile && (
+                <IconPrepDialog key={pendingIconFile.name + pendingIconFile.lastModified}
+                    file={pendingIconFile} soundName={soundFormData.name}
+                    onCancel={() => setPendingIconFile(null)} onConfirm={confirmPreparedIcon} />
+            )}
             {showSoundModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
+                <div inert={pendingIconFile ? true : undefined} className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
                     <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">

@@ -37,6 +37,7 @@ import { platformGate } from './specs/platform.mjs';
 import { scroll } from './specs/scroll.mjs';
 import { playback } from './specs/playback.mjs';
 import { fade } from './specs/fade.mjs';
+import { iconprep } from './specs/iconprep.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -153,6 +154,7 @@ async function main() {
   // need themselves. Everything that navigates or opens a modal goes THROUGH the
   // drawer here - there is no sidebar, so a spec cannot click a leaf directly.
   const ctx = {
+    cdp, cdpInput,
     label: LABEL,
     log, run,
     evalJs,
@@ -1522,6 +1524,7 @@ const qExtraKeys = (qKeys||[]).filter(k => !KNOWN_KEYS.includes(k));
   // suites; refcount re-seeds after it.
   await runSpecs(ctx, [playback]);
   await runSpecs(ctx, [fade]);
+  await runSpecs(ctx, [iconprep]);
 
   // ================================================================
   //  G: FILE REFCOUNT GUARD (shared spec - see e2e/specs/refcount.mjs)

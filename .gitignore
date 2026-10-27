@@ -365,3 +365,6 @@ MOVE_COPY_SOUND_SPEC.md
 # and HOTKEYS_SPEC.md depends on it. Do not delete it without reading s12/s13.
 PER_SOUND_VOLUME_SPEC.md
 SOUND_PRIMING_SPEC.md
+
+# Icon preparation shipped and user accepted 2026-10-27; full final design in docs/session-history.md.
+ICON_PREP_SPEC.md

@@ -23,7 +23,7 @@
     "(android). Anything platform-specific belongs inline in its entrypoint."
   ],
   "version": 1,
-  "updated": "2026-10-11",
+  "updated": "2026-10-27",
   "$featuresComment": [
     "Every shipped capability the app has. This is what answers 'will my new",
     "feature end up in the tests?' Ã¢â‚¬â€ a `shipped` feature with an empty",
@@ -282,10 +282,12 @@
     },
     {
       "name": "Icon preparation (use as-is / crop to square / silhouette)",
-      "spec": "ICON_PREP_SPEC.md",
-      "status": "planned",
-      "coveredBy": [],
-      "note": "NOT IMPLEMENTED, not authorised. Three opt-in choices on sound-icon upload, in two steps (choose, preview, confirm or cancel), never automatic: 'Use as-is', 'Crop to square' (interactive crop), 'Make silhouette'. Use-as-is exists so the feature never REMOVES the capability of uploading an unmodified icon. Brings scripts/Image Pipeline/image_pipeline.py into the app so no Python is needed. Fixes the measured weakness of recolorImageToColor (App.jsx:536), which cannot create an alpha channel. The script's method is NOT reused: it produces an 80% grey slab on dark backgrounds, measured on three of the author's own images; the spec uses an adaptive Otsu-on-distance-from-border-colour method chosen by measurement, keeping components >=2% of the largest. Colour/photo art is deliberately NOT silhouetted. NO quality gating: the disclaimer plus the preview is the safeguard and the user keeps agency. Adds NO persisted shape; replaces the icon on confirm. New module src/iconPrep.js, maths split out so a node check can reach it. Intended suite: specs/iconprep.mjs, category ICON, ids IP1..IPn - all 26 single-letter prefixes are taken, so a new category is required, not a new letter."
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/iconprep.mjs::IP"
+      ],
+      "note": "Shipped and user accepted 2026-10-27 after full web/Windows/Android verification and crop-preview/performance refinements. Three opt-in choices; live crop with slider and dimmed exclusions, decode/processing caches, exact original bytes, Save-time reference-aware replacement. No persisted shape change or quality gating. Design archived in docs/session-history.md; Python batch tool retained. Initial silhouette processing remains a one-time operation on mobile."
     }
   ],
   "retired": [
@@ -1276,6 +1278,51 @@
         "I9"
       ],
       "note": "PROFILE_SYNC_SPEC.md step 8. The engine is reached by importing /src/profileBundle.js - the same module URL the app imported, so it is the live instance - which only the Vite DEV server serves; the web phase runs a built dist under vite preview, and export/import is Tauri-only by design (§7), so the web arm is I1 and I2 alone. THE NATIVE PICKER IS NEVER STUBBED AND NEVER OPENED, because it cannot be: every property on window.__TAURI_INTERNALS__ is writable:false/configurable:false, and the one writable seam (chrome.webview.postMessage) is bypassed because Tauri's injected ipc captures it in a closure - both measured 2026-10-14. The spec therefore drives everything below the picker, running the app's own destination sequence against a path the test names; only the picker's two-line handoff is left to the user's hand-test. Clicking Export/Import here would open a #32770 that wedges the run. I0 logs ONLY when the spec's try/catch contains an exception, which is a real failure - it exists so a throw cannot unwind main() and skip the entrypoint's localStorage restore. Skipped ids print a SKIP line rather than logging a WARN, which would push the web phase off its exit-0 baseline. Runs after profiles (F) and before refcount (G) and reset (O), which re-seed for themselves"
+    },
+    {
+      "key": "IP",
+      "cat": "ICON",
+      "title": "Icon preparation",
+      "file": "specs/iconprep.mjs",
+      "export": "iconprep",
+      "covers": "Three choices, actual preview, cancel, byte-preserving use-as-is, light/dark and multipart silhouettes, empty result allowed, keyboard crop, real drag/wheel/pinch gestures, storage failure/retry on web, real native writes, persistence, outer-editor cancellation, shared-icon retention, decode errors, stable live-crop canvas/dialog, card-size preview, zoom slider, decode-once and zero-encode gestures, cached silhouette results",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^IP\\d",
+      "ids": [
+        "IP0",
+        "IP1",
+        "IP10",
+        "IP11",
+        "IP12",
+        "IP13",
+        "IP14",
+        "IP15",
+        "IP16",
+        "IP17",
+        "IP18",
+        "IP19",
+        "IP2",
+        "IP20",
+        "IP21",
+        "IP22",
+        "IP23",
+        "IP24",
+        "IP25",
+        "IP26",
+        "IP27",
+        "IP28",
+        "IP3",
+        "IP4",
+        "IP5",
+        "IP6",
+        "IP7",
+        "IP8",
+        "IP9"
+      ]
     }
   ]
 }
