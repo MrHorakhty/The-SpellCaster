@@ -30,8 +30,8 @@ things make the old "rebuilt by `tauri android init`" row wrong (corrected 2026-
 - **50 files under `src-tauri/gen/android/` are tracked in git.** `.gitignore` only excludes specific subpaths
   (`gen/schemas/`, `Run App.bat`, `local.properties`, `*.keystore`, `*.jks`, `.gradle/`, `build/`, `.cxx/`) - not
   the directory. Tracked and hand-maintained among them is
-  **`src-tauri/gen/android/app/src/main/java/com/mrhorakhty/thespellcaster/MainActivity.kt`**, which is where the
-  Rust plugins are registered, plus `build.gradle.kts` and `AndroidManifest.xml`.
+  **`src-tauri/gen/android/app/src/main/java/com/thespellcaster/mrhorakhty/MainActivity.kt`**, the hand-maintained
+  Android activity (Rust plugins are registered in `src-tauri/src/lib.rs`), plus `build.gradle.kts` and `AndroidManifest.xml`.
   ⚠️ **`Run App.bat` is the counter-example, retired 2026-10-16.** It was hand-maintained, lived under `gen/` (which
   backups exclude) **and** was gitignored — so it existed in exactly one place on one machine, and its comment
   claimed it "launches the app" while it actually ran the whole build+install pipeline. It is replaced by the two
@@ -220,7 +220,7 @@ the report you give the user must state each one with its actual number rather t
 | 2 | Lint | `npx eslint .` | **0 errors.** 3 warnings (`convertFileSrc`, `_`, `ev`) are the accepted baseline — do not chase them |
 | 3 | Build | `npx vite build` | completes |
 | 4 | Coverage | `node e2e/check-coverage.mjs` | `OK — manifest, code and platform wiring agree`, exit 0 |
-| 5 | Node checks | the seven Node checks below | **every count matches** — each exits non-zero on failure |
+| 5 | Node checks | the eight Node checks below | **every count matches** — each exits non-zero on failure |
 | 6 | Web E2E | `e2e\e2e-full.ps1 -Phase web -Suite full` | **0 FAIL** |
 | 7 | Windows E2E | `e2e\e2e-full.ps1 -Phase win -Suite full` | **0 FAIL** |
 | 8 | Android E2E | `e2e\e2e-android.ps1 -Suite mobile` | **0 FAIL** |
@@ -229,15 +229,15 @@ Gates 4–8 are the ones that catch things gates 2–3 cannot. Budget roughly 3 
 with warm `node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK. **Gate 5 is
 seconds**, and it is a gate precisely because of what has happened without it.
 
-### Gate 5 — the seven node checks, in one line
+### Gate 5 — the eight node checks, in one line
 
 ```powershell
-node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs
+node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs
 ```
 
-Run **all seven even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
+Run **all eight even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
 `profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
-`soundFiles` **32/32**, `iconPrep` **35/35**. They
+`soundFiles` **32/32**, `iconPrep` **35/35**, `snapshotUploads` **19/19**. They
 need no browser, no emulator and no CDP, so there is no excuse for skipping them.
 
 ⚠️ **Why this is a gate and not a suggestion — it has already bitten twice.** `bundleGuard.check` is what found the

@@ -9667,3 +9667,81 @@ Final cleanup backup …-20261027-220512 verified **242/242 files, 40.7 MB**, ex
 Cleanup commit 3f2d84c0cc001f3e17b5314fea014562e6385965 pushed to origin/mobile-support and independently verified before pruning. Preserved every retired scripts/ path outside the project in %LOCALAPPDATA%/opencode/backup-prune-history/personal-pipeline-cleanup-3f2d84c-20261027-220711/preserved-before-prune.zip (24,094,933 bytes), SHA256 66cc21785cb754ff76d44f6177c51a8828af761ce93eefdf6e2897aa887cc904. Archive contains 23 distinct contents / 42 historical references; all 18 removed scripts/research paths are covered. Every object and the manifest were verified before deletion of any older backup. Two older project backups removed (132,131,353 logical file-content bytes); keeper …-20261027-220512 retained with all 242 hashes reverified. Exactly one project backup remains, 242/242 files / 40.7 MB, exit 0. Detailed evidence in adjacent audit-before-prune.json / prune-result.json.
 
 The icon-prep spec was already fully archived/retired; no further document deletion was necessary. Its required knowledge remains in session history and Project State. /scripts/ is now absent and ignored; user maintains the batch pipeline as a separate personal tool with their own backup. Additional research/tool recovery is safely outside the app. Small shipped input examples remain tracked and unchanged. No source/test/assets changed (127/127 hashes), fresh lint/build/coverage/seven Node checks passed. Full E2E and hand-test were not repeated for this non-runtime cleanup; prior accepted app results remain valid. No process termination was needed. Claim released complete, only unrelated .gitattributes remains untracked. Final housekeeping docs are committed/pushed separately; no new backup made for this bookkeeping.
+
+## 2026-10-27 — Application identifier rename (verification incomplete)
+
+Codex changed application identity from `com.mrhorakhty.thespellcaster` to
+`com.thespellcaster.mrhorakhty`; debug Android adds `.debug`. Updated Tauri config,
+Android namespace/applicationId, moved MainActivity and the two Gradle helper paths,
+Android launcher/test package, README and AGENTS source-path reference. Display name
+unchanged. Old app data/install identity retained; no migration/deletion performed.
+
+Pre-change backup …-20261027-221228: VERIFY OK, 242/242 files, 40.7 MB.
+Lint 0 errors/3 baseline warnings, Vite build PASS, coverage OK (all exit 0).
+Node checks: 46/46 profileBundle, 32/32 profileStorage, 20/20 bundleGuard,
+profile-key guard OK, 46/46 fadeMath, 32/32 soundFiles, 35/35 iconPrep (all exit 0).
+Web E2E 290/0/0 PASS/FAIL/WARN exit 0. Windows 305/1/3 suite exit 2:
+IP0 InvalidStateError image decode failure. Fresh identity had no uploads directory;
+save-uploads made no snapshot and restore-uploads returned 4. LocalStorage restore
+was verified from disk. Windows log: `%TEMP%/opencode/e2e-run-20261027-222111.log`.
+
+Android runner dev startup blocked: --host 10.0.2.2 causes EADDRNOTAVAIL/CLI frontend wait.
+Standalone x86_64 debug APK/AAB built (exit 0), installed and launched successfully.
+Rename required clearing cached `tauri` Android artifacts with cargo clean -p tauri
+--target x86_64-linux-android and deleting only the ignored old-package generated
+Kotlin directory after checking no tracked files existed inside it. No generated
+source was hand-edited. New generated TauriActivity and Wry classes use new package.
+The waiting runner resumed against that bundled APK: 273/22/3 PASS/FAIL/WARN, suite
+exit 2. FADE14/15 and bundle tests dynamically import `/src/profileBundle.js`, absent
+from packaged assets; this workaround verifies build/launch but cannot satisfy those
+dev-server-only tests. Mobile log: `%TEMP%/opencode/e2e-android-20261027-222842.log`.
+Runner wrappers both left LASTEXITCODE 1; internal suite/report exit 2 is authoritative.
+
+Plan changed to standalone APK verification because dev-server startup was blocked;
+no unrelated app/test fixes made. E2E policy in runner headers requires instructions
+before fixes. Native gates and user hand-test remain unresolved. Claim retained;
+finishing commit/push/prune NOT run. Untracked `.gitattributes` preserved. Runners
+restored localStorage and stopped their processes/emulator/forwards. Source rename
+and documentation remain uncommitted; backup excludes gen, so new Android paths are
+in working tree pending eventual commit/push, per the existing backup limitation.
+Final verified backup: …-20261027-224324, 242/242 files, 40.7 MB, exit 0.
+Final bookkeeping notes postdate it. No backups pruned.
+
+## 2026-10-27 — Identifier verification blockers resolved
+
+User confirmed manual launch/playback PASS and intact web origin storage, and authorized blocker fixes.
+Pre-fix verified backup …-20261027-224945: 242/242 files, 40.7 MB.
+Android runner now uses --host 127.0.0.1 plus scoped temporary ADB reverse 5173/5183;
+compatible existing mappings remain, conflicts fail, owned mappings are removed in cleanup.
+This replaces the emulator-only 10.0.2.2 host that blocked Windows HMR/CLI health probes.
+Fresh/empty upload snapshots now have a validated sidecar recording original directory existence
+and file count; unmarked empty, missing, corrupt/truncated snapshots still refuse restore.
+Added snapshotUploads.check.mjs: 19/19 PASS, registered as gate 5's eighth Node check.
+The sandbox denied test-directory rename; isolated check passed outside it. Manifest --update
+was run/reviewed: no ID changes. Native icon pixel-read diagnostics now include URL/status/MIME/size.
+
+Windows diagnosis: a controlled temporary debug probe showed ordinary Roaming scope patterns but
+profile canonical paths redirected into Codex MSIX LocalCache. This caused native reads/writes
+to be denied despite correct AppData capabilities. The new identifier was correct. Temporary Rust
+diagnostics were removed with no source diff. One exploratory run was interrupted by rebuilding
+the diagnostic; it was not used as final verification. A fresh Shell.Application launch still
+inherited package identity. The existing Explorer desktop object's Document.Application.ShellExecute
+launched the runner without it. Normal user BAT execution and the final full gate both worked.
+No application permission broadening, profile data migration, or old-ID data deletion occurred.
+
+Final gates: lint 0 errors/3 baseline warnings (0), Vite build PASS (0), coverage OK
+42 suites/422 IDs/26 implemented features covered (0); Node checks 46/46, 32/32, 20/20,
+profile keys OK, 46/46, 32/32, 35/35, 19/19 (all 0). Web 290 PASS/0 FAIL/0 WARN (0),
+e2e-run-20261027-225248.log. Windows 307/0/3 (suite/wrapper 1),
+e2e-run-20261027-230949.log; empty original uploads restored and six localStorage keys
+restart-verified from disk. Android 297/0/3 (suite/wrapper 1),
+e2e-android-20261027-231733.log; rebuilt/installed dev APK, six keys restored/verified,
+runner-owned forwards/reverses and emulator cleaned up. FADE14/15, native bundle round trips,
+shared-icon byte retention all PASS. Prior bundled-APK failures were superseded by this full dev run.
+User hand-test applies to the renamed app; blocker fixes changed harnesses, not app UI/permissions.
+
+Three Kotlin source paths moved to new identity and old paths ignored. MainActivity package updated;
+Gradle helper contents unchanged. AGENTS activity description corrected: Rust plugins live in lib.rs.
+Unrelated .gitattributes remains untracked/excluded. Finishing workflow follows below.
+
+Final full backup …-20261027-232800 verified 252/252 files, 40.7 MB, exit 0; includes diagnostic logs. Final port/process/ADB-forward audit clean. Subject claim released after successful gates, then reclaimed solely for finishing housekeeping notes. Final notes postdate keeper; no new backup solely for pruning notes.

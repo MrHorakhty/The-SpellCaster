@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-27 22:09)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 23:28 — working on: finishing commit push and audited backup pruning
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,19 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Application identity
+
+Application ID is `com.thespellcaster.mrhorakhty`; Android debug adds `.debug`.
+Display name remains **The SpellCaster**. Old native installs/data remain under
+`com.mrhorakhty.thespellcaster`; no automatic migration or deletion was performed.
+Web localStorage remains under its browser origin; user confirmed it is intact.
+User manually verified the renamed app opens and plays correctly on 2026-10-27.
+
+Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
+`app/src/main/java/com/thespellcaster/mrhorakhty/MainActivity.kt:1`; both buildSrc
+helpers moved to matching paths; `Run Android.bat:48`; `e2e/e2e-android.ps1:32`.
+Old source-package paths are ignored against revival. Historical old-ID references stay in session history.
 
 ## Open items
 
@@ -38,42 +51,28 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Branch `mobile-support`; accepted icon feature `4b37c6c` and handover `177856f` are pushed/verified. Follow-up cleanup commit `3f2d84c` removes the user-retired personal scripts folder and is pushed/remote-verified; a following docs commit records final housekeeping.
-- Fix, regression tests, state consolidation and permanent finishing instructions are committed.
-  Icon preparation and refinements are user accepted (2026-10-27); its spec is archived/retired and the manifest spec reference is null.
-- **Committed icon work**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes`; preserve/exclude it from commits. The personal pipeline is now retired from this repository at user request.
-  No unrelated changes were discarded.
-- `.gitattributes` contains only `*.bat text eol=crlf`, user-authorized but still untracked.
-  It overrides `core.autocrlf` locally; other clones get no protection until it is committed.
-  Existing committed BAT blobs are LF, so this rule did not need renormalization.
-  Do not broaden to `* text=auto` casually or claim that “LF breaks goto” is a proven universal mechanism.
-- Personal `scripts/` folder removed at the user's explicit request on 2026-10-27. They retain their pipeline
-  separately and confirmed an external backup. It was not a runtime/build/test dependency. The 18 removed files
-  (23,438,950 bytes) matched verified backup …-20261027-215950 by SHA256 before deletion; research/examples
-  are preserved outside the repository in the verified recovery archive listed below. `/scripts/` is ignored against revival.
-  The two small committed examples under public/assets/icon-prep/ remain part of the app.
-- The user's preferred local launch is the root BAT files. No standalone EXE was requested or built for the fix.
-  Do not make an installer merely to enable a hand-test.
+- Branch `mobile-support`. Identifier rename and authorized verification fixes are complete;
+  finishing commit/push/backup audit is in progress. See git log and finishing notes for final hashes.
+- Intended changes: Tauri/Android identity and three source moves, Android launcher/package lookup,
+  loopback + temporary ADB reverse for Android E2E, explicit empty/absent upload snapshots with
+  19 regression assertions, icon pixel-read diagnostics, docs/retired-path guards.
+- **Unrelated untracked `.gitattributes` is preserved and excluded from commits.** It contains only
+  `*.bat text eol=crlf`; other clones get no protection until the user commits it. Existing committed BAT
+  blobs are LF. Do not broaden to `* text=auto` or claim that LF universally breaks goto.
+- Personal `/scripts/` was user-retired, deleted and ignored on 2026-10-27; recovery ZIPs remain below.
+  The two small shipped examples under public/assets/icon-prep/ remain part of the app.
+- User prefers root BAT launch scripts. No installer was requested or made for hand-testing.
 
 ## Finishing status
 
-Icon preparation is accepted/shipped. ICON_PREP_SPEC.md is absent, ignored and fully archived in session history;
-its manifest spec is null. No app-facing knowledge remained to migrate. The user separately retired the untracked
-/scripts/ folder, confirmed an external personal-pipeline backup, and the exact folder was successfully deleted.
-No process had to be stopped. All 18 removed files (23,438,950 bytes) are also preserved in a verified recovery ZIP
-outside the project, including the original examples, reports, contact sheets, generator and five preserved samples.
-The small shipped examples in public/assets/icon-prep/ are unchanged.
+Identifier implementation, native build/install/launch, all gates and user manual launch/playback are complete.
+Web 290/0/0 (exit 0), Windows 307/0/3 (exit 1), Android 297/0/3 (exit 1).
+Windows upload restoration succeeded, and six localStorage keys matched after restart.
+Android restored and verified six localStorage keys. Runners stopped their app/dev processes/emulator
+and removed owned CDP/ADB mappings. No app permission scope was widened.
 
-Cleanup commit **3f2d84c0cc001f3e17b5314fea014562e6385965** is pushed to origin/mobile-support and independently
-remote-verified before pruning. Final housekeeping is a following docs commit; use git log for the latest HEAD.
-Two older project backups removed after audit; exactly one remains: **…-20261027-220512**, 242/242, 40.7 MB,
-all hashes reverified. No additional backup created merely for finishing notes. Only .gitattributes remains untracked.
-
-Fresh cleanup checks: lint 0 errors/3 baseline warnings, build PASS, coverage 42 suites/422 IDs/no gaps (all exit 0),
-seven Node checks 46/46, 32/32, 20/20, keys OK, 46/46, 32/32, 35/35 (each exit 0). App/test/shipped assets unchanged
-in **127/127 SHA256 comparisons**. Full E2E not repeated for unused untracked-tool removal/docs/ignore edits;
-unchanged app's latest results remain web 290/0/0 (0), Windows 307/0/3 (1), Android 297/0/3 (1).
-No new app hand-test required. Existing running user-build processes/ports were left untouched; see operational notes.
+Initial failures and the environment diagnosis are archived in docs/session-history.md.
+Final backup verified: …-20261027-232800 (252/252, 40.7 MB). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Commit/push verification and older-backup audit remain as finishing housekeeping.
 
 ## Project and code map
 
@@ -94,7 +93,7 @@ There is no account, server or automatic cloud sync.
 | Icon preparation | `src/iconPrep.js` (pure segmentation/crop + canvas wrapper), `src/IconPrepDialog.jsx` (staged upload dialog) |
 | Native entry points | Tauri 2 / Rust: `src-tauri/src/main.rs` (desktop), `lib.rs` (mobile), shared `scope.rs` |
 | Android entry/config | 50 tracked files under `src-tauri/gen/android/`, including hand-maintained `MainActivity.kt`, Gradle config and manifest |
-| App identifiers | Windows/native storage: `com.mrhorakhty.thespellcaster`; Android debug: `com.mrhorakhty.thespellcaster.debug`. |
+| App identifiers | Windows/native storage: `com.thespellcaster.mrhorakhty`; Android debug: `com.thespellcaster.mrhorakhty.debug`. |
 | Version | App version comes from `package.json` via `__APP_VERSION__` in `vite.config.js`; do not hardcode it. |
 | Useful current symbols | `mapSoundContainers` App.jsx:827; `patchSoundById`:1938; `allSoundContainers`:2632; `removeFileIfUnreferenced`:2818; `playWithPrimes`:4447. Re-find symbols before editing; old spec line numbers drift. |
 
@@ -223,12 +222,14 @@ There is no account, server or automatic cloud sync.
   shipped features need coverage or an explicit visible gap. After test-ID edits run
   `node e2e/check-coverage.mjs --update` and review the ID diff. Check used prefixes before choosing new ones.
   Add new Node checks to AGENTS gate 5 in the same change.
-- Run all seven Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
+- Run all eight Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
   or a cancel after completion; `bundleGuard.check` supplies that coverage.
 - **Windows tests touch the user's real storage and uploads**, shared by installed/dev app.
   Runner snapshots uploads before launch, restores afterward, gracefully closes WebView2, restarts
   and compares the store **from disk**. A page-level “restored” log is not disk persistence.
-  Upload snapshots must abort safely on failure; empty snapshots refuse restore (exit 4).
+  Upload snapshots must abort safely on failure. Unmarked empty/missing/corrupt snapshots refuse restore (exit 4).
+  New snapshots have a `.state.json` sidecar recording original absence/existence and file count; validated
+  empty snapshots restore the original empty/absent state. `snapshotUploads.check.mjs` covers 19 cases.
   `uploads/p_guardprobe/` is an inert restore-test fixture, not a real profile or recovered user content.
 - Durable Windows snapshots: `%LOCALAPPDATA%/opencode/e2e-snapshots/` (newest 2 uploads / 5 localStorage).
   Android snapshots stay in `%TEMP%/opencode/`, because they protect an emulator, not the real Windows store.
@@ -249,19 +250,19 @@ There is no account, server or automatic cloud sync.
 
 ## Verification gates
 
-Commands and reporting rules live in [AGENTS.md](AGENTS.md). These include fresh pure/build checks for personal-tool cleanup and the latest full crop-refinement E2E results (unchanged app).
+Commands and reporting rules live in [AGENTS.md](AGENTS.md). Results below verify the renamed identifier and authorized harness fixes.
 
-| Gate | Current refinement result | Exit |
+| Gate | Identifier rename result | Exit |
 |---|---|---|
-| Final cleanup backup | `…-20261027-220512`, VERIFY OK 242/242, 40.7 MB; pre-delete backup also verified | 0 |
+| Final backup | `…-20261027-232800`, VERIFY OK 252/252, 40.7 MB (includes diagnostic logs); final housekeeping notes postdate it | 0 |
 | Lint | 0 errors / 3 accepted warnings | 0 |
 | Build | Success; existing ineffective-dynamic-import warning | 0 |
 | Coverage | 42 suites / 422 registered IDs; 26/26 implemented features covered; one planned, no gaps | 0 |
-| Node checks | profileBundle 46/46; profileStorage 32/32; bundleGuard 20/20; profile keys OK; fadeMath 46/46; soundFiles 32/32; iconPrep 35/35 | Each 0 |
-| Web E2E | **290 PASS / 0 FAIL / 0 WARN**; `e2e-run-20261027-203041.log` | 0 |
-| Windows E2E | **307 PASS / 0 FAIL / 3 baseline WARN**, restore restart-verified; `e2e-run-20261027-203657.log` | 1 |
-| Android E2E | **297 PASS / 0 FAIL / 3 baseline WARN**; `e2e-android-20261027-204405.log`; 9 keys restored and verified | 1 |
-| User hand-test | **PASS — user accepted the refined app on 2026-10-27**; one-time mobile silhouette wait observed/accepted | Accepted |
+| Node checks | profileBundle 46/46; profileStorage 32/32; bundleGuard 20/20; profile keys OK; fadeMath 46/46; soundFiles 32/32; iconPrep 35/35; snapshotUploads 19/19 | Each 0 |
+| Web E2E | **290 PASS / 0 FAIL / 0 WARN**; `e2e-run-20261027-225248.log` | 0 |
+| Windows E2E | **307 PASS / 0 FAIL / 3 baseline WARN**, restore restart-verified; `e2e-run-20261027-230949.log` | 1 |
+| Android E2E | **297 PASS / 0 FAIL / 3 baseline WARN**; `e2e-android-20261027-231733.log`; 6 keys restored and verified | 1 |
+| User hand-test | **PASS — user confirmed renamed app opens/plays on 2026-10-27; web storage retained** | Accepted |
 
 Focused ICON: **28 PASS / 0 FAIL**, exit 0. IP23–28 cover the reported regressions: slider synchronization,
 stable canvas/dialog dimensions, zero encode/decode during slider gestures, card-size preview/dimmed crop frame,
@@ -278,13 +279,17 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
   Desktop user launch: `Run Tauri.bat`; web: `Run.bat`; `Build.bat` builds web.
   `Build Android.bat` builds/reinstalls/runs; `Run Android.bat` opens the installed app and starts Vite if needed.
   Both are tracked root scripts; do not use the retired generated `Run App.bat`.
-- Native debug apps need the Vite server alive on **5173**; Vite binds `0.0.0.0`.
-  Emulator host alias is **10.0.2.2**, not ProtonVPN's **10.2.0.2**.
-  VPN routing can swallow the latter even when Vite binds all interfaces.
-  The Android runner uses `--host 10.0.2.2`; HMR socket warnings are cosmetic.
-- On 2026-10-25 the CLI's Windows-side server check stalled on the emulator alias despite localhost HTTP 200.
-  A **process-only** `TAURI_CLI_NO_DEV_SERVER_WAIT=true` on its replacement launcher let compile/install/tests finish.
-  No harness or persistent environment change was made. Check server health and a single running CLI before using this workaround.
+- Android dev apps need Vite alive on **5173**. A standalone `tauri android build --debug` instead bundles assets.
+  The E2E runner uses `--host 127.0.0.1` and ADB reverse **5173/5183** for frontend/HMR.
+  It preserves compatible existing mappings and removes only mappings it creates. Avoid `--host 10.0.2.2`:
+  that address exists inside the emulator, cannot bind Windows HMR, and stalls the CLI frontend probe.
+  No VPN or persistent environment changes were made.
+- **Codex MSIX virtualization can invalidate Windows native test results.** Its child processes may see
+  profile directories canonicalized into `OpenAI.Codex.../LocalCache/Roaming` while the AppData scope resolves
+  to ordinary Roaming. This caused permission errors and icon/bundle failures; normal user BAT launch worked.
+  Run the gate from the existing Explorer desktop object (`Shell.Application.Windows().FindWindowSW`
+  with SWC_DESKTOP=8, then `Document.Application.ShellExecute`), hidden. A newly instantiated Shell.Application
+  alone still inherited package context. Do not widen app permissions to mask this environment problem.
 - Last recorded toolchain: Rust 1.97.1; Android SDK `%LOCALAPPDATA%/Android/Sdk`, NDK `30.0.16138531`,
   Android Studio JBR 21. AVDs: Pixel_7, Pixel_Tablet, Small_Phone; runner uses Pixel_7.
   Treat historical version numbers as recorded environment, not fresh probes.
@@ -302,7 +307,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 - CMD pitfalls: unescaped `)` in a parenthesized echo ends the block; quoted executable paths inside
   `for /f` command capture can fail (redirect to a temp file); quoted file paths need `usebackq`.
   Verify by running the script, not by quoting theory.
-- The real Windows localStorage is under `%LOCALAPPDATA%/com.mrhorakhty.thespellcaster/EBWebView/Default/Local Storage/leveldb/`.
+- The real Windows localStorage is under `%LOCALAPPDATA%/com.thespellcaster.mrhorakhty/EBWebView/Default/Local Storage/leveldb/`.
   Never substitute a fixture snapshot for the user's board.
 - Raw LevelDB byte searches cannot prove missing profile data: values can be Snappy-compressed,
   and readable fragments need not belong to the preceding key. Preserve raw storage before investigation.
@@ -315,7 +320,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-220512`, 242/242 files, 40.7 MB, VERIFY OK, exit 0.** Two older backups removed after verified push and preservation of their unique contents. Exactly one project backup remains; all hashes rechecked. Only final housekeeping notes postdate it.
+- **Keeper: `…-20261027-232800`, 252/252 files, 40.7 MB, VERIFY OK (exit 0).** Four older backups await post-push content audit/pruning. Final housekeeping notes postdate the keeper.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
@@ -374,6 +379,7 @@ Detailed designs, decisions and inventories are preserved in session history and
 | `ICON_PREP_SPEC.md` | User accepted 2026-10-27; complete final design archived in session history; modules/tests own the shipped behavior. |
 | `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md` | Shipped starter-merge and icon behavior; implementation/history retain design. |
 | `TESTING_REPORT.md`, `TESTING_REPORT_FOLLOWUP.md`, `EDGE_TO_EDGE_REPORT.md` | Resolved audit records in git/history. |
+| Old Android Java paths under `com/mrhorakhty/` (app and buildSrc) | Renamed to `com/thespellcaster/mrhorakhty/`; three tracked files moved; old paths ignored. |
 | Personal `/scripts/` folder | Removed at user request 2026-10-27; app has no dependency. User keeps pipeline elsewhere; measurements/design in session history and verified recovery archive. |
 | Untracked `scripts/Sound Normalizer/` | Deleted at user's request; playback volume trim supplies the wanted behavior. Do not resurrect a duplicate loudness key/feature without a new design. User retained source copies. |
 

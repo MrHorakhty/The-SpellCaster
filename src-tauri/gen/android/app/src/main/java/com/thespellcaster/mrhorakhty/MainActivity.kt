@@ -1,4 +1,4 @@
-package com.mrhorakhty.thespellcaster
+package com.thespellcaster.mrhorakhty
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

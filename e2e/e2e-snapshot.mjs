@@ -126,17 +126,20 @@ if (FS_MODES.includes(mode)) {
   }
   const appData = process.env.APPDATA || process.env.HOME;
   const uploads = join(appData, identifier, 'uploads');
+  // A sidecar distinguishes a deliberately empty snapshot from a lost backup.
+  // Keep it outside the copied tree: it must never become an uploaded file.
+  const stateFile = `${file}.state.json`;
 
   if (mode === 'save-uploads') {
-    if (!existsSync(uploads)) {
-      log(`no uploads directory at ${uploads} - nothing to protect`);
-      process.exit(0);
-    }
     try {
+      const uploadsExisted = existsSync(uploads);
       rmSync(file, { recursive: true, force: true });
+      rmSync(stateFile, { force: true });
       mkdirSync(dirname(file), { recursive: true });
-      cpSync(uploads, file, { recursive: true });
+      if (uploadsExisted) cpSync(uploads, file, { recursive: true });
+      else mkdirSync(file);
       const n = countFiles(file);
+      writeFileSync(stateFile, JSON.stringify({ version: 1, uploadsExisted, fileCount: n }));
       log(`saved ${n} upload file(s) -> ${file}`);
       process.exit(0);
     } catch (err) {
@@ -150,7 +153,21 @@ if (FS_MODES.includes(mode)) {
     console.error(`[${LABEL}] FAILED: uploads snapshot ${file} does not exist - live files left untouched.`);
     process.exit(4);
   }
-  if (countFiles(file) === 0) {
+  let state;
+  if (existsSync(stateFile)) {
+    try {
+      state = JSON.parse(readFileSync(stateFile, 'utf8'));
+      if (state.version !== 1 || typeof state.uploadsExisted !== 'boolean' ||
+          !Number.isInteger(state.fileCount) || state.fileCount < 0 ||
+          (!state.uploadsExisted && state.fileCount !== 0) || state.fileCount !== countFiles(file)) {
+        throw new Error('snapshot metadata/count mismatch');
+      }
+    } catch (err) {
+      console.error(`[${LABEL}] FAILED: invalid uploads snapshot metadata: ${err.message} - live files left untouched.`);
+      process.exit(4);
+    }
+  }
+  if (countFiles(file) === 0 && !state) {
     console.error(`[${LABEL}] FAILED: uploads snapshot is empty - live files left untouched.`);
     process.exit(4);
   }
@@ -165,7 +182,7 @@ if (FS_MODES.includes(mode)) {
     process.exit(4);
   }
   try {
-    cpSync(file, uploads, { recursive: true });
+    if (state?.uploadsExisted !== false) cpSync(file, uploads, { recursive: true });
   } catch (err) {
     try { if (existsSync(aside)) renameSync(aside, uploads); } catch { /* reported below */ }
     console.error(`[${LABEL}] FAILED: could not restore uploads (${err.message}); the previous folder was put back.`);

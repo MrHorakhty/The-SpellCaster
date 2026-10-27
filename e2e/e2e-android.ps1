@@ -29,8 +29,9 @@ $adb   = "$env:ANDROID_HOME\platform-tools\adb.exe"
 $emu   = "$env:ANDROID_HOME\emulator\emulator.exe"
 $avd   = 'Pixel_7'
 $cdpPort = '9225'
-$pkg   = 'com.mrhorakhty.thespellcaster.debug'
+$pkg   = 'com.thespellcaster.mrhorakhty.debug'
 $results = [System.Collections.ArrayList]::new()
+$reversePortsAdded = @()
 
 Write-Host "Test output log -> $Script:TestLog" -ForegroundColor DarkGray
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
@@ -147,14 +148,21 @@ try {
     Assert-NotTimedOut -Minutes 25
 
     "`tLaunching tauri android dev (Rust compile + install) ..." | Add-Content $Script:TestLog
-    # --host 10.0.2.2: the CLI otherwise auto-detects the dev-server address and
-    # picks the FIRST network adapter it finds, which on this machine is the
-    # ProtonVPN one (10.2.0.2). The emulator's traffic to the VPN address is
-    # swallowed by the VPN, so the app loads nothing ("Failed to request
-    # http://10.2.0.2:5173/") and dies before the suite starts. 10.0.2.2 is
-    # Android's hard-coded emulator-to-host alias, and Vite binds 0.0.0.0
-    # (vite.config.js), so it answers there.
-    $tauriProc = Start-Process 'npm.cmd' @('run','tauri','android','dev','--','--host','10.0.2.2') `
+    # Both the CLI's frontend probe and Vite's HMR listener must use an address
+    # owned by Windows. 10.0.2.2 exists only inside the emulator. Reverse its
+    # loopback ports to Windows so devUrl/HMR avoid the VPN adapter as well.
+    $existingReverse = @(& $adb reverse --list)
+    foreach ($port in @(5173, 5183)) {
+        $mapping = $existingReverse | Where-Object { $_ -match "\stcp:$port\s" }
+        if ($mapping) {
+            if ($mapping -notmatch "\stcp:$port\s+tcp:$port$") { throw "Conflicting adb reverse for tcp:$port" }
+        } else {
+            & $adb reverse "tcp:$port" "tcp:$port"
+            if ($LASTEXITCODE -ne 0) { throw "Could not reverse tcp:$port" }
+            $reversePortsAdded += $port
+        }
+    }
+    $tauriProc = Start-Process 'npm.cmd' @('run','tauri','android','dev','--','--host','127.0.0.1') `
         -WorkingDirectory $proj `
         -RedirectStandardOutput  "$tmp\e2e-android-tauri.log" `
         -RedirectStandardError   "$tmp\e2e-android-tauri.err.log" `
@@ -239,6 +247,9 @@ try {
     }
     "`t[C-CLEANUP] removing adb forward ..." | Add-Content $Script:TestLog
     & $adb forward --remove "tcp:$cdpPort" 2>&1 | Out-Null
+    foreach ($port in $reversePortsAdded) {
+        & $adb reverse --remove "tcp:$port" 2>&1 | Out-Null
+    }
     "`t[C-CLEANUP] killing tauri tree ..." | Add-Content $Script:TestLog
     if ($tauriProc) {
         try { taskkill /PID $tauriProc.Id /T /F 2>&1 | Out-Null } catch {}

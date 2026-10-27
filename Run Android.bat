@@ -45,7 +45,7 @@ rem  resolves from PATH, so no quoted path is involved.
 rem ===========================================================
 setlocal
 cd /d "%~dp0"
-set "APP=com.mrhorakhty.thespellcaster.debug"
+set "APP=com.thespellcaster.mrhorakhty.debug"
 set "DEVLIST=%TEMP%\opencode\adb-devices.txt"
 set "DEVPORT=5173"
 set "ROOT=%CD%"

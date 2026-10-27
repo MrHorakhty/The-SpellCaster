@@ -49,9 +49,12 @@ export const iconprep = {
         };
         window.__ipPixels = async (selector) => {
           const image=document.querySelector(selector); if(!image) return null;
-          const blob=image.tagName==='CANVAS' ? await new Promise(resolve=>image.toBlob(resolve,'image/png'))
-            : await (await fetch(image.src)).blob();
-          const decoded=await createImageBitmap(blob); const c=document.createElement('canvas');
+          const response=image.tagName==='CANVAS' ? null : await fetch(image.src);
+          const blob=response ? await response.blob() : await new Promise(resolve=>image.toBlob(resolve,'image/png'));
+          let decoded;
+          try { decoded=await createImageBitmap(blob); }
+          catch(error) { throw new Error('Pixel decode failed: '+JSON.stringify({selector,src:image.src,status:response?.status,type:blob.type,size:blob.size,complete:image.complete,width:image.naturalWidth,error:String(error)})); }
+          const c=document.createElement('canvas');
           c.width=decoded.width;c.height=decoded.height; const g=c.getContext('2d');g.drawImage(decoded,0,0);
           const p=g.getImageData(0,0,c.width,c.height).data; decoded.close();
           let opaque=0,left=0,right=0,grey=true;

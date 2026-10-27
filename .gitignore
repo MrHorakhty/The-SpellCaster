@@ -371,3 +371,8 @@ ICON_PREP_SPEC.md
 
 # Personal image pipeline and research assets retired from this app at user request (2026-10-27).
 /scripts/
+
+# Package identity renamed to com.thespellcaster.mrhorakhty (2026-10-27).
+# Keep stale hand-maintained sources from returning under the old package.
+/src-tauri/gen/android/app/src/main/java/com/mrhorakhty/
+/src-tauri/gen/android/buildSrc/src/main/java/com/mrhorakhty/
