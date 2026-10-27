@@ -9877,3 +9877,25 @@ claim of its full manual launch. Google key-review completion is external and no
 Final backup/commit/push verification/audited pruning results follow below.
 
 Final backup …-20261028-011044: VERIFY OK 265/265, 40.8 MB, exit 0. Six older backups await audit after verified push. Existing responding Studio PID 7948 left untouched; no owned test listeners/app/emulator/forwards. Final notes postdate keeper; no new backup just for prune notes.
+
+Release finishing completed: local implementation commit bd219b9e788bd9f69a4237d6749b0cfdb9e42a59
+contains six intended files. Initial combined commit/push auto-review was rejected because
+the exact egress destination was not explicitly authorized. Completed local-only commit;
+user then explicitly approved pushing this commit and housekeeping notes to
+https://github.com/MrHorakhty/The-SpellCaster.git branch mobile-support and audited pruning.
+Push succeeded; git ls-remote matched bd219b9 exactly before any backup deletion.
+
+Audit compared every older backup file against Git-tracked paths union working tree,
+including untracked content. Zero backup-only paths. Preserved 26 differing file versions
+as 11 unique contents in %LOCALAPPDATA%/opencode/backup-prune-history/
+preserved-before-prune-bd219b9-20261028-release.zip. All entries round-trip/hash verified.
+ZIP SHA256 2e56a8e66272e1ef6429844667c92942293c0a935040ab158ae724b5ed38a4a6.
+Adjacent audit-before-prune-bd219b9-20261028-release.json and
+prune-result-bd219b9-20261028-release.json retain complete inventories and final result.
+Rechecked exact resolved folder and per-file hashes immediately before each deletion.
+Six older backups removed; sole remaining ttrpg-soundboard-backup-20261028-011044
+reverified all 265 hashes (40.8 MB). Final bookkeeping notes postdate keeper; no additional
+backup created only for prune notes. Temporary audit script preserved beside archive and
+removed from project. Claim released, .gitattributes remains unrelated/untracked; signed APK
+retained ignored on disk. Existing responding Studio PID 7948 untouched. Google certificate
+review remains externally In review, per user; completion not claimed. Final docs commit follows.

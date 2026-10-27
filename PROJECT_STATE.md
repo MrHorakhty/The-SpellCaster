@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 23:40 — working on: investigate signed AAB/APK build failure and registration status
+🔓 UNCLAIMED — last holder: Codex (2026-10-28 01:14)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -59,7 +59,7 @@ buildSrc incorrectly; corrected before successful verification; temporary init r
 No new test IDs; coverage manifest/code wiring remains OK. No app UI/playback/permission
 change, so no new app-feature hand-test was required. User signed-generation confirmation
 and APK signature verification are the relevant manual result.
-Final backup …-20261028-011044 verified 265/265 files, 40.8 MB (exit 0). Final metadata notes postdate keeper. Studio PID 7948 remains responding and untouched. Intended commit/push verification and audited older-backup pruning follow.
+Final backup …-20261028-011044 verified 265/265 files, 40.8 MB (exit 0). Final metadata notes postdate keeper. Studio PID 7948 remains responding and untouched. Implementation bd219b9 pushed and remote-verified; six older folders audited/pruned, preserving 26 versions/11 contents. Keeper 265 hashes rechecked; no backup-only path. Final bookkeeping notes postdate it.
 
 ## Application identity
 
@@ -103,9 +103,10 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 ## Repository and working tree
 
 - Branch `mobile-support`; previous identity/sync work through `02ae174` is pushed.
-  Current finishing changes: Gradle error propagation fix, guarded root release launcher,
+  Completed changes: Gradle error propagation fix, guarded root release launcher,
   README workflow, signed-output ignore rule, state/history. All applicable gates passed;
-  final backup, intended commit/push and backup audit are in progress.
+  implementation commit `bd219b9e788bd9f69a4237d6749b0cfdb9e42a59` is pushed to origin/mobile-support and remote SHA verified.
+  Final housekeeping is a following docs commit; use git log for latest HEAD.
 - **Unrelated untracked `.gitattributes` is preserved and excluded.** It contains only
   `*.bat text eol=crlf`; do not sweep it into this commit or broaden it casually.
 - Signed APK `src-tauri/gen/android/app/universal/release/app-universal-release.apk`
@@ -123,7 +124,10 @@ Console, per user report. Do not change keys or claim Google review has complete
 Fresh gates: lint 0 errors/3 warnings, build/coverage PASS, eight Node checks all pass;
 Web 290/0/0 (0), Windows 307/0/3 (1), Android 297/0/3 (1). Windows disk restoration
 verified six keys; Android restoration verified 30 keys. Tests clean up their own app,
-emulator and mappings; existing Studio is preserved. Final commit/push/prune pending.
+emulator and mappings; existing Studio is preserved. Implementation commit `bd219b9` is pushed to `origin/mobile-support` and remote-verified.
+Six older backups removed after audit and preservation of 26 differing versions as 11 unique
+contents. Zero backup-only paths. Sole keeper …-20261028-011044 rechecked: 265 files, 40.8 MB.
+Only unrelated .gitattributes remains untracked. Final bookkeeping is a following docs commit.
 
 ## Project and code map
 
@@ -371,7 +375,12 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261028-011044`, 265/265 files, 40.8 MB, VERIFY OK (exit 0).** Six older backups await post-push audit/pruning. Final housekeeping notes postdate keeper. Includes helper recovery log; gen itself excluded.
+- **Keeper: `…-20261028-011044`, 265/265 files, 40.8 MB, VERIFY OK (exit 0).** Six older backups removed after verified push and audited preservation; exactly one remains, all 265 hashes rechecked. Final housekeeping notes postdate keeper. Includes helper recovery log; gen itself excluded.
+- **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
+  26 differing older versions / 11 unique contents, all entries round-trip/hash verified.
+  SHA256 `2e56a8e66272e1ef6429844667c92942293c0a935040ab158ae724b5ed38a4a6`.
+  Adjacent audit-before-prune/prune-result JSON files and audit script retain complete inventories,
+  Git-tracked/working-tree membership and final verification. Keep all recovery archives.
 - **Studio-sync recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-9c2dfcf-20261027-studio.zip`,
   two differing doc versions, all ZIP entries verified; SHA256
   `ef38d09d5b5354f8211391dbb90acd9a57d0910804fb95e4dd75d3df1804c111`.
