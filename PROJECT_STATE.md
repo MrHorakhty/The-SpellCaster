@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 21:02 — working on: user accepted icon preparation; commit, push verification and backup audit/prune
+🔓 UNCLAIMED — last holder: Codex (2026-10-27 21:16)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -43,7 +43,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
   for the latest bookkeeping commit rather than treating an embedded hash as the current HEAD.
 - Fix, regression tests, state consolidation and permanent finishing instructions are committed.
   Icon preparation and refinements are user accepted (2026-10-27); its spec is archived/retired and the manifest spec reference is null.
-- **Completed icon work being finalized**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes` and `scripts/`; preserve/exclude them from the feature commit.
+- **Committed icon work**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes` and `scripts/`; preserve/exclude them from the feature commit.
   No unrelated changes were discarded.
 - `.gitattributes` contains only `*.bat text eol=crlf`, user-authorized but still untracked.
   It overrides `core.autocrlf` locally; other clones get no protection until it is committed.
@@ -60,17 +60,19 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Finishing status
 
-User accepted the complete refined app on 2026-10-27 (“Everything seems to be in order”). The one-time
-mobile silhouette pass remains observed/accepted, not an open defect. Final design archived before spec retirement.
-App/test/asset content matches the tested snapshot in **126/126 SHA256 comparisons**; only docs, ignore rules
-and registry metadata changed for finishing. Static coverage and whitespace checks passed again (exit 0).
-The existing full lint/build/Node/web/Windows/Android results below remain valid; no new runtime runs are implied.
+Icon preparation and its crop/performance refinements are **user accepted and complete (2026-10-27)**.
+Feature commit **4b37c6cdb2c44c625c8319f23d43f6128790f3c4** is pushed to **origin/mobile-support**,
+independently verified with ls-remote before pruning. Final housekeeping is recorded by a following docs commit;
+use git log for the latest branch head rather than treating an embedded hash as HEAD.
+App/test/assets match the tested snapshot in **126/126 SHA256 comparisons**. Only docs, ignore rules and
+registry metadata changed during finishing; coverage/whitespace checks passed again. No new runtime runs are implied.
 
-Branch mobile-support; intended feature commit and verified push pending, then audit/prune older project backups.
-Claim retained through housekeeping. Unrelated .gitattributes and scripts/ remain untracked and preserved.
-Windows hand-test app is now closed. Last process inspection found Vite PID 39292 and a Tauri Android
-android-studio-script --target armv7 process PID 39288; left untouched because they may belong to the user's build.
-No emulator or automated E2E runner was active. Re-check these process facts before claiming current port ownership.
+Final accepted backup **…-20261027-210819**, 260/260 files, 63 MB, verified. **7 older folders removed;
+exactly 1 remains**, rechecked against the full pre-prune SHA256 inventory. Distinct older contents are protected
+by the recovery ZIP listed below; no unique older file content was discarded. Only final bookkeeping postdates the keeper.
+Unrelated untracked `.gitattributes` and `scripts/` remain intentionally outside the feature commit and are in the backup.
+No Windows app/emulator/test runner is running. Vite **39292 / 0.0.0.0:5173** and Android Studio script
+**39288 / --target armv7** were observed and left untouched; they may belong to the user's mobile build.
 
 ## Project and code map
 
@@ -314,13 +316,13 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Newest verified backup: `…-20261027-210819`, 260/260 files, 63 MB, VERIFY OK, exit 0.** Final accepted source, tests, assets and design retirement. Only finishing-result bookkeeping may postdate it; this is the keeper for the pending audited prune.
+- **Keeper: `…-20261027-210819`, 260/260 files, 63 MB, VERIFY OK, exit 0.** Pushed/accepted source, tests, assets and design archive. Seven older folders removed after remote verification; exactly one remains and all keeper hashes were rechecked. Only final bookkeeping postdates it.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
   **gen is not wholly regenerable**: backups omit 50 tracked Android files, including MainActivity.
   Git/pushed copies protect them; do not put new hand-maintained files only in generated/ignored locations.
-- `public/assets` has **73 tracked files after this feature is committed (52 audio / 21 images)**, ~29 MB. They were clone/build-verified after
+- `public/assets` has **73 tracked files (52 audio / 21 images)**, ~29 MB. They were clone/build-verified after
   the ignore fix `ba57282`. Runtime user uploads are not tracked. User's shipped-content budget is under 100 MB.
 - Bitdefender can quarantine `e2e/e2e-full.ps1` from backup folders even after a successful copy.
   The repo e2e folder is excluded from scanning; OneDrive is not (user declined a broad exclusion).
@@ -333,9 +335,13 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
   Before later pruning, compare **git tracked paths ∪ working-tree paths**, including untracked files;
   preserve backup-only orphans first. Check what remains after a failed deletion. Sort backup names, not OneDrive mtimes.
   Take the final backup before pruning; do not create another just for the prune's documentation.
-- **Previous pushed/pruned baseline: `…-20261025-204821`, VERIFY OK 255/255, 62.9 MB, exit 0**; every file SHA256-checked
-  against the working tree before pruning and rechecked against the audit afterward. Only final finishing
-  documentation postdates it. **At that earlier prune, 8 older folders were removed and 1 remained; 527,461,955 bytes (~503 MiB) freed.** New icon-work backups have since accumulated; none have been pruned.
+- **Icon-work recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/icon-prep-4b37c6c-20261027-211228/preserved-before-prune.zip`
+  (**2,800,327 bytes**), SHA256 `1fd70c1817ab53c61df8e959931eb8dfb5b3a5fed93760ed0c9fd67aad5249cc`.
+  Holds **36 distinct contents / 58 historical references**, including the retired spec (the sole backup-only path).
+  Every ZIP object and manifest round-trip/hash verified. Adjacent audit-before-prune.json / prune-result.json record
+  the path union, all file hashes, remote verification and final inventory. Removed file contents total 462,165,302 bytes
+  (~440.76 MiB); this byte summary was corrected from stored per-file lengths after Measure-Object returned zero for
+  ordered dictionaries. Counts, content preservation and SHA256 deletion guards were unaffected. Keep this archive.
 - **Preserved older versions**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-8eda985.zip`
   (2,702,716 bytes). It holds 23 distinct file contents representing 38 older versions; `manifest.json`
   maps original folder/path to each `objects/<sha256>` entry. All entries round-trip/hash verified.
