@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:31)
+🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:37)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -21,6 +21,10 @@ Display name remains **The SpellCaster**. Old native installs/data remain under
 `com.mrhorakhty.thespellcaster`; no automatic migration or deletion was performed.
 Web localStorage remains under its browser origin; user confirmed it is intact.
 User manually verified the renamed app opens and plays correctly on 2026-10-27.
+Android Studio was resynced with Gradle on 2026-10-27; Modules → app → Default Config
+visibly shows the new ID. User confirmed the delayed sync resolved their signed AAB/APK concern.
+Existing universalRelease output metadata still has the old ID: generate a fresh release before signing/distribution.
+Debug output metadata has the new .debug ID. No app code/config changes were needed for Studio sync.
 
 Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
 `app/src/main/java/com/thespellcaster/mrhorakhty/MainActivity.kt:1`; both buildSrc
@@ -259,7 +263,7 @@ Commands and reporting rules live in [AGENTS.md](AGENTS.md). Results below verif
 
 | Gate | Identifier rename result | Exit |
 |---|---|---|
-| Final backup | `…-20261027-232800`, VERIFY OK 252/252, 40.7 MB (includes diagnostic logs); final housekeeping notes postdate it | 0 |
+| Final backup | `…-20261027-233645`, VERIFY OK 255/255, 40.7 MB (Studio sync follow-up); final housekeeping notes postdate it | 0 |
 | Lint | 0 errors / 3 accepted warnings | 0 |
 | Build | Success; existing ineffective-dynamic-import warning | 0 |
 | Coverage | 42 suites / 422 registered IDs; 26/26 implemented features covered; one planned, no gaps | 0 |
@@ -325,7 +329,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-232800`, 252/252 files, 40.7 MB, VERIFY OK (exit 0).** Four older backups removed after verified push and complete content audit; exactly one remains, all 252 hashes rechecked. Final housekeeping notes postdate the keeper.
+- **Keeper: `…-20261027-233645`, 255/255 files, 40.7 MB, VERIFY OK (exit 0).** Android Studio sync follow-up backup includes prior audit logs. Previous keeper …-232800 awaits post-push audit/pruning. Final housekeeping notes postdate the keeper.
 - **Rename recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-6805cef-20261027.zip`.
   38 older versions / 19 distinct contents; all ZIP entries round-trip/hash verified.
   SHA256 `33983ee80b948c818da517c2e36e9d3ba81a119433aeebe9a058db7898e00d1e`.

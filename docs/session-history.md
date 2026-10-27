@@ -9760,3 +9760,20 @@ ttrpg-soundboard-backup-20261027-232800 remains, all 252 hashes rechecked.
 Keeper is 40.7 MB; final bookkeeping notes postdate it. No extra backup for prune notes.
 Claim released. Only pre-existing unrelated .gitattributes remains untracked. A following
 docs commit records these final facts and is pushed/remote-verified separately.
+
+## 2026-10-27 — Android Studio delayed Gradle sync
+
+User saw old application ID while preparing signed AAB/APK. Source configuration
+already had com.thespellcaster.mrhorakhty; only local IDE change-history references
+retained old source paths. Used computer-use skill to run File → Sync Project with
+Gradle Files; after import, Project Structure → Modules → app → Default Config
+visibly showed com.thespellcaster.mrhorakhty. Left the read-only inspection page open.
+User confirmed the delayed sync resolved the issue and clarified AAB/APK signing.
+No app code/config change, credential entry, signing, upload or publication performed.
+Existing universalRelease output-metadata.json still has old ID; existing debug outputs
+have new .debug ID. A fresh release must be generated rather than using the old artifact.
+
+No runtime gates repeated for a UI-model refresh/docs-only follow-up; previous passing
+results remain valid. Final backup …-20261027-233645: VERIFY OK 255/255, 40.7 MB, exit 0.
+Claim released after user confirmed resolution. Unrelated .gitattributes preserved.
+Docs-only finishing commit/push and audit of the one older backup follow.
