@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 21:59 — working on: remove user-retired scripts folder; verify spec archive; finish cleanup
+🔓 UNCLAIMED — last holder: Codex (2026-10-27 22:09)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -38,7 +38,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Branch `mobile-support`; accepted icon feature `4b37c6c` and handover `177856f` are pushed/verified. Current follow-up removes the user-retired personal scripts folder; its cleanup commit is being finalized.
+- Branch `mobile-support`; accepted icon feature `4b37c6c` and handover `177856f` are pushed/verified. Follow-up cleanup commit `3f2d84c` removes the user-retired personal scripts folder and is pushed/remote-verified; a following docs commit records final housekeeping.
 - Fix, regression tests, state consolidation and permanent finishing instructions are committed.
   Icon preparation and refinements are user accepted (2026-10-27); its spec is archived/retired and the manifest spec reference is null.
 - **Committed icon work**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes`; preserve/exclude it from commits. The personal pipeline is now retired from this repository at user request.
@@ -50,26 +50,30 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 - Personal `scripts/` folder removed at the user's explicit request on 2026-10-27. They retain their pipeline
   separately and confirmed an external backup. It was not a runtime/build/test dependency. The 18 removed files
   (23,438,950 bytes) matched verified backup …-20261027-215950 by SHA256 before deletion; research/examples
-  will be preserved outside the repository during the finishing backup audit. `/scripts/` is ignored against revival.
+  are preserved outside the repository in the verified recovery archive listed below. `/scripts/` is ignored against revival.
   The two small committed examples under public/assets/icon-prep/ remain part of the app.
 - The user's preferred local launch is the root BAT files. No standalone EXE was requested or built for the fix.
   Do not make an installer merely to enable a hand-test.
 
 ## Finishing status
 
-Icon preparation is accepted/shipped; ICON_PREP_SPEC.md is already retired/ignored, final design fully archived,
-and the feature manifest spec is null. No app-facing design knowledge remains to migrate from that file.
-The user separately retired the untracked /scripts/ folder from this app and confirmed an external pipeline backup.
-It is now absent; all 18 files / 23,438,950 bytes were verified against the pre-delete backup before removal.
-Exact research/tool contents will be preserved outside the project before older project backups are pruned.
-Only .gitattributes remains unrelated/untracked. No process was stopped to perform deletion.
+Icon preparation is accepted/shipped. ICON_PREP_SPEC.md is absent, ignored and fully archived in session history;
+its manifest spec is null. No app-facing knowledge remained to migrate. The user separately retired the untracked
+/scripts/ folder, confirmed an external personal-pipeline backup, and the exact folder was successfully deleted.
+No process had to be stopped. All 18 removed files (23,438,950 bytes) are also preserved in a verified recovery ZIP
+outside the project, including the original examples, reports, contact sheets, generator and five preserved samples.
+The small shipped examples in public/assets/icon-prep/ are unchanged.
 
-Cleanup verification: app/test/shipped assets unchanged in **127/127 SHA256 comparisons** (including the manifest).
-Fresh lint **0 errors / 3 baseline warnings**, build PASS, coverage **42 suites / 422 IDs; no gaps**, all exit 0.
-All seven Node checks passed: **46/46, 32/32, 20/20, profile keys OK, 46/46, 32/32, 35/35**, each exit 0.
-Full E2E was not repeated for untracked personal-tool deletion and docs/ignore edits; the unchanged app's latest
-results remain web **290/0/0 (0)**, Windows **307/0/3 (1)**, Android **297/0/3 (1)**, with native baseline warnings.
-No new app hand-test is required for this cleanup. Claim retained until final backup, push and audited pruning finish.
+Cleanup commit **3f2d84c0cc001f3e17b5314fea014562e6385965** is pushed to origin/mobile-support and independently
+remote-verified before pruning. Final housekeeping is a following docs commit; use git log for the latest HEAD.
+Two older project backups removed after audit; exactly one remains: **…-20261027-220512**, 242/242, 40.7 MB,
+all hashes reverified. No additional backup created merely for finishing notes. Only .gitattributes remains untracked.
+
+Fresh cleanup checks: lint 0 errors/3 baseline warnings, build PASS, coverage 42 suites/422 IDs/no gaps (all exit 0),
+seven Node checks 46/46, 32/32, 20/20, keys OK, 46/46, 32/32, 35/35 (each exit 0). App/test/shipped assets unchanged
+in **127/127 SHA256 comparisons**. Full E2E not repeated for unused untracked-tool removal/docs/ignore edits;
+unchanged app's latest results remain web 290/0/0 (0), Windows 307/0/3 (1), Android 297/0/3 (1).
+No new app hand-test required. Existing running user-build processes/ports were left untouched; see operational notes.
 
 ## Project and code map
 
@@ -311,7 +315,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Newest verified backup: `…-20261027-220512`, 242/242 files, 40.7 MB, VERIFY OK, exit 0.** Excludes the user-retired personal scripts folder. Pre-delete copies remain protected until their contents are preserved during the pending audit/prune. Only finishing bookkeeping postdates this backup.
+- **Keeper: `…-20261027-220512`, 242/242 files, 40.7 MB, VERIFY OK, exit 0.** Two older backups removed after verified push and preservation of their unique contents. Exactly one project backup remains; all hashes rechecked. Only final housekeeping notes postdate it.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
@@ -330,6 +334,12 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
   Before later pruning, compare **git tracked paths ∪ working-tree paths**, including untracked files;
   preserve backup-only orphans first. Check what remains after a failed deletion. Sort backup names, not OneDrive mtimes.
   Take the final backup before pruning; do not create another just for the prune's documentation.
+- **Personal-tool/research recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/personal-pipeline-cleanup-3f2d84c-20261027-220711/preserved-before-prune.zip`
+  (**24,094,933 bytes**), SHA256 `66cc21785cb754ff76d44f6177c51a8828af761ce93eefdf6e2897aa887cc904`.
+  **23 distinct contents / 42 references**, including all **18 retired scripts/ paths** (23,438,950 bytes).
+  Objects and manifest round-trip/hash verified before pruning. The manifest maps names to objects for restoration
+  outside the app. Adjacent audit-before-prune.json / prune-result.json retain full inventories and evidence.
+  Two old backups removed (132,131,353 logical file-content bytes). Keep this archive as research/tool recovery.
 - **Icon-work recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/icon-prep-4b37c6c-20261027-211228/preserved-before-prune.zip`
   (**2,800,327 bytes**), SHA256 `1fd70c1817ab53c61df8e959931eb8dfb5b3a5fed93760ed0c9fd67aad5249cc`.
   Holds **36 distinct contents / 58 historical references**, including the retired spec (the sole backup-only path).
