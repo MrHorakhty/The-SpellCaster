@@ -165,7 +165,8 @@
       "spec": null,
       "status": "shipped",
       "coveredBy": [
-        "specs/indicators.mjs::U"
+        "specs/indicators.mjs::U",
+        "specs/soundintogroup.mjs::H"
       ],
       "note": "loop / glow / multi-file indicators and the div role=button contract"
     },
@@ -983,7 +984,7 @@
       "title": "Sound into group",
       "file": "specs/soundintogroup.mjs",
       "export": "soundIntoGroup",
-      "covers": "uploading a sound straight into a group category",
+      "covers": "uploading a sound straight into a group category; new-sound glow save/reload/editor persistence, disabling glow and string/numeric zero prominence",
       "platforms": [
         "web",
         "win",
@@ -991,7 +992,13 @@
       ],
       "ids": [
         "H1",
-        "H2"
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7",
+        "H8"
       ],
       "idPattern": "^H\\d"
     },

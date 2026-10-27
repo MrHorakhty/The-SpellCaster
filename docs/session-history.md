@@ -9899,3 +9899,59 @@ backup created only for prune notes. Temporary audit script preserved beside arc
 removed from project. Claim released, .gitattributes remains unrelated/untracked; signed APK
 retained ignored on disk. Existing responding Studio PID 7948 untouched. Google certificate
 review remains externally In review, per user; completion not claimed. Final docs commit follows.
+
+## 2026-10-28 — Git repair and glow persistence verification (Codex; hand-test pending)
+
+Claimed 01:21. Pre-change backup 20261028-012115 verified 265/265 files, 40.8 MB,
+exit 0; first sandbox attempt failed robocopy 16 before a successful elevated script.
+Historical Git blob 3d1fcf151b7e70470a24f58c83cd6d6b42a64182 was the old e2e-full.ps1.
+Exact-blob fetch failed local connectivity validation; `git fetch --refetch origin
+mobile-support` restored it. Final fsck --full --no-dangling exits 0 and rev-list walks
+1538 objects. No history rewriting, checkout replacement or pruning of Git objects.
+
+App.jsx now saves both glow fields on addSound; nullish defaults preserve numeric zero
+in editor hydration and card shadows. H3–H8 shared tests cover creation/reload/editor,
+zero, disabling, and numeric-zero imported JSON. Manifest ID diff reviewed: H3–H8 only;
+existing Card indicators feature linked to this suite. H8 scope spelling changed from
+a pre-scoped local variable to direct __pk calls after profile-key guard flagged it;
+semantics unchanged. All eight final Node checks pass at baseline counts.
+
+Verification attempts retained honestly:
+- Web 012312: 291 PASS/4 FAIL/0 WARN, suite 2/wrapper 1. New assertions incorrectly
+  expected numeric slider values; storage uses strings. Corrected assertions; no app
+  storage-type change. Added numeric-zero fixture to cover both valid representations.
+- Web 013004 via Explorer: 283/13/0 (2/1). Existing metadata/fade tests failed; H3–H8 pass.
+- Web 015421 direct: 277/19/0 (2/1), existing audio/metadata/fade checks failed; H3–H8 pass.
+  CDP Network.loadingFailed captured net::ERR_CACHE_READ_FAILURE for Tavern_Music.mp3
+  HTTP 206 while a detached audio probe decoded it (152.388s). This justified expanding
+  only web harness setup to Network.enable + Network.setCacheDisabled for !EXPECT_TAURI.
+  No assertion removed or downgraded, and no native/app cache setting changed.
+- Final web 020137: 296 PASS/0 FAIL/0 WARN, suite/wrapper 0.
+- Windows 013701: 313/0/3, suite/wrapper 1. Expected native WARNs remain. Original zero-file
+  uploads restored; six original keys restored, reloaded and verified again FROM DISK.
+- Android 014424: 303/0/3, suite/script 1. Debug APK built/installed, original 30 keys
+  restored/verified; runner emulator and ADB forwards/reverses cleaned. Temporary parent
+  launcher 42912 remained waiting on a redirected stream after native child exits; stopped
+  only that identified agent-owned launcher after confirming no native children/test ports.
+  Its status file therefore did not capture the Android return; final script log reports 1.
+- Final lint 0 errors/3 baseline warnings (0), Vite build PASS (0), coverage OK 42 suites /
+  428 IDs / 26 shipped features covered (0). Node: profileBundle 46/46, profileStorage
+  32/32, bundleGuard 20/20, profile keys OK, fadeMath 46/46, soundFiles 32/32, iconPrep
+  35/35, snapshotUploads 19/19 (each 0). Snapshot test's initial sandbox rename EPERM
+  was superseded by elevated successful runs. Intended-file whitespace diff passes;
+  unrelated settings.gradle has trailing blank lines and was left alone.
+
+Concurrent Android gradlew.bat/settings.gradle edits appeared at 01:33/01:35, outside
+this agent's edits. User confirmed separate ongoing work and said to preserve/exclude
+it and focus on maintenance. User expressly says their Android build problem persists,
+despite the supplied external conclusion claiming success; native debug E2E success
+must not be presented as resolving that separate build/signing problem. .gitattributes
+also remains unrelated/untracked. No unrelated edits reverted or included in a commit.
+
+Final backup 20261028-020925 verified 265/265, 40.8 MB (0); final process/backup metadata postdates keeper. Final audit found initial headless test Edge 42972 (started 01:23) survived runner cleanup; exact headless test-profile command verified and its process tree stopped. Sandbox preview 36320 was not host-reachable; replaced by host preview PID 7816 / exec session 19934 on 127.0.0.1:5233, HTTP 200. Only 5233 remains listening; test ports 5173/5183/9224/9225/9333 closed. Built preview intentionally left running for hand-test.
+No user hand-test claimed; active claim retained and finishing workflow (commit/push/
+backup pruning) not triggered while that gate is pending. Final backup recorded in state.
+
+## 2026-10-28 — Maintenance hand-test accepted; finishing (Codex)
+
+User confirmed the web build retains glow. All required gates and hand-test are complete; standing finishing workflow triggered. Intended six files reviewed; unrelated Android gradlew.bat/settings.gradle edits and untracked .gitattributes remain excluded. Built preview remains intentionally available on 127.0.0.1:5233. Final verified backup, commit/push verification and audited pruning follow; no new application changes after acceptance.

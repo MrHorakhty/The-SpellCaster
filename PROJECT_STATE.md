@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-28 01:14)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-28 01:21 — working on: repair missing Git object and new-sound glow persistence
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -78,6 +78,38 @@ Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
 helpers moved to matching paths; `Run Android.bat:48`; `e2e/e2e-android.ps1:32`.
 Old source-package paths are ignored against revival. Historical old-ID references stay in session history.
 
+## Maintenance — verified; finishing in progress
+
+- Git integrity repaired by refetching `origin/mobile-support` objects: historical blob
+  `3d1fcf151b7e70470a24f58c83cd6d6b42a64182` (old e2e-full.ps1) restored exactly.
+  Final `git fsck --full --no-dangling` exit 0; rev-list traverses 1538 objects. No history rewrite.
+- New sounds now retain `glowEnabled`/`glowProminence` in `src/App.jsx:2317`.
+  Numeric zero remains zero in glow rendering (:691) and editor hydration (:2216).
+  Shared `e2e/specs/soundintogroup.mjs:80` onward adds H3–H8; registered and linked
+  to the existing Card indicators feature. No new persisted keys or dependencies.
+- Web E2E setup `e2e/e2e-full.mjs:76` bypasses network cache only for the isolated web
+  session after CDP captured `net::ERR_CACHE_READ_FAILURE` on bundled MP3 HTTP 206.
+  Assertions retained; native behavior unchanged. Earlier failed attempts and diagnosis
+  are archived in session history. Final web 296 PASS/0 FAIL/0 WARN (suite/wrapper 0),
+  Windows 313/0/3 (1), Android 303/0/3 (suite/script 1; parent capture hung after child exit).
+  Logs: e2e-run-20261028-020137.log, e2e-run-20261028-013701.log,
+  e2e-android-20261028-014424.log under normal Windows Temp/opencode.
+- Lint 0 errors/3 baseline warnings (0); build PASS (0); coverage 42 suites/428 IDs,
+  26 shipped features covered (0). Node checks: 46/46, 32/32, 20/20, keys OK,
+  46/46, 32/32, 35/35, 19/19 (each 0). Intended-file diff whitespace check passes.
+  Windows original uploads restored (zero files), six keys verified after restart;
+  Android original 30 keys restored/verified. Runner emulator/forward cleanup completed.
+  Temporary parent launcher 42912 was stopped after native children exited and ports closed. Final audit identified initial headless test Edge 42972 (started 01:23) still alive after runner cleanup; exact test-profile command verified and its tree stopped. Sandbox preview 36320 replaced by host preview; only 5233 listens, no 5173/5183/9224/9225/9333 listeners.
+- Pre-change backup 20261028-012115: VERIFY OK 265/265, 40.8 MB (0).
+  Final backup 20261028-020925: VERIFY OK 265/265, 40.8 MB (0). Final process/backup metadata notes postdate it. Built web preview intentionally running on 127.0.0.1:5233
+  (PID 7816, exec session 19934, HTTP 200 from host) for manual testing. User confirmed the web build retains glow on 2026-10-28 at this finishing turn.
+  Subject and hand-test complete. Finishing workflow now authorized by standing instructions: intended-file commit/push/remote verification, then audited backup pruning.
+- Preserve/exclude unrelated `.gitattributes` and user-confirmed concurrent edits to
+  Android `gradlew.bat` / `settings.gradle` (ANDROID_PREFS_ROOT handling). Native E2E ran
+  with those edits present. User explicitly says their separate Android build problem
+  STILL EXISTS despite a supplied report claiming resolution; do not claim it fixed or
+  pursue that subject here. Android edits under gen remain outside project backups.
+
 ## Open items
 
 No export/import defect remains open from the fade work: the user confirmed export and re-import work on
@@ -86,8 +118,6 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Priority | Work | Status / constraint |
 |---|---|---|
 | 1 | [Hotkeys](HOTKEYS_SPEC.md) | Planned, **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
-| Repository health | Missing historical local Git blob | `git rev-list --objects origin/mobile-support` fails on `3d1fcf151b7e70470a24f58c83cd6d6b42a64182`; host-side cat-file confirms it is missing locally. Current commit archives and coverage validate, and push is verified. Audit/repair historical objects separately; no history was rewritten. Backup pruning did not rely on the missing history: every differing older version was preserved. |
-| Separate defect | New-sound glow persistence | Earlier investigation remains valid: `addSound` at `src/App.jsx:2297` omits `glowEnabled` and `glowProminence` from its explicit save allowlist, although the editor carries them. Verified from source during cleanup; not fixed or newly exercised in the UI. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
@@ -101,6 +131,9 @@ older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
 
 ## Repository and working tree
+
+- Current maintenance is verified and being committed: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. User-owned Android build edits and .gitattributes excluded.
+
 
 - Branch `mobile-support`; previous identity/sync work through `02ae174` is pushed.
   Completed changes: Gradle error propagation fix, guarded root release launcher,
@@ -116,6 +149,9 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
   existing Build/Run Android scripts remain available. No Studio reset or lock deletion.
 
 ## Finishing status
+
+Current maintenance: all automated gates pass and user confirmed glow retention in the web build. Commit/push/backup audit in progress; claim retained through final housekeeping. Previous Android release finishing result follows.
+
 
 Local signing/build subject is complete: user generated a signed APK; package and v2
 signature verified. Actual certificate registration is **In review** externally in Play

@@ -70,6 +70,14 @@ const PNG = join(dirname(fileURLToPath(import.meta.url)), '_e2e_pixel.png');
 
 async function main() {
   const { cdp, cdpInput, evalJs, close } = await connect({ port: DEBUG_PORT, label: LABEL, fatalExit: 3 });
+  if (!EXPECT_TAURI) {
+    // Headless Edge returned ERR_CACHE_READ_FAILURE for bundled MP3 ranges,
+    // leaving metadata/playback at readyState 0. Page.reload(ignoreCache) alone
+    // does not prevent this. Fetch media from the local preview server for this
+    // isolated test session; keep every decode/fade assertion intact.
+    await cdp('Network.enable');
+    await cdp('Network.setCacheDisabled', { cacheDisabled: true });
+  }
   const driver = makeDriver({ platform: 'desktop', cdp, cdpInput, evalJs, sleep });
 
   // Every navigation goes through here. A page load wipes ALL window helpers,

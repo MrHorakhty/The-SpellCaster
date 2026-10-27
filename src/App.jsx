@@ -688,8 +688,8 @@ const getGlowEffectStyle = (sound) => {
         return {}
     }
 
-    const intensity = (sound.glowProminence || 0.5) * 0.5 + 0.1
-    const spread = (sound.glowProminence || 0.5) * 10 + 5
+    const intensity = (sound.glowProminence ?? 0.5) * 0.5 + 0.1
+    const spread = (sound.glowProminence ?? 0.5) * 10 + 5
     const glowColor = /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(sound.color || '') ? sound.color : '#84cc16'
 
     return {
@@ -2213,7 +2213,7 @@ function AppBoard() {
             brightness: sound.brightness || 1,
             loop: loopValue,
             glowEnabled: sound.glowEnabled || false,
-            glowProminence: sound.glowProminence || 0.5,
+            glowProminence: sound.glowProminence ?? 0.5,
             volume: normalizeSoundVolume(sound.volume)
         })
         setEditingSound(sound)
@@ -2314,6 +2314,8 @@ function AppBoard() {
             randomPlay: newSoundData.randomPlay || false,
             color: newSoundData.color,
             brightness: newSoundData.brightness || 1,
+            glowEnabled: newSoundData.glowEnabled ?? false,
+            glowProminence: newSoundData.glowProminence ?? 0.5,
             loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups'),
             // This object literal is an explicit allowlist: a field missing here is
             // dropped for every newly created sound, while edits survive it because
