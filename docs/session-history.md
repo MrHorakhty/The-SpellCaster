@@ -9777,3 +9777,14 @@ No runtime gates repeated for a UI-model refresh/docs-only follow-up; previous p
 results remain valid. Final backup …-20261027-233645: VERIFY OK 255/255, 40.7 MB, exit 0.
 Claim released after user confirmed resolution. Unrelated .gitattributes preserved.
 Docs-only finishing commit/push and audit of the one older backup follow.
+
+Studio sync finishing: docs commit 9c2dfcf19a79643c6fb765247a540da8d36b7de8 pushed to
+origin/mobile-support; remote SHA verified. Audited previous keeper …-232800 against
+Git-tracked paths union working tree (including untracked); no backup-only paths.
+Preserved two differing doc versions in %LOCALAPPDATA%/opencode/backup-prune-history/
+preserved-before-prune-9c2dfcf-20261027-studio.zip; all entries verified, SHA256
+ef38d09d5b5354f8211391dbb90acd9a57d0910804fb95e4dd75d3df1804c111.
+Removed one older backup. Sole remaining keeper …-233645: 255 files, 40.7 MB; all
+keeper hashes rechecked. Adjacent audit/result JSONs retain complete inventories.
+No extra backup for housekeeping notes; only unrelated .gitattributes remains untracked.
+Claim released; final housekeeping docs commit follows.

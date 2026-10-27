@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:37)
+🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:38)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -77,10 +77,10 @@ Android restored and verified six localStorage keys. Runners stopped their app/d
 and removed owned CDP/ADB mappings. No app permission scope was widened.
 
 Initial failures and the environment diagnosis are archived in docs/session-history.md.
-Final backup verified: …-20261027-232800 (252/252, 40.7 MB). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Implementation commit `6805cef` pushed to origin/mobile-support and remote SHA verified.
+Final backup verified: …-20261027-233645 (255/255, 40.7 MB; Studio-sync follow-up). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Implementation commit `6805cef` pushed to origin/mobile-support and remote SHA verified.
 Four older backups were audited and removed only after preserving 38 differing file versions as
 19 unique contents in a hash-verified recovery ZIP. No backup-only path was found. Exactly one backup
-remains: …-20261027-232800; all 252 keeper hashes were rechecked. Only unrelated .gitattributes remains untracked.
+remains: …-20261027-233645; all 255 keeper hashes were rechecked after the Studio-sync follow-up. Only unrelated .gitattributes remains untracked.
 Final bookkeeping is recorded in a following docs commit; no additional backup created for these notes.
 
 ## Project and code map
@@ -329,7 +329,11 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-233645`, 255/255 files, 40.7 MB, VERIFY OK (exit 0).** Android Studio sync follow-up backup includes prior audit logs. Previous keeper …-232800 awaits post-push audit/pruning. Final housekeeping notes postdate the keeper.
+- **Keeper: `…-20261027-233645`, 255/255 files, 40.7 MB, VERIFY OK (exit 0).** Android Studio sync follow-up backup includes prior audit logs. Previous keeper …-232800 removed only after verified docs push and content audit; two differing docs preserved in a hash-verified ZIP. Exactly one backup remains, all 255 hashes rechecked. Final housekeeping notes postdate the keeper.
+- **Studio-sync recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-9c2dfcf-20261027-studio.zip`,
+  two differing doc versions, all ZIP entries verified; SHA256
+  `ef38d09d5b5354f8211391dbb90acd9a57d0910804fb95e4dd75d3df1804c111`.
+  Docs commit `9c2dfcf` was pushed/remote-verified before removing one older backup.
 - **Rename recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-6805cef-20261027.zip`.
   38 older versions / 19 distinct contents; all ZIP entries round-trip/hash verified.
   SHA256 `33983ee80b948c818da517c2e36e9d3ba81a119433aeebe9a058db7898e00d1e`.
