@@ -368,3 +368,6 @@ SOUND_PRIMING_SPEC.md
 
 # Icon preparation shipped and user accepted 2026-10-27; full final design in docs/session-history.md.
 ICON_PREP_SPEC.md
+
+# Personal image pipeline and research assets retired from this app at user request (2026-10-27).
+/scripts/

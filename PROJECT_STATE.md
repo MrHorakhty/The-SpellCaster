@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-27 21:16)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 21:59 — working on: remove user-retired scripts folder; verify spec archive; finish cleanup
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -38,41 +38,38 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Branch `mobile-support`. Completed fix/handover commit **`8eda985`** was pushed and independently
-  verified on `origin/mobile-support`. Final finishing records are committed separately; use `git log`
-  for the latest bookkeeping commit rather than treating an embedded hash as the current HEAD.
+- Branch `mobile-support`; accepted icon feature `4b37c6c` and handover `177856f` are pushed/verified. Current follow-up removes the user-retired personal scripts folder; its cleanup commit is being finalized.
 - Fix, regression tests, state consolidation and permanent finishing instructions are committed.
   Icon preparation and refinements are user accepted (2026-10-27); its spec is archived/retired and the manifest spec reference is null.
-- **Committed icon work**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes` and `scripts/`; preserve/exclude them from the feature commit.
+- **Committed icon work**: App integration, processing/dialog modules, Node/shared tests, two small examples, docs/coverage wiring and spec retirement. **Unrelated untracked work**: `.gitattributes`; preserve/exclude it from commits. The personal pipeline is now retired from this repository at user request.
   No unrelated changes were discarded.
 - `.gitattributes` contains only `*.bat text eol=crlf`, user-authorized but still untracked.
   It overrides `core.autocrlf` locally; other clones get no protection until it is committed.
   Existing committed BAT blobs are LF, so this rule did not need renormalization.
   Do not broaden to `* text=auto` casually or claim that “LF breaks goto” is a proven universal mechanism.
-- `scripts/` currently contains **18 untracked files / 23,438,950 bytes**: the Image Pipeline, two
-  original example images, and `output/` (13 files, including measurement reports and five preserved samples).
-  This on-disk inventory supersedes older claims that every preserved sample was deleted. The complete
-  51-image corpus is not here; re-running its full measurements needs the originals. Keep these files in
-  the verified project backup; do not commit them accidentally. Downscale future in-app example assets
-  to 256 px before committing them. The working batch pipeline is not retired.
+- Personal `scripts/` folder removed at the user's explicit request on 2026-10-27. They retain their pipeline
+  separately and confirmed an external backup. It was not a runtime/build/test dependency. The 18 removed files
+  (23,438,950 bytes) matched verified backup …-20261027-215950 by SHA256 before deletion; research/examples
+  will be preserved outside the repository during the finishing backup audit. `/scripts/` is ignored against revival.
+  The two small committed examples under public/assets/icon-prep/ remain part of the app.
 - The user's preferred local launch is the root BAT files. No standalone EXE was requested or built for the fix.
   Do not make an installer merely to enable a hand-test.
 
 ## Finishing status
 
-Icon preparation and its crop/performance refinements are **user accepted and complete (2026-10-27)**.
-Feature commit **4b37c6cdb2c44c625c8319f23d43f6128790f3c4** is pushed to **origin/mobile-support**,
-independently verified with ls-remote before pruning. Final housekeeping is recorded by a following docs commit;
-use git log for the latest branch head rather than treating an embedded hash as HEAD.
-App/test/assets match the tested snapshot in **126/126 SHA256 comparisons**. Only docs, ignore rules and
-registry metadata changed during finishing; coverage/whitespace checks passed again. No new runtime runs are implied.
+Icon preparation is accepted/shipped; ICON_PREP_SPEC.md is already retired/ignored, final design fully archived,
+and the feature manifest spec is null. No app-facing design knowledge remains to migrate from that file.
+The user separately retired the untracked /scripts/ folder from this app and confirmed an external pipeline backup.
+It is now absent; all 18 files / 23,438,950 bytes were verified against the pre-delete backup before removal.
+Exact research/tool contents will be preserved outside the project before older project backups are pruned.
+Only .gitattributes remains unrelated/untracked. No process was stopped to perform deletion.
 
-Final accepted backup **…-20261027-210819**, 260/260 files, 63 MB, verified. **7 older folders removed;
-exactly 1 remains**, rechecked against the full pre-prune SHA256 inventory. Distinct older contents are protected
-by the recovery ZIP listed below; no unique older file content was discarded. Only final bookkeeping postdates the keeper.
-Unrelated untracked `.gitattributes` and `scripts/` remain intentionally outside the feature commit and are in the backup.
-No Windows app/emulator/test runner is running. Vite **39292 / 0.0.0.0:5173** and Android Studio script
-**39288 / --target armv7** were observed and left untouched; they may belong to the user's mobile build.
+Cleanup verification: app/test/shipped assets unchanged in **127/127 SHA256 comparisons** (including the manifest).
+Fresh lint **0 errors / 3 baseline warnings**, build PASS, coverage **42 suites / 422 IDs; no gaps**, all exit 0.
+All seven Node checks passed: **46/46, 32/32, 20/20, profile keys OK, 46/46, 32/32, 35/35**, each exit 0.
+Full E2E was not repeated for untracked personal-tool deletion and docs/ignore edits; the unchanged app's latest
+results remain web **290/0/0 (0)**, Windows **307/0/3 (1)**, Android **297/0/3 (1)**, with native baseline warnings.
+No new app hand-test is required for this cleanup. Claim retained until final backup, push and audited pruning finish.
 
 ## Project and code map
 
@@ -143,8 +140,7 @@ There is no account, server or automatic cloud sync.
   Desktop synthetic segmentation median 45.87 → 6.38 ms (7.19×), 17 masks unchanged; no phone multiplier promised.
 - Code: src/iconPrep.js:71 (segmentation), :130 (decode cache), :152 (crop drawing), :161 (wrapper);
   src/IconPrepDialog.jsx:4; App.jsx:3115 (confirm) / :3169 (strict storage). ICON IP0–28 and iconPrep 35/35 cover it.
-- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; scripts/Image Pipeline/ remains
-  a working batch tool. Group-nested tint/load coverage remains a pre-existing gap. Existing-icon editing, gradient
+- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; the user retains the batch pipeline as a separate personal tool; the former scripts/ copy is removed. Group-nested tint/load coverage remains a pre-existing gap. Existing-icon editing, gradient
   removal, classifiers, algorithm-tuning controls and bulk conversion remain outside this feature.
 - Complete design and measurements: docs/session-history.md, “Accepted icon preparation: final design archive”.
   ICON_PREP_SPEC.md is retired and ignored; do not resurrect it. Coverage manifest spec is null.
@@ -249,12 +245,11 @@ There is no account, server or automatic cloud sync.
 
 ## Verification gates
 
-Commands and reporting rules live in [AGENTS.md](AGENTS.md). These are the **crop-feedback refinement**
-results for 2026-10-27; earlier complete results are archived in session history and do not validate this revision.
+Commands and reporting rules live in [AGENTS.md](AGENTS.md). These include fresh pure/build checks for personal-tool cleanup and the latest full crop-refinement E2E results (unchanged app).
 
 | Gate | Current refinement result | Exit |
 |---|---|---|
-| Final accepted backup | `…-20261027-210819`, VERIFY OK 260/260, 63 MB; source count fell by one because the archived spec was retired | 0 |
+| Final cleanup backup | `…-20261027-220512`, VERIFY OK 242/242, 40.7 MB; pre-delete backup also verified | 0 |
 | Lint | 0 errors / 3 accepted warnings | 0 |
 | Build | Success; existing ineffective-dynamic-import warning | 0 |
 | Coverage | 42 suites / 422 registered IDs; 26/26 implemented features covered; one planned, no gaps | 0 |
@@ -316,7 +311,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-210819`, 260/260 files, 63 MB, VERIFY OK, exit 0.** Pushed/accepted source, tests, assets and design archive. Seven older folders removed after remote verification; exactly one remains and all keeper hashes were rechecked. Only final bookkeeping postdates it.
+- **Newest verified backup: `…-20261027-220512`, 242/242 files, 40.7 MB, VERIFY OK, exit 0.** Excludes the user-retired personal scripts folder. Pre-delete copies remain protected until their contents are preserved during the pending audit/prune. Only finishing bookkeeping postdates this backup.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
@@ -369,6 +364,7 @@ Detailed designs, decisions and inventories are preserved in session history and
 | `ICON_PREP_SPEC.md` | User accepted 2026-10-27; complete final design archived in session history; modules/tests own the shipped behavior. |
 | `RESTORE_DEFAULTS_SPEC.md`, `ICON_FEATURE_SPEC.md` | Shipped starter-merge and icon behavior; implementation/history retain design. |
 | `TESTING_REPORT.md`, `TESTING_REPORT_FOLLOWUP.md`, `EDGE_TO_EDGE_REPORT.md` | Resolved audit records in git/history. |
+| Personal `/scripts/` folder | Removed at user request 2026-10-27; app has no dependency. User keeps pipeline elsewhere; measurements/design in session history and verified recovery archive. |
 | Untracked `scripts/Sound Normalizer/` | Deleted at user's request; playback volume trim supplies the wanted behavior. Do not resurrect a duplicate loudness key/feature without a new design. User retained source copies. |
 
 The claim on line 3 is cooperative, not a mutex. Re-read before every write, never silently take another agent's
