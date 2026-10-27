@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-28 01:21 — working on: repair missing Git object and new-sound glow persistence
+🔓 UNCLAIMED — last holder: Codex (2026-10-28 02:25)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -78,11 +78,11 @@ Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
 helpers moved to matching paths; `Run Android.bat:48`; `e2e/e2e-android.ps1:32`.
 Old source-package paths are ignored against revival. Historical old-ID references stay in session history.
 
-## Maintenance — verified; finishing in progress
+## Maintenance — complete and user accepted
 
 - Git integrity repaired by refetching `origin/mobile-support` objects: historical blob
   `3d1fcf151b7e70470a24f58c83cd6d6b42a64182` (old e2e-full.ps1) restored exactly.
-  Final `git fsck --full --no-dangling` exit 0; rev-list traverses 1538 objects. No history rewrite.
+  Repair verification: `git fsck --full --no-dangling` exit 0; rev-list traversed 1538 objects. No history rewrite.
 - New sounds now retain `glowEnabled`/`glowProminence` in `src/App.jsx:2317`.
   Numeric zero remains zero in glow rendering (:691) and editor hydration (:2216).
   Shared `e2e/specs/soundintogroup.mjs:80` onward adds H3–H8; registered and linked
@@ -101,9 +101,9 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   Android original 30 keys restored/verified. Runner emulator/forward cleanup completed.
   Temporary parent launcher 42912 was stopped after native children exited and ports closed. Final audit identified initial headless test Edge 42972 (started 01:23) still alive after runner cleanup; exact test-profile command verified and its tree stopped. Sandbox preview 36320 replaced by host preview; only 5233 listens, no 5173/5183/9224/9225/9333 listeners.
 - Pre-change backup 20261028-012115: VERIFY OK 265/265, 40.8 MB (0).
-  Final backup 20261028-020925: VERIFY OK 265/265, 40.8 MB (0). Final process/backup metadata notes postdate it. Built web preview intentionally running on 127.0.0.1:5233
+  Keeper backup 20261028-022427: VERIFY OK 265/265, 40.8 MB (0), all 265 hashes rechecked after pruning. Earlier 020925 backup was verified then audited/pruned. Final housekeeping metadata postdates keeper. Built web preview intentionally running on 127.0.0.1:5233
   (PID 7816, exec session 19934, HTTP 200 from host) for manual testing. User confirmed the web build retains glow on 2026-10-28 at this finishing turn.
-  Subject and hand-test complete. Finishing workflow now authorized by standing instructions: intended-file commit/push/remote verification, then audited backup pruning.
+  Subject and hand-test complete. Implementation ba2c64adf087ede47dabe05f19c1fe5bb484af29 pushed to origin/mobile-support and remote SHA verified. Three older backups audited/pruned after preserving 14 differing versions as 10 unique contents; zero backup-only paths. Sole keeper 20261028-022427 reverified. Recovery ZIP and audit/result manifests: %LOCALAPPDATA%/opencode/backup-prune-history/*ba2c64a-20261028-maintenance*. Final bookkeeping follows in a docs commit.
 - Preserve/exclude unrelated `.gitattributes` and user-confirmed concurrent edits to
   Android `gradlew.bat` / `settings.gradle` (ANDROID_PREFS_ROOT handling). Native E2E ran
   with those edits present. User explicitly says their separate Android build problem
@@ -132,7 +132,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Current maintenance is verified and being committed: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. User-owned Android build edits and .gitattributes excluded.
+- Current maintenance implementation ba2c64a is pushed and remote-verified: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. Final housekeeping is a following docs commit; use git log for latest HEAD. User-owned Android build edits and .gitattributes excluded.
 
 
 - Branch `mobile-support`; previous identity/sync work through `02ae174` is pushed.
@@ -150,7 +150,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Finishing status
 
-Current maintenance: all automated gates pass and user confirmed glow retention in the web build. Commit/push/backup audit in progress; claim retained through final housekeeping. Previous Android release finishing result follows.
+Current maintenance complete: all automated gates pass and user confirmed glow retention in the web build. Implementation ba2c64a pushed/remote-verified. Three older backups audited/pruned, keeper 20261028-022427 (265 files, 40.8 MB). Unrelated Android edits/.gitattributes remain; preview stays on 5233. Claim released. Previous Android release finishing result follows.
 
 
 Local signing/build subject is complete: user generated a signed APK; package and v2
