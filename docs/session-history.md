@@ -9745,3 +9745,18 @@ Gradle helper contents unchanged. AGENTS activity description corrected: Rust pl
 Unrelated .gitattributes remains untracked/excluded. Finishing workflow follows below.
 
 Final full backup …-20261027-232800 verified 252/252 files, 40.7 MB, exit 0; includes diagnostic logs. Final port/process/ADB-forward audit clean. Subject claim released after successful gates, then reclaimed solely for finishing housekeeping notes. Final notes postdate keeper; no new backup solely for pruning notes.
+
+Finishing completed: implementation commit 6805cef49d900c1e4b226ba4073c7e9a1af63afe
+pushed to origin/mobile-support and git ls-remote matched exactly before pruning.
+Audit compared every older backup file with Git-tracked paths union working tree,
+including untracked files; no backup-only path. Preserved 38 differing versions as
+19 unique contents in %LOCALAPPDATA%/opencode/backup-prune-history/
+preserved-before-prune-6805cef-20261027.zip, all entries round-trip/hash verified.
+ZIP SHA256 33983ee80b948c818da517c2e36e9d3ba81a119433aeebe9a058db7898e00d1e.
+Adjacent audit-before-prune-6805cef-20261027.json and prune-result-6805cef-20261027.json
+retain exact per-file inventories and final verification. Rechecked each resolved
+backup folder and its inventory before deletion. Four older folders removed; only
+ttrpg-soundboard-backup-20261027-232800 remains, all 252 hashes rechecked.
+Keeper is 40.7 MB; final bookkeeping notes postdate it. No extra backup for prune notes.
+Claim released. Only pre-existing unrelated .gitattributes remains untracked. A following
+docs commit records these final facts and is pushed/remote-verified separately.

@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 23:28 — working on: finishing commit push and audited backup pruning
+🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:31)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -52,7 +52,8 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 ## Repository and working tree
 
 - Branch `mobile-support`. Identifier rename and authorized verification fixes are complete;
-  finishing commit/push/backup audit is in progress. See git log and finishing notes for final hashes.
+  implementation commit `6805cef49d900c1e4b226ba4073c7e9a1af63afe` is pushed and remote-verified.
+  A following docs commit records finishing housekeeping; use git log for latest HEAD.
 - Intended changes: Tauri/Android identity and three source moves, Android launcher/package lookup,
   loopback + temporary ADB reverse for Android E2E, explicit empty/absent upload snapshots with
   19 regression assertions, icon pixel-read diagnostics, docs/retired-path guards.
@@ -72,7 +73,11 @@ Android restored and verified six localStorage keys. Runners stopped their app/d
 and removed owned CDP/ADB mappings. No app permission scope was widened.
 
 Initial failures and the environment diagnosis are archived in docs/session-history.md.
-Final backup verified: …-20261027-232800 (252/252, 40.7 MB). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Commit/push verification and older-backup audit remain as finishing housekeeping.
+Final backup verified: …-20261027-232800 (252/252, 40.7 MB). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Implementation commit `6805cef` pushed to origin/mobile-support and remote SHA verified.
+Four older backups were audited and removed only after preserving 38 differing file versions as
+19 unique contents in a hash-verified recovery ZIP. No backup-only path was found. Exactly one backup
+remains: …-20261027-232800; all 252 keeper hashes were rechecked. Only unrelated .gitattributes remains untracked.
+Final bookkeeping is recorded in a following docs commit; no additional backup created for these notes.
 
 ## Project and code map
 
@@ -320,7 +325,12 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-232800`, 252/252 files, 40.7 MB, VERIFY OK (exit 0).** Four older backups await post-push content audit/pruning. Final housekeeping notes postdate the keeper.
+- **Keeper: `…-20261027-232800`, 252/252 files, 40.7 MB, VERIFY OK (exit 0).** Four older backups removed after verified push and complete content audit; exactly one remains, all 252 hashes rechecked. Final housekeeping notes postdate the keeper.
+- **Rename recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-6805cef-20261027.zip`.
+  38 older versions / 19 distinct contents; all ZIP entries round-trip/hash verified.
+  SHA256 `33983ee80b948c818da517c2e36e9d3ba81a119433aeebe9a058db7898e00d1e`.
+  Adjacent `audit-before-prune-6805cef-20261027.json` and `prune-result-6805cef-20261027.json`
+  retain inventories, Git/working-tree membership, remote SHA and final folder inventory. Keep this archive.
 - Use **`backup-project.ps1`**, never bare robocopy. It copies + verifies + repairs, prints exclusions/counts,
   and enforces the 150 MB ceiling. Run before code edits and at completion; full rules are in AGENTS.
 - Includes source/docs/tests and `public/assets`; excludes node_modules, dist, .git, target and gen.
