@@ -141,12 +141,13 @@ Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emu
    ```bash
    npm run tauri android init   # only needed if src-tauri/gen/android is missing
    ```
-   The generated project lives in `src-tauri/gen/android/`. On Windows use the two helpers in the **project root**:
+   The generated project lives in `src-tauri/gen/android/`. On Windows use the helpers in the **project root**:
 
    | Script | What it does |
    |---|---|
    | **`Build Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
    | **`Run Android.bat`** | **Opens the app that is already installed** — no build, no reinstall. If nothing is serving port 5173 it **starts a Vite dev server itself**, because a debug build carries no UI of its own; it prints the PID and the `taskkill` to stop it. Fails clearly if no emulator or device is attached. |
+   | **`Open Android Release.bat`** | Prepares release APK/AAB files and opens Android Studio through Tauri for signing. Requires Studio to be fully closed first. Keep its console open throughout signing. `--check` checks prerequisites without launching Studio. |
 
    Or use the **Run App** configuration in Android Studio.
 
@@ -177,6 +178,19 @@ npm run tauri build
 npm run tauri android build
 ```
 The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk` to produce a directly installable APK, or use `--aab` for a Play Store bundle.
+
+For Android Studio's **Generate Signed App Bundle or APK** wizard on Windows, close
+Studio and double-click **`Open Android Release.bat`** from the project root. Wait for
+Studio to open itself and keep the launcher console running. An already-open IDE
+does not inherit the new process's Android linker environment. The Gradle helper
+preserves real npm/Tauri failures instead of hiding them behind a missing `npm.bat`.
+The wizard's signed universal APK output under `src-tauri/gen/android/app/universal/`
+is ignored by Git and remains on disk.
+
+Developer-verification registration checks the package and signing certificate.
+A package-only AAB status does not establish that a local APK's certificate is
+registered. Register the actual APK certificate when needed; creating another key
+does not register it. See [Google's additional-key instructions](https://support.google.com/googleplay/android-developer/answer/16762301).
 
 ## Project Structure
 

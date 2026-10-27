@@ -376,3 +376,6 @@ ICON_PREP_SPEC.md
 # Keep stale hand-maintained sources from returning under the old package.
 /src-tauri/gen/android/app/src/main/java/com/mrhorakhty/
 /src-tauri/gen/android/buildSrc/src/main/java/com/mrhorakhty/
+
+# Android Studio's signed universal release output (not source).
+/src-tauri/gen/android/app/universal/

@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-27 23:38)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-27 23:40 — working on: investigate signed AAB/APK build failure and registration status
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,6 +14,53 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
+## Android release workflow
+
+Signed APK generation succeeds. APK package `com.thespellcaster.mrhorakhty` and v2
+signature verified by aapt2/apksigner (exit 0), file `app/universal/release/app-universal-release.apk`.
+User added its actual signing certificate to the registered package; Google Play Console
+reports **In review**. No further key/account action by this agent is pending; do not
+change keys to make an existing APK match a different certificate. APK certificate:
+`6E:E2:C6:2B:43:4B:A6:A6:A1:D6:63:A0:60:D4:A1:56:49:41:26:A2:5D:CF:55:48:0A:78:3E:D2:0C:3C:F3:C8`.
+AAB package-only status and APK certificate-aware registration are different checks.
+No private keys/passwords were read, changed or uploaded by the agent.
+
+`Open Android Release.bat` (CRLF, root) refuses an existing Studio (host --check exit 2)
+and refuses an unsuccessful process check (sandbox --check exit 4). It prepares release
+APK/AAB and opens Studio through Tauri; leave its console open through signing.
+Do not repeatedly auto-launch Studio from Codex or reset settings/delete IDE locks.
+The observed DirectoryLock/CannotActivate error did NOT prove a hung IDE: PID 27324
+was responding normally; an additional instance failed to activate it. Healthy Studio
+was preserved; agent-owned companions were stopped. Computer Use was user-stopped.
+
+`BuildTask.kt:20` prefers npm.cmd on Windows, retries failures to START only, and
+propagates nonzero exits outside fallback handling. Previously a real CLI/linker error
+was hidden by a later missing npm.bat. Verified helper compile and real failed Gradle
+handoff preserved linker cc-not-found; full CLI release builds succeeded for four ABIs.
+No application UI/playback/permission code changed. User confirmed signed generation;
+launcher guards checked, but no claim of an additional launcher hand-test.
+
+Finishing explicitly requested. Verified changes: helper, launcher, README, release-output
+ignore rule, state/history; unrelated .gitattributes excluded. Signed APK/artifacts remain
+on disk, ignored against accidental commit. No signing session/test-port listeners at
+fresh gate dispatch. Pre-finish backup …-20261028-004605: VERIFY OK 260/260, 40.8 MB (0).
+Fresh lint 0 errors/3 accepted warnings (0), build PASS (0), coverage OK (0);
+eight Node checks 46/46, 32/32, 20/20, keys OK, 46/46, 32/32, 35/35, 19/19 (each 0).
+Fresh full gates completed in order via existing Explorer desktop outside Codex MSIX virtualization:
+Web **290/0/0** (0), Windows **307/0/3** (1), Android **297/0/3** (1).
+Logs: e2e-run-20261028-004702.log, e2e-run-20261028-005309.log,
+e2e-android-20261028-010009.log. Windows uploads restored (zero original files), six
+localStorage keys restart-verified; Android restored/verified 30 keys. Expected native
+WARNs retain their assertions; no failures. Runner-owned app/emulator/forwards cleaned up.
+Process/port audit and helper-recovery SHA check clean. Studio is user-owned and untouched.
+Focused real-Gradle regression PASS: invalid target produced expected Gradle exit 1,
+original CLI error preserved without npm.bat fallback. Initial scratch probe applied to
+buildSrc incorrectly; corrected before successful verification; temporary init removed.
+No new test IDs; coverage manifest/code wiring remains OK. No app UI/playback/permission
+change, so no new app-feature hand-test was required. User signed-generation confirmation
+and APK signature verification are the relevant manual result.
+Final backup …-20261028-011044 verified 265/265 files, 40.8 MB (exit 0). Final metadata notes postdate keeper. Studio PID 7948 remains responding and untouched. Intended commit/push verification and audited older-backup pruning follow.
+
 ## Application identity
 
 Application ID is `com.thespellcaster.mrhorakhty`; Android debug adds `.debug`.
@@ -23,7 +70,7 @@ Web localStorage remains under its browser origin; user confirmed it is intact.
 User manually verified the renamed app opens and plays correctly on 2026-10-27.
 Android Studio was resynced with Gradle on 2026-10-27; Modules → app → Default Config
 visibly shows the new ID. User confirmed the delayed sync resolved their signed AAB/APK concern.
-Existing universalRelease output metadata still has the old ID: generate a fresh release before signing/distribution.
+Fresh release APK/AAB use the new ID; user signed APK verified. Actual certificate registration is in Google review.
 Debug output metadata has the new .debug ID. No app code/config changes were needed for Studio sync.
 
 Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
@@ -43,7 +90,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Separate defect | New-sound glow persistence | Earlier investigation remains valid: `addSound` at `src/App.jsx:2297` omits `glowEnabled` and `glowProminence` from its explicit save allowlist, although the editor carries them. Verified from source during cleanup; not fixed or newly exercised in the UI. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
-| Other deferred work | Signed release APK; wake lock; fullscreen guard; iOS | APK signing needs a keystore; iOS needs macOS. No implementation authorization implied. |
+| Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
 | Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
@@ -55,33 +102,28 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Branch `mobile-support`. Identifier rename and authorized verification fixes are complete;
-  implementation commit `6805cef49d900c1e4b226ba4073c7e9a1af63afe` is pushed and remote-verified.
-  A following docs commit records finishing housekeeping; use git log for latest HEAD.
-- Intended changes: Tauri/Android identity and three source moves, Android launcher/package lookup,
-  loopback + temporary ADB reverse for Android E2E, explicit empty/absent upload snapshots with
-  19 regression assertions, icon pixel-read diagnostics, docs/retired-path guards.
-- **Unrelated untracked `.gitattributes` is preserved and excluded from commits.** It contains only
-  `*.bat text eol=crlf`; other clones get no protection until the user commits it. Existing committed BAT
-  blobs are LF. Do not broaden to `* text=auto` or claim that LF universally breaks goto.
-- Personal `/scripts/` was user-retired, deleted and ignored on 2026-10-27; recovery ZIPs remain below.
-  The two small shipped examples under public/assets/icon-prep/ remain part of the app.
-- User prefers root BAT launch scripts. No installer was requested or made for hand-testing.
+- Branch `mobile-support`; previous identity/sync work through `02ae174` is pushed.
+  Current finishing changes: Gradle error propagation fix, guarded root release launcher,
+  README workflow, signed-output ignore rule, state/history. All applicable gates passed;
+  final backup, intended commit/push and backup audit are in progress.
+- **Unrelated untracked `.gitattributes` is preserved and excluded.** It contains only
+  `*.bat text eol=crlf`; do not sweep it into this commit or broaden it casually.
+- Signed APK `src-tauri/gen/android/app/universal/release/app-universal-release.apk`
+  stays on disk and is now ignored. No keystore, credential or signed artifact is staged.
+- Personal `/scripts/` remains user-retired/ignored; recovery archives below are retained.
+- User prefers root BAT launchers. `Open Android Release.bat` is guarded and CRLF;
+  existing Build/Run Android scripts remain available. No Studio reset or lock deletion.
 
 ## Finishing status
 
-Identifier implementation, native build/install/launch, all gates and user manual launch/playback are complete.
-Web 290/0/0 (exit 0), Windows 307/0/3 (exit 1), Android 297/0/3 (exit 1).
-Windows upload restoration succeeded, and six localStorage keys matched after restart.
-Android restored and verified six localStorage keys. Runners stopped their app/dev processes/emulator
-and removed owned CDP/ADB mappings. No app permission scope was widened.
+Local signing/build subject is complete: user generated a signed APK; package and v2
+signature verified. Actual certificate registration is **In review** externally in Play
+Console, per user report. Do not change keys or claim Google review has completed.
 
-Initial failures and the environment diagnosis are archived in docs/session-history.md.
-Final backup verified: …-20261027-233645 (255/255, 40.7 MB; Studio-sync follow-up). Final port/process audit found no listeners on 5173/5183/9224/9225/5233/9333, app/emulator processes or ADB forwards. Implementation commit `6805cef` pushed to origin/mobile-support and remote SHA verified.
-Four older backups were audited and removed only after preserving 38 differing file versions as
-19 unique contents in a hash-verified recovery ZIP. No backup-only path was found. Exactly one backup
-remains: …-20261027-233645; all 255 keeper hashes were rechecked after the Studio-sync follow-up. Only unrelated .gitattributes remains untracked.
-Final bookkeeping is recorded in a following docs commit; no additional backup created for these notes.
+Fresh gates: lint 0 errors/3 warnings, build/coverage PASS, eight Node checks all pass;
+Web 290/0/0 (0), Windows 307/0/3 (1), Android 297/0/3 (1). Windows disk restoration
+verified six keys; Android restoration verified 30 keys. Tests clean up their own app,
+emulator and mappings; existing Studio is preserved. Final commit/push/prune pending.
 
 ## Project and code map
 
@@ -259,19 +301,19 @@ There is no account, server or automatic cloud sync.
 
 ## Verification gates
 
-Commands and reporting rules live in [AGENTS.md](AGENTS.md). Results below verify the renamed identifier and authorized harness fixes.
+Commands and reporting rules live in [AGENTS.md](AGENTS.md). Results below freshly verify the release-helper/launcher follow-up before the requested finishing workflow.
 
-| Gate | Identifier rename result | Exit |
+| Gate | Release follow-up result | Exit |
 |---|---|---|
-| Final backup | `…-20261027-233645`, VERIFY OK 255/255, 40.7 MB (Studio sync follow-up); final housekeeping notes postdate it | 0 |
+| Final backup | `…-20261028-011044`, VERIFY OK 265/265 files, 40.8 MB; final notes postdate keeper | 0 |
 | Lint | 0 errors / 3 accepted warnings | 0 |
 | Build | Success; existing ineffective-dynamic-import warning | 0 |
 | Coverage | 42 suites / 422 registered IDs; 26/26 implemented features covered; one planned, no gaps | 0 |
 | Node checks | profileBundle 46/46; profileStorage 32/32; bundleGuard 20/20; profile keys OK; fadeMath 46/46; soundFiles 32/32; iconPrep 35/35; snapshotUploads 19/19 | Each 0 |
-| Web E2E | **290 PASS / 0 FAIL / 0 WARN**; `e2e-run-20261027-225248.log` | 0 |
-| Windows E2E | **307 PASS / 0 FAIL / 3 baseline WARN**, restore restart-verified; `e2e-run-20261027-230949.log` | 1 |
-| Android E2E | **297 PASS / 0 FAIL / 3 baseline WARN**; `e2e-android-20261027-231733.log`; 6 keys restored and verified | 1 |
-| User hand-test | **PASS — user confirmed renamed app opens/plays on 2026-10-27; web storage retained** | Accepted |
+| Web E2E | **290 PASS / 0 FAIL / 0 WARN**; `e2e-run-20261028-004702.log` | 0 |
+| Windows E2E | **307 PASS / 0 FAIL / 3 baseline WARN**, restore restart-verified; `e2e-run-20261028-005309.log` | 1 |
+| Android E2E | **297 PASS / 0 FAIL / 3 baseline WARN**; `e2e-android-20261028-010009.log`; 30 keys restored and verified | 1 |
+| User verification | Signed APK generated by user; package/signature verified (apksigner 0). No app UI feature changed; no additional UI hand-test required | PASS |
 
 Focused ICON: **28 PASS / 0 FAIL**, exit 0. IP23–28 cover the reported regressions: slider synchronization,
 stable canvas/dialog dimensions, zero encode/decode during slider gestures, card-size preview/dimmed crop frame,
@@ -329,7 +371,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261027-233645`, 255/255 files, 40.7 MB, VERIFY OK (exit 0).** Android Studio sync follow-up backup includes prior audit logs. Previous keeper …-232800 removed only after verified docs push and content audit; two differing docs preserved in a hash-verified ZIP. Exactly one backup remains, all 255 hashes rechecked. Final housekeeping notes postdate the keeper.
+- **Keeper: `…-20261028-011044`, 265/265 files, 40.8 MB, VERIFY OK (exit 0).** Six older backups await post-push audit/pruning. Final housekeeping notes postdate keeper. Includes helper recovery log; gen itself excluded.
 - **Studio-sync recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-9c2dfcf-20261027-studio.zip`,
   two differing doc versions, all ZIP entries verified; SHA256
   `ef38d09d5b5354f8211391dbb90acd9a57d0910804fb95e4dd75d3df1804c111`.

@@ -9788,3 +9788,92 @@ Removed one older backup. Sole remaining keeper …-233645: 255 files, 40.7 MB; 
 keeper hashes rechecked. Adjacent audit/result JSONs retain complete inventories.
 No extra backup for housekeeping notes; only unrelated .gitattributes remains untracked.
 Claim released; final housekeeping docs commit follows.
+
+## 2026-10-28 — Signed release investigation handover (superseded state)
+
+## Signed Android generation in progress
+
+User now confirms APK generation succeeds. Signed APK verified by apksigner (exit 0; v2 signature valid) at app/universal/release/app-universal-release.apk, 162,514,493 bytes, timestamp 2026-10-28 00:26:53. aapt2 package = com.thespellcaster.mrhorakhty. Registration certificate mismatch remains unresolved; do not run finishing workflow/release claim until remaining authorized work/gates are complete.
+User confirmed package ID is registered in Google Play Console. AAB screenshot checks
+package-only status; APK reports selected key thespellcasterkey0 differs from registered
+certificate. Supplied fingerprint belongs to **App signing key**, confirmed by screenshot:
+3B:CC:B1:A1:41:03:72:82:1E:D9:89:0A:9C:48:4F:EF:BC:3F:81:F0:95:0C:F9:AF:D2:C4:A0:FD:84:4F:C2:C2.
+Actual APK signer SHA256 is 6E:E2:C6:2B:43:4B:A6:A6:A1:D6:63:A0:60:D4:A1:56:49:41:26:A2:5D:CF:55:48:0A:78:3E:D2:0C:3C:F3:C8. User supplied newer Console fingerprint 17:B4:50:2D:EC:96:5C:76:FF:E4:82:0E:ED:AE:B5:73:6A:64:88:BD:0F:68:FC:15:D6:47:45:11:2B:9B:62:8D; it differs from APK signer. User made new keys in Studio and Play Console; making keys did not resolve status. APK builds; remaining message is registration, not a current build error. Local private-key identity for the supplied Console cert is not established. User supplied keystore path privately;
+file is not JKS, so password-free JKS reader refused it without extracting/decrypting
+private-key bytes. No password requested, key/config/account changed or upload performed.
+User considered creating a new key; explained this cannot fix build/linker errors and
+will not match existing registration without a registration update.
+
+BuildTask.kt at the new buildSrc path now tries npm.cmd first on Windows, retries only
+failures to start, and propagates a started process's nonzero exit outside fallback.
+This fixes original misleading npm.bat CreateProcess error masking the actual failure.
+Actual Gradle :app:rustBuildX86Release compiled the helper and exposed **linker cc not found**
+for i686-linux-android (exit 1), rather than retrying npm.bat. Original standalone handoff
+also showed missing companion (10061); these are separate stages. Full Tauri CLI release
+build with helper fix succeeded for all four ABIs, producing fresh unsigned APK/AAB with
+new ID; APK aapt2 package and AAB manifest verified. CLI --open alone reused existing
+Studio and did not refresh its inherited Android linker environment.
+
+Repeated Studio startup DirectoryLock/CannotActivate error was missed during restart.
+Process audit found existing PID 27324 (parent Explorer, started 00:05:28 on Oct 28) was
+RESPONDING with title android. A new launcher instance failed to activate it; do NOT
+kill this healthy process, reset settings/plugins, or blindly delete locks. Computer Use
+was stopped by physical Escape; no further UI inputs issued after that interruption.
+Our Tauri companions 83477 and 72328 were stopped deliberately; healthy Studio preserved.
+No automated Studio relaunch should be attempted again in this workflow.
+
+New tracked-intent root **Open Android Release.bat** is CRLF and starts normal release
+CLI --open only if Studio is fully closed and npm.cmd exists; keeps CLI window open for
+signing. --check mode: existing Studio → exit 2 (host verified); process-query failure
+→ exit 4 (sandbox verified). Refuses ambiguous checks instead of spawning another IDE.
+NEXT: user closes Studio and double-clicks this file in normal Windows/Explorer, waits
+for Studio to open itself, then retries signed generation. No terminal/credential UI
+automation. That manual launch avoids inherited Codex/package process state.
+
+Uncommitted: BuildTask.kt, root launcher, PROJECT_STATE.md; unrelated .gitattributes
+preserved/excluded. Backup before helper fix …-20261027-235726: 256/256, 40.7 MB, exit 0.
+Backup …-20261028-001340: 259/259, 40.8 MB, exit 0; includes ignored root
+android-buildtask-recovery.log, SHA256-equal to modified BuildTask.kt (gen itself excluded).
+Logs: android-studio-release-session.log, android-studio-fresh-session.log,
+android-studio-gradle-diagnostic.log. Prior rename/runtime gates are historical results.
+Latest handover backup …-20261028-001540 verified 260/260 files, 40.8 MB, exit 0; includes launcher and helper recovery log. Final metadata note postdates it. Fresh lint after helper fix: 0 errors/3 accepted warnings, exit 0. Remaining required
+build/coverage/eight Node/Web/Windows/Android gates and signed manual retry pending.
+Do not run runner cleanup concurrently with a user signing session: it kills companion
+node processes. No commit/push/pruning while subject remains unfinished.
+
+
+User subsequently added the actual APK certificate to the existing registered package; Play Console reports In review. This is an external review, not an unfinished app-code fix. User explicitly requested finishing/pruning. Fresh gates are running before commit/push/prune.
+
+## 2026-10-28 — Release helper finishing verification
+
+User explicitly requested backup pruning/finishing. There were uncommitted changes:
+BuildTask error-propagation fix, guarded Open Android Release.bat, state notes. Added
+README release/signing workflow and ignore rule for Studio's app/universal signed
+outputs; preserved the signed APK on disk and excluded .gitattributes. No key, credential
+or artifact is committed. User added actual APK certificate in Play Console; status In review.
+Signed APK package com.thespellcaster.mrhorakhty, v2 signature valid, apksigner exit 0.
+
+Pre-finish backup …-20261028-004605: VERIFY OK 260/260, 40.8 MB (0). Fresh lint 0 errors/3
+accepted warnings (0); Vite build PASS (0); coverage OK 42 suites/422 IDs/26 shipped features
+covered (0). Node profileBundle 46/46, profileStorage 32/32, bundleGuard 20/20, profile-key
+guard OK, fadeMath 46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19; all exit 0.
+Full gates via Explorer desktop in order: Web 290/0/0 (0), Windows 307/0/3 (1), Android
+297/0/3 (1). Logs e2e-run-20261028-004702.log, e2e-run-20261028-005309.log,
+e2e-android-20261028-010009.log. Windows uploads restored and six keys restart-verified;
+Android restored/verified 30 keys. Runners removed their forwards/reverses, app and emulator.
+No test-port listeners remained in final audit; existing Studio untouched. Helper recovery
+log SHA256 matches source, protecting pending gen-excluded code before push.
+
+Focused regression invoked actual Gradle BuildTask with intentionally invalid CLI target.
+Expected Gradle exit 1 preserved original npm.cmd/Tauri error and did not fall through to
+npm.bat: PASS. Initial probe erroneously applied to buildSrc; restricted it to :app and
+reran successfully. Temporary init script removed; gradle-fallback-regression.log retained.
+Launcher --check existing-Studio guard expected 2 (host) and failed-process-query guard
+expected 4 (sandbox) passed. Full CLI release generated both formats for all four ABIs
+with the changed helper. No application UI/playback/permission feature changed, so no
+additional app-feature hand-test was required. Launcher was guard-tested; no unsupported
+claim of its full manual launch. Google key-review completion is external and not claimed.
+
+Final backup/commit/push verification/audited pruning results follow below.
+
+Final backup …-20261028-011044: VERIFY OK 265/265, 40.8 MB, exit 0. Six older backups await audit after verified push. Existing responding Studio PID 7948 left untouched; no owned test listeners/app/emulator/forwards. Final notes postdate keeper; no new backup just for prune notes.
