@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 01:22 — working on: organize logs and preview-first cleanup
+🔓 UNCLAIMED — last holder: Codex (2026-10-30 02:03)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -34,13 +34,19 @@ Windows six storage keys restored and verified FROM DISK; uploads restored.
 Android 28 keys restored/verified. Sandbox/host attempts failed or were interrupted;
 Explorer sequential web/Windows retries passed without app/harness changes.
 Their failed logs and diagnostic detail are retained in session history/logs.
-No test/app listeners remain. Existing emulator preserved; prior preview 5233
-was stopped by harness cleanup and will be restored after the final backup.
+Only preview listener 5233 remains (HTTP 200, PID 40516; launcher PID 41876).
+Existing emulator preserved; test ports 5173/5183/9222/9224/9225 closed.
 
-Backup audit mapped 51 differing paths; five unique older contents hash-preserved
-in `logs/keep/backup-prune-history-20261030/` with manifest.json. Final backup,
-commit/push verification and older-backup pruning pending. Unrelated Android
-gradlew.bat/settings.gradle and untracked .gitattributes remain untouched.
+Final backup 20261030-020121: VERIFY OK 284/284, 43.4 MB (0), hashes verified.
+Implementation 97145201df514da27929c5fd39d03c5b4616a857 pushed to origin/mobile-support;
+git ls-remote matched. Removed both older backups only after verified push and
+content audit. Kept newest 20261030-020121. Preservation manifest maps 52 differing
+paths; six unique older contents saved under logs/keep/backup-prune-history-20261030/.
+Audit caught a post-audit history change and paused before deleting that backup;
+additional content was preserved/reverified before the second deletion. Audit
+manifest, preview runtime captures and final bookkeeping postdate keeper by design.
+Unrelated Android gradlew.bat/settings.gradle and untracked .gitattributes remain
+untouched/uncommitted. Subject complete; final bookkeeping commit follows.
 
 ## Android release workflow
 
