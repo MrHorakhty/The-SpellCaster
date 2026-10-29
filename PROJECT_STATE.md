@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-30 01:20)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 01:22 — working on: organize logs and preview-first cleanup
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,34 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Log housekeeping
+
+Manual captures belong in ignored `logs/`, with timestamped names (AGENTS.md:5,
+docs/logs.md). 22 root logs moved to `logs/keep/legacy-root/`, SHA256 verified;
+zero original logs deleted. `clean-logs.ps1:1` previews direct .log files older
+than 30 days; -Apply deletes candidates. It never traverses subfolders or links.
+Latest verification evidence is protected in `logs/keep/verification-20261030/`.
+Preview/-WhatIf/apply retention checks passed (old removed, recent preserved).
+No app UI changed; user hand-test is not required for this housekeeping.
+
+Pre-change backup 20261030-012248: VERIFY OK 265/265, 40.8 MB (0).
+Lint 0 errors/2 baseline warnings (0); build PASS (0); coverage OK (0).
+Node checks: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20,
+keys OK, fadeMath 46/46, soundFiles 32/32, iconPrep 35/35,
+snapshotUploads 19/19 (all exit 0; snapshot needed host retry after EPERM).
+Final E2E: web 315/0/0 (0), Windows 332/0/3 (1), Android 322/0/3 (1).
+Windows six storage keys restored and verified FROM DISK; uploads restored.
+Android 28 keys restored/verified. Sandbox/host attempts failed or were interrupted;
+Explorer sequential web/Windows retries passed without app/harness changes.
+Their failed logs and diagnostic detail are retained in session history/logs.
+No test/app listeners remain. Existing emulator preserved; prior preview 5233
+was stopped by harness cleanup and will be restored after the final backup.
+
+Backup audit mapped 51 differing paths; five unique older contents hash-preserved
+in `logs/keep/backup-prune-history-20261030/` with manifest.json. Final backup,
+commit/push verification and older-backup pruning pending. Unrelated Android
+gradlew.bat/settings.gradle and untracked .gitattributes remain untouched.
 
 ## Android release workflow
 

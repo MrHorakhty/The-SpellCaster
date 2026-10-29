@@ -1,5 +1,15 @@
 # Project Instructions
 
+## Project log captures
+
+Write manual build, diagnostic and agent captures under the ignored root `logs/`
+folder, using `<topic>-yyyyMMdd-HHmmss.log`; place companion status files there too.
+Do not create new captures in the project root. Existing E2E runner log locations
+under `%TEMP%\opencode` remain unchanged. Keep the latest successful verification
+set and unresolved failure evidence in `logs/keep/`. See `docs/logs.md` for the
+explicit, preview-first `clean-logs.ps1` retention command. Never move a log while
+its writer is active. Initial root captures are preserved in `logs/keep/legacy-root/`.
+
 ## Permanent instruction: backup before changes
 
 Before making any code changes, run the backup script. It copies **and verifies**, which matters
