@@ -135,7 +135,7 @@ blobs.put('icon_cc_Fireball.png', txt('ICON-BYTES'))
 const EXPORT_DATA = {
   characters: [{
     id: 'c1', name: 'Human Paladin', sounds: [
-      { id: 's1', name: 'Fireball', type: 'Fire', volume: 0.5, color: '#f97316', loop: false, files: [{ name: 'sound_aa_Fireball.mp3', storedName: 'sound_aa_Fireball.mp3', displayName: 'Fireball.mp3', url: 'sound_aa_Fireball.mp3' }], icon: 'icon_cc_Fireball.png', iconDisplayName: 'Fireball.png' },
+      { id: 's1', name: 'Fireball', type: 'Fire', volume: 0.5, color: '#f97316', glowColor: '#00ffcc', loop: false, files: [{ name: 'sound_aa_Fireball.mp3', storedName: 'sound_aa_Fireball.mp3', displayName: 'Fireball.mp3', url: 'sound_aa_Fireball.mp3' }], icon: 'icon_cc_Fireball.png', iconDisplayName: 'Fireball.png' },
       // A sound with no `storedName`: resolves from /assets and must NOT enter the bundle.
       { id: 's2', name: 'Shipped Bow', files: [{ name: 'Longbow_4.mp3' }], icon: 'Bow.png' },
       // volume 0 is a legitimate level, not "absent".
@@ -196,6 +196,7 @@ await ok('data.json carries no imagePreview and no background image entry', () =
 await ok('volume rides along verbatim, including the legitimate 0', () => {
   const sounds = exported.data.characters[0].sounds
   assert.equal(sounds.find(s => s.id === 's1').volume, 0.5)
+  assert.equal(sounds.find(s => s.id === 's1').glowColor, '#00ffcc')
   assert.equal(sounds.find(s => s.id === 's3').volume, 0)
 })
 

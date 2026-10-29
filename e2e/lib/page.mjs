@@ -259,6 +259,7 @@ export function submitModalExpr(btnText) {
 // that would report it, and read-and-removed on the next mount. Also global, and
 // also deliberately absent from a suite's expected key set unless an import ran.
 export const KNOWN_KEYS = [
+  'spellcaster_reorder_animation',
   'backgroundSettings', 'boxSize', 'ttrpg_characters', 'ttrpg_characters_icon',
   'ttrpg_data_version', 'ttrpg_environment', 'ttrpg_environment_icon',
   'ttrpg_groups', 'ttrpg_themes', 'localStorageMigrationCompleted',

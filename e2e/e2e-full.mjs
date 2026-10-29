@@ -77,6 +77,13 @@ async function main() {
     // isolated test session; keep every decode/fade assertion intact.
     await cdp('Network.enable');
     await cdp('Network.setCacheDisabled', { cacheDisabled: true });
+    // The runner's dedicated headless profile is reused. A previous migration
+    // fixture can leave *_old keys behind, contaminating unrelated assertions.
+    // Only disposable web runs reset it; SAVE_RESTORE and native runs retain
+    // their existing snapshot/restore paths.
+    if (!SAVE_RESTORE) {
+      await cdp('Storage.clearDataForOrigin', { origin: await evalJs('location.origin'), storageTypes: 'local_storage' });
+    }
   }
   const driver = makeDriver({ platform: 'desktop', cdp, cdpInput, evalJs, sleep });
 

@@ -42,7 +42,7 @@ export function makeDriver({ platform, cdp, cdpInput, evalJs, sleep }) {
   // same code path serves mouse and touch: a CDP touch drag synthesizes the
   // pointer events with pointerType 'touch'. Edit mode is required - outside it
   // the press arms the press-and-hold prime instead of starting a drag.
-  const dragFromTo = async (from, to) => {
+  const dragFromTo = async (from, to, { beforeDrop } = {}) => {
     if (isDesktop) {
       await cdpInput('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', clickCount: 1 });
       await sleep(50);
@@ -57,6 +57,7 @@ export function makeDriver({ platform, cdp, cdpInput, evalJs, sleep }) {
         });
         await sleep(30);
       }
+      if (beforeDrop) await beforeDrop();
       await cdpInput('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', clickCount: 0 });
     } else {
       const pt = (x, y) => [{ x: Math.round(x), y: Math.round(y), id: 1, radiusX: 2, radiusY: 2, force: 1 }];
@@ -71,6 +72,7 @@ export function makeDriver({ platform, cdp, cdpInput, evalJs, sleep }) {
         });
         await sleep(50);
       }
+      if (beforeDrop) await beforeDrop();
       await cdp('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     }
   };

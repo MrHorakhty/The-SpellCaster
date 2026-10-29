@@ -40,7 +40,18 @@ export const PROFILE_PREFIX = 'profile:'
 export const UPLOADS_ROOT = 'uploads'
 
 // Deliberately NOT namespaced. See rule 2 above.
-export const GLOBAL_KEYS = new Set(['localStorageMigrationCompleted'])
+export const GLOBAL_KEYS = new Set(['localStorageMigrationCompleted', 'spellcaster_reorder_animation'])
+
+// An installation preference, deliberately shared by profiles and absent from bundles.
+const REORDER_ANIMATION_KEY = 'spellcaster_reorder_animation'
+export function readReorderAnimation() {
+    try { return storage()?.getItem(REORDER_ANIMATION_KEY) !== 'false' } catch { return true }
+}
+export function writeReorderAnimation(enabled) {
+    const ls = storage()
+    if (!ls) throw new Error('Local storage is unavailable')
+    ls.setItem(REORDER_ANIMATION_KEY, String(enabled !== false))
+}
 
 // Keys that belong to a profile and existed before profiles did. First-run
 // migration moves exactly these (plus any `sound_file_*`) into the default

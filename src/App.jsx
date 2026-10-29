@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import IconPrepDialog from './IconPrepDialog.jsx'
 /* global __APP_VERSION__ */
 import {
@@ -26,6 +26,8 @@ import {
     setActiveProfile,
     subscribeProfileSwitch,
     readProfileValue,
+    readReorderAnimation,
+    writeReorderAnimation,
     writeProfileValue,
     removeProfileValue,
     keysWithPrefix,
@@ -683,6 +685,25 @@ const recolorImageToColor = async (imageUrl, color, brightness) => {
     }
 }
 
+const validGlowColor = color => /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(color || '')
+const soundGlowColor = sound => {
+    const color = validGlowColor(sound.glowColor) ? sound.glowColor : validGlowColor(sound.color) ? sound.color : '#84cc16'
+    return color.length === 4 ? '#' + [...color.slice(1)].map(c => c + c).join('') : color
+}
+const colorHue = hex => {
+    const full = hex.length === 4 ? '#' + [...hex.slice(1)].map(c => c + c).join('') : hex
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(full.slice(i, i + 2), 16) / 255)
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+    if (!d) return 0
+    const h = max === r ? (g - b) / d : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    return Math.round((h * 60 + 360) % 360)
+}
+const hueColor = hue => {
+    const h = Number(hue) / 60, x = 1 - Math.abs(h % 2 - 1)
+    const rgb = h < 1 ? [1,x,0] : h < 2 ? [x,1,0] : h < 3 ? [0,1,x] : h < 4 ? [0,x,1] : h < 5 ? [x,0,1] : [1,0,x]
+    return '#' + rgb.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+}
+
 const getGlowEffectStyle = (sound) => {
     if (!sound.glowEnabled) {
         return {}
@@ -690,7 +711,7 @@ const getGlowEffectStyle = (sound) => {
 
     const intensity = (sound.glowProminence ?? 0.5) * 0.5 + 0.1
     const spread = (sound.glowProminence ?? 0.5) * 10 + 5
-    const glowColor = /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(sound.color || '') ? sound.color : '#84cc16'
+    const glowColor = soundGlowColor(sound)
 
     return {
         boxShadow: `0 0 ${spread}px ${intensity}px ${glowColor}, 0 4px 6px -1px rgba(0, 0, 0, 0.3)`
@@ -1285,8 +1306,26 @@ function AppBoard() {
     const [activeTab, setActiveTab] = useState('')
     const [editMode, setEditMode] = useState(false)
     const [draggedSoundId, setDraggedSoundId] = useState(null)
-    const [dragOverSoundId, setDragOverSoundId] = useState(null)
     const dragRef = useRef(null)
+    useEffect(() => () => dragRef.current?.cancel?.(), [])
+    useEffect(() => { if (!editMode) dragRef.current?.cancel?.() }, [editMode])
+    const [reorderAnimationEnabled, setReorderAnimationEnabled] = useState(readReorderAnimation)
+    const reorderRects = useRef(null)
+    useLayoutEffect(() => {
+        const before = reorderRects.current
+        reorderRects.current = null
+        if (!before || !reorderAnimationEnabled) return
+        for (const [element, rect] of before) {
+            if (!element.isConnected) continue
+            const after = element.getBoundingClientRect()
+            const dx = rect.left - after.left, dy = rect.top - after.top
+            if (Math.abs(dx) + Math.abs(dy) < 1) continue
+            element.animate([
+                { transform: `translate(${dx}px, ${dy}px)` },
+                { transform: 'translate(0, 0)' }
+            ], { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+        }
+    })
     const [audioEnabled, setAudioEnabled] = useState(false)
     const [masterVolume, setMasterVolume] = useState(1.0)
     const [soundInstances, setSoundInstances] = useState({})
@@ -1509,6 +1548,7 @@ function AppBoard() {
         brightness: 1,
         loop: false,
         glowEnabled: false,
+            glowColor: '#84cc16',
         glowProminence: 0.5,
         volume: 1
     })
@@ -2126,6 +2166,7 @@ function AppBoard() {
             loop: defaultLoop,
             randomPlay: false,
             glowEnabled: false,
+            glowColor: '#84cc16',
             glowProminence: 0.5,
             volume: 1
         })
@@ -2213,6 +2254,7 @@ function AppBoard() {
             brightness: sound.brightness || 1,
             loop: loopValue,
             glowEnabled: sound.glowEnabled || false,
+            glowColor: soundGlowColor(sound),
             glowProminence: sound.glowProminence ?? 0.5,
             volume: normalizeSoundVolume(sound.volume)
         })
@@ -2315,6 +2357,7 @@ function AppBoard() {
             color: newSoundData.color,
             brightness: newSoundData.brightness || 1,
             glowEnabled: newSoundData.glowEnabled ?? false,
+            glowColor: soundGlowColor(newSoundData),
             glowProminence: newSoundData.glowProminence ?? 0.5,
             loop: newSoundData.loop !== undefined ? newSoundData.loop : (tabType === 'environment' || tabType === 'groups'),
             // This object literal is an explicit allowlist: a field missing here is
@@ -2544,11 +2587,18 @@ function AppBoard() {
         }
     }
 
-    const moveSound = (draggedId, targetId, containerType, containerId, groupId = null) => {
+    const moveSound = (draggedId, targetId, containerType, containerId, groupId = null, previewRects = null) => {
         if (!draggedId || !targetId || draggedId === targetId) {
             return
         }
 
+        // Snapshot only on drop; pointer moves do not write state or storage.
+        reorderRects.current = null
+        if (reorderAnimationEnabled) {
+            const elements = [...document.querySelectorAll('[data-sound-layout]')]
+            elements.forEach(el => el.getAnimations().forEach(animation => animation.cancel()))
+            reorderRects.current = previewRects || new Map(elements.map(el => [el, el.getBoundingClientRect()]))
+        }
         const reorder = (list) => {
             const fromIndex = list.findIndex(sound => sound.id === draggedId)
             const toIndex = list.findIndex(sound => sound.id === targetId)
@@ -4627,12 +4677,146 @@ function AppBoard() {
         }
     }, [])
 
+    // Preview with DOM transforms only. React's stored lists change once, on drop.
+    const beginSoundDrag = (event, draggedId, containerType, containerId, groupId) => {
+        if (dragRef.current || event.isPrimary === false) return
+        event.preventDefault()
+        const card = event.currentTarget
+        const source = card.closest('[data-sound-layout]')
+        const grid = source?.parentElement
+        if (!grid) return
+        const nodes = [...grid.children].filter(el => el.hasAttribute('data-sound-layout'))
+        const from = nodes.indexOf(source)
+        if (from < 0) return
+        nodes.forEach(el => el.getAnimations().forEach(a => a.cancel()))
+        const rects = nodes.map(el => el.getBoundingClientRect())
+        const gridRect = grid.getBoundingClientRect()
+        let scroller = grid.parentElement
+        while (scroller && !(/auto|scroll/.test(window.getComputedStyle(scroller).overflowY) && scroller.scrollHeight > scroller.clientHeight)) scroller = scroller.parentElement
+        const anchor = scroller?.style.overflowAnchor
+        const state = { draggedId, from, target: from, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, valid: false, cancel: null }
+        const startX = event.clientX, startY = event.clientY
+        let ghost = null, placeholder = null, frame = null, ended = false
+        try { card.setPointerCapture(event.pointerId) } catch { /* capture may be unavailable */ }
+        const update = () => {
+            if (!state.active || ended) return
+            ghost.style.transform = `translate3d(${state.x - startX}px, ${state.y - startY}px, 0)`
+            const now = grid.getBoundingClientRect()
+            const ox = now.left - gridRect.left, oy = now.top - gridRect.top
+            const clip = scroller?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+            state.valid = state.x >= Math.max(now.left, clip.left) && state.x <= Math.min(now.right, clip.right) && state.y >= Math.max(now.top, clip.top) && state.y <= Math.min(now.bottom, clip.bottom)
+            let target = from, nearest = Infinity
+            if (state.valid) rects.forEach((r, i) => {
+                const distance = Math.hypot(state.x - (r.left + ox + r.width / 2), state.y - (r.top + oy + r.height / 2))
+                if (distance < nearest) { nearest = distance; target = i }
+            })
+            placeholder.style.visibility = state.valid ? 'visible' : 'hidden'
+            const slot = rects[target]
+            placeholder.style.left = `${slot.left + ox}px`
+            placeholder.style.top = `${slot.top + oy}px`
+            if (target === state.target) return
+            state.target = target
+            const order = nodes.filter(el => el !== source)
+            order.splice(target, 0, source)
+            for (const [index, el] of order.entries()) {
+                if (el === source) continue
+                const original = rects[nodes.indexOf(el)], destination = rects[index]
+                const dx = destination.left - original.left, dy = destination.top - original.top
+                const transform = `translate(${dx}px, ${dy}px)`
+                if (el.style.transform === transform || (!el.style.transform && dx === 0 && dy === 0)) continue
+                const before = el.getBoundingClientRect()
+                el.getAnimations().forEach(a => a.cancel())
+                el.style.transform = transform
+                if (reorderAnimationEnabled) el.animate([
+                    { transform: `translate(${before.left - original.left - ox}px, ${before.top - original.top - oy}px)` }, { transform }
+                ], { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+            }
+        }
+        const tick = () => {
+            if (ended) return
+            if (!grid.isConnected) { state.cancel(); return }
+            if (scroller) {
+                const r = scroller.getBoundingClientRect()
+                if (state.x >= r.left && state.x <= r.right && state.y >= r.top && state.y <= r.bottom) {
+                    const speed = state.y < r.top + 40 ? -Math.min(14, (r.top + 40 - state.y) / 3) : state.y > r.bottom - 40 ? Math.min(14, (state.y - r.bottom + 40) / 3) : 0
+                    scroller.scrollTop += speed
+                }
+            }
+            update()
+            frame = window.requestAnimationFrame(tick)
+        }
+        const finish = commit => {
+            if (ended) return
+            ended = true
+            window.cancelAnimationFrame(frame)
+            document.removeEventListener('pointermove', move)
+            document.removeEventListener('pointerup', up)
+            document.removeEventListener('pointercancel', cancel)
+            document.removeEventListener('keydown', key, true)
+            window.removeEventListener('blur', cancel)
+            window.removeEventListener('resize', cancel)
+            const changed = commit && state.active && state.valid && state.target !== from
+            const before = changed ? new Map(nodes.map(el => [el, el === source ? ghost.getBoundingClientRect() : el.getBoundingClientRect()])) : null
+            for (const el of nodes) {
+                el.getAnimations().forEach(a => a.cancel())
+                el.style.transform = ''
+            }
+            source.style.visibility = ''
+            ghost?.remove()
+            placeholder?.remove()
+            try { card.releasePointerCapture(event.pointerId) } catch { /* capture may already be released */ }
+            dragRef.current = null
+            setDraggedSoundId(null)
+            if (changed) moveSound(draggedId, nodes[state.target].dataset.soundLayout, containerType, containerId, groupId, before)
+            if (scroller) window.requestAnimationFrame(() => { scroller.style.overflowAnchor = anchor })
+        }
+        const move = e => {
+            if (e.pointerId !== state.pointerId) return
+            state.x = e.clientX; state.y = e.clientY
+            if (!state.active && Math.abs(state.x - startX) + Math.abs(state.y - startY) < 4) return
+            e.preventDefault()
+            if (!state.active) {
+                state.active = true
+                ghost = source.cloneNode(true)
+                ghost.removeAttribute('data-sound-layout')
+                ghost.setAttribute('data-sound-drag-ghost', '')
+                ghost.dataset.pointerId = String(state.pointerId)
+                ghost.setAttribute('aria-hidden', 'true')
+                ghost.inert = true
+                ghost.querySelectorAll('[data-sound-card]').forEach(el => el.removeAttribute('data-sound-card'))
+                ghost.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
+                Object.assign(ghost.style, { position: 'fixed', left: rects[from].left + 'px', top: rects[from].top + 'px', width: rects[from].width + 'px', height: rects[from].height + 'px', zIndex: '1000', pointerEvents: 'none', margin: '0', opacity: '0.95' })
+                placeholder = document.createElement('div')
+                placeholder.setAttribute('data-sound-drag-placeholder', '')
+                Object.assign(placeholder.style, { position: 'fixed', width: rects[from].width + 'px', height: rects[from].height + 'px', pointerEvents: 'none', zIndex: '30', border: '2px dashed var(--theme-accent)', borderRadius: '12px' })
+                document.body.append(placeholder, ghost)
+                source.style.visibility = 'hidden'
+                if (scroller) scroller.style.overflowAnchor = 'none'
+                setDraggedSoundId(draggedId)
+                frame = window.requestAnimationFrame(tick)
+            }
+            update()
+        }
+        const up = e => { if (e.pointerId === state.pointerId) { state.x = e.clientX; state.y = e.clientY; update(); finish(true) } }
+        const cancel = e => { if (!e || e.pointerId === undefined || e.pointerId === state.pointerId) finish(false) }
+        const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false) } }
+        state.cancel = () => finish(false)
+        dragRef.current = state
+        document.addEventListener('pointermove', move, { passive: false })
+        document.addEventListener('pointerup', up)
+        document.addEventListener('pointercancel', cancel)
+        document.addEventListener('keydown', key, true)
+        window.addEventListener('blur', cancel)
+        window.addEventListener('resize', cancel)
+    }
+
     // Render individual sound card
     const renderSoundCard = (sound, containerType, containerId, splitTarget = null) => {
+        const actionSize = isMobile ? 26 : Math.round(Math.min(44, Math.max(22, 30 * boxSize)))
+        const actionIconSize = isMobile ? 10 : Math.round(Math.min(24, Math.max(12, 16 * boxSize)))
         const isPlaying = isSoundPlaying(sound.id)
         const IconComponent = getSoundIcon(sound.type)
         const isDragging = draggedSoundId === sound.id
-        const isDragTarget = dragOverSoundId === sound.id && !isDragging
         // Show the in-flight drag value so the slider tracks the pointer, and fall
         // back to the persisted field (absent === 100%).
         const cardVolume = cardVolumeDraft && cardVolumeDraft.soundId === sound.id
@@ -4645,6 +4829,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
         return (
             <div
                 key={sound.id}
+                data-sound-layout={sound.id}
                 // Two levels: the outer div is the grid cell and owns the volume row,
                 // the inner one is the card's positioning context so the edit-mode
                 // buttons keep anchoring to the card rather than to the taller stack.
@@ -4663,92 +4848,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                         aria-pressed={isPrimedCard}
                         draggable={false}
                         onPointerDown={(e) => {
-                            // Armed first so press-and-hold primes; it is a no-op
-                            // in edit mode, so the drag branch below still owns
-                            // that case outright.
                             armPrimeHold(sound.id, e)
-                            if (!editMode || e.button !== 0) return
-                            e.preventDefault()
-                            try {
-                                e.target.setPointerCapture(e.pointerId)
-                            } catch {
-                                // ignore capture errors
-                            }
-                            dragRef.current = {
-                                draggedId: sound.id,
-                                containerType,
-                                containerId,
-                                groupId: splitTarget?.groupId || null,
-                                startX: e.clientX,
-                                startY: e.clientY,
-                                element: e.currentTarget,
-                            }
-                            setDraggedSoundId(sound.id)
-                        }}
-                        onPointerCancel={() => {
-                            dragRef.current = null
-                            setDraggedSoundId(null)
-                            setDragOverSoundId(null)
-                        }}
-                        onPointerMove={(e) => {
-                            if (!dragRef.current) return
-                            const dx = e.clientX - dragRef.current.startX
-                            const dy = e.clientY - dragRef.current.startY
-                            if (Math.abs(dx) + Math.abs(dy) < 4) return
-                            try {
-                                e.target.releasePointerCapture(e.pointerId)
-                            } catch {
-                                // ignore if capture was already released
-                            }
-                            const moveHandler = (ev) => {
-                                const allCards = document.querySelectorAll('[data-sound-card]')
-                                let foundTarget = null
-                                allCards.forEach(card => {
-                                    const rect = card.getBoundingClientRect()
-                                    if (ev.clientX >= rect.left && ev.clientX <= rect.right &&
-                                        ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
-                                        const cardId = card.dataset.soundId
-                                        if (cardId !== dragRef.current.draggedId) {
-                                            foundTarget = cardId
-                                        }
-                                    }
-                                })
-                                if (foundTarget !== dragRef.current.currentTargetId) {
-                                    dragRef.current.currentTargetId = foundTarget
-                                    setDragOverSoundId(foundTarget)
-                                }
-                            }
-                            const endDrag = (committed) => {
-                                document.removeEventListener('pointermove', moveHandler)
-                                document.removeEventListener('pointerup', upHandler)
-                                document.removeEventListener('pointercancel', onDocCancel)
-                                window.removeEventListener('blur', onDocBlur)
-                                if (committed && dragRef.current.currentTargetId) {
-                                    moveSound(
-                                        dragRef.current.draggedId,
-                                        dragRef.current.currentTargetId,
-                                        dragRef.current.containerType,
-                                        dragRef.current.containerId,
-                                        dragRef.current.groupId
-                                    )
-                                }
-                                setDraggedSoundId(null)
-                                setDragOverSoundId(null)
-                                dragRef.current = null
-                            }
-                            const upHandler = (ev) => {
-                                endDrag(true)
-                            }
-                            const onDocCancel = () => {
-                                endDrag(false)
-                            }
-                            const onDocBlur = () => {
-                                endDrag(false)
-                            }
-                            document.addEventListener('pointermove', moveHandler)
-                            document.addEventListener('pointerup', upHandler)
-                            document.addEventListener('pointercancel', onDocCancel)
-                            window.addEventListener('blur', onDocBlur)
+                            if (editMode && e.button === 0) beginSoundDrag(e, sound.id, containerType, containerId, splitTarget?.groupId || null)
                         }}
                         onClick={() => {
                             if (editMode) return
@@ -4779,7 +4880,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             togglePrime(sound.id)
                         }}
                         className={`w-full aspect-square bg-dark-700 border rounded-xl hover:bg-dark-600 transition-all duration-200 flex flex-col items-center justify-center overflow-hidden ${isPlaying && !editMode ? 'ring-2 ring-lime-500' : ''
-                            } ${isDragTarget ? 'ring-2 ring-lime-500 border-lime-400' : ''
                             } ${isDragging ? 'opacity-40' : ''} ${editMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                         style={{
                             backgroundColor: 'var(--theme-bg-secondary)',
@@ -4920,27 +5020,30 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                     <>
                         <button
                             onClick={() => handleDeleteSound(sound.id)}
-                            className={`absolute top-1 left-1 p-0.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            className={`absolute top-1 left-1 p-0.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            style={{ width: actionSize, height: actionSize }}
                             title="Delete Sound"
                         >
-                            <Trash2 size={10} />
+                            <Trash2 size={actionIconSize} />
                         </button>
                         <button
                             onClick={async () => { if (splitTarget) setSplitSoundTarget(splitTarget); await openEditSoundModal(sound) }}
-                            className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            style={{ width: actionSize, height: actionSize }}
                             title="Edit Sound"
                         >
-                            <Edit size={10} />
+                            <Edit size={actionIconSize} />
                         </button>
                         {/* Bottom-centre: both top corners are taken by delete and
                             edit. Anchored to this stack, not the card, so it does
                             not inherit the card's pointerdown drag handler. */}
                         <button
                             onClick={() => openMoveCopyModal(sound, containerType, containerId, splitTarget)}
-                            className={`absolute bottom-1 left-1/2 -translate-x-1/2 p-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                            className={`absolute bottom-1 left-1/2 -translate-x-1/2 p-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            style={{ width: actionSize, height: actionSize }}
                             title="Move or Copy Sound"
                         >
-                            <ArrowRightLeft size={10} />
+                            <ArrowRightLeft size={actionIconSize} />
                         </button>
                     </>
                 )}
@@ -5256,14 +5359,14 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             <>
                                                 <button
                                                     onClick={() => handlePanelDeleteItem(null, c.id)}
-                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                     title="Delete Character"
                                                 >
                                                     <Trash2 size={12} />
                                                 </button>
                                                 <button
                                                     onClick={() => handlePanelEditItem(null, c.id)}
-                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                     title="Edit Character"
                                                 >
                                                     <Edit size={12} />
@@ -5286,14 +5389,14 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             <>
                                                 <button
                                                     onClick={() => handlePanelDeleteItem(null, e.category)}
-                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                     title="Delete Category"
                                                 >
                                                     <Trash2 size={12} />
                                                 </button>
                                                 <button
                                                     onClick={() => handlePanelEditItem(null, e.category)}
-                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                     title="Edit Category"
                                                 >
                                                     <Edit size={12} />
@@ -5327,14 +5430,14 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <>
                                                     <button
                                                         onClick={() => handlePanelDeleteItem(source, itemId)}
-                                                        className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        className={`absolute top-1 left-1 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                         title={isCharSection ? 'Delete Character' : 'Delete Category'}
                                                     >
                                                         <Trash2 size={12} />
                                                     </button>
                                                     <button
                                                         onClick={() => handlePanelEditItem(source, itemId)}
-                                                        className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                        className={`absolute top-1 right-1 p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors ${isMobile ? 'opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                                                         title={isCharSection ? 'Edit Character' : 'Edit Category'}
                                                     >
                                                         <Edit size={12} />
@@ -6685,6 +6788,96 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             )}
                                         </div>
 
+                                        {/* Glow Effect Controls */}
+                                        <div data-glow-controls className="py-4 mt-4 border-t border-dark-700">
+                                            <h3 className="text-lg font-medium mb-3">Glow Effect</h3>
+
+                                            {/* Glow Toggle */}
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <Sparkles size={20} className="text-lime-500" />
+                                                    <span className="text-slate-300">Enable Glow Effect</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSoundFormData(prev => ({ ...prev, glowEnabled: !prev.glowEnabled }))}
+                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${soundFormData.glowEnabled ? 'bg-lime-600' : 'bg-dark-600'
+                                                        }`}
+                                                >
+                                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${soundFormData.glowEnabled ? 'translate-x-6' : 'translate-x-1'
+                                                        }`} />
+                                                </button>
+                                            </div>
+
+                                            {/* Glow Prominence Slider */}
+                                            {soundFormData.glowEnabled && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <label htmlFor="glowColor" className="text-sm text-slate-300">Glow Color</label>
+                                                        <input id="glowColor" type="color" name="glowColor" aria-label="Glow color"
+                                                            value={soundFormData.glowColor} onChange={handleSoundFormChange}
+                                                            className="w-10 h-10 cursor-pointer rounded-lg border border-dark-600" />
+                                                    </div>
+                                                    <input type="range" aria-label="Glow color hue" min="0" max="359" step="1"
+                                                        value={colorHue(soundFormData.glowColor)}
+                                                        onChange={e => setSoundFormData(prev => ({ ...prev, glowColor: hueColor(e.target.value) }))}
+                                                        className="glow-hue-slider w-full h-3 rounded-lg appearance-none cursor-pointer"
+                                                        style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }} />
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm text-slate-400">Glow Prominence</span>
+                                                        <span className="text-sm text-slate-300">{Math.round(soundFormData.glowProminence * 100)}%</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        name="glowProminence"
+                                                        min="0"
+                                                        max="1"
+                                                        step="0.01"
+                                                        value={soundFormData.glowProminence}
+                                                        onChange={handleSoundFormChange}
+                                                        className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer slider"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-slate-500">
+                                                        <span>Subtle</span>
+                                                        <span>Prominent</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div data-playback-options className="space-y-3 pb-3">
+                                            {/* Random playback option */}
+                                            {audioFiles.length > 1 && (
+                                                <div className="flex items-center space-x-3 mt-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="randomPlay"
+                                                        id="randomPlay"
+                                                        checked={soundFormData.randomPlay}
+                                                        onChange={(e) => setSoundFormData(prev => ({ ...prev, randomPlay: e.target.checked }))}
+                                                        className="w-4 h-4 text-lime-500 bg-dark-700 border-dark-600 rounded focus:ring-lime-500"
+                                                    />
+                                                    <label htmlFor="randomPlay" className="text-sm">
+                                                        Play random file from selection
+                                                    </label>
+                                                </div>
+                                            )}
+                                        <div className="flex items-center space-x-3">
+                                            <input
+                                                type="checkbox"
+                                                name="loop"
+                                                id="loop"
+                                                checked={soundFormData.loop}
+                                                onChange={handleSoundFormChange}
+                                                className="w-4 h-4 text-lime-500 bg-dark-700 border-dark-600 rounded focus:ring-lime-500"
+                                            />
+                                            <label htmlFor="loop" className="text-sm">
+                                                Loop sound continuously
+                                            </label>
+                                        </div>
+
+                                        </div>
+
                                         <div>
                                             <label className="block text-sm font-medium mb-1">Upload Audio Files *</label>
                                             <input
@@ -6888,36 +7081,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 )
                                             })()}
 
-                                            {/* Random playback option */}
-                                            {audioFiles.length > 1 && (
-                                                <div className="flex items-center space-x-3 mt-3">
-                                                    <input
-                                                        type="checkbox"
-                                                        name="randomPlay"
-                                                        id="randomPlay"
-                                                        checked={soundFormData.randomPlay}
-                                                        onChange={(e) => setSoundFormData(prev => ({ ...prev, randomPlay: e.target.checked }))}
-                                                        className="w-4 h-4 text-lime-500 bg-dark-700 border-dark-600 rounded focus:ring-lime-500"
-                                                    />
-                                                    <label htmlFor="randomPlay" className="text-sm">
-                                                        Play random file from selection
-                                                    </label>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center space-x-3">
-                                            <input
-                                                type="checkbox"
-                                                name="loop"
-                                                id="loop"
-                                                checked={soundFormData.loop}
-                                                onChange={handleSoundFormChange}
-                                                className="w-4 h-4 text-lime-500 bg-dark-700 border-dark-600 rounded focus:ring-lime-500"
-                                            />
-                                            <label htmlFor="loop" className="text-sm">
-                                                Loop sound continuously
-                                            </label>
                                         </div>
 
                                         {/* Sound Volume. A trim ON TOP OF the master
@@ -6968,52 +7131,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             <p className="text-xs text-slate-500 mt-1">
                                                 Trim applied on top of the master volume. 100% leaves this sound alone.
                                             </p>
-                                        </div>
-
-                                        {/* Glow Effect Controls */}
-                                        <div className="pt-4 border-t border-dark-700">
-                                            <h3 className="text-lg font-medium mb-3">Glow Effect</h3>
-
-                                            {/* Glow Toggle */}
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center space-x-2">
-                                                    <Sparkles size={20} className="text-lime-500" />
-                                                    <span className="text-slate-300">Enable Glow Effect</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSoundFormData(prev => ({ ...prev, glowEnabled: !prev.glowEnabled }))}
-                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${soundFormData.glowEnabled ? 'bg-lime-600' : 'bg-dark-600'
-                                                        }`}
-                                                >
-                                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${soundFormData.glowEnabled ? 'translate-x-6' : 'translate-x-1'
-                                                        }`} />
-                                                </button>
-                                            </div>
-
-                                            {/* Glow Prominence Slider */}
-                                            {soundFormData.glowEnabled && (
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm text-slate-400">Glow Prominence</span>
-                                                        <span className="text-sm text-slate-300">{Math.round(soundFormData.glowProminence * 100)}%</span>
-                                                    </div>
-                                                    <input
-                                                        type="range"
-                                                        name="glowProminence"
-                                                        min="0"
-                                                        max="1"
-                                                        step="0.01"
-                                                        value={soundFormData.glowProminence}
-                                                        onChange={handleSoundFormChange}
-                                                        className="w-full h-2 bg-dark-600 rounded-lg appearance-none cursor-pointer slider"
-                                                    />
-                                                    <div className="flex justify-between text-xs text-slate-500">
-                                                        <span>Subtle</span>
-                                                        <span>Prominent</span>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
 
                                         <div className="pt-4 border-t border-dark-700">
@@ -7351,8 +7468,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                     <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold">Background Settings</h2>
+                                <h2 className="text-xl font-bold">Settings</h2>
                                 <button
+                                    data-settings-close
                                     onClick={() => setShowSettingsModal(false)}
                                     className="p-1 hover:bg-dark-700 rounded-lg"
                                 >
@@ -7361,6 +7479,24 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             </div>
 
                             <div className="space-y-6">
+                                <div className="pb-4 border-b border-dark-700">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span className="text-sm font-medium">Animate Sound Reordering</span>
+                                        <button type="button" role="switch" aria-label="Animate Sound Reordering" data-reorder-animation
+                                            aria-checked={reorderAnimationEnabled}
+                                            onClick={() => {
+                                                const enabled = !reorderAnimationEnabled
+                                                setReorderAnimationEnabled(enabled)
+                                                if (!enabled) document.querySelectorAll('[data-sound-layout]').forEach(el => el.getAnimations().forEach(a => a.cancel()))
+                                                try { writeReorderAnimation(enabled) }
+                                                catch (err) { reportSaveFailure('animation settings', err) }
+                                            }}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${reorderAnimationEnabled ? 'bg-lime-600' : 'bg-dark-600'}`}
+                                        >
+                                            <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${reorderAnimationEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                </div>
                                 {/* Background Type Selection */}
                                 <div>
                                     <h3 className="text-lg font-medium mb-3">Background Type</h3>

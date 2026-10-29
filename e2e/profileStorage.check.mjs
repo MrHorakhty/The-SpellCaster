@@ -212,5 +212,27 @@ ok('migration runs before any file lookup, and is a no-op off Tauri', async () =
   assert.deepEqual(await m.migrateUploadsToProfile('p_xyz'), { moved: 0, skipped: 0, failed: 0 });
 });
 
+ok('reorder animation defaults on for absent or invalid preferences', () => {
+  ls.removeItem('spellcaster_reorder_animation')
+  assert.equal(m.readReorderAnimation(), true)
+  ls.setItem('spellcaster_reorder_animation', 'invalid')
+  assert.equal(m.readReorderAnimation(), true)
+})
+ok('reorder animation preserves a saved false then true', () => {
+  m.writeReorderAnimation(false)
+  assert.equal(m.readReorderAnimation(), false)
+  m.writeReorderAnimation(true)
+  assert.equal(m.readReorderAnimation(), true)
+})
+ok('reorder animation is shared across profile switches and deletions', () => {
+  m.writeReorderAnimation(false)
+  const extra=m.createProfile('Motion preference check', '3')
+  m.setActiveProfile(extra)
+  assert.equal(m.readReorderAnimation(), false)
+  assert.equal(ls.getItem('profile:'+extra+':spellcaster_reorder_animation'), null)
+  m.deleteProfile(extra)
+  assert.equal(m.readReorderAnimation(), false)
+})
+
 await Promise.all(pending);
 console.log(`\n${pass} passed${process.exitCode ? ', with failures' : ''}\n`)

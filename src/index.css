@@ -204,6 +204,30 @@ body {
   border-radius: 2px;
 }
 
+.glow-hue-slider::-webkit-slider-runnable-track {
+  height: 12px;
+  background: transparent;
+}
+.glow-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -3px;
+  border: 2px solid #334155;
+  border-radius: 50%;
+  background: white;
+}
+.glow-hue-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #334155;
+  border-radius: 50%;
+  background: white;
+}
+.glow-hue-slider::-moz-range-track {
+  background: transparent;
+}
+
 /* Per-sound volume slider (the one under every sound card).
 
    There is one of these per card, always visible, so a full-size round handle

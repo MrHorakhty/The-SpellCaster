@@ -342,7 +342,7 @@ const UI_HELPERS = `window.__ui = {
 const SEED = `(() => {
   const bundled = (id, name, type) => ({ id, name, type, icon:'Icon.png',
     files:[{ name:'Longbow_4.mp3', displayName:'Longbow_4.mp3' }],
-    color:'#ff0000', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1, volume:1 });
+    color:'#ff0000', glowColor:'#00ffcc', duration:0, fadeIn:0, fadeOut:0, loop:false, randomPlay:false, brightness:1, volume:1 });
   window.__pseed({
     ttrpg_characters: [
       { id:'bk_c1', name:'Hero', sounds:[ bundled('bk_s1','Shipped Bow','Ranged') ] },

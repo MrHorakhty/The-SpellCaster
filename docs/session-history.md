@@ -9957,3 +9957,140 @@ backup pruning) not triggered while that gate is pending. Final backup recorded 
 User confirmed the web build retains glow. All required gates and hand-test are complete; standing finishing workflow triggered. Intended six files reviewed; unrelated Android gradlew.bat/settings.gradle edits and untracked .gitattributes remain excluded. Built preview remains intentionally available on 127.0.0.1:5233. Final verified backup, commit/push verification and audited pruning follow; no new application changes after acceptance.
 
 Finishing result: final backup 20261028-022427 VERIFY OK 265/265, 40.8 MB (0). Implementation ba2c64adf087ede47dabe05f19c1fe5bb484af29 pushed to origin/mobile-support and exact remote SHA verified before pruning. Audit preserved 14 differing versions as 10 unique contents; zero backup-only paths. Three older backups removed; sole keeper 20261028-022427 rechecked at all 265 hashes. Recovery ZIP preserved-before-prune-ba2c64a-20261028-maintenance.zip SHA256 dbe802148243d6dfd4e360b2ed62ca28d1f0efb281a87c74b4f99c3256622601; adjacent audit/result JSON files retain inventories. Final metadata postdates keeper; no new backup solely for prune notes. Claim released 2026-10-28 02:25. User-owned Android gradlew.bat/settings.gradle edits and untracked .gitattributes remain untouched. Preview intentionally remains on 127.0.0.1:5233 (PID 7816 / exec session 19934). Final bookkeeping committed separately after this implementation commit.
+
+
+## 2026-10-29 — Sound editor usability, glow color and app animation preference (Codex; hand-test pending)
+
+Authorized batch: move Random/Loop before uploaded files, move Glow directly after
+Tint, enlarge desktop/web sound actions (30px hit areas/16px icons) while retaining
+mobile (26px/10px), independent glow color picker+hue slider, animated reorder, and
+Use as is wording. Optional glowColor rides sound objects; legacy tint fallback
+preserves old appearance, editor seeds a separate color and addSound lists it.
+Bundle fixtures and deep round-trip checks now carry it. No dependency/version bump.
+Reorder uses DOM-node FLIP snapshots on drop and 240ms Web Animations transforms on
+whole card/volume stacks, so wrapped grids and duplicate split-view IDs use actual
+nodes. No per-pointer persistence. Initial implementation followed device reduced
+motion; user explicitly requested an app setting instead while verification ran.
+Replaced that policy with Animate sound reordering (default on) in Settings, globally
+persisted as spellcaster_reorder_animation via profileStorage helpers. Independent of
+OS preference, shared across profile switches/deletion, deliberately outside bundles.
+Settings heading now reflects its wider scope. Preference save failures report through
+the existing banner. KNOWN_KEYS/global-key documentation updated. Three Node checks
+added to profileStorage (35/35), with AGENTS baseline changed from 32/32 in this session.
+
+Backup 20261029-225856 verified 265/265, 40.8 MB (0). Existing unrelated Android edits
+and .gitattributes preserved throughout. Initial in-memory edit script failed an exact
+anchor due CRLF before writing any source; normalized line endings for block moves.
+Another small Node edit script wrote its intended test additions then failed assigning
+a const before the AGENTS edit; corrected only the remaining baseline edit, no duplicate
+assertions. No app failures resulted from either tooling correction.
+
+Verification sequence:
+- Web 230407: 299 PASS/5 FAIL/0 WARN (suite 2, wrapper 1). Four failures were stale
+  ttrpg_characters_old in a reused disposable web profile. X3 assumed the host allowed
+  motion, but matchMedia reported reduce and the initial app correctly skipped it.
+  Added web-only fresh-origin local-storage setup for !EXPECT_TAURI && !SAVE_RESTORE,
+  retaining native/user snapshot paths; made motion tests explicitly select preferences.
+- Corrected pre-steering web 231128: 304/0/0 (0). User changed the motion requirement
+  while this run was in progress, so a new full run validated app-level control.
+- Final web 231918: 305/0/0, suite/wrapper 0. X3 verifies four animations despite device
+  reduce; X4 disables in Settings and still reorders; X5 proves off survives reload and
+  re-enable restores animation. H9–H13 and IP29 pass. No assertion downgraded or removed.
+- Windows 232618: 322/0/3, suite/wrapper 1, expected native warnings retained. Six original
+  keys restored/verified FROM DISK after restart, original zero-file uploads restored.
+- Android 233353: 312/0/3, suite/wrapper 1. Debug build/install successful for this run;
+  touch reorder, app setting, mobile action geometry and independent glow pass. Original
+  26 keys restored/verified, runner emulator/forwards/reverses cleaned. No claim that the
+  user's separate ongoing Android release/build problem has been fixed.
+- Final lint 0 errors/3 baseline warnings (0), Vite build PASS with known dynamic-import
+  warning (0), coverage 42 suites/437 IDs/27 shipped features covered (0), ID diff reviewed:
+  H9–H13, X3–X5, IP29. Eight Node gates: 46/46, 35/35, 20/20, keys OK (0 problems),
+  46/46, 32/32, 35/35, 19/19 (each 0). Bundle fixtures also check independent glowColor.
+
+Isolated visual QA screenshots of editor/settings inspected: tint/glow order, hue bar,
+playback controls above a three-file list, and Settings toggle all laid out correctly.
+Images remain in this chat's visualization directory. QA headless browser 36064 and
+its tree were stopped after command/profile verification. Native launcher completed
+normally (COMPLETE win=1 android=1); only the intentional built preview listens on
+127.0.0.1:5233, PID 35944 / exec session 3852, HTTP 200. Tests on ports 5173/5183/9224/
+9225/9333/9334 are closed. No user hand-test claimed. Active claim retained; no commit,
+push or backup pruning until that gate completes. Final backup 20261029-234840 verified 265/265 files, 40.8 MB (0). Backup-result metadata postdates the snapshot.
+
+
+## 2026-10-30 — Live drag follow-ups (Codex; new hand-test pending)
+
+User accepted the previous editor UI batch, then authorized a switch instead of the
+checkbox, exact title Animate Sound Reordering, live mouse/finger following with
+neighbor displacement, and desktop/web action scaling. This extends the subject;
+no checkpoint commit/push/prune or claim release occurred while follow-ups remain.
+Backup 20261030-000804 verified 265/265, 40.8 MB (0) before follow-up edits.
+
+Implemented a thresholded pointer lifecycle with capture, an inert lifted clone,
+destination placeholder and cached same-grid slots. Only DOM transforms preview the
+order; original React/storage data stays unchanged until valid release. Only moved
+neighbors animate; drop settles from visual positions. Animation-off preserves live
+following and instant displacement. Escape, pointercancel, blur, resize, source-board
+exit, edit-mode exit and unmount clean up. Edge scrolling handles long lists. Source
+board scope preserves cross-container exclusions. Action bounds 22–44px / 12–24px
+icons on desktop/web, mobile 26/10 unchanged. Switch uses role=switch/aria-checked and
+existing app-wide persistence. Removed old drag-over ring state and document listener
+path; its obsolete unused ev parameter disappeared. AGENTS accepted lint baseline
+updated 3 → 2; no unrelated warning cleanup. No new dependencies or persistence fields.
+
+Tests X6–X14/B5 added to shared specs; driver has an optional beforeDrop hook so real
+mouse/touch checks inspect an active gesture. Covers pointer position, displaced
+neighbors, unchanged stored order before drop, switch role/title, cancellation via
+Escape/pointercancel/blur, invalid outside release, wrapped rows, long-board scrolling,
+and button geometry at minimum/maximum size. Cancellation IDs initially generated
+inside a loop were not statically inventoried; replaced only labels with explicit
+literal X9/X10/X11 calls, assertions unchanged. Reviewed manifest delta: X6–X14/B5,
+42 suites/447 IDs/28 shipped features covered. New Live sound reordering feature
+registered. Focused desktop X1–X14/B1–B5 and focused touch X1–X14 both 0 failures.
+
+Final verification:
+- Web e2e-run-20261030-002656.log: 315 PASS/0 FAIL/0 WARN, suite/wrapper 0.
+- Windows e2e-run-20261030-003416.log: 332/0/3, suite/wrapper 1. Original zero-file
+  uploads restored, 9 original keys reverified FROM DISK after app restart.
+- Android e2e-android-20261030-005957.log: 322/0/3, suite/wrapper 1. Original 27
+  keys restored and verified after reload. Expected native assertions remain WARNs.
+- Lint 0 errors/2 accepted warnings (0), build PASS with existing dynamic-import warning
+  (0), coverage OK (0). Node: 46/46, 35/35, 20/20, keys OK (0 problems), 46/46, 32/32,
+  35/35, 19/19 (each 0). Final review removed an inert leftover class token; repeated
+  lint/build/coverage/all Node gates pass, with no observable behavior change.
+
+Android recovery and runner expansion, preserved honestly:
+1. Initial Android 004158 exited suite 3/wrapper 1 after seeding; restore exit 3.
+   Runner attached to existing PID6246, snapshot at 00:42:09, then installPackageLI
+   killed that process at 00:42:12 and started PID10851. Logcat proves installation,
+   rather than a frontend drag crash, broke the CDP connection. Original snapshot
+   27 keys/19,800 bytes copied hash-identically to LOCALAPPDATA/opencode/e2e-snapshots/
+   android-recovery-20261030-004209.json, SHA256
+   5FE976593DFBAF7C11D4116B9B0B017E0223826FDAE6667F4CAACD9A393B8968.
+   Temporary frontend and reverse/forward mappings restored and reload-verified all
+   27 keys (0). Separate readback compare exactly matched (0); temporary services removed.
+2. Narrow e2e-android.ps1 guard now records pre-build PID, waits for a different PID,
+   and clears stale values on empty polls. Syntax parse passes; actual retry skipped
+   10851 and attached to new11186. No snapshots/tests run against old installation.
+3. Retry 004546 completed 320 PASS/2 FAIL/3 WARN (suite 2/wrapper 1), IP20/IP21 failures
+   in existing empty-silhouette/shared-icon assertions; all live-drag tests passed.
+   All 27 original keys restored/verified (0). Added diagnostic metadata/reference
+   identities to those logs only, no weakened assertions or longer waits and no icon
+   implementation edits. Focused native icon suite passed 0 failures (256x256 empty
+   PNG/coverage0; sibling original bytes equal), restored 27 keys in finally (0).
+4. Final full Android 005957 passes both IP20/IP21 and every other check. Earlier icon
+   failure cause remains unestablished. Final pre-run snapshot compared exactly with
+   original recovery snapshot, and final restore matched that pre-run snapshot (27 keys).
+   No claim about resolving the user's separate Android release/build problem.
+
+Isolated visual QA inspected live-sound-drag-20261030.png and reorder-switch-20261030.png
+in this chat's visualization directory. QA browsers and recovery/frontend services
+closed; test forwards/reverses removed. Existing emulator-5554 was already running and
+is preserved. Only intentional built preview listens at 127.0.0.1:5233 (PID39848, exec
+session49112), host HTTP200. User-owned Android gradlew.bat/settings.gradle edits and
+untracked .gitattributes remain untouched/excluded. New follow-up hand-test is NOT
+claimed; active claim retained and finishing workflow awaits it. Final backup 20261030-011253 verified 265/265 files, 40.8 MB (0). Backup-result notes postdate that snapshot.
+
+
+## 2026-10-30 — Editor/live-drag hand-test accepted; finishing (Codex)
+
+User confirmed all follow-ups are working correctly. Prior UI batch and live dragging, switch/title and scaled buttons are now user accepted; all required gates pass. Standing finishing workflow triggered. Reviewed intended code/tests/docs and preserved user-owned Android gradlew.bat/settings.gradle edits plus untracked .gitattributes. No implementation changes after acceptance. Preview remains on 127.0.0.1:5233; pre-existing emulator preserved. Final acceptance backup, commit/push verification and audited backup pruning follow.

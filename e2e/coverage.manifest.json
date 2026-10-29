@@ -23,7 +23,7 @@
     "(android). Anything platform-specific belongs inline in its entrypoint."
   ],
   "version": 1,
-  "updated": "2026-10-27",
+  "updated": "2026-10-30",
   "$featuresComment": [
     "Every shipped capability the app has. This is what answers 'will my new",
     "feature end up in the tests?' Ã¢â‚¬â€ a `shipped` feature with an empty",
@@ -289,6 +289,28 @@
         "specs/iconprep.mjs::IP"
       ],
       "note": "Shipped and user accepted 2026-10-27 after full web/Windows/Android verification and crop-preview/performance refinements. Three opt-in choices; live crop with slider and dimmed exclusions, decode/processing caches, exact original bytes, Save-time reference-aware replacement. No persisted shape change or quality gating. Design archived in docs/session-history.md; Python batch tool retained. Initial silhouette processing remains a one-time operation on mobile."
+    },
+    {
+      "name": "Sound editor usability and independent glow color",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/soundintogroup.mjs::H",
+        "specs/drag.mjs::X",
+        "specs/iconprep.mjs::IP",
+        "specs/bundle.mjs::I",
+        "specs/sliders.mjs::B"
+      ],
+      "note": "Authorized 2026-10-29: top playback controls, glow under tint with its own color, larger desktop actions, reorder animation, Use as is wording. Reorder animation is controlled by an app-wide on/off setting (default on), independent of device preferences. Accepted by user, then extended on 2026-10-30 with a title-cased switch and scaling desktop actions."
+    },
+    {
+      "name": "Live sound reordering",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/drag.mjs::X"
+      ],
+      "note": "Authorized 2026-10-30: lifted sound follows mouse/touch, same-container neighbors preview destination, commit once on drop, cancellation restores original order."
     }
   ],
   "retired": [
@@ -974,7 +996,8 @@
         "B1",
         "B2",
         "B3",
-        "B4"
+        "B4",
+        "B5"
       ],
       "idPattern": "^B\\d"
     },
@@ -992,13 +1015,18 @@
       ],
       "ids": [
         "H1",
+        "H10",
+        "H11",
+        "H12",
+        "H13",
         "H2",
         "H3",
         "H4",
         "H5",
         "H6",
         "H7",
-        "H8"
+        "H8",
+        "H9"
       ],
       "idPattern": "^H\\d"
     },
@@ -1016,7 +1044,19 @@
       ],
       "ids": [
         "X1",
-        "X2"
+        "X10",
+        "X11",
+        "X12",
+        "X13",
+        "X14",
+        "X2",
+        "X3",
+        "X4",
+        "X5",
+        "X6",
+        "X7",
+        "X8",
+        "X9"
       ],
       "idPattern": "^X\\d"
     },
@@ -1322,6 +1362,7 @@
         "IP26",
         "IP27",
         "IP28",
+        "IP29",
         "IP3",
         "IP4",
         "IP5",

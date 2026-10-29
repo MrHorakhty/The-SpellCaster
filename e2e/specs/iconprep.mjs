@@ -70,6 +70,7 @@ export const iconprep = {
       await evalJs(`window.__ipUpload()`);
       const choice = await waitFor(`document.querySelectorAll('[data-icon-mode]').length===3 && !document.querySelector('[data-icon-mode]:disabled')`);
       log('ICON','IP1: upload offers three choices without a default',choice && await evalJs(`!document.querySelector('[data-icon-confirm]')`) ? 'PASS':'FAIL');
+      log('ICON','IP29: original upload choice reads Use as is',await evalJs(`document.querySelector('[data-icon-mode="original"]')?.textContent.includes('Use as is') && !document.querySelector('[data-icon-mode="original"]')?.textContent.includes('as-is')`) ? 'PASS':'FAIL');
       log('ICON','IP2: selection leaves editor and saved sound unchanged',await evalJs(`document.querySelector('img[alt="Icon preview"]').getAttribute('src')===window.__ipOriginalIcon && JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')))[0].sounds[0].icon==='Caustic_Blast_Acid.png'`) ? 'PASS':'FAIL');
       log('ICON','IP3: both small input examples load',await waitFor(`Array.from(document.querySelectorAll('[data-icon-mode="silhouette"] img')).filter(i=>i.complete&&i.naturalWidth===256).length===2`) ? 'PASS':'FAIL');
       await evalJs(`document.querySelector('[data-icon-mode="silhouette"]').click()`);
@@ -194,14 +195,14 @@ export const iconprep = {
       await evalJs(`document.querySelector('[data-icon-confirm]').click()`);
       await waitFor(`!document.querySelector('[data-icon-prep]')`);
       const empty = await evalJs(`window.__ipPixels('img[alt="Icon preview"]')`);
-      log('ICON','IP20: empty silhouette can actually be stored',empty?.width===256 && empty?.height===256 && empty?.coverage===0 ? 'PASS':'FAIL');
+      log('ICON','IP20: empty silhouette can actually be stored',empty?.width===256 && empty?.height===256 && empty?.coverage===0 ? 'PASS':'FAIL',JSON.stringify({...empty,bytes:undefined}));
       if (await submitModal('Save Changes') !== 'OK') throw new Error('Icon replacement could not save the sound.');
       await waitFor(`!document.querySelector('[data-sound-modal-close]')`);
       await reload(); await awaitBoard(ctx,{min:2});
       const shared = await evalJs(`JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')))[0].sounds`);
       await waitFor(`(() => {const src=document.querySelector('[data-sound-id="ip_sibling"] img')?.src;return !!src && !src.includes('/assets/')})()`);
       const sibling = await evalJs(`${pixels}('[data-sound-id="ip_sibling"] img')`);
-      log('ICON','IP21: saving replacement preserves shared original icon bytes',shared?.[0]?.icon!==persisted.icon && shared?.[1]?.icon===persisted.icon && sibling?.bytes.join(',')===original?.bytes.join(',') ? 'PASS':'FAIL');
+      log('ICON','IP21: saving replacement preserves shared original icon bytes',shared?.[0]?.icon!==persisted.icon && shared?.[1]?.icon===persisted.icon && sibling?.bytes.join(',')===original?.bytes.join(',') ? 'PASS':'FAIL',JSON.stringify({replacement:shared?.[0]?.icon,sibling:shared?.[1]?.icon,original:persisted.icon,bytesEqual:sibling?.bytes.join(',')===original?.bytes.join(',')}));
       await driver.enterEditMode();
       await evalJs(`document.querySelector('[data-sound-id="ip_sound"]').parentElement.querySelector('button[title="Edit Sound"]').click()`);
       await waitFor(`!!document.querySelector('[data-sound-modal-close]')`);

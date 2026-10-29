@@ -69,6 +69,16 @@ export const sliders = {
     })()`);
     log('SLIDER', 'B4: box-size survives reload', afterReload?.size === '1.8' || afterReload?.bs === '1.8' ? 'PASS' : 'FAIL', JSON.stringify(afterReload));
 
+    await driver.enterEditMode();
+    const setSize = async value => {
+      await evalJs(`(() => {const s=[...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0.5');const n=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;n.call(s,'${value}');s.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await sleep(200);
+      return evalJs(`['Edit Sound','Delete Sound','Move or Copy Sound'].map(title=>{const b=document.querySelector('[data-sound-card]')?.parentElement?.querySelector('button[title="'+title+'"]');return {width:b?.getBoundingClientRect().width,icon:Number(b?.querySelector('svg')?.getAttribute('width'))};})`);
+    };
+    const small=await setSize(0.5), large=await setSize(2);
+    log('SLIDER','B5: action buttons scale with desktop boxes and preserve mobile sizing',
+      small?.length===3 && large?.length===3 && small.every(b=>b.width===(driver.isDesktop?22:26) && b.icon===(driver.isDesktop?12:10)) && large.every(b=>b.width===(driver.isDesktop?44:26) && b.icon===(driver.isDesktop?24:10)) ? 'PASS':'FAIL',JSON.stringify({small,large}));
+    await driver.exitEditMode();
     // Reset box-size back to 1.0
     await evalJs(`(() => { const s=[...document.querySelectorAll('input[type=range]')].find(s=>s.min==='0.5'); if(s){ const n=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; n.call(s,'1'); s.dispatchEvent(new Event('input',{bubbles:true})); s.dispatchEvent(new Event('change',{bubbles:true})); }})()`);
     await sleep(200);

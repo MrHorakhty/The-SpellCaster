@@ -217,7 +217,7 @@ the report you give the user must state each one with its actual number rather t
 | # | Gate | Command | Passes when |
 |---|---|---|---|
 | 1 | Backup | `.\backup-project.ps1` | `VERIFY OK` and the file count matches the source |
-| 2 | Lint | `npx eslint .` | **0 errors.** 3 warnings (`convertFileSrc`, `_`, `ev`) are the accepted baseline — do not chase them |
+| 2 | Lint | `npx eslint .` | **0 errors.** 2 warnings (`convertFileSrc`, `_`) are the accepted baseline — do not chase them |
 | 3 | Build | `npx vite build` | completes |
 | 4 | Coverage | `node e2e/check-coverage.mjs` | `OK — manifest, code and platform wiring agree`, exit 0 |
 | 5 | Node checks | the eight Node checks below | **every count matches** — each exits non-zero on failure |
@@ -236,7 +236,7 @@ node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bu
 ```
 
 Run **all eight even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
-`profileStorage` **32/32**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
+`profileStorage` **35/35**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
 `soundFiles` **32/32**, `iconPrep` **35/35**, `snapshotUploads` **19/19**. They
 need no browser, no emulator and no CDP, so there is no excuse for skipping them.
 

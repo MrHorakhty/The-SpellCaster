@@ -162,6 +162,12 @@ try {
             $reversePortsAdded += $port
         }
     }
+    # A running dev app belongs to the previous installation. Do not attach to
+    # its WebView while Gradle is still building: installPackageLI will kill it
+    # after the suite has seeded data, taking the restore connection with it.
+    $previousPidRaw = & $adb shell pidof $pkg 2>&1
+    $previousAppPid = if ($null -ne $previousPidRaw) { "$previousPidRaw".Trim() } else { '' }
+    "`tPrevious app PID: $previousAppPid; waiting for a fresh launch." | Add-Content $Script:TestLog
     $tauriProc = Start-Process 'npm.cmd' @('run','tauri','android','dev','--','--host','127.0.0.1') `
         -WorkingDirectory $proj `
         -RedirectStandardOutput  "$tmp\e2e-android-tauri.log" `
@@ -176,8 +182,8 @@ try {
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 5
         $raw = & $adb shell pidof $pkg 2>&1
-        if ($null -ne $raw) { $pidLine = "$raw".Trim() }
-        if ($pidLine -match '^\d+$') { $appReady = $true; break }
+        $pidLine = if ($null -ne $raw) { "$raw".Trim() } else { '' }
+        if ($pidLine -match '^\d+$' -and $pidLine -ne $previousAppPid) { $appReady = $true; break }
     }
     if (-not $appReady) {
         $results.Add('TIMEOUT waiting for app launch') | Out-Null

@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-28 02:25)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-29 22:58 — working on: accepted editor/live-drag UI — finishing workflow
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -78,6 +78,64 @@ Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
 helpers moved to matching paths; `Run Android.bat:48`; `e2e/e2e-android.ps1:32`.
 Old source-package paths are ignored against revival. Historical old-ID references stay in session history.
 
+## Sound editor and live reordering — accepted; finishing in progress
+
+- User accepted the prior editor UI batch on 2026-10-30, then requested these
+  follow-ups. All are implemented: Animate Sound Reordering is now a title-cased
+  switch, desktop/web action buttons scale with box size (22–44px, icons 12–24px),
+  mobile retains 26px/10px, and a lifted sound follows mouse/finger while its
+  same-board neighbors move aside. The app animation preference is unchanged,
+  default ON and global across profiles, independent of OS motion preferences.
+- Live drag uses an inert clone and destination placeholder, with DOM transforms
+  for preview only. The persisted order changes once on valid release. Escape,
+  pointer cancellation, blur, resize, leaving the source board and unmount cancel
+  safely. Wrapped rows and edge auto-scroll are covered. No per-pointer writes;
+  only affected neighbors animate. With animation OFF, following and immediate
+  repositioning still work. Cross-container dragging remains excluded.
+  Code: src/App.jsx:4681 (drag lifecycle), :2589 (drop commit), :4815 (action sizes),
+  :7484 (switch). Obsolete drag-target ring state/listeners removed; unused ev
+  warning disappeared with them. AGENTS lint baseline is now 2 warnings.
+- Prior accepted controls remain: Random/Loop above file list, Glow below Tint,
+  independent optional glowColor with legacy tint fallback and native bundle
+  persistence, hue picker, Use as is wording. No dependency/data-version change.
+- Tests: shared X6–X14 + B5 added to the prior H9–H13/X3–X5/IP29 UI coverage.
+  New Live sound reordering feature registered. Cancellation labels were made
+  literal so X9–X11 are inventoried; ID diff reviewed. Final inventory is 42 suites,
+  447 IDs, 28 shipped features covered (0). Focused mouse (X1–X14/B1–B5) and touch
+  (X1–X14) checks both had 0 failures. Existing checks remain intact.
+- Final gates: lint 0 errors/2 accepted warnings (0); build PASS with known
+  dynamic-import warning (0); coverage OK (0). Eight Node counts: profileBundle
+  46/46, profileStorage 35/35, bundleGuard 20/20, keys OK (0 problems), fadeMath
+  46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19 (each exit 0).
+  Web 315 PASS/0 FAIL/0 WARN (0), Windows 332/0/3 (1), Android 322/0/3 (1).
+  Expected native WARNs are retained. Logs in Windows Temp/opencode:
+  e2e-run-20261030-002656.log, e2e-run-20261030-003416.log,
+  e2e-android-20261030-005957.log. Windows original zero-file uploads restored;
+  9 keys verified after restart. Android original 27 keys restored/verified.
+- Android startup race fixed in e2e/e2e-android.ps1:169/:186: record previous app
+  PID and wait for a fresh PID before snapshot/seeding; polling also clears stale
+  PID values. Actual regression: old PID6246 was attached before installPackageLI
+  replaced it after seeding. Original 27-key snapshot was restored and independently
+  read back exactly before retry. Recovery file is under LOCALAPPDATA/opencode/
+  e2e-snapshots/android-recovery-20261030-004209.json (SHA256
+  5FE976593DFBAF7C11D4116B9B0B017E0223826FDAE6667F4CAACD9A393B8968).
+  Fresh-PID guard was exercised with existing PID10851 → new11186. Runner syntax
+  parse passes. Failed attempts are archived, not counted as successful gates.
+- One Android retry had IP20/IP21 icon assertion failures. Added pixel/reference
+  diagnostics without changing either assertion, timeout or icon implementation.
+  Focused native icon suite then passed 0 FAIL, restored original 27 keys in finally;
+  final full Android also passes both. Their earlier cause was not established.
+- Final review removed an inert leftover CSS class token; no behavior changed.
+  Lint/build/coverage/eight Node checks repeated successfully after that cleanup.
+  Visual QA inspected live-drag and switch screenshots in this chat's visualization
+  directory (live-sound-drag-20261030.png, reorder-switch-20261030.png).
+- Pre-follow-up backup 20261030-000804: VERIFY OK 265/265, 40.8 MB (0). Final backup 20261030-011253: VERIFY OK 265/265, 40.8 MB (0). Backup-result notes postdate the snapshot. User confirmed all follow-ups work on 2026-10-30. All gates and both hand-tests are complete. Final acceptance backup, intended-file commit/push/remote verification, and audited pruning in progress; claim retained through bookkeeping.
+- Only intentional built preview 127.0.0.1:5233 remains (PID39848, exec session49112,
+  host HTTP200). QA browsers/recovery servers/owned port mappings removed. Existing
+  emulator-5554 was already running before tests and is left untouched. Unrelated
+  Android gradlew.bat/settings.gradle and untracked .gitattributes remain preserved.
+  The separate Android release/build issue has NOT been declared resolved.
+
 ## Maintenance — complete and user accepted
 
 - Git integrity repaired by refetching `origin/mobile-support` objects: historical blob
@@ -132,6 +190,9 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
+- Current sound-editor/live-drag work is verified and user accepted; intended-file finishing workflow is in progress. See current section above. Preserve the two user-owned Android files and .gitattributes.
+
+
 - Current maintenance implementation ba2c64a is pushed and remote-verified: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. Final housekeeping is a following docs commit; use git log for latest HEAD. User-owned Android build edits and .gitattributes excluded.
 
 
@@ -150,7 +211,10 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Finishing status
 
-Current maintenance complete: all automated gates pass and user confirmed glow retention in the web build. Implementation ba2c64a pushed/remote-verified. Three older backups audited/pruned, keeper 20261028-022427 (265 files, 40.8 MB). Unrelated Android edits/.gitattributes remain; preview stays on 5233. Claim released. Previous Android release finishing result follows.
+Current UI follow-ups: automated gates and user hand-test pass. Final backup/commit/push/remote verification/backup audit in progress. Active claim retained through final bookkeeping. Earlier maintenance results follow.
+
+
+Earlier maintenance complete: all automated gates pass and user confirmed glow retention in the web build. Implementation ba2c64a pushed/remote-verified. Three older backups audited/pruned, keeper 20261028-022427 (265 files, 40.8 MB). Unrelated Android edits/.gitattributes remain; preview stays on 5233. Claim released. Previous Android release finishing result follows.
 
 
 Local signing/build subject is complete: user generated a signed APK; package and v2
@@ -195,10 +259,10 @@ There is no account, server or automatic cloud sync.
 - Board keys are `profile:<id>:<key>`. Use `profileStorage.js` for reads, writes, removal **and enumeration**.
   Board keys include `ttrpg_characters`, **`ttrpg_environment` (singular)**, `ttrpg_groups`,
   `ttrpg_data_version`, the two `ttrpg_*_icon` keys, `boxSize`, `backgroundSettings` and web `sound_file_*` keys.
-- **Four global keys are intentional**: `spellcaster_profiles` (index), `localStorageMigrationCompleted`
+- **Five global keys are intentional**: `spellcaster_profiles` (index), `localStorageMigrationCompleted`
   (device migration), `spellcaster_import_backups` (last 3 replace snapshots), and `spellcaster_import_notice`
   (read-and-removed after remount; an import may create its target profile). Keep the shared
-  `KNOWN_KEYS` in `e2e/lib/page.mjs` current. The harness's `ttrpg_themes` seed is not an app storage feature.
+  `KNOWN_KEYS` in `e2e/lib/page.mjs` current. `spellcaster_reorder_animation` is the fifth global key: an app-installation UI preference shared by profiles and excluded from bundles. The harness's `ttrpg_themes` seed is not an app storage feature.
 - Profile switching is a **full remount**, preventing old auto-save effects from writing into the next profile.
   New/adopted/imported profiles must be stamped with **`DATA_VERSION = '3'`** from birth.
   A version mismatch **repairs forward, never resets**; casually bumping it affects every profile.

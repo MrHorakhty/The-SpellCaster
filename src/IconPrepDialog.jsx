@@ -146,7 +146,7 @@ export default function IconPrepDialog({ file, soundName = 'Your sound', onCance
                 {!mode ? <div className="space-y-3">
                     <p>Choose how to use this image. Nothing is stored until you confirm.</p>
                     {[
-                        ['original', 'Use as-is', 'Keep the original file and colours untouched.'],
+                        ['original', 'Use as is', 'Keep the original file and colours untouched.'],
                         ['crop', 'Crop to square', 'Pan and zoom to choose a square crop. Keep the original colours.'],
                         ['silhouette', 'Make silhouette', 'Remove a plain background and make a grey shape for tinting. Colour and photo detail will be lost.'],
                     ].map(([value, title, description]) => <button type="button" key={value} data-icon-mode={value}
@@ -159,7 +159,7 @@ export default function IconPrepDialog({ file, soundName = 'Your sound', onCance
                         </span><span className="text-sm">It will work best with images like these.</span></>}
                     </button>)}
                 </div> : <div className="space-y-3">
-                    <p>{mode === 'original' ? 'Use as-is' : mode === 'crop' ? 'Crop to square' : 'Make silhouette'}</p>
+                    <p>{mode === 'original' ? 'Use as is' : mode === 'crop' ? 'Crop to square' : 'Make silhouette'}</p>
                     {mode === 'crop' && source && <>
                         <div ref={cropSurface} data-icon-crop role="group" aria-label="Square crop. Arrow keys pan; plus and minus zoom."
                             tabIndex={0} className="relative overflow-hidden border border-dark-600 rounded-lg mx-auto"
