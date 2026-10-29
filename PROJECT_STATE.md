@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-29 22:58 — working on: accepted editor/live-drag UI — finishing workflow
+🔓 UNCLAIMED — last holder: Codex (2026-10-30 01:20)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -78,7 +78,7 @@ Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
 helpers moved to matching paths; `Run Android.bat:48`; `e2e/e2e-android.ps1:32`.
 Old source-package paths are ignored against revival. Historical old-ID references stay in session history.
 
-## Sound editor and live reordering — accepted; finishing in progress
+## Sound editor and live reordering — complete and user accepted
 
 - User accepted the prior editor UI batch on 2026-10-30, then requested these
   follow-ups. All are implemented: Animate Sound Reordering is now a title-cased
@@ -129,7 +129,7 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   Lint/build/coverage/eight Node checks repeated successfully after that cleanup.
   Visual QA inspected live-drag and switch screenshots in this chat's visualization
   directory (live-sound-drag-20261030.png, reorder-switch-20261030.png).
-- Pre-follow-up backup 20261030-000804: VERIFY OK 265/265, 40.8 MB (0). Final backup 20261030-011253: VERIFY OK 265/265, 40.8 MB (0). Backup-result notes postdate the snapshot. User confirmed all follow-ups work on 2026-10-30. All gates and both hand-tests are complete. Final acceptance backup, intended-file commit/push/remote verification, and audited pruning in progress; claim retained through bookkeeping.
+- Pre-follow-up backup 20261030-000804: VERIFY OK 265/265, 40.8 MB (0). Final backup 20261030-011253: VERIFY OK 265/265, 40.8 MB (0). Backup-result notes postdate the snapshot. User confirmed all follow-ups work on 2026-10-30. All gates and both hand-tests are complete. Acceptance backup 20261030-011909: VERIFY OK 265/265 files, 40.8 MB (exit 0). Implementation 49b7da0333cb304634407026347a468bde72d4a3 pushed to origin/mobile-support; exact remote SHA verified. Six older backups audited/pruned, preserving 60 differing versions as 32 unique contents; zero backup-only paths. Sole keeper 20261030-011909 reverified across all 265 hashes. Recovery ZIP and audit/result manifests: C:/Users/emire/AppData/Local/opencode/backup-prune-history/*49b7da0-20261030-ui*. ZIP SHA256 8b200ddd7981528c414839f13d9e5a11b22d88f85336094e46df4a8092fd8dd1. Final bookkeeping notes postdate keeper; no additional backup needed solely for pruning notes.
 - Only intentional built preview 127.0.0.1:5233 remains (PID39848, exec session49112,
   host HTTP200). QA browsers/recovery servers/owned port mappings removed. Existing
   emulator-5554 was already running before tests and is left untouched. Unrelated
@@ -190,7 +190,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Current sound-editor/live-drag work is verified and user accepted; intended-file finishing workflow is in progress. See current section above. Preserve the two user-owned Android files and .gitattributes.
+- Current sound-editor/live-drag work is complete and user accepted; implementation 49b7da0 pushed/remote-verified, final verified backup retained and six older folders audited/pruned. See current section above. Preserve the two user-owned Android files and .gitattributes.
 
 
 - Current maintenance implementation ba2c64a is pushed and remote-verified: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. Final housekeeping is a following docs commit; use git log for latest HEAD. User-owned Android build edits and .gitattributes excluded.
@@ -211,7 +211,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Finishing status
 
-Current UI follow-ups: automated gates and user hand-test pass. Final backup/commit/push/remote verification/backup audit in progress. Active claim retained through final bookkeeping. Earlier maintenance results follow.
+Current UI follow-ups complete: automated gates and user hand-test pass. Implementation 49b7da0 pushed/remote-verified; final keeper 20261030-011909 (265 files, 40.8 MB), six older folders audited/pruned with differing versions archived. User-owned Android files/.gitattributes remain uncommitted. Built preview on 5233 and pre-existing emulator remain available. Claim released; final bookkeeping committed separately. Earlier maintenance results follow.
 
 
 Earlier maintenance complete: all automated gates pass and user confirmed glow retention in the web build. Implementation ba2c64a pushed/remote-verified. Three older backups audited/pruned, keeper 20261028-022427 (265 files, 40.8 MB). Unrelated Android edits/.gitattributes remain; preview stays on 5233. Claim released. Previous Android release finishing result follows.
