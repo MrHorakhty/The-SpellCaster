@@ -10237,3 +10237,13 @@ internal tooling. No test listeners or task-owned emulator/pipeline remain.
 Unrelated gradlew.bat/settings.gradle and .gitattributes preserved. Final verified
 backup and finishing workflow follow; their bookkeeping may postdate the keeper.
 Final backup 20261030-231749: VERIFY OK 749/749 files,55.9 MB, exit 0.
+Finishing: implementation baa1dea43e69de9d06c99a2710eaa64774d91bc2 pushed to
+origin/mobile-support and git ls-remote matched. Audited both older backups against
+tracked paths and the working tree (including untracked), preserved 10 differing
+entries in logs/keep/android-preflight-prune-20261030-231846/manifest.json before
+deletion, removed two older backups and rehashed all 749 keeper files. Sole keeper:
+ttrpg-soundboard-backup-20261030-231749,55.9 MB. Prune result/manifest protected in
+that keep directory. No new backup was made just to record pruning. Final bookkeeping
+postdates keeper intentionally. Subject complete; claim released. Unrelated Android
+gradlew.bat/settings.gradle and untracked .gitattributes remain; no task-owned native
+processes/emulator or test listeners remain. Final documentation commit follows.

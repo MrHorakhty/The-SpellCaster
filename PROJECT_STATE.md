@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 22:45 — working on: Android release preflight checker
+🔓 UNCLAIMED — last holder: Codex (2026-10-30 23:19)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -50,7 +50,7 @@ Verification (all completed 2026-10-30):
 Evidence: logs/keep/android-preflight-20261030/. No user hand-test required for
 internal tooling. No task-owned emulator/pipeline or listeners on 5173/5183/5233/
 9222/9224/9225 remain. Unrelated Android gradlew.bat/settings.gradle and untracked
-.gitattributes remain untouched. Final backup 20261030-231749 VERIFY OK 749/749,55.9 MB (0). Subject implementation/verification complete; commit/push and backup audit in progress. Final housekeeping postdates keeper intentionally.
+.gitattributes remain untouched. Final backup 20261030-231749 VERIFY OK 749/749,55.9 MB (0). Implementation baa1dea43e69de9d06c99a2710eaa64774d91bc2 pushed to origin/mobile-support; git ls-remote matched. Audited older backups against tracked paths and working tree including untracked files; preserved 10 differing entries under logs/keep/android-preflight-prune-20261030-231846/, removed two older backups, and rehashed all 749 keeper files. Only newest 231749 remains. Subject complete; final housekeeping postdates keeper intentionally and is committed separately.
 ## Mobile sizing parity
 
 Mobile cards now use the same 140 * boxSize width and flex wrapping as desktop/web,
