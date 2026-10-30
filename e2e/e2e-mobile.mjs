@@ -248,9 +248,8 @@ async function main() {
     const envTab = document.querySelector('button[title="Environment"]');
     log('MOBILE','M4: rail has Characters tab',!!charsTab?'PASS':'FAIL');
     log('MOBILE','M5: rail has Environment tab',!!envTab?'PASS':'FAIL');
-    const grid = document.querySelector('div.grid.gap-3');
-    const cols = grid ? getComputedStyle(grid).gridTemplateColumns : '';
-    log('MOBILE','M6: grid present',!!grid?'PASS':'FAIL');
+    const layout = document.querySelector('[data-sound-layout]')?.parentElement;
+    log('MOBILE','M6: wrapping sound layout present',layout && getComputedStyle(layout).flexWrap==='wrap'?'PASS':'FAIL');
     const w = window.innerWidth;
     log('MOBILE','M7: viewport <= 480px',w<=480?'PASS':'FAIL',w+'px');
     return r;

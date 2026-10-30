@@ -105,9 +105,8 @@ export const scroll = {
       r1?.found===true && r1?.holdsCards===true?'PASS':'FAIL',
       r1?.found ? `cls="${(r1?.cls||'').substring(0,70)}" cards=${r1?.cards}` : `no scroll container; ${r1?.cards} cards on the page`);
 
-    // Desktop wraps with flex; mobile lays out a grid whose column count follows
-    // boxSize. Asserting the wrong one would fail on a platform that is correct.
-    const layoutOk = expectMobile ? /grid-cols-/.test(r1?.layoutCls||'') : /flex-wrap/.test(r1?.layoutCls||'');
+    // All platforms wrap cards whose widths follow boxSize.
+    const layoutOk = /flex-wrap/.test(r1?.layoutCls||'');
     log('SCROLL','R2: cards use the layout this platform expects',layoutOk?'PASS':'FAIL',`layout="${r1?.layoutCls}"`);
 
     log('SCROLL','R3: the board is big enough to overflow',(r1?.scrollH ?? 0) > (r1?.clientH ?? 0) + 1?'PASS':'FAIL',

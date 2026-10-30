@@ -10109,3 +10109,84 @@ Pre-change verified backup 20261030-012248: 265/265, 40.8 MB, exit 0. Lint 0 err
 Pre-prune backup audit mapped 51 differing paths across two older backups; hash-preserved five unique older contents under logs/keep/backup-prune-history-20261030/, manifest maps originals and current equivalents (including moved logs). No older backups deleted yet. Unrelated Android gradlew.bat/settings.gradle changes and untracked .gitattributes excluded from intended commit. Final backup and finishing results follow.
 
 Finishing complete: implementation 97145201df514da27929c5fd39d03c5b4616a857 pushed to origin/mobile-support and git ls-remote matched. Final backup 20261030-020121 VERIFY OK 284/284, 43.4 MB (0); 284 content hashes verified before pruning. Removed two older backups (011909 and 012248). The prune check paused on a history version changed after pre-audit; preserved and reverified it before deleting that backup. Final manifest records 52 differing paths, six saved unique contents. Newest 020121 keeper remains; file count and retained hashes rechecked after deletion. Manifest/bookkeeping changes postdate keeper intentionally, no recursive backup loop. Restored prior built preview via Explorer (HTTP 200 on 127.0.0.1:5233, listener PID 40516, launcher 41876); test ports closed, existing emulator preserved. Unrelated Android gradlew.bat/settings.gradle and untracked .gitattributes remain. No unfinished subject work; claim released. Final documentation commit follows.
+
+
+## 2026-10-30 — mobile sizing parity and edit buttons (hand-test pending)
+
+Mobile sound cards now use desktop/web width 140 * boxSize and flex wrapping in
+single and split views (src/App.jsx:4836,5462,6059), replacing full-width grid cells
+and threshold-based column counts. User confirmed boxes and contents scale properly,
+then requested mobile edit-button scaling as well: shared 22–44px action dimensions
+and 12–24px icons, always visible on touch (4815–4816,5023,5031,5042).
+B2 now measures width on all platforms; B6 checks eight valid slider sizes spanning
+the retired thresholds. B5/H11 assert common action sizing; scroll R2 and mobile M6
+assert wrapping. Manifest reviewed: only B6 added, coverage checker OK.
+
+Final lint 0 errors/2 baseline warnings (0), build PASS (0), coverage OK (0).
+All eight Node checks PASS (0): profileBundle 46/46, profileStorage 35/35,
+bundleGuard 20/20, profile keys OK, fadeMath 46/46, soundFiles 32/32,
+iconPrep 35/35, snapshotUploads 19/19. Snapshot needed host process access.
+Final E2E web 316/0/0 (suite/wrapper 0), Windows 333/0/3 (1/1),
+Android 323/0/3 (1/1). Expected native warnings retained. Windows six storage keys
+and uploads restored, verified FROM DISK; Android 28 keys restored/verified.
+Initial web B6 failed only because test values .65/1.45 rounded to valid .7/1.5;
+corrected to .6/1.4. Initial Android only M6 old grid selector failed (322/1/3).
+Initial Windows inherited MSIX context yielded zero-byte fixture uploads and
+305/26/3; unchanged runner via existing Explorer desktop shell passed, matching
+the documented prior-session mitigation. No filesystem behavior changed to mask it.
+Evidence retained in logs/keep/mobile-sizing-20261030/; final full logs 025735,
+023953 and Android 024736. Pre-change backup 020719 289/289 44.2 MB; subsequent
+pre-test/button backups 021120 302/302, 023420 306/306, 024133 310/310, all
+VERIFY OK, exit 0, latter three 44.3 MB. Final backup follows handover write.
+
+Edit-button hand-test pending, so claim remains held and commit/push/prune have
+not run. Unrelated gradlew.bat/settings.gradle/.gitattributes preserved. Existing
+emulator preserved; previous preview 5233 stopped by E2E cleanup.
+
+Final backup 20261030-030602 VERIFY OK 368/368, 46.4 MB (0). No test/preview
+listeners on 5173/5183/5233/9222/9224/9225. Backup bookkeeping postdates keeper.
+
+
+## 2026-10-30 — smaller mobile edit proportions, minimum without maximum
+
+User confirmed scaling edit buttons worked, but found desktop sizing too large
+on Android and noticed the upper cap. Discussion agreed smaller mobile proportions,
+a minimum and no maximum. Desktop/web formulas unchanged. Mobile actions now
+round(max(22,26*boxSize)), icons round(max(8,10*boxSize)) (App.jsx:4815–4820).
+Thus default 26/10, minimum 22/8, at boxSize 2 52/20. Mobile always-visible actions
+retained. B5 validates platform minimum/maximum; H11 validates mobile 26/10 versus
+desktop 30/16 at default. Card sizing/wrapping fix unchanged.
+
+Pre-change backup 20261030-031220 VERIFY OK 370/370,46.4 MB (0). Lint
+0 errors/2 baseline warnings (0), build PASS (0), coverage OK/no id diff (0).
+Eight Node checks all exit 0: profileBundle 46/46, profileStorage 35/35,
+bundleGuard 20/20, keys OK, fadeMath 46/46, soundFiles 32/32,
+iconPrep 35/35, snapshotUploads 19/19.
+Final full E2E via desktop Explorer shell: web 316/0/0 (suite/wrapper 0),
+Windows 333/0/3 (1/1), Android retry 323/0/3 (1/1).
+Initial Android 322/1/3 (suite 2/wrapper 1), only IP18 crop-save failure;
+unchanged retry passed IP18. No app/test changes masked that failure.
+All evidence protected in logs/keep/mobile-button-proportions-20261030/;
+full logs 031316,032002, Android032746/033750. Windows six keys/uploads restored
+and verified FROM DISK; Android 28 keys restored/verified on both runs.
+
+Smaller-proportion user hand-test pending; claim held, changes uncommitted,
+finishing commit/push/audit/prune not run. No backups pruned. Unrelated Android
+gradlew.bat/settings.gradle/.gitattributes preserved. Existing emulator preserved;
+no agent-started preview remains. Final backup follows this handover write.
+
+Final backup 20261030-034718 VERIFY OK 410/410,47.5 MB (0). No test/preview
+listeners on 5173/5183/5233/9222/9224/9225. Bookkeeping postdates keeper.
+
+
+## 2026-10-30 — mobile sizing accepted; finishing
+
+User hand-tested the final smaller mobile button proportions and confirmed
+"Looks fine". Card and edit-button sizing subject is complete; claim released.
+Final verification remains lint 0 errors/2 baseline warnings (0), build PASS (0),
+coverage OK (0), Node checks 46/46,35/35,20/20,keys OK,46/46,32/32,35/35,19/19
+(all 0); web 316/0/0 (0), Windows 333/0/3 (1), Android retry 323/0/3 (1).
+Prior IP18 failure preserved; unchanged retry passed. No test/preview listeners
+were left running; existing emulator preserved. Finishing commits intended code,
+tests and docs only; pre-existing gradlew.bat/settings.gradle/.gitattributes remain.
+Final backup, verified push and backup-content audit/prune results follow.

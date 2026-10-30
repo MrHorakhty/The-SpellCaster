@@ -4812,8 +4812,12 @@ function AppBoard() {
 
     // Render individual sound card
     const renderSoundCard = (sound, containerType, containerId, splitTarget = null) => {
-        const actionSize = isMobile ? 26 : Math.round(Math.min(44, Math.max(22, 30 * boxSize)))
-        const actionIconSize = isMobile ? 10 : Math.round(Math.min(24, Math.max(12, 16 * boxSize)))
+        const actionSize = isMobile
+            ? Math.round(Math.max(22, 26 * boxSize))
+            : Math.round(Math.min(44, Math.max(22, 30 * boxSize)))
+        const actionIconSize = isMobile
+            ? Math.round(Math.max(8, 10 * boxSize))
+            : Math.round(Math.min(24, Math.max(12, 16 * boxSize)))
         const isPlaying = isSoundPlaying(sound.id)
         const IconComponent = getSoundIcon(sound.type)
         const isDragging = draggedSoundId === sound.id
@@ -4833,8 +4837,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                 // Two levels: the outer div is the grid cell and owns the volume row,
                 // the inner one is the card's positioning context so the edit-mode
                 // buttons keep anchoring to the card rather than to the taller stack.
-                className={`group relative shrink-0 flex flex-col gap-1 ${isMobile ? 'w-full' : ''}`}
-                style={isMobile ? {} : { width: `${140 * boxSize}px` }}
+                className="group relative shrink-0 flex flex-col gap-1"
+                style={{ width: `${140 * boxSize}px` }}
             >
                 <div className="relative">
                     <div
@@ -5020,7 +5024,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                     <>
                         <button
                             onClick={() => handleDeleteSound(sound.id)}
-                            className={`absolute top-1 left-1 p-0.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            className={`absolute top-1 left-1 p-0.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors z-10 ${isMobile ? 'flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                             style={{ width: actionSize, height: actionSize }}
                             title="Delete Sound"
                         >
@@ -5028,7 +5032,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                         </button>
                         <button
                             onClick={async () => { if (splitTarget) setSplitSoundTarget(splitTarget); await openEditSoundModal(sound) }}
-                            className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            className={`absolute top-1 right-1 p-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors z-10 ${isMobile ? 'flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                             style={{ width: actionSize, height: actionSize }}
                             title="Edit Sound"
                         >
@@ -5039,7 +5043,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             not inherit the card's pointerdown drag handler. */}
                         <button
                             onClick={() => openMoveCopyModal(sound, containerType, containerId, splitTarget)}
-                            className={`absolute bottom-1 left-1/2 -translate-x-1/2 p-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors z-10 ${isMobile ? 'min-h-[26px] min-w-[26px] flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                            className={`absolute bottom-1 left-1/2 -translate-x-1/2 p-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors z-10 ${isMobile ? 'flex items-center justify-center opacity-100' : 'flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
                             style={{ width: actionSize, height: actionSize }}
                             title="Move or Copy Sound"
                         >
@@ -5459,7 +5463,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             ? (activeItem.groupName ? `${activeItem.groupName}, ${activeItem.displayName}` : activeItem.displayName)
                             : (isCharSection ? 'Select Character' : 'Select Category')}
                     </h2>
-                    <div className={isMobile ? 'grid grid-cols-2 gap-3' : 'flex flex-wrap gap-4'}>
+                    <div className="flex flex-wrap gap-4">
                         {activeItem?.sounds?.map(sound => renderSoundCard(
                             sound,
                             activeItem.containerType,
@@ -6056,7 +6060,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className={`grid gap-3 ${boxSize >= 1.5 ? 'grid-cols-1' : boxSize >= 0.7 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                        <div className="flex flex-wrap gap-4">
                                             {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.sounds : activeGroupCategoryObj?.sounds) || []).map(sound => renderSoundCard(
                                                 sound,
                                                 activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : (activeGroup?.mode === 'characters' ? 'groupCharacter' : 'group'),

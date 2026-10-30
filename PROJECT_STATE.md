@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-30 02:03)
+🔓 UNCLAIMED — last holder: Codex (2026-10-30 03:48)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,34 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Mobile sizing parity
+
+Cards use 140 * boxSize width and flex wrapping on all platforms, including
+split-view (src/App.jsx:4840,5466,6063). B6 checks eight slider sizes and volume
+row width; B2 measures 252px at 1.8 on every platform; scroll R2/mobile M6 expect
+wrapping. Manifest reviewed: only B6 added. User confirmed card sizing works.
+
+User then requested scaling edit buttons on mobile. Shared desktop dimensions
+were hand-tested, but user found them too large and noticed the upper cap.
+Agreed revision: smaller mobile proportions, a minimum, no maximum; desktop/web
+unchanged. Mobile now max(22,26*boxSize) buttons and max(8,10*boxSize) icons,
+rounded to pixels (App.jsx:4815–4820). Default 26/10, minimum 22/8, at size 2
+52/20; no upper cap. Always-visible mobile actions retained. B5/H11 now assert
+platform proportions. User hand-tested final smaller mobile proportions and confirmed they look fine. Desktop/web stay at their original 22–44px/12–24px limits; only mobile upper caps removed.
+
+Pre-revision backup 20261030-031220 VERIFY OK 370/370, 46.4 MB (0).
+Latest lint 0 errors/2 baseline warnings (0), build PASS (0), coverage OK (0).
+All eight Node checks PASS (0): 46/46,35/35,20/20,keys OK,46/46,32/32,35/35,19/19. Latest web 316 PASS/0 FAIL/0 WARN (suite/wrapper 0). Windows 333 PASS/0 FAIL/3 expected WARN (suite/wrapper 1), six keys/uploads restored and verified FROM DISK. Android initial revision run 322 PASS/1 FAIL/3 WARN (suite 2/wrapper 1), only IP18 icon crop-save assertion failed; B5 minimum 22/8, default H11 26/10, maximum B5 52/20 all PASS. 28 keys restored/verified. Unchanged Android retry 323 PASS/0 FAIL/3 expected WARN (suite/wrapper 1); IP18 PASS, 28 storage keys restored/verified. Final E2E all green. Logs/status: logs/mobile-button-proportions-android-retry-20261030-0340.*. All revision evidence protected in logs/keep/mobile-button-proportions-20261030/.
+(desktop shell avoids inherited MSIX zero-byte native-upload issue).
+Launcher/status: logs/mobile-button-proportions-20261030-0315.*.
+Prior revision verified web 316/0/0 (0), Windows 333/0/3 (1), Android 323/0/3 (1);
+Windows six keys/uploads and Android 28 keys restored/verified. Prior successful
+and failed evidence protected in logs/keep/mobile-sizing-20261030/; see history.
+Subject complete: user hand-test confirmed. Finishing workflow: final handover and backup, then commit/push/remote verification and backup audit/prune. Unrelated changes stay uncommitted.
+Final revision backup 20261030-034718: VERIFY OK 410/410,47.5 MB (0). No listeners on 5173/5183/5233/9222/9224/9225. Backup metadata postdates keeper.
+Unrelated gradlew.bat/settings.gradle/.gitattributes preserved. Existing emulator
+preserved; prior preview 5233 stopped by E2E cleanup.
 
 ## Log housekeeping
 

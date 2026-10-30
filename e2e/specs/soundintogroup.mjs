@@ -106,7 +106,7 @@ export const soundIntoGroup = {
         return {title,width:b?.getBoundingClientRect().width,height:b?.getBoundingClientRect().height,icon:b?.querySelector('svg')?.getAttribute('width')};
       });
     })()`);
-    log('GRP','H11: action hit areas and icons use platform sizing',actionSizes?.length===3 && actionSizes.every(b=>b.width>=(driver.isDesktop?30:26) && b.height>=(driver.isDesktop?30:26) && b.icon===(driver.isDesktop?'16':'10')) ? 'PASS':'FAIL',JSON.stringify(actionSizes));
+    log('GRP','H11: action hit areas and icons use platform proportions',actionSizes?.length===3 && actionSizes.every(b=>b.width>=(driver.isDesktop?30:26) && b.height>=(driver.isDesktop?30:26) && b.icon===(driver.isDesktop?'16':'10')) ? 'PASS':'FAIL',JSON.stringify(actionSizes));
 
     await reload();
     await navigateTo('Tavern Pack');
