@@ -239,6 +239,21 @@ Gates 4–8 are the ones that catch things gates 2–3 cannot. Budget roughly 3 
 with warm `node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK. **Gate 5 is
 seconds**, and it is a gate precisely because of what has happened without it.
 
+### Windows gate from Codex desktop
+
+Read the MSIX virtualization warning in `PROJECT_STATE.md` before gate 7.
+Launching native tests directly as a Codex child can produce false uploads-scope
+failures even outside the filesystem sandbox (icon saves, zero-byte bundle fixtures).
+Use the **existing Explorer desktop** object's `Document.Application.ShellExecute`
+to launch the unchanged runner hidden: obtain the desktop through
+`Shell.Application.Windows().FindWindowSW(0, 0, 8, [ref]$desktopHwnd, 1)`.
+A newly created Shell.Application's own ShellExecute is not equivalent. Keep the
+launcher/captures/status under `logs/`, verify its parent is explorer.exe, wait for
+the suite and restoration to finish, and report actual counts. Do not widen app
+filesystem permissions to mask this launch-context problem. Verified 2026-10-31:
+direct Codex run 305/26/3; unchanged Explorer run 333/0/3 with real upload bytes
+and restore-from-disk proof. Exit 1 remains the expected native WARN baseline.
+
 ### Gate 5 — the nine node checks, in one line
 
 Additional tooling gate: `pwsh -NoProfile -File e2e/android-preflight.check.ps1`

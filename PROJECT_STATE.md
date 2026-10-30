@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-31 00:13)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-31 01:03 — working on: finishing documentation commit/push and audited backup pruning
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -325,6 +325,59 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   Android `gradlew.bat` / `settings.gradle` (ANDROID_PREFS_ROOT handling). Native E2E ran
   with those edits present. The prior unresolved Studio Rust failure is now fixed and verified in the current release-build section above; the user explicitly authorized that investigation. Android edits under gen remain outside project backups.
 
+## Hotkey spec review and Windows investigation — complete
+
+HOTKEYS_SPEC.md:1 reviewed against current code on 2026-10-31; design review only,
+implementation remains unauthorized. V1 proposes in-app physical single keys,
+profile ownership, repeated card-equivalent triggers through playWithPrimes,
+sound-id identity through moves/renames across all five container shapes, explicit
+bundle wiring and full event-suppression/persistence coverage. Plan updated because
+profiles shipped, groupTop exists, card activation triggers overlapping playback,
+and bundle collection/commit require explicit fields. Android external keyboards
+are possible; hardware dispatch needs actual verification before claiming support.
+
+Windows uploads investigation resolved without app/harness/permission changes.
+The direct Codex-child run reproduced the already-documented MSIX virtualization
+failure: 305/26/3, forbidden uploads mkdir/exists, zero-byte bundle fixture. The
+operational warning was missed initially. Existing Explorer desktop shell launch
+avoids inherited package context; first launcher pwsh39428 parent explorer11464
+confirmed in logs/windows-investigation-20261031-004950.ancestry.json. First
+Explorer run lost page helpers during priming (six FAIL then fatal type error;
+no final suite summary); store restored/verified, cause of that interruption not
+established. Unchanged isolated retry completed 333/0/3, with all corresponding
+icon saves passing, real upload 320044 bytes, and G6c resolving native audio.
+AGENTS.md now places the existing launch requirement beside the Windows gate.
+Do not widen filesystem capabilities for a Codex launch-context failure.
+
+Verification for this doc-only subject (PASS/FAIL/WARN; exits):
+- Backups 20261031-001912 and 004929 VERIFY OK 889/889 and 915/915 respectively,
+  61.6/62.2 MB (0). Review backup 004713 verified 915/915,62.2 MB (0).
+  Final backup 20261031-010255 VERIFY OK 935/935,62.3 MB (0);
+  older backups retained until remote proof. Housekeeping postdates keeper.
+- Lint 0 errors/2 baseline warnings (0); build PASS (0); coverage OK (0),
+  42 suites/448 registered ids,28/28 shipped covered; hotkeys already planned.
+- Node: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20, keys OK,
+  fadeMath 46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19,
+  androidReleaseSession 19/19 (all 0); preflight 9/9 (0). Snapshot check needed
+  host retry after sandbox EPERM. Static/Node/web/Android results retained from
+  the same unchanged app/harness tree; only Windows reran for its launch issue.
+- Web 316/0/0 (0); final Windows 333/0/3 expected WARN (suite/wrapper 1);
+  Android 323/0/3 expected WARN (1). Initial sandbox web CDP access was blocked
+  before assertions; cleaned before host runs. No human hand-test needed or
+  claimed for docs-only work. No hotkey implementation or behavior is verified.
+- Final Windows six keys restored/verified FROM DISK, zero original uploads
+  restored; Android 28 keys restored/verified. Direct Codex namespace's earlier
+  13 keys/25 uploads were also restored, separately from Explorer's ordinary store.
+- Evidence: logs/keep/hotkey-spec-20261031/ and
+  logs/keep/windows-investigation-20261031/; failed runs preserved as diagnostics.
+
+Earlier Studio/companion PIDs above had already ended before investigation.
+Final host check: no listeners on 5173/5183/5233/9333/9224/9225 and no Studio/emulator. Preserve unrelated user Android gradlew.bat /
+settings.gradle edits and untracked .gitattributes. Intended changes only:
+HOTKEYS_SPEC.md, AGENTS.md, PROJECT_STATE.md and docs/session-history.md.
+Subject complete; final backup/commit/push verification/audit/prune follows.
+Hotkey implementation remains a separate authorization decision.
+
 ## Open items
 
 No export/import defect remains open from the fade work: the user confirmed export and re-import work on
@@ -332,7 +385,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| 1 | [Hotkeys](HOTKEYS_SPEC.md) | Planned, **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
+| 1 | [Hotkeys](HOTKEYS_SPEC.md) | Spec refreshed 2026-10-31; **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |

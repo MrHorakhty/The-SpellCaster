@@ -1,213 +1,191 @@
 # Hotkeys — Planning Spec
 
-> **Status**: **New spec, 2026-10-06.** Design only — **implementation is not authorised.** No app code has been
-> written. Line numbers verified against `src/App.jsx` at **6240 lines** on 2026-10-06; re-verify before editing.
-> **Created**: 2026-10-06
-> **Related**: `PROFILE_SYNC_SPEC.md` (live, holds the deferred merge/cloud-sync scope). ⚠️
-> `PER_SOUND_VOLUME_SPEC.md` and `SOUND_PRIMING_SPEC.md` were **deleted 2026-10-16** after shipping; the decisions
-> this spec leans on from them now live in **`PROJECT_STATE.md`** (per-sound volume section; Sound priming section)
-> and in git at `git show c60a355:PER_SOUND_VOLUME_SPEC.md` / `git show c60a355:SOUND_PRIMING_SPEC.md`.
-> ⚠️ **Recommended order: after profiles.** See §1 — the deciding factor is that a hotkey is a *reference to a
-> sound*, and profiles are what force that reference story to exist properly.
+> Status: design reviewed against the working tree on 2026-10-31. Spec review is
+> authorized; app implementation is not yet authorized. No hotkey code is shipped.
+> Profiles v1 and one-shot priming are shipped, so the original prerequisite is met.
+> Related: PROJECT_STATE.md and PROFILE_SYNC_SPEC.md (future merge/sync scope).
 
----
+## 1. Scope and behavior
 
-## 0. What the user asked for
+V1 binds one physical key to one sound in the active profile, while the app has
+focus. No new native dependency or OS-wide registration. Global shortcuts, chords,
+macros, MIDI and separate binding-set export remain deferred.
 
-"Ability to Add Hotkeys" — bind a key to a sound so it can be triggered from the keyboard.
+A press behaves like clicking the sound card: call `playWithPrimes`, not
+`playSound` directly. Each accepted press triggers playback, including another
+instance if that sound is already playing; it does not toggle stop. This applies
+to loops too. Existing stop controls retain their current behavior, including
+primed-group stopping. Edit mode suppresses triggering. Priming remains one-shot:
+the first accepted trigger consumes it; rejected/unresolved presses do not.
 
----
+Bindings work across all tabs of the active profile, including sounds off screen.
+A sound may have several different keys; each key has exactly one target.
+Duplicate codes are refused with the existing target named; no silent reassignment.
 
-## 1. Why this one should come *after* profiles, and the other two should not
+## 2. Key policy and event handling
 
-A hotkey is **not** a piece of content; it is a **pointer at** content. That single fact drives everything below.
+Store and compare `KeyboardEvent.code`, with a separate recorded `key` label for
+display. Physical position is the contract across keyboard layouts; the recorded
+label can become stale after a layout change, so show the code alongside it.
 
-`PROFILE_SYNC_SPEC.md` already has to answer hard questions about sound identity: its §8 "unresolvable audio
-references" policy exists because an imported profile can reference audio the local app does not have, and its §3
-warns that **categories have no id — identity is the display name**. Hotkeys multiply both problems.
+V1 allowlist: `KeyA`–`KeyZ`, `Digit0`–`Digit9`, `Numpad0`–`Numpad9`.
+Reserve Enter, Space, Escape, Tab, arrows, navigation keys, function keys,
+punctuation and all modifier keys. This avoids card activation, focus navigation,
+modal Escape and platform shortcut collisions. Reject Ctrl, Meta, Alt, Shift,
+AltGraph, composition/dead/process/unidentified events and auto-repeat during both
+recording and triggering. A shifted key is not a second binding.
 
-**Therefore: build hotkeys after the profile work, and store them per profile.** Then a hotkey's target always
-resolves within the profile that contains it, and it rides the bundle for free with the rest of the board.
+Use one bubble-phase document listener with cleanup. Before triggering, reject:
 
-The alternative — global (device-level) hotkeys with per-profile content — produces a feature whose bindings
-break every time the user switches profile or imports a new one, with no obvious moment at which they broke. Do
-not build that by accident.
+- `defaultPrevented`, composition, repeat or any prohibited modifier;
+- editable targets or ancestors: input (including number/range), textarea, select,
+  contenteditable and textbox roles; inspect the composed event path as needed;
+- edit mode, an open modal, settings, About, the side drawer, an active drag,
+  binding capture, or an active profile/import transition;
+- missing, malformed, duplicate or unresolved binding targets.
 
----
+Use a shared interaction-blocked predicate rather than a partial modal list.
+Respect the existing capture-phase Escape handlers. Only prevent the default on
+an accepted binding event. Do not stop unrelated keyboard propagation. Listener
+state must track the current profile and board without stale closures or duplicate
+registrations under React effect remounts. Blur/visibility loss cancels recording;
+composition end does not replay a discarded keystroke.
 
-## 2. Two tiers — decide which one, because the cost differs by 10×
+## 3. Target identity
 
-| | **In-app hotkeys** | **Global hotkeys** |
-|---|---|---|
-| Scope | only while the SpellCaster window has focus | work while any app has focus |
-| Implementation | a `keydown` listener | `tauri-plugin-global-shortcut` — a **new dependency**, OS-level registration |
-| Desktop | ✅ | ✅ |
-| Android | n/a (no keyboard) | ❌ plugin is desktop-only |
-| Extra risk | low | see §3 |
-| Recommend | **ship this first** | add later if asked |
-
-**In-app first.** It covers the real use case (GM hands are on the keyboard, the board is on screen) with zero new
-dependencies, and it is testable in the existing harness on web and Windows.
-
-### ⚠️ The input-capture problem (this is the real work)
-
-A soundboard has **many text inputs** — the volume text field (`volumeInput`, App.jsx:1068), the sound-name
-field, the numeric `duration`/`fadeIn`/`fadeOut` fields (5529-5553), the `boxSize` field, the move/copy picker's
-filter, search boxes. A binding on `1` must **not** fire when the user types "1" into a field.
-
-Every handler must therefore bail out when:
-
-```js
-const tag = e.target?.tagName
-if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return
-if (e.ctrlKey || e.metaKey || e.altKey) return          // don't steal browser/app shortcuts
-if (e.repeat) return                                    // holding a key must not machine-gun
-```
-
-Plus: **do not fire while a modal is open.** There are already two `keydown` listeners to coordinate with —
-App.jsx:728 (document-level) and App.jsx:2166 (capture-phase, closes the move/copy modal on `Escape`). A global
-capture listener that fires before a modal's own handler will make the modal un-closable. Bind with
-`document.addEventListener('keydown', handler)` (bubble phase) unless a test proves otherwise.
-
-⚠️ `Escape` must stay reserved. So must anything the app already uses.
-
----
-
-## 3. If global hotkeys are wanted: the plugin-registration trap
-
-`tauri-plugin-global-shortcut` is **desktop-only**. Register it in `src-tauri/src/main.rs` **only** — and this is
-the **reverse** of the `tauri-plugin-dialog` rule in `PROFILE_SYNC_SPEC.md` §10, where registering in only one
-place is a bug:
-
-| | dialog | global-shortcut |
-|---|---|---|
-| missing from `lib.rs` | ❌ broken on mobile (`Plugin not found`) | n/a — mobile doesn't need it |
-| registered in `lib.rs` too | harmless but pointless | ⚠️ **may fail to build or behave badly on Android** — `lib.rs` is the mobile entry point |
-
-So: `main.rs` only, and **verify `cargo check` with the Android target** after adding it
-(`cargo check --target aarch64-linux-android` or just a Gradle build), because a desktop-only plugin in the
-mobile binary is exactly the kind of thing that passes a desktop build and breaks the APK.
-
-Registration is a runtime side effect (it reserves the key with the OS), so also decide the lifecycle: register
-on mount / on binding change, and **unregister on unmount and on hotkey rebinding**, or the keys stay captured by
-a dead process and the OS refuses to hand them to the next instance.
-
----
-
-## 4. Data model
-
-Per profile. A binding is a **reference plus a display snapshot**:
+Use a sound id as the authoritative identity within the owning profile. Keep a
+container reference and display snapshot for the picker and unresolved row:
 
 ```json
 {
   "id": "hk_a1b2c3",
-  "key": "1",                                  // normalised: see below
+  "code": "Digit1",
+  "label": "1",
   "target": {
-    "containerType": "character",              // character | groupCharacter | environment | group
-    "containerId": "Sir Bram",                 // ⚠️ for categories this IS the display name
-    "groupId": null,
-    "soundId": "sound_1757..._k3f9x2"
+    "soundId": "sound_1757_k3f9x2",
+    "containerType": "character",
+    "containerId": "character_123",
+    "groupId": null
   },
-  "displayName": "Fireball"                    // snapshot, for the UI when the target is gone
+  "displayName": "Fireball"
 }
 ```
 
-⚠️ **This is the same reference shape `transferSound` already uses** (App.jsx:2108, 2123, 2144:
-`{ containerType, containerId, groupId }`) plus the sound's own id. Reuse it — do not invent a second one.
+Reuse `allSoundContainers` and the transfer reference shape. There are FIVE shapes:
+character, environment, groupCharacter, group and groupTop. Environment/category
+container ids are names; they must not determine a sound's identity. Resolve only
+inside the active profile, requiring exactly one matching sound id. Never fall
+back to matching a name. Duplicate sound ids in malformed/imported data make the
+binding unresolved rather than firing the first match.
 
-### Key normalisation (do this once, in one helper)
+A category rename or sound move preserves its sound id and therefore its binding;
+refresh the location/display metadata from the resolved target. Copying creates
+a new sound id and leaves the binding attached to the original. Deleting a sound
+or its container leaves a visible unresolved binding, repairable or removable.
+Import pruning of missing audio may also remove a target: keep its binding and
+show the reason. A sound that still exists but has unusable audio follows the
+existing playback error path; do not present success when playback fails.
 
-Compare and store keys **canonically**, or bindings silently fail: `KeyboardEvent.key` is layout-dependent
-(`'1'` vs `'Digit1'`, `'/'` vs `'Slash'`, `' '` vs `'Space'`). Store `e.code` (`'Digit1'`, `'Slash'`, `'Space'`) and
-accept `e.code` on lookup — it is layout-independent and stable. Keep `e.key` only for display.
+## 4. Persistence and profile bundles
 
-### ⚠️ Dangling references are normal, not exceptional
+Planned scoped key: `ttrpg_hotkeys`, accessed through profileStorage wrappers.
+Payload: `{ "version": 1, "bindings": [] }`. Missing key means no bindings.
+Validate ids, codes, target shapes and duplicate codes on load/import. Invalid
+rows must never register; surface an actionable warning and preserve original
+stored data until repair is explicitly saved. An unknown payload version must
+not be overwritten by an automatic empty-state save.
 
-Three ordinary actions break a binding, and all three are things users do:
+Bindings must be wired explicitly into all of these paths during implementation:
 
-1. **Renaming a category** — `containerId` is the *display name* for categories (the known identity landmine).
-2. **Deleting the sound**, or its whole container.
-3. **Importing a profile** that lacks the referenced sound.
+- App initialization, durable writes and profile switch/create/duplicate/delete.
+- `collectProfileForExport`, bundle payload validation and `commitKeys` (including
+  its written-key allowlist), plus normalized return/state hydration.
+- Snapshot/restore, rollback, replacement import and restore-default behavior.
+- Profile storage/key guards and browser/native fixture seed/cleanup inventories.
 
-Policy (mirroring `PROFILE_SYNC_SPEC.md` §8): **keep the binding, show it as unresolved, let the user repair or
-delete it.** Do not auto-delete, do not auto-remap by name (names collide), and never leave a hotkey that fires
-nothing while looking live. The `displayName` snapshot is what makes a broken binding explainable.
+Planned bundle field: `data.hotkeys`, using the versioned payload above. A bundle
+without it imports as empty bindings, including replace-active; it must not retain
+the previous board's keys. A new-profile import keeps sound ids and resolves only
+within that new profile. Profile duplication copies bindings into the new namespace.
+No bindings belong in GLOBAL_KEYS. Do not add a new key to the legacy migration
+list merely because it is profile-scoped; it never existed before profiles.
 
-Sound ids are minted once and never regenerated (`mintId('sound')`, App.jsx:260, called at 1485 and 2045), so an
-id-based reference is stable **within** a profile's lifetime — which is exactly why bindings belong inside the
-profile.
+Export is currently an explicit field selection, and replace-import deletes keys
+outside its allowlist. A separate binding collection does NOT ride the bundle
+for free. Test format compatibility and decide whether the bundle format version
+must advance before shipping; older builds must not silently destroy bindings
+under a claimed lossless round trip. Native bundle support does not authorize or
+supply web audio bundle export/import, which remains deferred.
 
----
+During switching/import, stop hotkey dispatch before changing the profile and
+resume only after target data and bindings are hydrated. A failed switch/import
+restores both consistently. No outgoing-profile write may land in the incoming
+namespace. Failed storage writes must use the existing actionable error handling.
 
-## 5. Where the UI goes
+## 5. Settings UI
 
-A "Hotkeys" section in the existing Settings modal, alongside the "Profiles & Sync" section that
-`PROFILE_SYNC_SPEC.md` §9.2 plans — reuse that modal rather than adding an eighth one. Per row: the key
-(combo box, click-to-record), the target sound (picker, same pattern as the move/copy picker), and a status
-dot for unresolved targets.
+Add a Hotkeys section to the existing Settings modal, alongside the shipped
+Profiles controls. Show key label/code, sound and location, and explicit unresolved
+status. Provide Add, Record/rebind, Choose/repair target and Remove actions.
+Use the existing move/copy picker patterns across all five container shapes.
+Keep empty states and errors visible and keyboard accessible.
 
-⚠️ **Recording a key inside a text input is a UX trap**: the field swallows the keystroke. Either bind on
-`keydown` with `preventDefault` in a capture phase, or use a "press a key…" button that captures the next
-`keydown` at the document level.
+Recording starts from a button, never a text input. Settings blocks playback while
+a dedicated temporary recorder accepts the next allowed key. Escape cancels;
+invalid/duplicate keys explain why and keep recording; Cancel, blur, profile change
+and unmount remove capture listeners. Commit only after both a valid key and a
+target are selected. Canceling a draft must not alter a persisted binding.
+Focus returns to the initiating control. No silent replacement of another row.
 
-### Decisions to make before coding
+Android can use an external keyboard; do not describe keyboard use as impossible.
+Bindings/settings must survive Android profile/bundle operations. Touch-only use
+needs no keyboard to inspect, choose targets or remove bindings. In-app dispatch
+may work with attached keyboards; do not promise hardware behavior without testing.
 
-- Chords (`Ctrl+Shift+1`) or single keys? **Single keys for v1**, with modifiers reserved (§2).
-- Can one key trigger several sounds? **No** — one binding, one target. Multi-sound triggering is **priming's** job
-  (`playWithPrimes`); don't build it twice. See `PROJECT_STATE.md`, Sound priming.
-- Does the key **toggle** or **trigger**? `playSound` (App.jsx:3256) starts; `stopSound` (3472) stops. Decide
-  whether a second press stops the sound, and make it consistent with what clicking the card does.
-- Looping sounds: if the key stops a looping sound, is that a "stop" or a "toggle"? Same question as above.
-- **Does a hotkey respect `editMode`?** `playSound` early-returns when `editMode` is true (App.jsx:3257), so a
-  binding pressed in edit mode should do nothing. Keep that behaviour rather than special-casing it.
-- Should a hotkey also fire the sound's **primed** sounds? **Yes** — that is what a user expects, and priming is
-  the shipped one-shot multi-sound mechanism. ⚠️ **Non-negotiable: route it through `playWithPrimes`**, never
-  `playSound` directly. Two triggers with different semantics is the thing to avoid, and this was recorded as a
-  binding requirement before the priming spec was retired.
+## 6. Implementation and coverage plan
 
----
+Hotkeys are already registered as a planned feature
+in `e2e/coverage.manifest.json`. When implementation is authorized, add pure
+validation/resolution/event-policy Node
+checks and register their command/count in AGENTS.md gate 5. Pick a fresh suite
+prefix after checking the manifest; do not reserve a supposedly free numeric
+range in an existing suite. Register platform wiring, run --update and review ids.
 
-## 6. E2E notes
+Required cases:
 
-- **CDP can send keys**: `Input.dispatchKeyEvent` with `type: 'keyDown'`/`'keyUp'` and a `code`. That makes
-  in-app hotkeys fully testable on **web and Windows**.
-- **Android has no keyboard** — this feature is untestable there, and the mobile suite should not try. Say so in
-  the suite rather than skipping silently.
-- ⚠️ Do **not** drive `DOM.setFileInputFiles` — it kills the Android WebView renderer (already documented in
-  `e2e-mobile.mjs`); a hotkey target picker is a reason to prefer calling an in-page function, as
-  `PROFILE_SYNC_SPEC.md` §9.3 does.
-- New IDs: **`P` is taken** — `specs/volume.mjs` holds `P1`–`P16` (per-sound volume), desktop priming took `P17`–`P34`
-  and mobile priming took `Q1`–`Q14`, so **`P35`+ is free but do not reuse a shipped range**. ⚠️ The original
-  advice here ("continue from `P1`") was stale the moment both features shipped. Check `coverage.manifest.json`
-  before picking, and keep `idPattern` non-overlapping or `check-coverage.mjs` reports `AMBIGUOUS_ID`.
-- Test the negatives, they are the real risks: pressing a bound key **while typing in a field** fires nothing;
-  pressing it **with a modal open** fires nothing; a **dangling** binding is visible and inert; **`Escape`**
-  still closes modals; a **rebound** key fires only the new target.
+- Trigger, repeated presses/overlap, loop behavior, priming consumed once and edit
+  mode; no repeat/composition/modifier activation or Enter/Space double trigger.
+- Editable descendants, every modal/drawer, drag, prevented event, capture cancel,
+  listener cleanup/remount, blur and profile/import transition suppression.
+- Duplicate refusal, rebind removes old dispatch, canceled draft unchanged,
+  rename/move preserved, copy stays with original, delete/prune unresolved,
+  duplicate sound id inert, repair and removal.
+- Independent profiles, rapid switch without stale dispatch, reload persistence,
+  duplicate/delete/defaults, native bundle round trip, legacy bundle with no field,
+  replace-active clears old keys, malformed/unknown versions and failure rollback.
+- Web and Windows real key dispatch through CDP, not only calling a helper.
+  Android management/persistence/bundle regression tests plus explicit hardware
+  keyboard coverage or a registered, visible hardware-test gap. Never use
+  DOM.setFileInputFiles on Android; the renderer crash warning still applies.
 
----
+Before shipping run all AGENTS.md gates in order, report actual counts/exits, and
+obtain the user's hand-test of the built app. Do not run E2E/orphan cleanup during
+an active Android Studio release companion session. Spec review alone proves no
+hotkey behavior and needs no app hand-test.
 
-## 7. Verification checklist
+## 7. Current-code anchors (reviewed 2026-10-31)
 
-- [ ] A bound key triggers its sound while the window is focused.
-- [ ] The key does **not** fire while any text field has focus (test with a digit key, which is the worst case).
-- [ ] The key does not fire in edit mode, or fires consistently with the card behaviour — decided in §5.
-- [ ] `Escape` and existing app shortcuts still work; no binding can shadow them (enforced in the picker).
-- [ ] Binding the same key twice is **refused or reassigned**, never silently duplicated.
-- [ ] A **deleted** target leaves the binding visible, marked unresolved, and firing nothing.
-- [ ] A **renamed category** does not silently break a binding into a different sound, and vice versa.
-- [ ] Rebinding releases the old key (no stale registration, especially if global hotkeys are enabled).
-- [ ] Two profiles have independent binding sets; switching profiles swaps them.
-- [ ] Bindings survive an export/import round trip with the target resolving (or degrading to unresolved, cleanly).
-- [ ] `npx eslint src/App.jsx` → 0 errors; `npx vite build` succeeds.
-- [ ] E2E: web + Windows pass; mobile suite is unchanged and does not attempt key dispatch.
+- `src/App.jsx:1280`: drawer key handler; `:3066`: move/copy capture handler;
+  `:4802`: drag Escape handler (recheck exact positions before implementation).
+- `src/App.jsx:2661`: transfer references; `:2739`: five-shape sound index;
+  `:2757`: sound-container lookup. Existing first-match lookup needs ambiguity
+  handling for imported hotkey targets, not blind reuse.
+- `src/App.jsx:4189`: playback entry; `:4496`: stopTrigger; `:4511`:
+  playWithPrimes; `:4860` and `:4868`: card click/keyboard paths.
+- `src/App.jsx:7470`: Settings; `src/profileStorage.js:53`: legacy keys;
+  `src/profileBundle.js:889`: commitKeys; `:1102`: collectProfileForExport.
 
----
-
-## 8. Deferred
-
-- **Global (out-of-app) hotkeys** — §3. Only after the in-app tier is solid, and only if the user actually needs
-  to trigger sounds while another window has focus.
-- Chords / multi-modifier bindings.
-- One key → several sounds (belongs to priming).
-- Profile-level **macro** scripts ("play X, wait 200ms, play Y").
-- Import/export of hotkey *sets* as a separate shareable file (the profile bundle covers this).
+The earlier plan changed because profiles have shipped, card triggering is now
+verified, groupTop exists, and bundle serialization requires explicit work.
+Global-shortcut plugin placement is deferred research: inspect current platform
+entry points, dependency cfgs and capabilities if global scope is later requested.

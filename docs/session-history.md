@@ -10296,3 +10296,62 @@ was made for pruning bookkeeping. Studio18292/private companion55368 rechecked l
 working release session intentionally preserved. Subject complete, claim released;
 final documentation commit follows. Three unrelated files remain uncommitted:
 user gradlew.bat/settings.gradle and .gitattributes. No app UI/keys were changed.
+
+## 2026-10-31 — Hotkey spec refreshed; Windows verification failed
+
+Codex reviewed the planning spec only, as authorized. HOTKEYS_SPEC.md now reflects
+shipped profiles, five container shapes, sound-id identity through moves/renames,
+card-equivalent trigger/overlap semantics, explicit bundle serialization and native
+keyboard/persistence coverage. No app/harness/config implementation was changed.
+The older assumptions (profiles pending, four shapes, automatic bundle carriage,
+Android keyboard impossible) were corrected from current code. In-app v1 remains
+proposed; implementation not authorized.
+
+Pre-change backup 20261031-001912 verified 889/889,61.6 MB (0), after sandbox
+robocopy 16 required host retry. Lint 0 errors/2 warnings (0), build PASS (0),
+coverage OK 42 suites/448 ids/28 shipped covered (0). Node profileBundle46/46,
+profileStorage35/35,bundleGuard20/20,keys OK,fadeMath46/46,soundFiles32/32,
+iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19 (all 0); snapshot
+needed host retry after sandbox EPERM. Preflight9/9 (0). Sandbox web CDP socket
+access was denied before assertions; stopped/cleaned, then host gates ran.
+Web316/0/0 exit0; Windows305/26/3 suite exit2/wrapper1; Android323/0/3 exit1.
+Windows console forbids uploads mkdir/exists; five icon failures, failed bundle
+fixture/prerequisites and G6c. AppData capabilities already declared; root cause
+not established. Android corresponding saves/fixture passed. Evidence protected
+under logs/keep/hotkey-spec-20261031/. Windows restored13 keys FROM DISK and25
+uploads; Android restored/verified28 keys. No test listeners, Studio or emulator
+remain. The previous release/Studio session had ended before these runs.
+No human app hand-test claimed or needed for spec-only work. Required Windows
+gate failure holds finishing: no commit/push/prune, claim retained, diagnosis is
+pending. Unrelated user Android files and .gitattributes preserved. Final verified
+backup follows; no backups will be removed while push is held.
+Final backup 20261031-004713 VERIFY OK 915/915,62.2 MB (0). All older backups retained; final bookkeeping postdates keeper. No commit/push performed; Windows blocker and claim remain active.
+
+## 2026-10-31 — Windows investigation resolved through existing Explorer shell
+
+User authorized investigation after the hotkey spec review. The operational warning
+already documented the exact Codex MSIX virtualization failure; the earlier direct
+host invocation missed it. No app/harness/capability changes were needed. Existing
+Explorer desktop Document.Application.ShellExecute launched the unchanged runner;
+launcher39428 parent explorer11464 was confirmed. First Explorer run lost page-side
+helpers at P27 (six FAIL, then fatal keysBefore.filter error, no final summary),
+restored six keys FROM DISK/zero uploads. Its interruption cause is not established.
+An unchanged isolated retry passed333/0/3, suite and wrapper1 expected WARN; all
+previously failing icon saves passed, bundle fixture read320044 bytes and G6c used
+native audio. Six ordinary Windows keys restored/verified FROM DISK; zero original
+uploads. Earlier Codex-context13 keys/25 uploads had separately restored too.
+Diagnostic and passing evidence retained in logs/keep/windows-investigation-20261031/;
+prior web/Node/Android proof in logs/keep/hotkey-spec-20261031/.
+
+AGENTS.md now places the documented Explorer-launch requirement alongside gate7,
+to avoid repeating this environment failure or widening app permissions to mask it.
+Pre-investigation backup004929 VERIFY OK915/915,62.2MB (0). Retained same-tree gates:
+lint0 errors/2 warnings(0),buildPASS(0),coverage42 suites/448 ids/28 shipped covered(0);
+Node46/46,35/35,20/20,keysOK,46/46,32/32,35/35,19/19,19/19(all0),preflight9/9(0);
+web316/0/0(0),Android323/0/3(1),28 keys restored/verified. No human hand-test needed
+or claimed for documentation-only work; hotkeys remain unimplemented/unauthorized.
+Subject complete. Final backup, intended docs commit/push/remote proof and audited
+backup prune follow. User Android gradlew/settings edits and .gitattributes remain
+excluded from intended changes; no app code or harness modified.
+Final host check: no test listeners or Studio/emulator remain. Claim released after subject completion; final housekeeping follows.
+Final backup20261031-010255 VERIFY OK935/935,62.3MB(0). Housekeeping postdates keeper. Claim temporarily reclaimed for finishing bookkeeping; no new subject work.
