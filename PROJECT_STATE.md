@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-30 03:48)
+🔓 UNCLAIMED — last holder: Codex (2026-10-30 03:50)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -16,31 +16,38 @@ That snapshot is historical and contains contradictions; current code, this hand
 
 ## Mobile sizing parity
 
-Cards use 140 * boxSize width and flex wrapping on all platforms, including
-split-view (src/App.jsx:4840,5466,6063). B6 checks eight slider sizes and volume
-row width; B2 measures 252px at 1.8 on every platform; scroll R2/mobile M6 expect
-wrapping. Manifest reviewed: only B6 added. User confirmed card sizing works.
+Mobile cards now use the same 140 * boxSize width and flex wrapping as desktop/web,
+including split view (src/App.jsx:4840,5466,6063). Mobile edit buttons use
+round(max(22,26*boxSize)), icons round(max(8,10*boxSize)) (4815–4820): default
+26/10, minimum 22/8, no upper cap. Desktop/web retain their existing size limits.
+Mobile actions remain always visible. User hand-tested and accepted both card
+sizing and the final smaller mobile edit-button proportions.
 
-User then requested scaling edit buttons on mobile. Shared desktop dimensions
-were hand-tested, but user found them too large and noticed the upper cap.
-Agreed revision: smaller mobile proportions, a minimum, no maximum; desktop/web
-unchanged. Mobile now max(22,26*boxSize) buttons and max(8,10*boxSize) icons,
-rounded to pixels (App.jsx:4815–4820). Default 26/10, minimum 22/8, at size 2
-52/20; no upper cap. Always-visible mobile actions retained. B5/H11 now assert
-platform proportions. User hand-tested final smaller mobile proportions and confirmed they look fine. Desktop/web stay at their original 22–44px/12–24px limits; only mobile upper caps removed.
+Shared B6 verifies eight card/volume-row widths; B2 measures 252px at size 1.8;
+B5/H11 check platform button proportions; mobile M6/scroll R2 expect wrapping.
+Manifest reviewed: only B6 added. Latest verification:
+- Lint 0 errors/2 baseline warnings (0); build PASS (0); coverage OK (0).
+- Eight Node checks: 46/46,35/35,20/20,keys OK,46/46,32/32,35/35,19/19 (all 0).
+- Web 316 PASS/0 FAIL/0 WARN (0); Windows 333/0/3 expected WARN (1).
+- Android 323/0/3 expected WARN (1). Initial IP18 crop-save failure passed on
+  unchanged retry; evidence retained. Windows six keys/uploads restored and
+  verified FROM DISK; Android 28 keys restored/verified.
+Evidence: logs/keep/mobile-button-proportions-20261030/ and mobile-sizing-20261030/.
+Native suites launch through Explorer desktop shell to avoid inherited MSIX
+zero-byte native-upload failures, as documented in session history.
 
-Pre-revision backup 20261030-031220 VERIFY OK 370/370, 46.4 MB (0).
-Latest lint 0 errors/2 baseline warnings (0), build PASS (0), coverage OK (0).
-All eight Node checks PASS (0): 46/46,35/35,20/20,keys OK,46/46,32/32,35/35,19/19. Latest web 316 PASS/0 FAIL/0 WARN (suite/wrapper 0). Windows 333 PASS/0 FAIL/3 expected WARN (suite/wrapper 1), six keys/uploads restored and verified FROM DISK. Android initial revision run 322 PASS/1 FAIL/3 WARN (suite 2/wrapper 1), only IP18 icon crop-save assertion failed; B5 minimum 22/8, default H11 26/10, maximum B5 52/20 all PASS. 28 keys restored/verified. Unchanged Android retry 323 PASS/0 FAIL/3 expected WARN (suite/wrapper 1); IP18 PASS, 28 storage keys restored/verified. Final E2E all green. Logs/status: logs/mobile-button-proportions-android-retry-20261030-0340.*. All revision evidence protected in logs/keep/mobile-button-proportions-20261030/.
-(desktop shell avoids inherited MSIX zero-byte native-upload issue).
-Launcher/status: logs/mobile-button-proportions-20261030-0315.*.
-Prior revision verified web 316/0/0 (0), Windows 333/0/3 (1), Android 323/0/3 (1);
-Windows six keys/uploads and Android 28 keys restored/verified. Prior successful
-and failed evidence protected in logs/keep/mobile-sizing-20261030/; see history.
-Subject complete: user hand-test confirmed. Finishing workflow: final handover and backup, then commit/push/remote verification and backup audit/prune. Unrelated changes stay uncommitted.
-Final revision backup 20261030-034718: VERIFY OK 410/410,47.5 MB (0). No listeners on 5173/5183/5233/9222/9224/9225. Backup metadata postdates keeper.
-Unrelated gradlew.bat/settings.gradle/.gitattributes preserved. Existing emulator
-preserved; prior preview 5233 stopped by E2E cleanup.
+Implementation 95c67e6c50c06b0aa83eacbeca3ad520989671b2 pushed to origin/mobile-support;
+git ls-remote matched. Final backup 20261030-034838 VERIFY OK 412/412,47.5 MB (0);
+all 412 keeper hashes verified after pruning. Only the backup command's own
+in-progress capture differs from its finished working-tree capture, as expected.
+After verified push, audited all eight older backups against working-tree files
+(including untracked) and tracked Git content; preserved 35 unique versions in
+logs/keep/mobile-sizing-prune-20261030/ with manifest, reverified redundancy before
+each deletion, and removed eight backups. Only newest 034838 remains.
+Final bookkeeping postdates keeper intentionally; no recursive backup cycle.
+Subject complete; final bookkeeping commit follows. Unrelated Android gradlew.bat,
+settings.gradle and untracked .gitattributes remain untouched/uncommitted.
+Existing emulator preserved; no listeners on 5173/5183/5233/9222/9224/9225.
 
 ## Log housekeeping
 

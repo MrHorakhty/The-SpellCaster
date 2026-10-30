@@ -10190,3 +10190,19 @@ Prior IP18 failure preserved; unchanged retry passed. No test/preview listeners
 were left running; existing emulator preserved. Finishing commits intended code,
 tests and docs only; pre-existing gradlew.bat/settings.gradle/.gitattributes remain.
 Final backup, verified push and backup-content audit/prune results follow.
+
+
+Finishing result: implementation 95c67e6c50c06b0aa83eacbeca3ad520989671b2 committed
+and pushed to origin/mobile-support; git ls-remote matched. Final pre-prune backup
+20261030-034838 VERIFY OK 412/412,47.5 MB (0); 412 keeper hashes verified.
+After the verified push, eight older backups audited against working-tree files
+(including untracked) and tracked HEAD content. Preserved 35 unique file versions
+in logs/keep/mobile-sizing-prune-20261030/ with SHA256 manifest. Every older backup
+and its redundancy reverified immediately before native PowerShell deletion,
+with exact resolved parent/name and reparse checks. Removed eight; only newest
+034838 remains, all keeper hashes rechecked afterward. The keeper's backup-output
+capture predates its own completion, the only expected source hash difference.
+Bookkeeping postdates keeper; no new backup just to record prune. Claim released,
+subject complete; final docs commit follows. Unrelated gradlew.bat/settings.gradle
+and .gitattributes remain uncommitted. No test/preview listeners left running;
+existing emulator preserved.
