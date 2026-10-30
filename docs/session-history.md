@@ -10286,3 +10286,13 @@ or emulator remain. Do not run E2E cleanup while this Studio signing session is 
 User-owned gradlew.bat/settings.gradle hashes match recovery copies; .gitattributes
 preserved/excluded. Final verified backup and finishing commit/push/audit follow.
 Final backup 20261031-001058 VERIFY OK 874/874,58.9 MB (0); housekeeping postdates keeper.
+Finishing: implementation 72daed28202f01862fadcde681f9cd6b93d76711 pushed to
+origin/mobile-support and git ls-remote matched. After remote verification, audited
+three older backups against tracked paths and the working tree including untracked
+files. Preserved 15 differing entries in logs/keep/android-build-fix-prune-20261031-001201/
+with manifest/result, removed three older folders and rehashed all 874 keeper files.
+Only ttrpg-soundboard-backup-20261031-001058 remains (58.9 MB). No recursive backup
+was made for pruning bookkeeping. Studio18292/private companion55368 rechecked live;
+working release session intentionally preserved. Subject complete, claim released;
+final documentation commit follows. Three unrelated files remain uncommitted:
+user gradlew.bat/settings.gradle and .gitattributes. No app UI/keys were changed.

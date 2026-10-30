@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 23:21 — working on: reproduce and fix actual Android build failure
+🔓 UNCLAIMED — last holder: Codex (2026-10-31 00:13)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -66,7 +66,7 @@ approval timed out; user subsequently approved access. No force-kill, settings r
 lock deletion, signing authentication or private-key access was performed.
 User-owned gradlew.bat/settings.gradle are byte-identical to their keep/ recovery
 copies; untracked .gitattributes is untouched and excluded from intended changes.
-Implementation/verification complete. Final backup 20261031-001058 VERIFY OK 874/874,58.9 MB (0); keeper hash audit follows. Commit/push/prune in progress; final housekeeping postdates keeper intentionally.
+Implementation/verification complete. Final backup 20261031-001058 VERIFY OK 874/874,58.9 MB (0); keeper hash audit follows. Implementation 72daed28202f01862fadcde681f9cd6b93d76711 pushed to origin/mobile-support; git ls-remote matched. Audited three older backups against tracked paths and all working-tree files, preserved 15 differing entries under logs/keep/android-build-fix-prune-20261031-001201/, removed three old folders, and rehashed all 874 keeper files. Only newest 20261031-001058 remains. Subject complete; final housekeeping postdates keeper intentionally and is committed separately.
 ## Android release preflight
 
 `android-preflight.ps1:1` works on Windows PowerShell 5.1 and PowerShell 7.
