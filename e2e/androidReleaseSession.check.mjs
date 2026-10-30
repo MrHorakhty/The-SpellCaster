@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { createReleaseSession, launchReleaseSession } from '../open-android-release.mjs';
+
+const project = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const fixture = mkdtempSync(path.join(project, 'logs', 'android-release-check-'));
+const parentTemp = path.join(fixture, 'parent-temp');
+mkdirSync(parentTemp);
+const env = { ...process.env, TEMP: parentTemp, TMP: parentTemp, Temp: 'stale-case-variant' };
+let count = 0;
+function check(condition, label) {
+  assert.ok(condition, label);
+  console.log(`PASS ${label}`);
+  count++;
+}
+const a = createReleaseSession({ root: fixture, baseTemp: parentTemp, env });
+const b = createReleaseSession({ root: fixture, baseTemp: parentTemp, env });
+check(a.directory !== b.directory, 'two release sessions get different temp directories');
+check(a.env.TEMP === a.directory && a.env.TMP === a.directory && a.env.TMPDIR === a.directory, 'temp variables select the same private session');
+check(!('Temp' in a.env), 'case-variant temp variables cannot override isolation on Windows');
+check(env.TEMP === parentTemp && env.Temp === 'stale-case-variant', 'parent environment remains unchanged');
+check(a.env.PATH === env.PATH && a.env.Path === env.Path, 'toolchain PATH is preserved');
+const marker = 'fixture.spellcaster-server-addr';
+writeFileSync(path.join(parentTemp, marker), 'unrelated-build');
+const writer = `require('node:fs').writeFileSync(require('node:path').join(require('node:os').tmpdir(), ${JSON.stringify(marker)}), process.argv[1])`;
+const childA = spawnSync(process.execPath, ['-e', writer, 'session-a'], { env: a.env });
+const childB = spawnSync(process.execPath, ['-e', writer, 'session-b'], { env: b.env });
+check(childA.status === 0 && childB.status === 0, 'real child processes use isolated Windows temp environments');
+check(readFileSync(path.join(a.directory, marker), 'utf8') === 'session-a', 'second session cannot overwrite first companion address');
+check(readFileSync(path.join(b.directory, marker), 'utf8') === 'session-b', 'second session has its own companion address');
+check(readFileSync(path.join(parentTemp, marker), 'utf8') === 'unrelated-build', 'release sessions cannot overwrite unrelated build address');
+writeFileSync(path.join(parentTemp, marker), 'later-build');
+check(readFileSync(path.join(a.directory, marker), 'utf8') === 'session-a', 'later unrelated build cannot replace Studio session address');
+
+const cli = path.join(fixture, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
+mkdirSync(path.dirname(cli), { recursive: true });
+writeFileSync(path.join(fixture, 'package.json'), '{"type":"commonjs"}');
+writeFileSync(cli, `console.log(JSON.stringify({args:process.argv.slice(2),temp:require('node:os').tmpdir(),cwd:process.cwd()})); console.error('original build failure'); process.exit(7);`);
+const failure = await launchReleaseSession({ root: fixture, baseTemp: parentTemp, env });
+const capture = readFileSync(failure.logPath, 'utf8');
+const metadata = JSON.parse(capture.split(/\r?\n/).find(line => line.startsWith('{')));
+check(failure.code === 7, 'native nonzero exit is preserved without retrying');
+check(capture.includes('original build failure'), 'original stderr reaches durable log');
+check(metadata.temp === failure.directory, 'actual launcher child inherits its private temp');
+check(metadata.cwd === fixture, 'launcher uses the project working directory');
+check(JSON.stringify(metadata.args) === JSON.stringify(['android', 'build', '--open']), 'launcher requests the real Tauri Studio build workflow');
+writeFileSync(cli, 'console.log("release session complete"); process.exit(0);');
+const success = await launchReleaseSession({ root: fixture, baseTemp: parentTemp, env });
+check(success.code === 0 && readFileSync(success.logPath, 'utf8').includes('release session complete'), 'successful exit and stdout are preserved');
+check(success.directory !== failure.directory && success.logPath !== failure.logPath, 'retries get a new directory and capture');
+// Exercise the entry point used by the BAT, rather than only imported functions.
+const entry = path.join(fixture, 'open-android-release.mjs');
+writeFileSync(entry, readFileSync(path.join(project, 'open-android-release.mjs')));
+writeFileSync(cli, 'console.error("entry failure retained"); process.exit(7);');
+const entryResult = spawnSync(process.execPath, [process.platform === 'win32' ? entry.toLowerCase() : entry], { env, encoding: 'utf8' });
+check(entryResult.status === 7, 'BAT helper entry point preserves failure with Windows path casing');
+check(entryResult.stdout.includes('Build log:') && entryResult.stderr.includes('entry failure retained'), 'entry point starts the logged release workflow');
+console.log(`androidReleaseSession: ${count}/${count} PASS, 0 FAIL`);

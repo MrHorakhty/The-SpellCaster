@@ -230,7 +230,7 @@ the report you give the user must state each one with its actual number rather t
 | 2 | Lint | `npx eslint .` | **0 errors.** 2 warnings (`convertFileSrc`, `_`) are the accepted baseline — do not chase them |
 | 3 | Build | `npx vite build` | completes |
 | 4 | Coverage | `node e2e/check-coverage.mjs` | `OK — manifest, code and platform wiring agree`, exit 0 |
-| 5 | Node checks | the eight Node checks below | **every count matches** — each exits non-zero on failure |
+| 5 | Node checks | the nine Node checks below | **every count matches** — each exits non-zero on failure |
 | 6 | Web E2E | `e2e\e2e-full.ps1 -Phase web -Suite full` | **0 FAIL** |
 | 7 | Windows E2E | `e2e\e2e-full.ps1 -Phase win -Suite full` | **0 FAIL** |
 | 8 | Android E2E | `e2e\e2e-android.ps1 -Suite mobile` | **0 FAIL** |
@@ -239,7 +239,7 @@ Gates 4–8 are the ones that catch things gates 2–3 cannot. Budget roughly 3 
 with warm `node_modules` and cargo cache; Android additionally boots an emulator and rebuilds the APK. **Gate 5 is
 seconds**, and it is a gate precisely because of what has happened without it.
 
-### Gate 5 — the eight node checks, in one line
+### Gate 5 — the nine node checks, in one line
 
 Additional tooling gate: `pwsh -NoProfile -File e2e/android-preflight.check.ps1`
 must pass all assertions (currently 9/9). This tests the Android preflight's
@@ -249,12 +249,13 @@ pipeline, set `PREFLIGHT_BUILD_FIXTURES=1` for 16/16 assertions, including origi
 native exit preservation, missing build output and hung-build timeout using an isolated fake CLI.
 
 ```powershell
-node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs
+node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs; node e2e/androidReleaseSession.check.mjs
 ```
 
-Run **all eight even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
+Run **all nine even when one fails**, and report each count. Current baseline: `profileBundle` **46/46**,
 `profileStorage` **35/35**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
-`soundFiles` **32/32**, `iconPrep` **35/35**, `snapshotUploads` **19/19**. They
+`soundFiles` **32/32**, `iconPrep` **35/35**, `snapshotUploads` **19/19**,
+`androidReleaseSession` **19/19**. They
 need no browser, no emulator and no CDP, so there is no excuse for skipping them.
 
 ⚠️ **Why this is a gate and not a suggestion — it has already bitten twice.** `bundleGuard.check` is what found the

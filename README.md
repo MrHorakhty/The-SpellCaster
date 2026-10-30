@@ -176,7 +176,7 @@ Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emu
    |---|---|
    | **`Build Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
    | **`Run Android.bat`** | **Opens the app that is already installed** — no build, no reinstall. If nothing is serving port 5173 it **starts a Vite dev server itself**, because a debug build carries no UI of its own; it prints the PID and the `taskkill` to stop it. Fails clearly if no emulator or device is attached. |
-   | **`Open Android Release.bat`** | Prepares release APK/AAB files and opens Android Studio through Tauri for signing. Requires Studio to be fully closed first. Keep its console open throughout signing. `--check` checks prerequisites without launching Studio. |
+   | **`Open Android Release.bat`** | Prepares release APK/AAB files and opens Android Studio through Tauri for signing. Gives each launch a private temporary session so other builds cannot overwrite its Tauri companion address; captures complete output under `logs/android-release-*.log`. Requires Studio to be fully closed first. Keep its console open throughout signing. `--check` checks prerequisites without launching Studio. |
 
    Or use the **Run App** configuration in Android Studio.
 
@@ -213,6 +213,13 @@ Studio and double-click **`Open Android Release.bat`** from the project root. Wa
 Studio to open itself and keep the launcher console running. An already-open IDE
 does not inherit the new process's Android linker environment. The Gradle helper
 preserves real npm/Tauri failures instead of hiding them behind a missing `npm.bat`.
+Each launcher gets a private temporary directory for its Tauri companion address,
+so other builds cannot replace that session's address. Complete launcher output is
+saved under `logs/android-release-*.log`. Opening Studio directly or closing the
+launcher can leave Gradle without its companion; Tauri requires the CLI to remain
+running while using the IDE ([official development guide](https://v2.tauri.app/develop/#using-xcode-or-android-studio)).
+Do not run E2E cleanup during signing: the runners may stop Tauri processes even
+though their temporary address files are separate.
 The wizard's signed universal APK output under `src-tauri/gen/android/app/universal/`
 is ignored by Git and remains on disk.
 

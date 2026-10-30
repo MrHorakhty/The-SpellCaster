@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-30 23:19)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 23:21 — working on: reproduce and fix actual Android build failure
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,6 +14,59 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
+## Android Studio release build — verified
+
+Reported Arm64Release npm exit -1073740791 (0xC0000409) was a Tauri options-reader
+panic, connection refused 10061. The shared temp address can outlive its CLI or be
+replaced by another build. Open Android Release.bat:25 now calls
+open-android-release.mjs:7: each CLI/Studio launch gets private TEMP/TMP/TMPDIR,
+unchanged toolchain PATH, original exit propagation and a complete timestamped log.
+Studio must start through the launcher, with its console kept alive. Existing-Studio
+guard still refuses (2). README.md:179 documents use; the ninth Node gate is
+e2e/androidReleaseSession.check.mjs:1, baseline 19/19.
+
+Actual IDE verification after user-approved Computer Use: old Studio closed normally,
+then the updated launcher prepared all ABIs/APK/AAB and opened a fresh Studio. Agent
+selected arm64Release and invoked the native IDE build. Studio ran
+:app:assembleArm64Release at 00:07:56 on 2026-10-31 and reported success in 10.227s;
+its Rust command --release --target aarch64 finished in 1.03s, with a fresh private
+companion connection. No shell exit code is exposed by Studio's Tooling API; the
+IDE build finished green. Fresh arm64 APK is 43,772,481 bytes, correct package
+com.thespellcaster.mrhorakhty/version 0.1.3/code 1003, SHA256
+9FE054E480EE7F281C479354555D1BECACB98C7A7EEDD039E1A4BD89A7A91374.
+The reported Rust/Studio build failure is closed. This validates the exact failing
+task, not the signing credential UI: no signed APK or credential/registration change
+is claimed. Plan changed from requiring the signing wizard to testing the exact IDE
+release assemble because the reported failure was in Rust before signing, and this
+verifies it without authentication. No human app hand-test claimed or required for
+internal build tooling; agent drove and observed the actual Studio build.
+
+Other verification (2026-10-30 unless noted):
+- Backup 20261030-232103 VERIFY OK 762/762,58.1 MB (0); interim pending-work
+  snapshot 20261030-235927 VERIFY OK 868/868,58.8 MB (0).
+- Lint 0 errors/2 baseline warnings (0); Vite build PASS (0); coverage OK (0),
+  28 shipped features covered and --update reviewed: zero suite ID changes.
+- Node: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20, keys OK,
+  fadeMath 46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19,
+  androidReleaseSession 19/19 (all 0). Additional PowerShell preflight 9/9 (0).
+- Web 316/0/0 (0); Windows 333/0/3 expected WARN (1), six keys verified FROM DISK
+  and zero uploads restored; Android 323/0/3 expected WARN (1), 28 keys restored.
+- Full four-ABI unsigned APK+AAB build (0), four native libraries verified;
+  focused real private-temp ARM64 build (0) created its private endpoint and left
+  the shared endpoint unchanged. Error/build/artifact proof protected in
+  logs/keep/android-build-fix-20261030/.
+
+Working Studio is intentionally left ready for the user: PID 18292, launcher Node
+20796, Tauri CLI 31880, private endpoint 127.0.0.1:55368 in temp session
+spellcaster-android-release-hrnOeK. Live log:
+logs/android-release-20796-hrnOeK-20261031-000115.log. Do NOT run E2E/orphan cleanup
+while this release/signing session is in use: it can kill the companion despite
+private addresses. No test emulator or test-port listeners remain. Initial Sky
+approval timed out; user subsequently approved access. No force-kill, settings reset,
+lock deletion, signing authentication or private-key access was performed.
+User-owned gradlew.bat/settings.gradle are byte-identical to their keep/ recovery
+copies; untracked .gitattributes is untouched and excluded from intended changes.
+Implementation/verification complete. Final backup 20261031-001058 VERIFY OK 874/874,58.9 MB (0); keeper hash audit follows. Commit/push/prune in progress; final housekeeping postdates keeper intentionally.
 ## Android release preflight
 
 `android-preflight.ps1:1` works on Windows PowerShell 5.1 and PowerShell 7.
@@ -46,7 +99,7 @@ Verification (all completed 2026-10-30):
   rerun after pipelines finished passed. A sandbox 5.1 attempt was policy-blocked.
 - Initial unbounded probe was manually stopped during Rust compilation (native 1,
   checker 2); it was not proof of a build defect. Added timeout/live logs; final
-  bounded probe succeeded. Separate reported Android problem is not declared fixed.
+  bounded probe succeeded. The later Studio exact-task verification above now closes the reported Rust/companion failure.
 Evidence: logs/keep/android-preflight-20261030/. No user hand-test required for
 internal tooling. No task-owned emulator/pipeline or listeners on 5173/5183/5233/
 9222/9224/9225 remain. Unrelated Android gradlew.bat/settings.gradle and untracked
@@ -240,7 +293,7 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   host HTTP200). QA browsers/recovery servers/owned port mappings removed. Existing
   emulator-5554 was already running before tests and is left untouched. Unrelated
   Android gradlew.bat/settings.gradle and untracked .gitattributes remain preserved.
-  The separate Android release/build issue has NOT been declared resolved.
+  The later Studio exact-task verification above closes the reported Rust/companion failure; signing credentials and registration are separate.
 
 ## Maintenance — complete and user accepted
 
@@ -270,9 +323,7 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   Subject and hand-test complete. Implementation ba2c64adf087ede47dabe05f19c1fe5bb484af29 pushed to origin/mobile-support and remote SHA verified. Three older backups audited/pruned after preserving 14 differing versions as 10 unique contents; zero backup-only paths. Sole keeper 20261028-022427 reverified. Recovery ZIP and audit/result manifests: %LOCALAPPDATA%/opencode/backup-prune-history/*ba2c64a-20261028-maintenance*. Final bookkeeping follows in a docs commit.
 - Preserve/exclude unrelated `.gitattributes` and user-confirmed concurrent edits to
   Android `gradlew.bat` / `settings.gradle` (ANDROID_PREFS_ROOT handling). Native E2E ran
-  with those edits present. User explicitly says their separate Android build problem
-  STILL EXISTS despite a supplied report claiming resolution; do not claim it fixed or
-  pursue that subject here. Android edits under gen remain outside project backups.
+  with those edits present. The prior unresolved Studio Rust failure is now fixed and verified in the current release-build section above; the user explicitly authorized that investigation. Android edits under gen remain outside project backups.
 
 ## Open items
 

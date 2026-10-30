@@ -10247,3 +10247,42 @@ that keep directory. No new backup was made just to record pruning. Final bookke
 postdates keeper intentionally. Subject complete; claim released. Unrelated Android
 gradlew.bat/settings.gradle and untracked .gitattributes remain; no task-owned native
 processes/emulator or test listeners remain. Final documentation commit follows.
+
+## 2026-10-31 — Android Studio Rust release build fixed (Codex)
+
+User supplied :app:rustBuildArm64Release npm exit -1073740791. The matching daemon
+log identified a Tauri options-reader panic/connection refused 10061; no evidence
+of npm/compiler corruption. Standalone Gradle reproduced it (17s, exit 1). The
+app-scoped shared temp address can become stale or be replaced by another build.
+Updated Open Android Release.bat to invoke root open-android-release.mjs, isolating
+TEMP/TMP/TMPDIR per CLI/Studio launch, preserving PATH/exit status and logging the
+original output. Kept the existing-Studio refusal guard (verified 2). Registered
+androidReleaseSession.check.mjs as the ninth Node gate (19/19), including real child
+isolation, original failures/logging and BAT helper entry-point/path casing.
+Pre-change backup 20261030-232103 762/762,58.1 MB (0); interim 235927 868/868,
+58.8 MB (0). Lint 0 errors/2 baseline warnings (0); Vite PASS (0); coverage OK (0),
+28 shipped features, zero ID changes after --update. Node checks: 46/46,35/35,
+20/20,keys OK,46/46,32/32,35/35,19/19,19/19 (all 0); extra PowerShell check 9/9 (0).
+Web 316/0/0 (0); Windows 333/0/3 (1), six keys verified FROM DISK/zero uploads
+restored; Android 323/0/3 (1), 28 keys restored/verified. Full four-ABI APK+AAB
+build (0), APK native ABI census verified. Focused isolated ARM64 build (0) created
+private endpoint and did not change shared address. Evidence in logs/keep/android-build-fix-20261030/.
+Computer Use initially hit app-approval timeout; user explicitly approved retry.
+Agent closed the idle Studio normally, ran the updated launcher through the desktop
+shell, waited for Tauri to open fresh Studio, selected arm64Release and invoked the
+IDE build. Idea log confirms :app:assembleArm64Release at 00:07:56, success in
+10.227s; daemon shows the formerly failing Rust release command completed in 1.03s.
+Fresh arm64 APK 43,772,481 bytes, package com.thespellcaster.mrhorakhty, 0.1.3/code
+1003; SHA256 9FE054E480EE7F281C479354555D1BECACB98C7A7EEDD039E1A4BD89A7A91374.
+Plan refined: validate the exact reported IDE Rust build before signing rather than
+requiring a signing-wizard authentication step. The successful actual IDE task closes
+this reported failure; no signed-APK generation, key change, authentication or account
+registration change is claimed. No human app hand-test needed for internal build
+work; the agent actually exercised Studio. No UI settings reset/force-kill/lock deletion.
+Studio 18292 and release owner Node20796/Tauri31880 intentionally left usable for
+user signing, private RPC 127.0.0.1:55368 (temp spellcaster-android-release-hrnOeK),
+live capture logs/android-release-20796-hrnOeK-20261031-000115.log. No test listeners
+or emulator remain. Do not run E2E cleanup while this Studio signing session is used.
+User-owned gradlew.bat/settings.gradle hashes match recovery copies; .gitattributes
+preserved/excluded. Final verified backup and finishing commit/push/audit follow.
+Final backup 20261031-001058 VERIFY OK 874/874,58.9 MB (0); housekeeping postdates keeper.

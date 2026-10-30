@@ -13,12 +13,16 @@ del /Q "%STUDIO_CHECK%" >nul 2>&1
 if "%STUDIO_STATUS%"=="0" goto studio_open
 where npm.cmd >nul 2>&1
 if errorlevel 1 goto npm_missing
+where node.exe >nul 2>&1
+if errorlevel 1 goto npm_missing
 if /I "%~1"=="--check" goto ready
 
 echo Preparing release APK and AAB, then opening Android Studio.
 echo Leave this window open while generating your signed bundle or APK.
 echo Enter signing passwords only in Android Studio.
-call npm.cmd run tauri android build -- --open
+rem A private TEMP/TMP keeps other Tauri builds from replacing Studio's
+rem companion address file. The helper also captures the complete build output.
+node.exe "%~dp0open-android-release.mjs"
 set "RESULT=%ERRORLEVEL%"
 echo.
 echo Tauri release session ended with exit code %RESULT%.
@@ -33,7 +37,7 @@ pause
 exit /b 2
 
 :npm_missing
-echo npm.cmd was not found. Install Node.js or make npm available on PATH.
+echo Node.js or npm.cmd was not found. Make both available on PATH.
 if /I "%~1"=="--check" exit /b 3
 pause
 exit /b 3
