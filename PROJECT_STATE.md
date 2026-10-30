@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-10-31 01:03 — working on: finishing documentation commit/push and audited backup pruning
+🔓 UNCLAIMED — last holder: Codex (2026-10-31 01:04)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -353,7 +353,9 @@ Verification for this doc-only subject (PASS/FAIL/WARN; exits):
 - Backups 20261031-001912 and 004929 VERIFY OK 889/889 and 915/915 respectively,
   61.6/62.2 MB (0). Review backup 004713 verified 915/915,62.2 MB (0).
   Final backup 20261031-010255 VERIFY OK 935/935,62.3 MB (0);
-  older backups retained until remote proof. Housekeeping postdates keeper.
+  four older backups audited/pruned after remote verification; 16 differing entries
+  preserved under logs/keep/windows-investigation-prune-20261031-010352/.
+  All 935 keeper hashes rechecked; only 010255 remains. Housekeeping postdates keeper.
 - Lint 0 errors/2 baseline warnings (0); build PASS (0); coverage OK (0),
   42 suites/448 registered ids,28/28 shipped covered; hotkeys already planned.
 - Node: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20, keys OK,
@@ -375,7 +377,9 @@ Earlier Studio/companion PIDs above had already ended before investigation.
 Final host check: no listeners on 5173/5183/5233/9333/9224/9225 and no Studio/emulator. Preserve unrelated user Android gradlew.bat /
 settings.gradle edits and untracked .gitattributes. Intended changes only:
 HOTKEYS_SPEC.md, AGENTS.md, PROJECT_STATE.md and docs/session-history.md.
-Subject complete; final backup/commit/push verification/audit/prune follows.
+Subject complete. Documentation commit 0c413a5b90b8698a46d2bf6540bd091063750418
+pushed to origin/mobile-support and remote SHA verified before pruning. Final
+housekeeping committed separately. Only three unrelated user files remain dirty.
 Hotkey implementation remains a separate authorization decision.
 
 ## Open items

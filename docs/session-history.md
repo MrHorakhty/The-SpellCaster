@@ -10355,3 +10355,11 @@ backup prune follow. User Android gradlew/settings edits and .gitattributes rema
 excluded from intended changes; no app code or harness modified.
 Final host check: no test listeners or Studio/emulator remain. Claim released after subject completion; final housekeeping follows.
 Final backup20261031-010255 VERIFY OK935/935,62.3MB(0). Housekeeping postdates keeper. Claim temporarily reclaimed for finishing bookkeeping; no new subject work.
+Finishing completed: documentation0c413a5b90b8698a46d2bf6540bd091063750418 pushed to
+origin/mobile-support and remote SHA matched. Audited four older backup folders
+against tracked paths and all working-tree files including untracked content;
+preserved16 differing entries under logs/keep/windows-investigation-prune-20261031-010352/,
+removed4 older folders, rehashed935 keeper files and verified only newest backup
+20261031-010255 remains. No new backup for prune bookkeeping. Claim released;
+final housekeeping is committed separately. Only unrelated gradlew.bat,
+settings.gradle and .gitattributes remain uncommitted. No app or harness changes.
