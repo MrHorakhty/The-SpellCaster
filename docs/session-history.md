@@ -10206,3 +10206,34 @@ Bookkeeping postdates keeper; no new backup just to record prune. Claim released
 subject complete; final docs commit follows. Unrelated gradlew.bat/settings.gradle
 and .gitattributes remain uncommitted. No test/preview listeners left running;
 existing emulator preserved.
+
+## 2026-10-30 — Android release preflight checker (Codex)
+
+Added android-preflight.ps1 (PowerShell 5.1/7): read-only tools/config inspection,
+explicit bounded ARM64 release build with original native exit/error logs, and
+independent APK package/version/signature/certificate verification. No app UI,
+credentials, signing setup or user-owned Android files changed. Registered the
+PowerShell fault checks in AGENTS.md and documented usage in README.md.
+Pre-change backup 20261030-224554 VERIFY OK 452/452,54.5 MB (0).
+Lint 0 errors/2 baseline warnings (0); Vite build PASS (0); coverage OK (0),
+28 shipped features covered, --update changed zero suite IDs. Node checks:
+46/46,35/35,20/20,keys OK,46/46,32/32,35/35,19/19, all exit 0; snapshotUploads
+needed a host retry after sandbox failure. Web 316/0/0 (0); Windows 333/0/3 (1),
+six keys verified FROM DISK/zero uploads restored; Android 323/0/3 (1), 28 keys
+restored/verified. Native runners launched through existing Explorer shell.
+Final default preflight 24/0/1 (1). Actual bounded release 27/0/1 (1), native
+exit 0; produced unsigned APK, expected package/version, SHA256
+9FE054E480EE7F281C479354555D1BECACB98C7A7EEDD039E1A4BD89A7A91374. Explicit
+inspection correctly rejected its unsigned signature: 26/1/0 (2). The previously
+recorded signed APK path is absent. No signing/private key action was attempted;
+the separate user-reported Android issue is not declared resolved.
+Extended fault injection 16/16 (0) on both Windows PowerShell 5.1 and PowerShell 7;
+basic suite 9/9 (0). Initial release probe manually stopped mid Rust compilation
+(native 1/checker 2), prompting bounded builds/live logs rather than a claim of a
+build defect. Initial 5.1 extended run hit the active-pipeline guard; final idle
+rerun passed. Sandbox 5.1 execution was policy-blocked; host passed. Evidence is
+protected in logs/keep/android-preflight-20261030/. No user hand-test needed for
+internal tooling. No test listeners or task-owned emulator/pipeline remain.
+Unrelated gradlew.bat/settings.gradle and .gitattributes preserved. Final verified
+backup and finishing workflow follow; their bookkeeping may postdate the keeper.
+Final backup 20261030-231749: VERIFY OK 749/749 files,55.9 MB, exit 0.

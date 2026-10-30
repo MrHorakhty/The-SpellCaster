@@ -241,6 +241,13 @@ seconds**, and it is a gate precisely because of what has happened without it.
 
 ### Gate 5 — the eight node checks, in one line
 
+Additional tooling gate: `pwsh -NoProfile -File e2e/android-preflight.check.ps1`
+must pass all assertions (currently 9/9). This tests the Android preflight's
+blocked-build, missing-APK, Java-path and report/exit-code failure behavior.
+On an unrestricted host with working Android prerequisites and no active Android
+pipeline, set `PREFLIGHT_BUILD_FIXTURES=1` for 16/16 assertions, including original
+native exit preservation, missing build output and hung-build timeout using an isolated fake CLI.
+
 ```powershell
 node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs
 ```

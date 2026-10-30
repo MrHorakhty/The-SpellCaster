@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-30 03:50)
+🔒 CURRENT HOLDER: Codex — claimed 2026-10-30 22:45 — working on: Android release preflight checker
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,6 +14,43 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
+## Android release preflight
+
+`android-preflight.ps1:1` works on Windows PowerShell 5.1 and PowerShell 7.
+Default inspection needs no Studio/device and changes no configuration. Explicit
+`-Build` (line 99) runs the local Tauri ARM64 release build, refuses concurrent
+Android pipelines, saves live stdout/stderr, retains native exit status and stops
+only its own process tree on timeout (900s default). `-ApkPath` verifies package,
+version and signature/certificate (line 146); it never reads signing credentials.
+README.md:122 documents use; e2e/android-preflight.check.ps1:1 is registered as
+an additional AGENTS.md gate. App UI/runtime code and existing Android edits unchanged.
+
+Verification (all completed 2026-10-30):
+- Pre-change backup 20261030-224554 VERIFY OK 452/452,54.5 MB (0).
+- Lint 0 errors/2 baseline WARN (0); Vite build PASS (0), existing import warning.
+- Coverage OK, 28 shipped features covered (0); --update reviewed: 0 suite ID changes.
+- Node: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20, keys OK,
+  fadeMath 46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19 (all 0).
+  Snapshot check needed a host retry after the sandbox failure.
+- Web 316 PASS/0 FAIL/0 WARN (0); Windows 333/0/3 expected WARN (1);
+  Android 323/0/3 expected WARN (1). Windows six keys verified FROM DISK and zero
+  uploads restored; Android 28 keys restored/verified. Native gates ran via Explorer.
+- Checker default 24/0/1 (1); explicit release 27/0/1 (1), native build exit 0.
+  APK output: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk,
+  SHA256 9FE054E480EE7F281C479354555D1BECACB98C7A7EEDD039E1A4BD89A7A91374.
+  Identity/version match; explicit signature inspection correctly rejects unsigned
+  output: 26/1/0 (2). No signed release was produced or signing credentials accessed.
+- Extended fault tests 16/16 (0) on BOTH PowerShell 5.1 and 7: original exit/error,
+  zero-exit/no-artifact refusal and hung-build timeout. Basic suite is 9/9 (0).
+  Initial 5.1 extended attempt was correctly blocked by active Android E2E;
+  rerun after pipelines finished passed. A sandbox 5.1 attempt was policy-blocked.
+- Initial unbounded probe was manually stopped during Rust compilation (native 1,
+  checker 2); it was not proof of a build defect. Added timeout/live logs; final
+  bounded probe succeeded. Separate reported Android problem is not declared fixed.
+Evidence: logs/keep/android-preflight-20261030/. No user hand-test required for
+internal tooling. No task-owned emulator/pipeline or listeners on 5173/5183/5233/
+9222/9224/9225 remain. Unrelated Android gradlew.bat/settings.gradle and untracked
+.gitattributes remain untouched. Final backup 20261030-231749 VERIFY OK 749/749,55.9 MB (0). Subject implementation/verification complete; commit/push and backup audit in progress. Final housekeeping postdates keeper intentionally.
 ## Mobile sizing parity
 
 Mobile cards now use the same 140 * boxSize width and flex wrapping as desktop/web,
@@ -85,7 +122,7 @@ untouched/uncommitted. Subject complete; final bookkeeping commit follows.
 
 ## Android release workflow
 
-Signed APK generation succeeds. APK package `com.thespellcaster.mrhorakhty` and v2
+Signed APK generation previously succeeded. The previously recorded signed APK path is currently absent; the preflight section above records the current unsigned output. Previously verified APK package `com.thespellcaster.mrhorakhty` and v2
 signature verified by aapt2/apksigner (exit 0), file `app/universal/release/app-universal-release.apk`.
 User added its actual signing certificate to the registered package; Google Play Console
 reports **In review**. No further key/account action by this agent is pending; do not

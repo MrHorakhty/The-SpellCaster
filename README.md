@@ -119,6 +119,35 @@ Audio files uploaded on desktop/web are stored through the Tauri filesystem plug
 
 ### Android App Development
 
+For an Android release environment report, run `./android-preflight.ps1` from
+Windows PowerShell 5.1 or PowerShell 7. Android Studio and an emulator do not need to be running. The default
+only inspects tools and source configuration; it does not build, install or sign.
+Reports and native command output go to timestamped `logs/android-preflight-*.log`
+and companion JSON files. Exit codes: **0** all requested checks pass, **1** warnings
+only (including no APK requested), **2** one or more failures.
+
+```powershell
+.\android-preflight.ps1
+.\android-preflight.ps1 -ApkPath 'C:\path\to\your-signed-release.apk'
+.\android-preflight.ps1 -Build
+```
+
+`-Build` explicitly runs a noninteractive ARM64 release APK build through the local
+Tauri CLI, retaining its original exit code in JSON and live stdout/stderr logs.
+The default timeout is 900 seconds (`-BuildTimeoutSeconds` overrides it); timeout
+stops only the probe's process tree and fails the report.
+It refuses failed prerequisites or an active Studio/Tauri Android pipeline. It
+does not sign or install the result. `-ApkPath` independently checks an existing
+APK's hash, package, version and signature against the registered release
+certificate; use `-ExpectedCertificate` only when intentionally checking a different
+certificate. An existing APK never establishes that a new build succeeded. No
+keystore or password is read. Passing this report does not establish runtime health.
+Run `pwsh -NoProfile -File e2e/android-preflight.check.ps1` for the checker's
+environment fault-injection checks.
+With a configured Android host and no active Studio/Android pipeline, set
+`$env:PREFLIGHT_BUILD_FIXTURES='1'` before that check to also test original build
+failure capture and timeout against an isolated fake CLI under `logs/`.
+
 Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emulator or a connected device with USB debugging enabled.
 
 1. Add the Android Rust targets and install the Tauri CLI:
