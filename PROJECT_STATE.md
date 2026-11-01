@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 22:55 — working on: remove Replace Profile; targeted verification only
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 23:03)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,7 +14,7 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
-## Replace Profile removal — verified; finishing workflow active
+## Replace Profile removal — complete; targeted verification
 
 User requested removing Replace Profile and explicitly requested targeted testing,
 not full E2E. UI now offers only New Profile(default) and Merge. Retired replace API
@@ -38,10 +38,17 @@ this removes a mode and leaves already accepted New/Merge behavior intact.
 Standalone Windows build22:59:17 PASS(exit0),45009920 bytes,Explorer parent verified:
 src-tauri/target/debug/app.exe,SHA256
 1A109472E36FAC049A46452C8560D2E9DC86422A750FA18FF3570DC36EE49952.
-Evidence will be retained in logs/keep/remove-replace-20261101/.
+Evidence:logs/keep/remove-replace-20261101/.
 No E2E browser/app/emulator process started; only the completed build ran.
-Finishing:14 intended paths reviewed. Final backup20261101-230139 VERIFY OK
-1763/1763,108.1MB(exit0). Next commit,push/remote verify,then audited old-backup pruning. Claim remains held until finishing completes.
+Implementationa80e7f501930a60bbeb695c1947e42cd21a3edcf pushed to
+origin/mobile-support;git ls-remote matched. Final backup20261101-230139 VERIFY OK
+1763/1763,108.1MB(exit0). Audited older backups against tracked paths ∪ working tree,
+preserved30 differing entries in logs/keep/remove-replace-prune-20261101-230258/,
+then removed2 older folders. Exactly1 backup remains;all1763 keeper hashes rechecked.
+Final housekeeping postdates keeper and is committed separately; no new backup
+merely to record pruning. Subject complete;no unfinished removal work. Targeted
+scope was explicit user instruction,not a claim of fresh full E2E or human testing.
+
 
 ## Manual profile file sync — accepted and complete
 
@@ -891,7 +898,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Latest verified: …-20261101-230139,1763/1763 files,108.1MB,VERIFY OK(exit0).** Replace Profile removal and targeted results included. Older225554 and224941 remain until verified push/content audit. Final bookkeeping postdates keeper.
+- **Keeper: …-20261101-230139,1763/1763 files,108.1MB,VERIFY OK(exit0).** Two older backups removed after verified push/content audit;30 differing entries preserved at logs/keep/remove-replace-prune-20261101-230258/. Exactly1 backup remains;all1763 keeper hashes rechecked. Final bookkeeping postdates keeper.
 
 - **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
   26 differing older versions / 11 unique contents, all entries round-trip/hash verified.

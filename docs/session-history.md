@@ -11072,3 +11072,11 @@ no E2E/browser/emulator or clicks. Final finishing backup/push/prune results fol
 Final removal backup20261101-230139 VERIFY OK1763/1763,108.1MB(exit0).
 Fourteen intended paths reviewed; no untracked/unrelated source changes. Commit,
 verified push and audited pruning follow. Final bookkeeping postdates keeper.
+
+Removal implementationa80e7f501930a60bbeb695c1947e42cd21a3edcf pushed and remote
+verified on origin/mobile-support. Audit compared older backups with git-tracked
+paths ∪ working tree(including ignored/untracked files),preserved30 differing
+entries under logs/keep/remove-replace-prune-20261101-230258/,then removed2 older
+folders. Only backup20261101-230139 remains;all1763 keeper hashes rechecked.
+No extra backup merely to record pruning. Claim released;subject complete.
+Final bookkeeping committed separately and intentionally postdates keeper.
