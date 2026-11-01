@@ -44,7 +44,7 @@ rem  netstat check gets away with the backtick form because netstat
 rem  resolves from PATH, so no quoted path is involved.
 rem ===========================================================
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 set "APP=com.thespellcaster.mrhorakhty.debug"
 set "DEVLIST=%TEMP%\opencode\adb-devices.txt"
 set "DEVPORT=5173"

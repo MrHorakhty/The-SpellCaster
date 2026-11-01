@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-10-31 01:04)
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:04)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,47 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Windows installer launcher and launcher folder — verified
+
+`launchers/Build Installer.bat:1` builds both Windows MSI and NSIS EXE release
+installers with local npm/Tauri, checks prerequisites, logs under root logs/,
+preserves failure exit codes, pauses for double-click use, and accepts --no-pause.
+All nine former root BAT files now live in launchers/. Their project/helper paths
+resolve from that folder; older hardcoded checkout paths are portable now.
+README production/Android instructions and AGENTS references are updated; root
+/*.bat is ignored to prevent duplicate launchers. Generated Android gradlew.bat
+stays in its required location. No application/runtime code changed in this subject.
+
+User authorized taking over the interrupted hotkey claim; that work is parked,
+unfinished, and preserved uncommitted for the user to revisit. This subject does
+not complete the hotkey UI/chord work. Existing Android edits/.gitattributes are
+untouched. Commit staging must exclude those and the pre-existing hotkey changes.
+
+Verification on 2026-11-01:
+- Backup before changes:20261101-164754 VERIFY OK1070/1070,69MB(exit0).
+  Before relocation:20261101-165709 VERIFY OK1096/1096,69.1MB(exit0).
+- Lint:0 errors/2 accepted warnings(exit0); Vite build PASS(exit0).
+- Coverage:OK,43 suites/483 ids,28 shipped features covered(exit0); no tests changed.
+- Node(each exit0):profileBundle46/46,profileStorage35/35,bundleGuard20/20,
+  profile keysOK,fadeMath46/46,soundFiles32/32,iconPrep35/35,
+  snapshotUploads19/19,androidReleaseSession19/19,hotkeys75/75.
+  Snapshot host retry passed after sandbox EPERM. PowerShell preflight9/9(exit0).
+- Web:349 PASS/0 FAIL/0 WARN(exit0), cleanup complete. Initial sandbox runner
+  exited1 without a suite result and reported blocked CIM; host retry passed.
+- Windows/Android E2E:NOT RUN(no counts/exit codes). Plan narrowed after the user
+  questioned full E2E for BAT-only tooling: real installer generation and launcher
+  smoke checks verify this change; no native gate started. No app hand-test required.
+- Five stubbed launcher command/directory checks PASS5/5(exit0), run from another
+  directory without starting real dev/Android pipelines. Inventory9 launchers,
+  0 root BAT files; Android release --check PASS(exit0), Studio not launched.
+- Actual relocated installer build from logs/ PASS(exit0),2/2 fresh bundles:
+  MSI33316864 bytes and NSIS EXE32485343 bytes. Output lives under
+  src-tauri/target/release/bundle/{msi,nsis}/. Initial sandbox packaging failed
+  WiX download DNS(exit1); launcher preserved that exit/log; host builds passed.
+- Evidence:logs/keep/windows-installers-20261101/, including final artifact hashes.
+  No build/test processes or listeners on5173/5183/5233/9222/9224/9225/9333 remain.
+Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Commit/push verification and audited prune are finishing housekeeping; these notes may postdate the keeper.
 
 ## Android Studio release build — verified
 

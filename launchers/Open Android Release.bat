@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 rem Studio must be launched by Tauri to inherit its Android linker settings.
 rem Reusing an already-open IDE does not update that process's environment.
@@ -22,7 +22,7 @@ echo Leave this window open while generating your signed bundle or APK.
 echo Enter signing passwords only in Android Studio.
 rem A private TEMP/TMP keeps other Tauri builds from replacing Studio's
 rem companion address file. The helper also captures the complete build output.
-node.exe "%~dp0open-android-release.mjs"
+node.exe "%~dp0..\open-android-release.mjs"
 set "RESULT=%ERRORLEVEL%"
 echo.
 echo Tauri release session ended with exit code %RESULT%.

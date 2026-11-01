@@ -14,7 +14,7 @@ rem  running against a dead dev server produced a FALSE bug report
 rem  that cost five rounds of investigation. See PROJECT_STATE.md.
 rem
 rem  Deliberate difference from the sibling Run*.bat files: the
-rem  project root comes from %~dp0 instead of a hardcoded path, so
+rem  project root comes from the parent of %~dp0 instead of a hardcoded path, so
 rem  this file is portable and can be tracked in git. The old gen\
 rem  copy was untracked AND excluded from backups, so it existed in
 rem  exactly one place on one machine.
@@ -24,7 +24,7 @@ rem  unescaped ) inside echo text - "process(es)" - silently ends an
 rem  if-block early in cmd. Labels cannot be broken that way.
 rem ===========================================================
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 set "ROOT=%~dp0"
 
 rem --- guard 1: refuse to start a second dev pipeline --------------------

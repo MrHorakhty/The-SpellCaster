@@ -10363,3 +10363,34 @@ removed4 older folders, rehashed935 keeper files and verified only newest backup
 20261031-010255 remains. No new backup for prune bookkeeping. Claim released;
 final housekeeping is committed separately. Only unrelated gradlew.bat,
 settings.gradle and .gitattributes remain uncommitted. No app or harness changes.
+
+## 2026-11-01 — Windows installer launcher
+
+User requested an MSI/EXE build BAT and then moving the crowded root BAT files
+into their own folder. Added launchers/Build Installer.bat, moved eight existing
+root BAT files beside it, corrected working-directory/helper paths and old
+hardcoded roots, updated README/AGENTS/ignore references. Generated Android
+Gradle wrapper remains in place. Installer supports --no-pause, root logs/ output,
+prerequisite errors and original build exit propagation. No app runtime changes.
+User authorized takeover of the interrupted Codex hotkey claim; hotkey work stays
+parked and its existing edits are excluded from the installer commit.
+
+Backups:164754 VERIFY OK1070/1070,69MB(0); pre-move1657091096/1096,69.1MB(0).
+Lint0 errors/2 baseline warnings(0), Vite buildPASS(0), coverageOK43 suites/483 ids,
+28 shipped features covered(0). Ten Node checks(each0):profileBundle46/46,
+profileStorage35/35,bundleGuard20/20,keysOK,fadeMath46/46,soundFiles32/32,
+iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19,hotkeys75/75.
+Preflight9/9(0). Snapshot sandbox EPERM resolved with host retry. Web349/0/0(0),
+cleanup complete; sandbox attempt exited1 without a test summary/CIM access.
+Windows/Android E2E not run(no counts/exit codes): plan narrowed after user
+questioned full E2E for BAT-only changes; actual packaging and focused launcher
+checks suffice. No new application feature or human app hand-test required.
+Five stubbed command/directory checks5/5(0), nine launchers/zero root BAT files;
+Android release --check0 without opening Studio. Final actual relocated installer
+run from logs/ passed0, generating MSI33316864bytes and EXE32485343bytes.
+Initial sandbox WiX download failed DNS(1), proving launcher error propagation;
+host retry and final moved run passed. Installers remain uninstalled in the normal
+release bundle folders. Evidence/hashes:logs/keep/windows-installers-20261101/.
+No build/test processes or test-port listeners remain. Final backup, scoped commit,
+remote verification and audited prune results follow as finishing housekeeping.
+Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete, claim released; hotkey work remains parked. Final bookkeeping may postdate keeper.

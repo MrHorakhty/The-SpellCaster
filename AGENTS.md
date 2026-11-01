@@ -45,7 +45,7 @@ things make the old "rebuilt by `tauri android init`" row wrong (corrected 2026-
   ⚠️ **`Run App.bat` is the counter-example, retired 2026-10-16.** It was hand-maintained, lived under `gen/` (which
   backups exclude) **and** was gitignored — so it existed in exactly one place on one machine, and its comment
   claimed it "launches the app" while it actually ran the whole build+install pipeline. It is replaced by the two
-  **tracked root** scripts `Build Android.bat` and `Run Android.bat`. 💡 **A hand-maintained file belongs
+  **tracked** scripts `launchers/Build Android.bat` and `launchers/Run Android.bat`. 💡 **A hand-maintained file belongs
   next to the tracked sources, never inside a generated directory** — that is the same rule as the 50 files above.
 - So a fresh `tauri android init` would **not** reproduce them. That is precisely why they are tracked.
 

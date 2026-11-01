@@ -170,19 +170,19 @@ Requires Android Studio with the Android SDK, NDK, and a JDK, plus a running emu
    ```bash
    npm run tauri android init   # only needed if src-tauri/gen/android is missing
    ```
-   The generated project lives in `src-tauri/gen/android/`. On Windows use the helpers in the **project root**:
+   The generated project lives in `src-tauri/gen/android/`. On Windows use the helpers in the **`launchers/` folder**:
 
    | Script | What it does |
    |---|---|
-   | **`Build Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
-   | **`Run Android.bat`** | **Opens the app that is already installed** — no build, no reinstall. If nothing is serving port 5173 it **starts a Vite dev server itself**, because a debug build carries no UI of its own; it prints the PID and the `taskkill` to stop it. Fails clearly if no emulator or device is attached. |
-   | **`Open Android Release.bat`** | Prepares release APK/AAB files and opens Android Studio through Tauri for signing. Gives each launch a private temporary session so other builds cannot overwrite its Tauri companion address; captures complete output under `logs/android-release-*.log`. Requires Studio to be fully closed first. Keep its console open throughout signing. `--check` checks prerequisites without launching Studio. |
+   | **`launchers/Build Android.bat`** | **Builds, reinstalls and runs** the debug app — the full pipeline (Vite + Gradle + `adb install -r`). Reinstalling **force-stops** the running app. Refuses to start if another dev pipeline is already running, and asks before freeing port 5173. |
+   | **`launchers/Run Android.bat`** | **Opens the app that is already installed** — no build, no reinstall. If nothing is serving port 5173 it **starts a Vite dev server itself**, because a debug build carries no UI of its own; it prints the PID and the `taskkill` to stop it. Fails clearly if no emulator or device is attached. |
+   | **`launchers/Open Android Release.bat`** | Prepares release APK/AAB files and opens Android Studio through Tauri for signing. Gives each launch a private temporary session so other builds cannot overwrite its Tauri companion address; captures complete output under `logs/android-release-*.log`. Requires Studio to be fully closed first. Keep its console open throughout signing. `--check` checks prerequisites without launching Studio. |
 
    Or use the **Run App** configuration in Android Studio.
 
-   > A **debug** build loads its UI from the Vite dev server, so it needs *something* serving port 5173 to load at all — otherwise the app opens to a blank "Failed to request …:5173" page. Both scripts handle that for you: `Run Android.bat` starts its own if none is running, `Build Android.bat` brings one up as part of the pipeline. If you kill a server you started by hand, the app stays open but cannot reload — bring one back up.
+   > A **debug** build loads its UI from the Vite dev server, so it needs *something* serving port 5173 to load at all — otherwise the app opens to a blank "Failed to request …:5173" page. Both scripts handle that for you: `launchers/Run Android.bat` starts its own if none is running, `launchers/Build Android.bat` brings one up as part of the pipeline. If you kill a server you started by hand, the app stays open but cannot reload — bring one back up.
 
-   > If the dev server fails with `Port 5173 is already in use`, a previous Vite process is still running. Free it with the bundled helper from the project root: `kill-ports.bat` (add `/all` to also clear app processes and adb forwards, `/emu` to shut the emulator down).
+   > If the dev server fails with `Port 5173 is already in use`, a previous Vite process is still running. Free it with the bundled helper in `launchers/`: `launchers/kill-ports.bat` (add `/all` to also clear app processes and adb forwards, `/emu` to shut the emulator down).
 
 **Device notes**
 - Application ID: `com.thespellcaster.mrhorakhty` (debug builds get the `.debug` suffix). Renamed from `com.mrhorakhty.thespellcaster`; existing installs/data use the old identity and are not automatically migrated.
@@ -202,6 +202,18 @@ npm run build
 npm run tauri build
 ```
 
+On Windows, double-click **`launchers/Build Installer.bat`** to build both the MSI and
+NSIS EXE release installers. It works from any current directory. Install Node.js,
+the Rust MSVC toolchain, Visual Studio C++ Build Tools with the Windows SDK, and
+run `npm install` first. First-time packaging may download WiX/NSIS tools.
+The window stays open so you can read the result; use
+`& ".\launchers\Build Installer.bat" --no-pause` from PowerShell to skip the pause.
+Complete build output is saved to `logs/windows-installer-yyyyMMdd-HHmmss.log`.
+Default output folders are `src-tauri/target/release/bundle/msi/` and
+`src-tauri/target/release/bundle/nsis/`; the build log gives the actual paths
+when a custom Cargo target directory is used. The script builds installers;
+run the resulting installer separately to install the app.
+
 **Android Build (APK):**
 ```bash
 npm run tauri android build
@@ -209,7 +221,7 @@ npm run tauri android build
 The APK is written to `src-tauri/gen/android/app/build/outputs/apk/`. Add `--apk` to produce a directly installable APK, or use `--aab` for a Play Store bundle.
 
 For Android Studio's **Generate Signed App Bundle or APK** wizard on Windows, close
-Studio and double-click **`Open Android Release.bat`** from the project root. Wait for
+Studio and double-click **`launchers/Open Android Release.bat`** from the `launchers/` folder. Wait for
 Studio to open itself and keep the launcher console running. An already-open IDE
 does not inherit the new process's Android linker environment. The Gradle helper
 preserves real npm/Tauri failures instead of hiding them behind a missing `npm.bat`.
@@ -251,8 +263,8 @@ does not register it. See [Google's additional-key instructions](https://support
 │   ├── e2e-mobile.mjs       # Android UI suite
 │   ├── e2e-full.ps1         # Windows/web runner
 │   ├── e2e-android.ps1      # Android runner
-│   ├── e2e-snapshot.mjs     # Crash-safe localStorage backup/restore used by both runners
-│   └── kill-ports.bat       # Frees dev/E2E ports (repo root copy: ../kill-ports.bat)
+│   └── e2e-snapshot.mjs     # Crash-safe localStorage backup/restore used by both runners
+├── launchers/              # Windows batch launchers: dev, Android, installers and port cleanup
 ├── vite.config.js           # Vite configuration
 ├── tailwind.config.js       # Tailwind CSS configuration
 └── package.json             # Node.js dependencies
@@ -364,7 +376,7 @@ End-to-end suites drive the real app over the Chrome DevTools Protocol and are r
 - `e2e/e2e-full.ps1` - Desktop and web phases
 - `e2e/e2e-android.ps1` - Android emulator/device phase
 - `e2e/check-coverage.mjs` - Static coverage check, no browser needed (`node e2e/check-coverage.mjs`)
-- `kill-ports.bat` - Frees the ports and stray processes the suites use (run it first if a run fails to start)
+- `launchers/kill-ports.bat` - Frees the ports and stray processes the suites use (run it first if a run fails to start)
 
 There are two entrypoints, `e2e/e2e-full.mjs` (web + Windows) and `e2e/e2e-mobile.mjs` (Android). Both run the same shared specs from `e2e/specs/`, so most assertions are literally the same code on both platforms; only the gestures differ (a CDP mouse click vs `Input.dispatchTouchEvent`).
 
