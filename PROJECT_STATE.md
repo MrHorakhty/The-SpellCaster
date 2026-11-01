@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:11)
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:12)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -41,7 +41,7 @@ Verification2026-11-01:
   No new user app hand-test or signing-wizard run claimed or required.
 - Evidence/recovery:logs/keep/android-remnants-20261101-170732/.
 Android files are now clean, not deferred edits. Only parked hotkey work remains
-outside the intended commit. Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). No active build/test pipelines or test listeners remain. The probe-owned idle Gradle daemon was identified by PID/start-time and closed after native success because it held the completed preflight output handle open. Cleanup complete; commit/push/prune housekeeping follows.
+outside the intended commit. Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). No active build/test pipelines or test listeners remain. The probe-owned idle Gradle daemon was identified by PID/start-time and closed after native success because it held the completed preflight output handle open. Cleanup complete. Implementation2e0f43c1096ba01a03c26c9ea9b8f9acad134410 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned2 older backups, preserving6 differing entries in logs/keep/android-remnants-prune-20261101-171225/. All1204 keeper hashes rechecked; only verified newest backup20261101-171109 remains. Only parked hotkey work remains uncommitted. Final bookkeeping intentionally postdates keeper.
 
 ## Windows installer launcher and launcher folder — verified
 
