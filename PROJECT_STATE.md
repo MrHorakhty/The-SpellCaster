@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 21:42 — working on: finishing accepted manual profile file sync
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 22:52)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,7 +14,7 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
-## Manual profile file sync — accepted; finishing workflow active
+## Manual profile file sync — accepted and complete
 
 User clarified2026-11-01: sync means exporting a `.spellcaster` file, moving it
 manually, and importing with Merge on the other device. Record history and native
@@ -76,12 +76,17 @@ Verification(each exit0 except expected native suite1):
 - Final host inventory22:31:0 listeners5173/5183/5233/9222/9224/9225/9333;
   0 app/emulator/compiler processes. Gradle cache daemon34480 remains,untouched.
 
-Requested subject is complete and user accepted. Finishing workflow active:
-reviewed intended30 paths; final backup20261101-224941 VERIFY OK1692/1692,
-96.7MB(exit0). Next commit,push/remote verification,then
-content-audited pruning keeping newest. No force push. Claim retained until the
-workflow finishes. Final host inventory22:49:0 test listeners on5173/5183/5233/9222/9224/9225/9333;
-0 app/emulator/compiler processes. No user-owned app was closed.
+Subject and finishing workflow complete. Implementationf99266abcb0e5bc63aa6fab96e2683e2f85d0fc0
+pushed to origin/mobile-support; git ls-remote matched. Final verified backup
+20261101-224941:1692/1692 files,96.7MB(exit0). Audited7 older backups against
+tracked paths ∪ working tree(including ignored/untracked files),preserved88 differing
+entries in logs/keep/manual-sync-prune-20261101-225107/,then removed all7. Exactly1
+backup remains;all1692 keeper hashes rechecked. Final housekeeping postdates keeper
+and is committed separately; no new backup merely to record pruning.
+No unfinished manual-sync work. No app-managed network sync is planned. Separate
+parked browser export/import and unrelated open items remain below. Final host
+inventory22:49:0 test listeners,0 app/emulator/compiler processes; user apps not
+closed. Gradle cache daemon34480 was left untouched at the22:31 inspection.
 
 
 ## Android E2E restoration — verified
@@ -857,7 +862,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Latest verified: …-20261101-224941,1692/1692 files,96.7MB,VERIFY OK(exit0).** Final manual-sync scope and user acceptance included. Eight backups remain until verified push and content audit. Older names:224712,224310,224216,223238,222846,214235,213220. Final housekeeping intentionally postdates keeper. Prior restore-work prune evidence stays at logs/keep/android-restore-prune-20261101-213302/.
+- **Keeper: …-20261101-224941,1692/1692 files,96.7MB,VERIFY OK(exit0).** Seven older backups removed only after verified push and content audit.88 differing entries preserved at logs/keep/manual-sync-prune-20261101-225107/. Exactly1 backup remains;all1692 hashes rechecked. Final housekeeping intentionally postdates keeper.
 
 - **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
   26 differing older versions / 11 unique contents, all entries round-trip/hash verified.
