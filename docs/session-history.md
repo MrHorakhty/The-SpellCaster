@@ -10908,3 +10908,38 @@ User-confirmed modifier hand-test passed; hotkey subject complete. Claim release
 AppPID21072 remains open, no test/dev listeners/emulator. Android runner flush/
 cold-store verification remains a separate open safety task. Final bookkeeping
 commit follows the implementation; housekeeping/prune archives postdate keeper.
+
+## 2026-11-01 — Android E2E durable storage restoration
+
+Fixed the runner safety debt found after hotkeys: in-page restoration could pass
+while test profiles survived the next boot. e2e/android-restore.ps1 now restores,
+closes through BACK/settle/sync, force-stops, cold-launches, forwards the new PID's
+WebView, snapshots and compares original storage exactly, then closes gracefully.
+e2e/e2e-android.ps1 blocks tests when the safety snapshot fails; restoration failure
+fails the run and preserves the recovery session. Removed the broad orphan/app.exe
+cleanup because it could terminate unrelated Windows review apps; cleanup uses the
+captured Android Tauri tree. Added and registered android-restore.check.ps1.
+
+Pre-change backup20261101-210127 VERIFY OK1413/1413,91.5MB(exit0); sandbox attempt
+failed robocopy16/script1, host retry passed. Lint0 errors/4 pre-existing warnings
+(2 source/2 recovery copies), build and coverage43 suites/495 IDs/29 covered features
+all exit0. Coverage --update changed0 suites/IDs. All10 Node checks exit0:
+profileBundle46/46,profileStorage35/35,bundleGuard20/20,profile keysOK,fadeMath46/46,
+soundFiles32/32,iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19,
+hotkeys120/120. Snapshot check needed an unchanged host retry after sandbox failure.
+New restore fault checks23/23; preflight9/9 and extended16/16, all exit0.
+
+Targeted Android first proved the repaired storage lifecycle before broader desktop
+regressions:369 PASS/0 FAIL/3 expected WARNs(suite/wrapper1), original28 keys matched
+FROM DISK after cold restart; emulator shutdown complete. Web360/0/0(exit0), then
+Windows379/0/3(suite/wrapper1), original12 keys matched FROM DISK and0 original uploads
+restored. Existing Explorer desktop launch confirmed parent14292/explorer.exe.
+Quiet interval ended after restoration. Full runs took~11m20s Android including boot,
+8m20s web and9m Windows, longer than older planning estimates. No runtime/UI change;
+no new user app hand-test required or claimed. Final host inspection:0 app/emulator
+processes and0 listeners on5173/5183/5233/9222/9224/9225/9333.
+Evidence and original/cold snapshots:logs/keep/android-restore-20261101/.
+Finishing backup/push/retention results follow as housekeeping below.
+
+Final backup20261101-213220 VERIFY OK1516/1516 files,92.2MB(exit0).
+Final bookkeeping intentionally postdates this verified snapshot.

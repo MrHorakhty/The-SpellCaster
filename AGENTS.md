@@ -268,6 +268,10 @@ On an unrestricted host with working Android prerequisites and no active Android
 pipeline, set `PREFLIGHT_BUILD_FIXTURES=1` for 16/16 assertions, including original
 native exit preservation, missing build output and hung-build timeout using an isolated fake CLI.
 
+Android restore tooling gate: `pwsh -NoProfile -File e2e/android-restore.check.ps1`
+must pass all assertions (currently 23/23). It fault-tests graceful closure,
+cold restart, fresh CDP forwarding, disk comparison and failure propagation without a device.
+
 ```powershell
 node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs; node e2e/androidReleaseSession.check.mjs; node e2e/hotkeys.check.mjs
 ```

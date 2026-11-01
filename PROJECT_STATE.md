@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 20:30)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 21:01 — working on: Android E2E durable storage restoration
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,45 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Android E2E restoration — verified
+
+The runner now refuses to seed tests without a valid safety snapshot. Restoration
+uses BACK, a five-second settle, sync and force-stop; starts a fresh app process;
+forwards its new WebView socket; saves storage again and compares every key/value
+with the original snapshot. It closes gracefully again before emulator shutdown.
+A restore/restart/compare failure fails the runner and preserves the emulator,
+dev server, ADB mappings and recovery snapshot. Cleanup targets the captured Android
+Tauri process tree; retired broad orphan/app.exe sweeps no longer kill unrelated Windows apps.
+Code: e2e/e2e-android.ps1:185,204,215; e2e/android-restore.ps1:16,25.
+Fault checks: e2e/android-restore.check.ps1:1; registered in AGENTS tooling gates.
+
+Verification 2026-11-01:
+- Pre-change backup20261101-210127 VERIFY OK1413/1413,91.5MB(exit0).
+  Initial sandbox attempt failed robocopy16/script1; host retry passed.
+- Lint0 errors/4 existing warnings(2 source,2 archived recovery duplicates),exit0.
+  Vite build PASS(exit0); coverage43 suites/495 IDs,29 shipped features covered(exit0).
+  Coverage --update changed0 suites/IDs; diff reviewed, no coverage removed.
+- Node(all exit0): profileBundle46/46,profileStorage35/35,bundleGuard20/20,
+  profile keysOK,fadeMath46/46,soundFiles32/32,iconPrep35/35,snapshotUploads19/19,
+  androidReleaseSession19/19,hotkeys120/120. Snapshot check sandbox failure retained;
+  unchanged host retry passed. Android restore fault checks23/23(exit0);
+  preflight9/9 and extended isolated fake-CLI16/16(each exit0).
+- Android369 PASS/0 FAIL/3 WARN(suite/wrapper1,expected native warnings).
+  Original28 keys matched exactly FROM DISK after cold app restart; graceful final
+  closure and runner-owned emulator shutdown completed. Original/cold snapshots:
+  normal Windows Temp/opencode/ls-backup-20261101-210354.json[.cold.json].
+- Web360 PASS/0 FAIL/0 WARN(exit0). Windows379/0/3(suite/wrapper1,expected warnings),
+  original12 keys verified FROM DISK,0 original uploads restored. Desktop wrapper
+  parent14292/explorer.exe verified. Quiet interval ended after restoration.
+- Sequence: static/Node, targeted Android cold-start proof, then web/Windows;
+  prioritized proving the known restore failure fixed before broader regression runs.
+  Actual full runs: Android~11m20s including boot/cleanup,web8m20s,Windows9m.
+  Older3/4/5min planning estimates are low for the current full suites.
+- No app runtime/UI changes; no new built-app hand-test required or claimed.
+- Evidence/recovery: logs/keep/android-restore-20261101/. Final host inspection:
+  0 test listeners on5173/5183/5233/9222/9224/9225/9333;0 app/emulator processes.
+Final backup20261101-213220 VERIFY OK1516/1516,92.2MB(exit0). Subject verified; commit/push verification and backup retention workflow in progress. Final bookkeeping intentionally postdates keeper.
 
 ## Android build leftovers — settled
 
@@ -436,7 +475,7 @@ Current verification(all static/Node exits0):
 - Android in-memory restore did NOT survive shutdown. Manually recovered FIRST
   original28-key snapshot and verified28/28 after a cold app restart(exit0),then
   BACK/settle/sync/emulator shutdown. Debug package only; release untouched.
-  See Native E2E safety debt below: fix Android runner before further Android runs.
+  That runner safety debt is now resolved; see Android E2E restoration above.
 
 Standalone src-tauri/target/debug/app.exe:45007360bytes,SHA256
 0613FA54E1240C85D89D164C665F4D854BB77F5A585AD0DF45D4FE41B5DDA98A.
@@ -449,7 +488,7 @@ with manifest/proofs. All1374 keeper hashes rechecked; only verified newest back
 20261101-202657 remains. Final bookkeeping and prune archives intentionally postdate
 keeper. Completed HOTKEYS_SPEC.md retired/ignored; design docs/hotkeys.md and history.
 No unfinished hotkey work. Claim released; Android runner restoration safety debt
-remains a separate open item before further Android E2E runs.
+is now resolved; see Android E2E restoration above.
 
 ## Open items
 
@@ -463,7 +502,6 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
-| Native E2E safety debt | Android runner restore | Confirmed2026-11-01: in-memory verification passed but next boot retained test profiles. Manual BACK/settle/cold-start comparison restored original28 keys from disk. Add graceful Activity close and cold-read comparison to e2e/e2e-android.ps1 before further Android runs; preserve recovery evidence. |
 | Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
 
 `PROFILE_SYNC_SPEC.md` remains live because it holds future scope and hotkey dependencies.

@@ -32,53 +32,12 @@ $cdpPort = '9225'
 $pkg   = 'com.thespellcaster.mrhorakhty.debug'
 $results = [System.Collections.ArrayList]::new()
 $reversePortsAdded = @()
+. (Join-Path $PSScriptRoot 'android-restore.ps1')
 
 Write-Host "Test output log -> $Script:TestLog" -ForegroundColor DarkGray
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 
 # --- Helpers -----------------------------------------------------------------
-
-# PIDs that Remove-Orphans must never touch.
-# The orphan sweep matches on '*ttrpg-soundboard*', which also matches the command line
-# of the shell/agent session that launched this script - killing that would end the run
-# (and the session) mid-suite. So protect this process's whole ancestry plus anything
-# that is opencode itself.
-function Get-ProtectedPids {
-    $keep = New-Object 'System.Collections.Generic.HashSet[int]'
-
-    $id = $PID
-    for ($i = 0; $i -lt 16; $i++) {
-        if (-not $id) { break }
-        [void]$keep.Add([int]$id)
-        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
-        if (-not $proc -or $proc.ParentProcessId -eq 0 -or $proc.ParentProcessId -eq $id) { break }
-        $id = $proc.ParentProcessId
-    }
-
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like 'opencode*' -or ($_.CommandLine -like '*opencode*') } |
-        ForEach-Object { [void]$keep.Add([int]$_.ProcessId) }
-
-    return $keep
-}
-
-function Remove-Orphans {
-    $keep = Get-ProtectedPids
-    Get-CimInstance Win32_Process |
-        Where-Object {
-            -not $keep.Contains([int]$_.ProcessId) -and (
-                ($_.CommandLine -like '*ttrpg-soundboard*') -or
-                ($_.CommandLine -like '*vite*5173*') -or
-                ($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*remote-debugging-port=*')
-            )
-        } |
-        ForEach-Object {
-            try {
-                Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
-                "`tKilled PID $($_.ProcessId) ($($_.Name))" | Add-Content $Script:TestLog
-            } catch {}
-        }
-}
 
 function Invoke-TestSuite {
     param([string]$Label, [string]$Mjs, [string]$Port, [string]$Expect, [string]$SaveRestore)
@@ -220,9 +179,10 @@ try {
     "`t[SNAP] saving app storage -> $lsBackup" | Add-Content $Script:TestLog
     & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') save $lsBackup 2>&1 | Add-Content $Script:TestLog
     if ($LASTEXITCODE -ne 0) {
-        "`t[SNAP] WARNING: could not snapshot app storage (exit $LASTEXITCODE) - the suite will run without a crash-safe restore." | Add-Content $Script:TestLog
-        Write-Host "WARNING: could not snapshot app storage - no crash-safe restore available." -ForegroundColor Yellow
+        $snapshotExit = $LASTEXITCODE
         $lsBackup = $null
+        Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
+        throw "Safety snapshot FAILED (exit $snapshotExit); suite not started."
     } else {
         Write-Host "App storage snapshotted -> $lsBackup"
     }
@@ -232,40 +192,42 @@ try {
     $code = Invoke-TestSuite -Label 'MOB' -Mjs "e2e-$mobileSuite.mjs" -Port $cdpPort -Expect '1' -SaveRestore '1'
     $results.Add("android: exit=$code") | Out-Null
 
+} catch {
+    $results.Add("FAILED: $_") | Out-Null
+    Write-Host "ERROR: $_" -ForegroundColor Red
 } finally {
+    $restoreFailed = $false
     # Restore first, while the app is still alive and CDP is still forwarded.
     if ($lsBackup) {
         "`t[C-CLEANUP] restoring app storage from $lsBackup ..." | Add-Content $Script:TestLog
-        $env:CDP_PORT = $cdpPort
-        $env:LABEL    = 'SNAP'
-        & node (Join-Path $PSScriptRoot 'e2e-snapshot.mjs') restore $lsBackup 2>&1 | Add-Content $Script:TestLog
-        $restoreCode = $LASTEXITCODE
-        Remove-Item Env:\CDP_PORT, Env:\LABEL -ErrorAction SilentlyContinue
-        if ($restoreCode -eq 0) {
-            Write-Host "App storage restored." -ForegroundColor Green
-        } else {
-            "`t[C-CLEANUP] RESTORE FAILED (exit $restoreCode). The app may still hold E2E test data." | Add-Content $Script:TestLog
+        try {
+            Restore-AndroidStorage -Snapshot $lsBackup
+            Write-Host 'App storage restored and verified FROM DISK after cold restart.' -ForegroundColor Green
+        } catch {
+            $restoreFailed = $true
+            "`t[C-CLEANUP] RESTORE FAILED: $_. The app may still hold E2E test data." | Add-Content $Script:TestLog
             "`t[C-CLEANUP] Recover with: adb forward tcp:$cdpPort localabstract:webview_devtools_remote_<apppid>  then  node e2e-snapshot.mjs restore $lsBackup" | Add-Content $Script:TestLog
-            Write-Host "WARNING: storage restore failed (exit $restoreCode)." -ForegroundColor Red
+            Write-Host "ERROR: storage restore failed: $_" -ForegroundColor Red
             Write-Host "  The app may still contain E2E test data. Snapshot kept at: $lsBackup" -ForegroundColor Red
-            $results.Add("WARNING: app storage restore failed (exit $restoreCode) - snapshot at $lsBackup") | Out-Null
+            $results.Add("FAILED: app storage restore - snapshot at $lsBackup") | Out-Null
         }
     }
-    "`t[C-CLEANUP] removing adb forward ..." | Add-Content $Script:TestLog
-    & $adb forward --remove "tcp:$cdpPort" 2>&1 | Out-Null
-    foreach ($port in $reversePortsAdded) {
-        & $adb reverse --remove "tcp:$port" 2>&1 | Out-Null
-    }
-    "`t[C-CLEANUP] killing tauri tree ..." | Add-Content $Script:TestLog
-    if ($tauriProc) {
-        try { taskkill /PID $tauriProc.Id /T /F 2>&1 | Out-Null } catch {}
-    }
-    try { taskkill /F /IM app.exe /T 2>&1 | Out-Null } catch {}
-    "`t[C-CLEANUP] killing remaining orphans ..." | Add-Content $Script:TestLog
-    Remove-Orphans
-    if ($emulatorStarted) {
-        "`t[C-CLEANUP] stopping emulator ..." | Add-Content $Script:TestLog
-        & $adb emu kill 2>&1 | Out-Null
+    if (-not $restoreFailed) {
+        "`t[C-CLEANUP] removing adb forward ..." | Add-Content $Script:TestLog
+        & $adb forward --remove "tcp:$cdpPort" 2>&1 | Out-Null
+        foreach ($port in $reversePortsAdded) {
+            & $adb reverse --remove "tcp:$port" 2>&1 | Out-Null
+        }
+        "`t[C-CLEANUP] killing tauri tree ..." | Add-Content $Script:TestLog
+        if ($tauriProc) {
+            try { taskkill /PID $tauriProc.Id /T /F 2>&1 | Out-Null } catch {}
+        }
+        if ($emulatorStarted) {
+            "`t[C-CLEANUP] stopping emulator ..." | Add-Content $Script:TestLog
+            & $adb emu kill 2>&1 | Out-Null
+        }
+    } else {
+        Write-Host 'Recovery session preserved: emulator, dev server and ADB mappings left running.' -ForegroundColor Red
     }
 }
 
