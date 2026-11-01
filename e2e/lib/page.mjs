@@ -25,6 +25,7 @@
 // what the suites pass; the prefix is what the app reads.
 
 export const PK_KEYS = [
+  'ttrpg_hotkeys',
   'ttrpg_characters',
   'ttrpg_environment',
   'ttrpg_groups',
@@ -259,6 +260,7 @@ export function submitModalExpr(btnText) {
 // that would report it, and read-and-removed on the next mount. Also global, and
 // also deliberately absent from a suite's expected key set unless an import ran.
 export const KNOWN_KEYS = [
+  'ttrpg_hotkeys',
   'spellcaster_reorder_animation',
   'backgroundSettings', 'boxSize', 'ttrpg_characters', 'ttrpg_characters_icon',
   'ttrpg_data_version', 'ttrpg_environment', 'ttrpg_environment_icon',

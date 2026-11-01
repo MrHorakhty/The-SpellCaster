@@ -40,6 +40,7 @@ const SPECS = existsSync(join(root, SPECS_DIR))
   : [];
 
 const BARE_KEYS = [
+  'ttrpg_hotkeys',
   'ttrpg_characters_icon', 'ttrpg_environment_icon', 'ttrpg_characters',
   'ttrpg_environment', 'ttrpg_groups', 'ttrpg_data_version', 'ttrpg_themes',
   'backgroundSettings', 'boxSize',

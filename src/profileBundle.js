@@ -43,6 +43,7 @@
 
 import { Zip, ZipPassThrough, unzipSync } from 'fflate'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { HOTKEYS_KEY, requireHotkeys } from './hotkeys.js'
 
 import {
     profileScopedKey,
@@ -52,12 +53,15 @@ import {
     removeProfileValue,
     profileUploadPath,
     createProfile,
+    deleteProfile,
     setActiveProfile,
     requestProfileRemount,
     getActiveProfileId,
 } from './profileStorage.js'
 
-export const BUNDLE_FORMAT_VERSION = 1
+// v2 explicitly carries profile-owned hotkeys. v1 readers refuse it instead of
+// accepting a round trip that silently strips bindings. We still import v1.
+export const BUNDLE_FORMAT_VERSION = 2
 export const BUNDLE_EXTENSION = '.spellcaster'
 
 /** Zip chunk size. Large enough to matter, small enough to yield. */
@@ -529,6 +533,7 @@ export function buildBundleData({ data, settings, remap }) {
         characters: rewriteContainerShapes(data.characters, remap),
         environmentSounds: rewriteContainerShapes(data.environmentSounds, remap),
         groups: rewriteContainerShapes(data.groups, remap),
+        hotkeys: requireHotkeys(data.hotkeys),
         settings: {
             boxSize: settings && settings.boxSize != null ? settings.boxSize : 1,
             background: {
@@ -720,6 +725,9 @@ export function parseBundle(bytes) {
     } catch {
         throw new BundleError('That bundle has a corrupt data.json.', 'corrupt-data')
     }
+    try { data.hotkeys = requireHotkeys(data.hotkeys) } catch {
+        throw new BundleError('That bundle contains invalid or unsupported hotkeys. Nothing was imported. Repair them in the exporting app first.', 'invalid-hotkeys')
+    }
 
     const files = new Map()
     for (const file of manifest.files || []) {
@@ -783,6 +791,7 @@ export function pruneUnresolvableSounds(data, manifestFiles) {
         // it is profile content - dropping it here would silently reset the box
         // size and the background theme on every import.
         settings: data.settings,
+        hotkeys: requireHotkeys(data.hotkeys),
         characters: [],
         environmentSounds: [],
         groups: [],
@@ -891,11 +900,12 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
         characters: normalize('ttrpg_characters', data.characters || []),
         environmentSounds: normalize('ttrpg_environment', data.environmentSounds || []),
         groups: normalize('ttrpg_groups', data.groups || []),
+        hotkeys: requireHotkeys(data.hotkeys),
     }
 
     // Whatever keys the target already had that we are not setting must go, or
     // a stale icon from the previous board survives the import.
-    const written = new Set(['ttrpg_characters', 'ttrpg_environment', 'ttrpg_groups', 'ttrpg_data_version', 'boxSize', 'backgroundSettings', 'ttrpg_characters_icon', 'ttrpg_environment_icon'])
+    const written = new Set([HOTKEYS_KEY, 'ttrpg_characters', 'ttrpg_environment', 'ttrpg_groups', 'ttrpg_data_version', 'boxSize', 'backgroundSettings', 'ttrpg_characters_icon', 'ttrpg_environment_icon'])
     for (const key of profileKeys(profileId)) {
         if (!written.has(key)) removeProfileValue(profileId, key)
     }
@@ -903,6 +913,7 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
     writeProfileValue(profileId, 'ttrpg_characters', JSON.stringify(normalized.characters))
     writeProfileValue(profileId, 'ttrpg_environment', JSON.stringify(normalized.environmentSounds))
     writeProfileValue(profileId, 'ttrpg_groups', JSON.stringify(normalized.groups))
+    writeProfileValue(profileId, HOTKEYS_KEY, JSON.stringify(normalized.hotkeys))
 
     const boxSize = settings && settings.boxSize != null ? settings.boxSize : 1
     writeProfileValue(profileId, 'boxSize', String(boxSize))
@@ -1021,12 +1032,28 @@ export async function importBundle(bytes, {
 
     const { data: pruned, dropped } = pruneUnresolvableSounds(data, manifestFiles)
 
-    commitKeys(profileId, {
-        data: pruned,
-        settings: pruned.settings,
-        normalize,
-        dataVersion,
-    })
+    try {
+        commitKeys(profileId, {
+            data: pruned,
+            settings: pruned.settings,
+            normalize,
+            dataVersion,
+        })
+    } catch (err) {
+        // A quota/permission failure on the new binding key must not leave the
+        // replacement board paired with the old board's bindings. Native blob
+        // names are content-addressed; restoring keys keeps the old board valid.
+        try {
+            if (snapshot) restoreProfileSnapshot(snapshot)
+            else deleteProfile(profileId)
+        } catch (rollbackError) {
+            console.error('[profiles] key rollback failed:', rollbackError)
+            const recovery = snapshot ? 'The pre-import snapshot is retained for recovery.' : 'The incomplete new profile may need to be removed after storage is available.'
+            throw new BundleError(`Import could not save the profile or restore its keys. ${recovery} Free storage before trying again.`, 'rollback-failed')
+        }
+        console.error('[profiles] could not commit profile keys:', err)
+        throw new BundleError('Import could not save the profile keys. The previous profile was preserved. Free storage and try again.', 'key-write-failed')
+    }
 
     if (setActive) {
         if (mode === 'replace') {
@@ -1099,7 +1126,7 @@ export async function importBundle(bytes, {
  * React state - exporting what is ON SCREEN, not a re-read of storage that
  * might lag a keystroke behind it.
  */
-export function collectProfileForExport({ characters, environmentSounds, groups, boxSize, backgroundSettings, charSectionIcon, envSectionIcon, parse }) {
+export function collectProfileForExport({ characters, environmentSounds, groups, hotkeys, boxSize, backgroundSettings, charSectionIcon, envSectionIcon, parse }) {
     const readJson = (key, fallback) => {
         const raw = parse(key)
         if (raw == null) return fallback
@@ -1116,6 +1143,7 @@ export function collectProfileForExport({ characters, environmentSounds, groups,
             characters: characters || readJson('ttrpg_characters', []),
             environmentSounds: environmentSounds || readJson('ttrpg_environment', []),
             groups: groups || readJson('ttrpg_groups', []),
+            hotkeys: requireHotkeys(hotkeys ?? parse(HOTKEYS_KEY)),
         },
         settings: {
             boxSize: boxSize != null ? boxSize : 1,

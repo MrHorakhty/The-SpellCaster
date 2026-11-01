@@ -10,7 +10,7 @@
 > the seam's fade-out half was actually built, so the advice in §7.4 is now true. §5's line saying looping sounds
 > disable both fades is **superseded by §7** and is marked as such below.
 > **Created**: 2026-10-18
-> **Related**: `PROFILE_SYNC_SPEC.md` (live, §13 deferred scope), `HOTKEYS_SPEC.md` (the other unbuilt plan).
+> **Related**: `PROFILE_SYNC_SPEC.md` (live, §13 deferred scope), `docs/hotkeys.md` (shipped profile hotkey design).
 > A throwaway visual mock lives at `%TEMP%\opencode\fade-mock.html` — **outside the repo**, deliberately, so it
 > costs no gate, no commit and no backup churn. Rev 2 reflects every decision in §2; open it to re-judge the layout.
 > 💡 **The mock is the design, and the first implementation was not it.** The build shipped a plain scrubber where

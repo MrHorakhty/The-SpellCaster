@@ -1,5 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import IconPrepDialog from './IconPrepDialog.jsx'
+import HotkeySettings from './HotkeySettings.jsx'
+import { HOTKEYS_KEY, inspectHotkeys, hotkeyTargets, resolveHotkey, refreshHotkeys, hotkeyEventAllowed, hotkeyModifiers, hotkeySignature } from './hotkeys.js'
 /* global __APP_VERSION__ */
 import {
     User, Users, Music, Music2, Volume2, Settings, Flame, FlameKindling, Zap, Shield, ShieldHalf, Sword, Swords,
@@ -890,6 +892,22 @@ function AppBoard() {
     // fixed for the lifetime of this mount - a profile switch remounts the app
     // (see the Profiles section below), so it can never change underneath them.
     const [activeProfileId] = useState(() => ensureProfileStore(DATA_VERSION))
+    // No auto-save: malformed/future data stays untouched until an explicit repair.
+    // The profile id is fixed for this mount, so writes cannot cross profiles.
+    const [hotkeyState, setHotkeyState] = useState(() => inspectHotkeys(readProfileValue(activeProfileId, HOTKEYS_KEY)))
+    const saveHotkeys = payload => {
+        const next = inspectHotkeys(refreshHotkeys(payload, hotkeyTargets(allSoundContainers())))
+        if (next.error) return false
+        try {
+            writeProfileValue(activeProfileId, HOTKEYS_KEY, JSON.stringify(next.payload))
+            setHotkeyState(next)
+            return true
+        } catch (err) {
+            reportSaveFailure('hotkeys', err)
+            setHotkeyState(current => ({ ...current, saveError: describeSaveFailure('Hotkeys', err) }))
+            return false
+        }
+    }
 
     const [characters, setCharacters] = useState(() => {
         return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_characters', data.characters)
@@ -1141,6 +1159,7 @@ function AppBoard() {
             // screen, and the auto-save effects may lag a keystroke behind it.
             const { data: boardData, settings } = collectProfileForExport({
                 characters, environmentSounds, groups,
+                hotkeys: hotkeyState.error ? undefined : refreshHotkeys(hotkeyState.payload, hotkeyTargets(allSoundContainers())),
                 boxSize, backgroundSettings, charSectionIcon, envSectionIcon,
                 parse: key => readProfileValue(activeProfileId, key),
             })
@@ -4534,6 +4553,26 @@ function AppBoard() {
         }
     }
 
+    const hotkeyTargetList = hotkeyTargets(allSoundContainers())
+    // All interactive overlays share this gate. Reading the active index also
+    // blocks the interval between a synchronous switch and React's remount.
+    const hotkeyBlocked = editMode || isPanelOpen || showSoundModal || pendingIconFile ||
+        showCharacterModal || showCategoryModal || showGroupModal || showMoveCopyModal ||
+        showSettingsModal || showAboutModal || showRestoreConfirm || showDeleteConfirm || !!bundleBusy
+    useEffect(() => {
+        const key = event => {
+            if (hotkeyBlocked || dragRef.current || readProfileIndex().activeProfileId !== activeProfileId ||
+                !hotkeyEventAllowed(event)) return
+            const binding = hotkeyState.payload.bindings.find(row => hotkeySignature(row) === hotkeySignature({ code: event.code, modifiers: hotkeyModifiers(event) }))
+            const resolved = binding && resolveHotkey(binding, hotkeyTargetList)
+            if (!resolved) return
+            event.preventDefault()
+            playWithPrimes(resolved.sound).catch(err => console.error('Hotkey playback failed:', err))
+        }
+        document.addEventListener('keydown', key)
+        return () => document.removeEventListener('keydown', key)
+    })
+
     useEffect(() => {
         if (tabType === 'characters' && characters.length > 0 && !activeTab) {
             setActiveTab(characters[0].id)
@@ -7637,6 +7676,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                         )
                                     )}
                                 </div>
+
+                                <HotkeySettings state={hotkeyState} targets={hotkeyTargetList} onSave={saveHotkeys} createId={() => mintId('hk')} />
 
                                 {/* Profiles. A section of Settings rather than a seventh modal - the Settings
                                     modal is already a bottom sheet on mobile and a centered dialog on

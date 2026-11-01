@@ -10364,6 +10364,82 @@ removed4 older folders, rehashed935 keeper files and verified only newest backup
 final housekeeping is committed separately. Only unrelated gradlew.bat,
 settings.gradle and .gitattributes remain uncommitted. No app or harness changes.
 
+## 2026-10-31 — Hotkeys implemented; built-app hand-test pending
+
+User authorized implementation after spec review/Windows investigation. In-app,
+physical single letter/digit bindings are per profile, trigger through playWithPrimes
+(including one-shot priming and overlapping playback), and suppress editable fields,
+modifiers/repeat/composition, edit mode, all overlays/drag and profile transitions.
+Settings offers record/cancel/edit/repair/remove/reset with duplicate refusal and
+focus return. Targets resolve unique sound ids across five container shapes, so
+moves/renames keep bindings; copied/deleted/ambiguous ids cannot silently retarget.
+Malformed/future storage is preserved until explicit repair. Failed writes preserve
+old bindings and show an inline retryable error. New ids reuse App's mintId.
+
+src/hotkeys.js:9/:71 holds validation/event policy; HotkeySettings.jsx:4 the editor;
+App.jsx:897/:4556/:7680 owns profile state/dispatch/settings. profileBundle.js:64/
+:898/:1129 emits format2, commits ttrpg_hotkeys and collects live bindings. Import
+reads format1 as empty bindings, including replacement, while old builds refuse2.
+Plan expanded when review found binding-key writes could fail after board replacement:
+existing snapshots now roll back replacement key writes; partial new profiles are
+removed. Two fault checks cover those paths. Ten Node checks are mandatory now.
+
+Backups before/through work:010541 VERIFY OK950/950,67.3MB(0),011448965/965,
+67.4MB(0),0138131014/1014,68.2MB(0). Lint0 errors/2 baseline warnings(0),Vite
+buildPASS(0),coverageOK43 suites/483 ids(0),only HK0-HK34 added/no prior id changes.
+Node profileBundle46/46,profileStorage35/35,bundleGuard20/20,keysOK,fadeMath46/46,
+soundFiles32/32,iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19,
+hotkeys75/75(all0),extended preflight16/16(0). Initial full web349/0/0 passed;
+Windows lost helpers in existing priming, no summary. User reported possibly selecting
+Reload/Restart in a right-click menu while working, consistent with helper loss;
+quiet retry approved and completed with navigation capture. AGENTS now documents
+quiet input/start-end notices as well as existing Explorer/MSIX launch requirement.
+Initial Android356/1/3 was only I17's stale format1 expected message, corrected to
+use exported supported format. Final full passes: Windows367/0/3(1),Android357/0/3(1),
+latest rebuilt web349/0/0(0). Six ordinary Windows keys verified restored FROM DISK,
+zero original uploads; Android28 keys restored/verified. Negative-path Node errors
+are injected expected failures, not failing assertions. Earlier failed evidence and
+latest successes are protected under logs/keep/hotkeys-implementation-20261031/.
+Desktop/narrow screenshots reviewed under logs/keep/hotkeys-ui-20261031/; no horizontal
+overflow at411px. Physical Android keyboard delivery remains explicitly unverified;
+emulator CDP tests are not hardware proof. No human hand-test claimed.
+
+Standalone desktop build `npx tauri build --debug --no-bundle` passed(0). Built
+src-tauri/target/debug/app.exe45006336bytes, SHA256
+874969AF7A91019A81F4993A57CAC5F446DC753DC43689D2313C3285FDEA7496.
+Opened through Explorer for human hand-test, PID35356, title The SpellCaster, debug
+console suppressed. Bundled assets need no dev server. Test listeners/emulator gone.
+Do not run E2E orphan cleanup while the user is testing this app. User-owned Android
+gradlew/settings files hash-match existing recovery copies; .gitattributes untouched.
+Implementation/spec/docs/tests are uncommitted. Hotkeys feature remains planned and
+spec stays live until acceptance. Claim retained; commit/push/prune await required
+built-app user hand-test. Final verified project backup follows.
+
+### 2026-10-31 — Fast wrap after initial hotkey hand-test
+
+User reports the built app seems to work. Requests: friendlier sound picker instead
+of the long all-sounds list; broader bindable keys; possible Shift/Alt/Ctrl combos.
+Settle UI design first. No improvement implementation or UI choice accepted yet.
+Suggested next discussion: searchable picker with location paths, optional container
+browsing, compact assigned bindings. User nearing usage limit requested fast wrap.
+Claim held; no commit/push/prune. Built app PID35356 left for user, no automated input.
+Final verified wrap-up backup follows; preserve unrelated user Android edits and
+.gitattributes. Existing automatic gates remain green as recorded above.
+Wrap backup20261031-021813 VERIFY OK1067/1067,69MB(0). Backup metadata postdates keeper; no pruning or commits.
+
+### 2026-10-31 — Explicit checkpoint and pruning before five-day break
+
+User requested pruning despite the unfinished UI/chord design work. Following the
+finishing workflow dependency: checkpoint the verified current implementation and
+handover, push/verify, then audit/prune old backups while preserving all unique
+content and keeping the newest verified backup. This is a work-in-progress
+checkpoint, not a claim that the requested improvements are complete. Claim stays
+held and the live spec remains. Existing green verification results apply to the
+unchanged code; user reports initial built-app hand-test working. Unrelated Android
+files and .gitattributes remain excluded. Final checkpoint backup and remote/audit
+results follow.
+Checkpoint backup20261031-022327 VERIFY OK1068/1068,69MB(0). Keeper chosen by name; housekeeping will postdate it.
+
 ## 2026-11-01 — Windows installer launcher
 
 User requested an MSI/EXE build BAT and then moving the crowded root BAT files
@@ -10421,3 +10497,404 @@ Final backup, commit/push/remote verification and audited prune results follow.
 Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). Probe-owned idle Gradle daemon20332 (started17:09:04) closed after build success to release inherited output handle; preflight wrapper then returned expected1. No active pipelines/test listeners remain. Subject complete; claim released. Final housekeeping may postdate keeper.
 
 Cleanup complete. Implementation2e0f43c1096ba01a03c26c9ea9b8f9acad134410 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned2 older backups, preserving6 differing entries in logs/keep/android-remnants-prune-20261101-171225/. All1204 keeper hashes rechecked; only verified newest backup20261101-171109 remains. Only parked hotkey work remains uncommitted. Final bookkeeping intentionally postdates keeper.
+
+
+## 2026-11-01 — Hotkey picker resumed and verified
+
+User reset the usage limit and resumed the interrupted hotkey work. Recovery found
+no interrupted app/build pipeline; later installer/Android sessions had already
+finished audited backup pruning. Claimed Project State and preserved all existing
+hotkey changes. User approved searchable sound selection with location paths and
+compact binding rows, replacing the all-sounds dropdown. Results now scroll within
+a bounded list, search names/locations, display empty results and selection feedback,
+and disable duplicate sound IDs. No broader keys/modifier combinations implemented
+yet; these remain the next requested step.
+
+Backup20261101-173816 VERIFY OK1219/1219,80.3MB(exit0); initial sandbox robocopy16
+was resolved by the host retry. Lint0 errors/4 warnings(exit0):2 accepted source
+warnings and2 identical warnings in preserved logs/keep recovery code. Vite and
+standalone debug builds PASS(exit0). Coverage43 suites/487 IDs(exit0); only
+HK35-HK38 added, no existing IDs removed. Node exits all0: profileBundle46/46,
+profileStorage35/35,bundleGuard20/20,profile keysOK,fadeMath46/46,soundFiles32/32,
+iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19,hotkeys75/75.
+Snapshot fixture rename hit sandbox EPERM; isolated host retry passed19/19.
+PowerShell Android preflight9/9(exit0). Desktop and411px screenshots reviewed with
+no horizontal overflow. Web353/0/0(exit0),Android361/0/3 and Windows371/0/3
+(suite/wrapper1,expected native WARNs). Android28 original keys restored/verified;
+Windows6 original keys verified FROM DISK,0 original uploads restored.
+
+User approved Android-before-Windows quiet interval; Windows17:58:13-18:07:16
+ran through the existing Explorer desktop,parent explorer.exe verified. All native
+cleanup/restoration completed; no E2E/dev listeners remain. Standalone debug app
+opened via Explorer without a console,PID32284,title The SpellCaster,45006848bytes,
+SHA25689E867AAC57352D2BFB035B9B41B1452F6FA6ACE3EFDD7DA25AE890A800D7842.
+User asked to hand-test the revised picker; acceptance pending. Claim retained;
+hotkey work remains uncommitted, with broader keys/Ctrl/Alt/Shift next. Evidence:
+logs/keep/hotkeys-picker-20261101/. Final checkpoint backup recorded in Project State.
+
+Final checkpoint backup20261101-180858 VERIFY OK1282/1282,81.2MB(exit0).
+Final housekeeping notes postdate the keeper; no new commit/push/prune triggered
+while the resumed hotkey subject remains unfinished.
+
+
+## 2026-11-01 — Historical hotkey handover before modifier consolidation
+
+This snapshot preserves prior progress and superseded pending items. Current
+PROJECT_STATE.md and code take precedence.
+
+## Hotkeys — picker accepted; modifiers in progress
+
+User accepted the revised picker UI2026-11-01 and reported modifiers do not work. The prior build intentionally rejected them; Ctrl/Alt/Shift combinations and broader trigger keys are now in implementation. Backup20261101-192502 VERIFY OK1282/1282,81.2MB(exit0). New hotkey payload version2 prevents old readers interpreting chords as bare keys; v1 bindings remain readable. Exact code+modifier-mask collision/dispatch rules are shared. Node120/120(exit0),AGENTS gate count updated; HK39-HK46 added with no old IDs removed,43 suites/495 IDs. Static lint0 errors/4 warnings,build and coverage exit0; all ten Node checks exit0 on host. Extended preflight16/16(exit0). Full web360 PASS/0 FAIL/0 WARN(exit0), cleanup complete19:36:20. Android first full run has passed HK39-HK46 (all modifier cases including native bundle), but failed iconprep IP4/IP5/IP0: silhouette result absent after the existing10s wait, then null.src. No icon code/harness changes made. First run completed346 PASS/3 FAIL/3 WARN(suite2,wrapper1);28 original keys restored/verified and cleanup completed. Failure preserved logs/keep/hotkeys-modifiers-20261101/android-icon-failure.log. Unchanged full Android retry passed all icon checks; no icon code/harness changes. Read-only observerPID37988 captured preview states and was stopped after the icon suite. Original preview-timeout cause unconfirmed; failure evidence retained. Retry completed369 PASS/0 FAIL/3 WARN(suite/wrapper1). Snapshot comparison exposed Android in-memory restore not persisting: later boots held test-profile IDs (29/33 keys). Manual recovery restored FIRST pre-modifier-run28-key snapshot, closed Activity with BACK, waited, force-stopped/cold-started and compared28/28 FROM DISK(exit0), then BACK/wait/sync/emulator shutdown. Release package untouched; debug emulator only. Evidence android-original-20261101-193740.json and android-restored-from-disk-20261101-200057.json under logs/keep/hotkeys-modifiers-20261101/. Android runner needs separate flush/cold-verify fix before further runs; do not trust its in-memory-only success. Windows quiet interval started20:02:37; runnerPID37416,parent14292 verified explorer.exe. Native Windows suite running; Z22 loop-fade sampling failed (2 downward samples,end0.06 vs base0.2; requires3 and <0.06). Audio/fade code untouched. Continue current suite/restoration; all HK39-HK46 modifier cases passed on Windows. User approved another8-10min quiet interval for an unchanged full retry AFTER current suite/restoration finish. First Windows run completed378 PASS/1 FAIL/3 WARN(suite2,wrapper1);7 original keys verified FROM DISK,0 original uploads restored. Failure evidence windows-loop-failure.log retained. User-approved unchanged Windows retry started20:12:09,PID34080,parent14292 confirmed explorer.exe. Z22 passed on retry(3-step ramp from0.2 to0); remaining suites running. Keep first failure trace; no playback or harness changes made. Windows quiet interval approved after Android. Modifier desktop/narrow screenshots reviewed (394/394px and357/357px section widths, no horizontal overflow); evidence logs/keep/hotkeys-modifiers-20261101/. User authorized closing the reviewed app and Windows quiet interval after Android; PID32284 closed normally before tests.
+
+User resumed this work after resetting the usage limit. Recovery found no app/node
+or build pipeline running; existing hotkey edits are intact and uncommitted.
+Later installer/Android sessions already completed audited backup pruning; do not
+repeat the interrupted October checkpoint blindly. User approved the searchable picker with location paths and compact binding rows.
+Implementation replaces the dropdown with bounded searchable buttons, selected-path
+feedback, empty results and duplicate-ID refusal. Broader keys and modifier combinations
+follow this UI work. Backup20261101-173816 VERIFY OK1219/1219,80.3MB(exit0);
+sandbox backup failed robocopy16, host retry succeeded. Initial lint0 errors/4 warnings
+(exit0):2 source baseline warnings and2 identical warnings from preserved recovery
+code under logs/keep. Build PASS; coverage OK43 suites/487 IDs, HK35-HK38 added
+with no existing IDs removed. Nine Node checks passed at prior baseline counts; snapshotUploads sandbox fixture rename failed EPERM; isolated host retry19/19(exit0), completing all ten Node checks;
+Android preflight9/9(exit0). Desktop and411px picker/saved-row screenshots visually reviewed, no horizontal overflow (394/394px desktop section;357/357px narrow). Evidence under logs/keep/hotkeys-picker-20261101/. Full web353 PASS/0 FAIL/0 WARN(exit0), cleanup complete. Android361 PASS/0 FAIL/3 expected WARNs(suite/wrapper exit1),28 original keys restored/verified and emulator cleaned up. Windows371 PASS/0 FAIL/3 expected WARNs(suite/wrapper exit1), runnerPID35260 parent14292 confirmed explorer.exe. Quiet interval17:58:13-18:07:16 ended;6 original keys verified FROM DISK,0 original upload files restored. All platform suites completed, evidence logs/keep/hotkeys-picker-20261101/. Standalone revised-picker build PASS(exit0),45006848 bytes,SHA25689E867AAC57352D2BFB035B9B41B1452F6FA6ACE3EFDD7DA25AE890A800D7842. App opened through Explorer without a console,PID32284,title The SpellCaster. Revised-picker hand-test requested and pending; broader keys and Ctrl/Alt/Shift combinations remain next. Final lint0 errors/4 warnings(exit0):2 source baseline plus2 identical preserved recovery warnings. Coverage43 suites/487 IDs(exit0). No E2E/dev listeners remain. Final checkpoint backup20261101-180858 VERIFY OK1282/1282,81.2MB(exit0). Final bookkeeping intentionally postdates keeper. Keep claim active and changes uncommitted while this hotkey work remains unfinished. Claim retained for resumed work.
+
+Wrap backup20261031-021813 VERIFY OK1067/1067,69MB(0). Claim retained.
+
+User hand-tested the built app and reports it seems to work. Remaining requests:
+replace the long all-sounds dropdown with a friendlier picker; broaden bindable
+keys and consider basic Shift/Alt/Ctrl combinations. UI choice approved2026-11-01: searchable sound picker with location paths and compact binding rows. Picker implementation/verification is underway; modifier combinations remain next.
+Approved UI: searchable picker with location paths and compact assigned bindings. Optional container browsing was not selected. The previous wrap was interrupted by the usage limit; the user has reset it and resumed implementation.
+User explicitly requested pruning before a five-day break. A checkpoint commit/push
+and audited prune are authorized; the UI/chord work remains unfinished and is now parked by the user; the installer session took over the claim.
+
+User authorized implementation on 2026-10-31. In-app physical letters/digits are
+profile-owned, use playWithPrimes (trigger/overlap, one-shot priming), and pause
+for editable controls, modifiers/repeats/composition, edit mode, overlays, drag and
+profile/import transitions. No global shortcut plugin. Unique sound-id resolution
+covers all five shapes; moves/renames preserve targets, copies keep independent
+ids, and missing/ambiguous targets stay visible and repairable. Settings supports
+record, cancel, rebind, duplicate refusal, target repair, remove and explicit reset.
+Malformed/future storage stays untouched until explicit repair/reset. Inline write
+errors preserve old bindings and allow retry. IDs use App's existing mintId.
+
+Code anchors: src/hotkeys.js:9(validation),:71(event policy),
+src/HotkeySettings.jsx:4(settings editor), src/App.jsx:897(scoped state),
+:4556(dispatch gate),:7680(settings integration); src/profileBundle.js:64(format2),
+:898(commit keys),:1129(export collection). Separate scoped key ttrpg_hotkeys;
+no auto-save and no legacy/global migration. Bundle v2 explicitly carries bindings;
+v1 imports default to empty bindings, and older builds refuse v2 rather than lose
+bindings. Failed import key writes restore replacement snapshots or remove the
+partial new profile; rollback error reports available recovery accurately.
+
+Final automated verification on 2026-10-31:
+- Pre-change backup010541 VERIFY OK950/950,67.3MB(0); gate backup011448
+  965/965,67.4MB(0); refreshed backup0138131014/1014,68.2MB(0). Wrap backup021813 verified1067/1067,69MB(0); checkpoint backup022327 VERIFY OK1068/1068,69MB(0).
+- Lint0 errors/2 accepted warnings(0), Vite buildPASS(0), coverageOK(0):
+  43 suites/483 ids; HK0–HK34 added, no prior IDs changed. Hotkeys remains planned
+  while UI/chord improvements await design; suite is wired on web/Windows/Android.
+- Ten Node checks all0: profileBundle46/46,profileStorage35/35,bundleGuard20/20,
+  profile keysOK,fadeMath46/46,soundFiles32/32,iconPrep35/35,snapshotUploads19/19,
+  androidReleaseSession19/19,hotkeys75/75. Extended preflight16/16(0).
+- Final web349/0/0(0), Windows367/0/3(suite/wrapper1),
+  Android357/0/3(suite/wrapper1). Expected native WARNs preserved.
+  Windows six keys restored/verified FROM DISK, zero original uploads;
+  Android28 keys restored/verified. Desktop/narrow screenshots visually reviewed;
+  411px layout has no horizontal overflow. Physical Android keyboard is an explicit
+  visible coverage gap (CDP on emulator is not hardware proof).
+- A Windows attempt lost page helpers mid-priming and had no final summary;
+  user reported possibly selecting Reload/Restart in a native context menu while
+  working. A reserved quiet retry passed with navigation capture and no helper loss.
+  AGENTS.md now requires a start/end notice and quiet interval for foreground tests.
+  Initial Android356/1/3 was only stale I17 format1 expectation; changed it to use
+  the exported supported version, then the full corrected suite passed.
+- Plan expanded after review found the new binding-key write could fail after board
+  replacement: snapshot/new-profile rollback and two fault tests were added; static,
+  Node and full platform checks were repeated. Binding ids also reuse mintId.
+
+Evidence: logs/keep/hotkeys-implementation-20261031/ and
+logs/keep/hotkeys-ui-20261031/. Standalone bundled desktop debug build passed(0), src-tauri/target/debug/app.exe
+45006336bytes SHA256874969AF7A91019A81F4993A57CAC5F446DC753DC43689D2313C3285FDEA7496.
+Previously opened through Explorer without a debug console (old PID35356); user hand-tested and reported working. Recovery2026-11-01 found this app no longer running. Android leftovers and .gitattributes were subsequently settled/committed as recorded above. Current revised picker verification is described at the top of this section; its built-app hand-test remains pending.
+HOTKEYS_SPEC.md stays live for the unfinished design work; user parked that work and authorized the installer-session claim takeover.
+
+
+## 2026-11-01 — Ctrl/Alt/Shift combinations implemented and automatically verified
+
+User accepted the searchable picker and reported modifiers were not working.
+The prior build deliberately rejected them. Implemented exact physical-code plus
+modifier-mask bindings (Ctrl1,Alt2,Shift4), any subset of those modifiers, and
+punctuation/numpad operators/F1-F4/F6-F10. Modifier-only presses keep capture
+active. Shared validation reserves navigation,Meta/AltGraph,F5/F11/F12 and common
+browser/window shortcuts. New writes use hotkey payload2; legacy payload1 remains
+readable with no automatic rewrite. Format2 bundles preserve masks; old builds
+refuse unsupported payload2 rather than interpret modified keys as bare keys.
+Duplicate chords are refused; the same key with different masks can coexist.
+Approved searchable UI remains; labels and help now describe combinations.
+
+Pre-change backup20261101-192502 VERIFY OK1282/1282,81.2MB(exit0). Lint0 errors/4
+warnings(exit0),2 accepted source warnings plus2 identical archived recovery-code
+warnings. Vite and standalone debug builds PASS(exit0). Coverage43 suites/495 IDs
+(exit0),only HK39-HK46 added; no old IDs removed. All10 Node checks exit0:
+profileBundle46/46,profileStorage35/35,bundleGuard20/20,profile keysOK,fadeMath46/46,
+soundFiles32/32,iconPrep35/35,snapshotUploads19/19,androidReleaseSession19/19,
+hotkeys120/120. AGENTS baseline updated. Extended Android preflight16/16(exit0).
+Desktop and411px screenshots with Ctrl+Alt+Shift+4 reviewed, no horizontal overflow.
+
+Final full results:web360/0/0(exit0),Android369/0/3 and Windows379/0/3
+(suite/wrapper1,expected native WARNs). Initial Android346/3/3(suite2,wrapper1)
+failed IP4/IP5/IP0 when a silhouette preview was absent after the10s wait. Unchanged
+full retry passed; read-only preview observer captured states, then stopped.
+Initial Windows378/1/3(suite2,wrapper1) failed Z22 with2 downward samples/end0.06.
+User approved an additional quiet interval; unchanged retry passed3-step ramp to0.
+No icon,playback or timeout/threshold changes made to obtain passes. Failure traces
+retained; causes unconfirmed. Windows intervals20:02:37-20:11:37 and
+20:12:09-20:21:08 used existing Explorer desktop, parent14292 verified explorer.exe.
+All7 original Windows keys restored/verified FROM DISK,0 original uploads restored;
+pre-run snapshots from both Windows runs also deep-compare exactly.
+
+Android restoration safety issue discovered: in-memory verification passed but
+subsequent emulator launches held prior test-profile IDs(29/33 keys). Retained both
+original and dirty snapshots. Recovered FIRST pre-modifier-run28-key snapshot in
+debug package com.thespellcaster.mrhorakhty.debug; BACK finished Activity, settled7s,
+force-stop/cold-start, saved/compared28/28 FROM DISK(exit0), BACK/settle/sync/emulator
+shutdown. Release package untouched. Runner has no graceful flush/cold-read check;
+recorded separate safety debt before further Android runs. One-time recovery script
+and all evidence live under logs/ and logs/keep/hotkeys-modifiers-20261101/.
+
+Standalone app45007360bytes SHA256
+0613FA54E1240C85D89D164C665F4D854BB77F5A585AD0DF45D4FE41B5DDA98A
+built successfully and reopened through Explorer without a console,PID21072,title
+The SpellCaster. No E2E/dev listeners or emulator remain. User asked to hand-test
+modifier recording/playback; acceptance pending. Claim retained, hotkey changes
+uncommitted, feature planned until acceptance. No finishing commit/push/prune yet.
+
+Final modifier checkpoint backup20261101-202311 VERIFY OK1371/1371,82.3MB(exit0).
+Final housekeeping notes postdate keeper. Human modifier hand-test remains pending;
+claim retained and no finishing commit/push/prune triggered while unfinished.
+
+
+## 2026-11-01 — Hotkeys accepted and implementation spec retired
+
+User confirmed: "Yes, modifier combinations work" after separately accepting the
+searchable picker. All required automatic gates and the built-app hand-test are
+complete. Design moved to docs/hotkeys.md; HOTKEYS_SPEC.md deleted and ignored,
+feature registry changed to shipped with specs/hotkeys.mjs::HK coverage. Android
+runner restoration safety debt remains separate and open; release app untouched,
+original28 debug-emulator keys recovered and verified from disk. Review appPID21072
+remains open; no E2E/dev listeners or emulator. Finishing commit/push/audited prune
+now authorized by the standing completed-subject workflow. Pre-housekeeping backup
+20261101-202512 VERIFY OK1371/1371,82.3MB(exit0).
+
+### Retired implementation spec snapshot (historical)
+
+# Hotkeys — Implementation Spec
+
+> Status: implementation authorized; picker UI accepted2026-11-01. Modifier automatic gates pass; built-app modifier hand-test pending.
+> Initial behavior and revised picker hand-tests passed; modifier hand-test is pending. This remains the live implementation spec.
+> Profiles v1 and one-shot priming are shipped, so the original prerequisite is met.
+> Related: PROJECT_STATE.md and PROFILE_SYNC_SPEC.md (future merge/sync scope).
+
+## 1. Scope and behavior
+
+Each binding assigns one physical trigger key to one sound in the active profile, while the app has
+focus. No new native dependency or OS-wide registration. Ctrl/Alt/Shift combinations are supported in-app. Global shortcuts,
+macros, MIDI and separate binding-set export remain deferred.
+
+A press behaves like clicking the sound card: call `playWithPrimes`, not
+`playSound` directly. Each accepted press triggers playback, including another
+instance if that sound is already playing; it does not toggle stop. This applies
+to loops too. Existing stop controls retain their current behavior, including
+primed-group stopping. Edit mode suppresses triggering. Priming remains one-shot:
+the first accepted trigger consumes it; rejected/unresolved presses do not.
+
+Bindings work across all tabs of the active profile, including sounds off screen.
+A sound may have several different keys; each key has exactly one target.
+Duplicate code/mask combinations are refused with the existing target named; no silent reassignment.
+
+## 2. Key policy and event handling
+
+Store and compare `KeyboardEvent.code`, with a separate recorded `key` label for
+display. Physical position is the contract across keyboard layouts; the recorded
+label can become stale after a layout change, so show the code alongside it.
+
+Supported triggers: letters, top-row/numpad digits, punctuation (including the
+international backslash), numpad operators/decimal/comma, F1–F4 and F6–F10.
+Combine a trigger with any subset of Ctrl, Alt and Shift. Modifier keys alone keep
+recording active; Escape cancels. Store a bit mask (Ctrl=1,Alt=2,Shift=4), and match
+the physical code AND exact mask. Bare1,Ctrl+1 and Shift+1 are distinct bindings.
+
+Keep Enter, Space, Escape, Tab, arrows, navigation, Meta, AltGraph, F5/F11/F12 and
+common browser/window shortcuts reserved. The explicit reserved chords are Ctrl+
+W/T/R/L/P/O/S/H/J/D/N/F/Q,Ctrl+F4,Alt+F4 and Ctrl+Shift+I/C. The same policy validates
+saved rows and records/dispatches events. Reject composition/dead/process/unidentified
+events and auto-repeat. Hardware/OS shortcuts intercepted before the WebView cannot
+be assigned. Numpad navigation without Num Lock remains reserved.
+
+Use one bubble-phase document listener with cleanup. Before triggering, reject:
+
+- `defaultPrevented`, composition, repeat or any prohibited modifier;
+- editable targets or ancestors: input (including number/range), textarea, select,
+  contenteditable and textbox roles; inspect the composed event path as needed;
+- edit mode, an open modal, settings, About, the side drawer, an active drag,
+  binding capture, or an active profile/import transition;
+- missing, malformed, duplicate or unresolved binding targets.
+
+Use a shared interaction-blocked predicate rather than a partial modal list.
+Respect the existing capture-phase Escape handlers. Only prevent the default on
+an accepted binding event. Do not stop unrelated keyboard propagation. Listener
+state must track the current profile and board without stale closures or duplicate
+registrations under React effect remounts. Blur/visibility loss cancels recording;
+composition end does not replay a discarded keystroke.
+
+## 3. Target identity
+
+Use a sound id as the authoritative identity within the owning profile. Keep a
+container reference and display snapshot for the picker and unresolved row:
+
+```json
+{
+  "id": "hk_a1b2c3",
+  "code": "Digit1",
+  "modifiers": 1,
+  "label": "Ctrl+1",
+  "target": {
+    "soundId": "sound_1757_k3f9x2",
+    "containerType": "character",
+    "containerId": "character_123",
+    "groupId": null
+  },
+  "displayName": "Fireball"
+}
+```
+
+Reuse `allSoundContainers` and the transfer reference shape. There are FIVE shapes:
+character, environment, groupCharacter, group and groupTop. Environment/category
+container ids are names; they must not determine a sound's identity. Resolve only
+inside the active profile, requiring exactly one matching sound id. Never fall
+back to matching a name. Duplicate sound ids in malformed/imported data make the
+binding unresolved rather than firing the first match.
+
+A category rename or sound move preserves its sound id and therefore its binding;
+refresh the location/display metadata from the resolved target. Copying creates
+a new sound id and leaves the binding attached to the original. Deleting a sound
+or its container leaves a visible unresolved binding, repairable or removable.
+Import pruning of missing audio may also remove a target: keep its binding and
+show the reason. A sound that still exists but has unusable audio follows the
+existing playback error path; do not present success when playback fails.
+
+## 4. Persistence and profile bundles
+
+Planned scoped key: `ttrpg_hotkeys`, accessed through profileStorage wrappers.
+Payload: `{ "version": 2, "bindings": [] }`. Missing key means no bindings.
+Version1 remains readable as unmodified bindings; explicit edits save version2.
+Older builds refuse version2 rather than silently firing chords as bare keys.
+Validate ids, codes, target shapes and duplicate codes on load/import. Invalid
+rows must never register; surface an actionable warning and preserve original
+stored data until repair is explicitly saved. An unknown payload version must
+not be overwritten by an automatic empty-state save.
+
+Bindings must be wired explicitly into all of these paths during implementation:
+
+- App initialization, durable writes and profile switch/create/duplicate/delete.
+- `collectProfileForExport`, bundle payload validation and `commitKeys` (including
+  its written-key allowlist), plus normalized return/state hydration.
+- Snapshot/restore, rollback, replacement import and restore-default behavior.
+- Profile storage/key guards and browser/native fixture seed/cleanup inventories.
+
+Planned bundle field: `data.hotkeys`, using the versioned payload above. A bundle
+without it imports as empty bindings, including replace-active; it must not retain
+the previous board's keys. A new-profile import keeps sound ids and resolves only
+within that new profile. Profile duplication copies bindings into the new namespace.
+No bindings belong in GLOBAL_KEYS. Do not add a new key to the legacy migration
+list merely because it is profile-scoped; it never existed before profiles.
+
+Export is currently an explicit field selection, and replace-import deletes keys
+outside its allowlist. A separate binding collection does NOT ride the bundle
+for free. Test format compatibility and decide whether the bundle format version
+must advance before shipping; older builds must not silently destroy bindings
+under a claimed lossless round trip. Native bundle support does not authorize or
+supply web audio bundle export/import, which remains deferred.
+
+During switching/import, stop hotkey dispatch before changing the profile and
+resume only after target data and bindings are hydrated. A failed switch/import
+restores both consistently. No outgoing-profile write may land in the incoming
+namespace. Failed storage writes must use the existing actionable error handling.
+
+## 5. Settings UI
+
+Add a Hotkeys section to the existing Settings modal, alongside the shipped
+Profiles controls. Show key label/code, sound and location, and explicit unresolved
+status. Provide Add, Record/rebind, Choose/repair target and Remove actions.
+User approved a searchable sound picker with location paths and compact assigned-binding rows on 2026-11-01. Search matches sound names and their full locations across all five container shapes; results scroll within a bounded list. Keep the selected sound visible beneath results even when the query changes. Duplicate sound IDs are unavailable. User accepted this picker UI and requested working modifier combinations; these are now implemented and undergoing verification.
+Keep empty states and errors visible and keyboard accessible.
+
+Recording starts from a button, never a text input. Settings blocks playback while
+a dedicated temporary recorder accepts the next allowed key. Escape cancels;
+invalid/duplicate keys explain why and keep recording; Cancel, blur, profile change
+and unmount remove capture listeners. Commit only after both a valid key and a
+target are selected. Canceling a draft must not alter a persisted binding.
+Focus returns to the initiating control. No silent replacement of another row.
+
+Android can use an external keyboard; do not describe keyboard use as impossible.
+Bindings/settings must survive Android profile/bundle operations. Touch-only use
+needs no keyboard to inspect, choose targets or remove bindings. In-app dispatch
+may work with attached keyboards; do not promise hardware behavior without testing.
+
+## 6. Implementation and coverage plan
+
+Hotkeys remains planned in `e2e/coverage.manifest.json` until hand-test acceptance.
+`e2e/hotkeys.check.mjs` is registered as the tenth gate-5 check (120/120). Shared
+`specs/hotkeys.mjs` registers HK0–HK46 on all three platforms. The id diff was
+reviewed: no existing ids changed. Android physical keyboard delivery remains a
+visible gap; emulator CDP input is covered. Final modifier results2026-11-01:web360/0/0(exit0),
+Windows379/0/3 and Android369/0/3(expected native WARN exit1). Initial unrelated
+icon/loop-fade failures passed unchanged retries; evidence retained. Android
+original28-key debug-app snapshot was manually restored and verified FROM DISK;
+runner flush/cold-read safety debt is recorded in PROJECT_STATE.md.
+
+Required cases:
+
+- Trigger, repeated presses/overlap, loop behavior, priming consumed once and edit
+  mode; exact modifier matching, no repeat/composition/Meta/AltGraph activation or Enter/Space double trigger.
+- Editable descendants, every modal/drawer, drag, prevented event, capture cancel,
+  listener cleanup/remount, blur and profile/import transition suppression.
+- Duplicate refusal, rebind removes old dispatch, canceled draft unchanged,
+  rename/move preserved, copy stays with original, delete/prune unresolved,
+  duplicate sound id inert, repair and removal.
+- Independent profiles, rapid switch without stale dispatch, reload persistence,
+  duplicate/delete/defaults, native bundle round trip, legacy bundle with no field,
+  replace-active clears old keys, malformed/unknown versions and failure rollback.
+- Web and Windows real key dispatch through CDP, not only calling a helper.
+  Android management/persistence/bundle regression tests plus explicit hardware
+  keyboard coverage or a registered, visible hardware-test gap. Never use
+  DOM.setFileInputFiles on Android; the renderer crash warning still applies.
+
+Before shipping run all AGENTS.md gates in order, report actual counts/exits, and
+obtain the user's hand-test of the built app. Do not run E2E/orphan cleanup during
+an active Android Studio release companion session. Spec review alone proves no
+hotkey behavior and needs no app hand-test.
+
+## 7. Pre-implementation anchors (reviewed 2026-10-31; historical line numbers)
+
+- `src/App.jsx:1280`: drawer key handler; `:3066`: move/copy capture handler;
+  `:4802`: drag Escape handler (recheck exact positions before implementation).
+- `src/App.jsx:2661`: transfer references; `:2739`: five-shape sound index;
+  `:2757`: sound-container lookup. Existing first-match lookup needs ambiguity
+  handling for imported hotkey targets, not blind reuse.
+- `src/App.jsx:4189`: playback entry; `:4496`: stopTrigger; `:4511`:
+  playWithPrimes; `:4860` and `:4868`: card click/keyboard paths.
+- `src/App.jsx:7470`: Settings; `src/profileStorage.js:53`: legacy keys;
+  `src/profileBundle.js:889`: commitKeys; `:1102`: collectProfileForExport.
+
+The earlier plan changed because profiles have shipped, card triggering is now
+verified, groupTop exists, and bundle serialization requires explicit work.
+Global-shortcut plugin placement is deferred research: inspect current platform
+entry points, dependency cfgs and capabilities if global scope is later requested.
+
+Current implementation anchors and gate/backup handover are in PROJECT_STATE.md.
+
+Final finishing backup20261101-202657 VERIFY OK1374/1374,82.4MB(exit0).
+Coverage retirement check43 suites/495 IDs,29 shipped/29 covered,0 planned(exit0).
+No app changes after user acceptance; prior lint/build/Node/platform gates remain
+applicable. Final housekeeping may postdate keeper.

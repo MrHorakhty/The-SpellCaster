@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:12)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 17:37 — working on: finish accepted hotkeys; commit, push and audited backup pruning
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -40,8 +40,7 @@ Verification2026-11-01:
   cleanup; prior same-session app checks are documented in installer section.
   No new user app hand-test or signing-wizard run claimed or required.
 - Evidence/recovery:logs/keep/android-remnants-20261101-170732/.
-Android files are now clean, not deferred edits. Only parked hotkey work remains
-outside the intended commit. Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). No active build/test pipelines or test listeners remain. The probe-owned idle Gradle daemon was identified by PID/start-time and closed after native success because it held the completed preflight output handle open. Cleanup complete. Implementation2e0f43c1096ba01a03c26c9ea9b8f9acad134410 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned2 older backups, preserving6 differing entries in logs/keep/android-remnants-prune-20261101-171225/. All1204 keeper hashes rechecked; only verified newest backup20261101-171109 remains. Only parked hotkey work remains uncommitted. Final bookkeeping intentionally postdates keeper.
+Android files are now clean, not deferred edits. The separately handled hotkey work is now accepted; see its current section. Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). No active build/test pipelines or test listeners remain. The probe-owned idle Gradle daemon was identified by PID/start-time and closed after native success because it held the completed preflight output handle open. Cleanup complete. Implementation2e0f43c1096ba01a03c26c9ea9b8f9acad134410 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned2 older backups, preserving6 differing entries in logs/keep/android-remnants-prune-20261101-171225/. All1204 keeper hashes rechecked; only verified newest backup20261101-171109 remains. Hotkey work has since been accepted; finishing status is in the hotkey section. Final bookkeeping intentionally postdates keeper.
 
 ## Windows installer launcher and launcher folder — verified
 
@@ -54,9 +53,7 @@ README production/Android instructions and AGENTS references are updated; root
 /*.bat is ignored to prevent duplicate launchers. Generated Android gradlew.bat
 stays in its required location. No application/runtime code changed in this subject.
 
-User authorized taking over the interrupted hotkey claim; that work is parked,
-unfinished, and preserved uncommitted for the user to revisit. This subject does
-not complete the hotkey UI/chord work. Android leftovers are settled in the section
+User authorized taking over the interrupted hotkey claim for installer work; hotkeys were preserved and subsequently resumed and accepted. Installer work did not itself complete hotkeys; later hotkey completion is recorded below. Android leftovers are settled in the section
 above; pre-existing hotkey changes remain separate.
 
 Verification on 2026-11-01:
@@ -82,7 +79,7 @@ Verification on 2026-11-01:
   WiX download DNS(exit1); launcher preserved that exit/log; host builds passed.
 - Evidence:logs/keep/windows-installers-20261101/, including final artifact hashes.
   No build/test processes or listeners on5173/5183/5233/9222/9224/9225/9333 remain.
-Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkey changes remain uncommitted; Android leftovers were settled subsequently as recorded above. These finishing notes intentionally postdate the keeper.
+Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Android leftovers were settled subsequently as recorded above; hotkeys were later resumed and accepted as recorded below. These finishing notes intentionally postdate the keeper.
 
 ## Android Studio release build — verified
 
@@ -395,62 +392,59 @@ Old source-package paths are ignored against revival. Historical old-ID referenc
   Android `gradlew.bat` / `settings.gradle` (ANDROID_PREFS_ROOT handling). Native E2E ran
   with those edits present. The prior unresolved Studio Rust failure is now fixed and verified in the current release-build section above; the user explicitly authorized that investigation. Android edits under gen remain outside project backups.
 
-## Hotkey spec review and Windows investigation — complete
+## Hotkeys — shipped and user accepted
 
-HOTKEYS_SPEC.md:1 reviewed against current code on 2026-10-31; design review only,
-implementation remains unauthorized. V1 proposes in-app physical single keys,
-profile ownership, repeated card-equivalent triggers through playWithPrimes,
-sound-id identity through moves/renames across all five container shapes, explicit
-bundle wiring and full event-suppression/persistence coverage. Plan updated because
-profiles shipped, groupTop exists, card activation triggers overlapping playback,
-and bundle collection/commit require explicit fields. Android external keyboards
-are possible; hardware dispatch needs actual verification before claiming support.
+User accepted the searchable picker UI2026-11-01. Ctrl/Alt/Shift combinations and
+broader trigger keys are implemented after the user reported modifiers did not work
+in the prior single-key build. User confirmed modifier recording/playback works; built-app hand-test passed.
 
-Windows uploads investigation resolved without app/harness/permission changes.
-The direct Codex-child run reproduced the already-documented MSIX virtualization
-failure: 305/26/3, forbidden uploads mkdir/exists, zero-byte bundle fixture. The
-operational warning was missed initially. Existing Explorer desktop shell launch
-avoids inherited package context; first launcher pwsh39428 parent explorer11464
-confirmed in logs/windows-investigation-20261031-004950.ancestry.json. First
-Explorer run lost page helpers during priming (six FAIL then fatal type error;
-no final suite summary); store restored/verified, cause of that interruption not
-established. Unchanged isolated retry completed 333/0/3, with all corresponding
-icon saves passing, real upload 320044 bytes, and G6c resolving native audio.
-AGENTS.md now places the existing launch requirement beside the Windows gate.
-Do not widen filesystem capabilities for a Codex launch-context failure.
+- In-app physical code + exact modifier mask(Ctrl1,Alt2,Shift4); any subset of these
+  modifiers can coexist with the bare key. Modifier-only presses keep recording.
+  Letters/digits,punctuation,numpad operators,F1-F4/F6-F10 supported. Navigation,
+  Meta/AltGraph,F5/F11/F12 and common browser/window shortcuts remain reserved.
+- Profile-scoped ttrpg_hotkeys payload2; payload1 remains readable. Explicit edits
+  save2, no auto-save or legacy/global migration. Unknown versions remain intact
+  until explicit reset. Bundle format2 preserves masks; older readers refuse them.
+- Stable unique soundId across all5 container shapes; missing/duplicate IDs inert
+  with repair UI. Trigger uses playWithPrimes(overlap,one-shot priming). Typing,
+  editing,dialogs,drag,profile/import transitions,repeat and composition suppress it.
+  Duplicate exact chords refused. Save failures preserve old bindings and allow retry.
+- Approved picker searches names/locations, bounds scrolling, shows selected paths
+  and compact rows. Desktop/411px modifier screenshots reviewed,no horizontal overflow.
+- Code:src/hotkeys.js:4(allowlist),:6(mask/signature),:18(validation),:83(event policy);
+  src/HotkeySettings.jsx:34(record conflicts),:56(save),:86(search);
+  src/App.jsx:897(profile state),:4566(dispatch),:7680(settings);
+  src/profileBundle.js:64(format2),:898(commit),:1129(collection).
 
-Verification for this doc-only subject (PASS/FAIL/WARN; exits):
-- Backups 20261031-001912 and 004929 VERIFY OK 889/889 and 915/915 respectively,
-  61.6/62.2 MB (0). Review backup 004713 verified 915/915,62.2 MB (0).
-  Final backup 20261031-010255 VERIFY OK 935/935,62.3 MB (0);
-  four older backups audited/pruned after remote verification; 16 differing entries
-  preserved under logs/keep/windows-investigation-prune-20261031-010352/.
-  All 935 keeper hashes rechecked; only 010255 remains. Housekeeping postdates keeper.
-- Lint 0 errors/2 baseline warnings (0); build PASS (0); coverage OK (0),
-  42 suites/448 registered ids,28/28 shipped covered; hotkeys already planned.
-- Node: profileBundle 46/46, profileStorage 35/35, bundleGuard 20/20, keys OK,
-  fadeMath 46/46, soundFiles 32/32, iconPrep 35/35, snapshotUploads 19/19,
-  androidReleaseSession 19/19 (all 0); preflight 9/9 (0). Snapshot check needed
-  host retry after sandbox EPERM. Static/Node/web/Android results retained from
-  the same unchanged app/harness tree; only Windows reran for its launch issue.
-- Web 316/0/0 (0); final Windows 333/0/3 expected WARN (suite/wrapper 1);
-  Android 323/0/3 expected WARN (1). Initial sandbox web CDP access was blocked
-  before assertions; cleaned before host runs. No human hand-test needed or
-  claimed for docs-only work. No hotkey implementation or behavior is verified.
-- Final Windows six keys restored/verified FROM DISK, zero original uploads
-  restored; Android 28 keys restored/verified. Direct Codex namespace's earlier
-  13 keys/25 uploads were also restored, separately from Explorer's ordinary store.
-- Evidence: logs/keep/hotkey-spec-20261031/ and
-  logs/keep/windows-investigation-20261031/; failed runs preserved as diagnostics.
+Current verification(all static/Node exits0):
+- Backup20261101-192502 VERIFY OK1282/1282,81.2MB. Final finishing backup20261101-202657 VERIFY OK1374/1374,82.4MB(exit0). Final bookkeeping intentionally postdates keeper.
+- Lint0 errors/4 warnings(2 source baseline,2 duplicate archived recovery warnings);
+  Vite and standalone debug builds PASS; coverage43 suites/495 IDs. HK39-HK46 added,
+  no old IDs removed. Feature shipped with specs/hotkeys.mjs::HK coverage; design docs/hotkeys.md.
+- Node:profileBundle46/46,profileStorage35/35,bundleGuard20/20,profile keysOK,
+  fadeMath46/46,soundFiles32/32,iconPrep35/35,snapshotUploads19/19,
+  androidReleaseSession19/19,hotkeys120/120. Extended Android preflight16/16.
+- Web360 PASS/0 FAIL/0 WARN(exit0). Android369/0/3 and Windows379/0/3
+  (suite/wrapper1,expected native WARNs). All modifier cases passed all platforms;
+  physical Android keyboard remains an explicit visible coverage gap.
+- Initial Android346/3/3(suite2,wrapper1),IP4/IP5/IP0 preview wait failure; unchanged
+  retry passed. Initial Windows378/1/3(suite2,wrapper1),Z22 ramp sampled2 drops;
+  unchanged retry passed3 drops to0. No icon/playback/threshold changes; failures
+  retained, causes unconfirmed. Evidence:logs/keep/hotkeys-modifiers-20261101/.
+- Windows7 original keys verified FROM DISK,0 original uploads restored; both
+  pre-run snapshots match exactly. Quiet intervals ended; Explorer parents verified.
+- Android in-memory restore did NOT survive shutdown. Manually recovered FIRST
+  original28-key snapshot and verified28/28 after a cold app restart(exit0),then
+  BACK/settle/sync/emulator shutdown. Debug package only; release untouched.
+  See Native E2E safety debt below: fix Android runner before further Android runs.
 
-Earlier Studio/companion PIDs above had already ended before investigation.
-Final host check: no listeners on 5173/5183/5233/9333/9224/9225 and no Studio/emulator. Preserve unrelated user Android gradlew.bat /
-settings.gradle edits and untracked .gitattributes. Intended changes only:
-HOTKEYS_SPEC.md, AGENTS.md, PROJECT_STATE.md and docs/session-history.md.
-Subject complete. Documentation commit 0c413a5b90b8698a46d2bf6540bd091063750418
-pushed to origin/mobile-support and remote SHA verified before pruning. Final
-housekeeping committed separately. Only three unrelated user files remain dirty.
-Hotkey implementation remains a separate authorization decision.
+Standalone src-tauri/target/debug/app.exe:45007360bytes,SHA256
+0613FA54E1240C85D89D164C665F4D854BB77F5A585AD0DF45D4FE41B5DDA98A.
+Open for user hand-test,PID21072,title The SpellCaster,launched through Explorer
+without a console. No test/dev listeners or emulator. Do not run E2E cleanup against
+this review app without arranging another interval. Hotkey subject complete and user accepted. Finishing commit/push/audited prune
+in progress; no new app changes since successful gates and hand-test. Completed
+HOTKEYS_SPEC.md retired/ignored; design preserved in docs/hotkeys.md and history.
 
 ## Open items
 
@@ -459,12 +453,12 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| 1 | [Hotkeys](HOTKEYS_SPEC.md) | Spec refreshed 2026-10-31; **not authorized for implementation**. Bindings belong to profiles; use the profile reference rules and route triggers through `playWithPrimes`. Suppress shortcuts while editing text. |
 | Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
+| Native E2E safety debt | Android runner restore | Confirmed2026-11-01: in-memory verification passed but next boot retained test profiles. Manual BACK/settle/cold-start comparison restored original28 keys from disk. Add graceful Activity close and cold-read comparison to e2e/e2e-android.ps1 before further Android runs; preserve recovery evidence. |
 | Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
 
 `PROFILE_SYNC_SPEC.md` remains live because it holds future scope and hotkey dependencies.
@@ -477,8 +471,8 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 - Branch mobile-support; Windows launchers live in launchers/ (user requested).
 - Old Android environment workarounds are reverted; gradlew.bat/settings.gradle
   match HEAD. .gitattributes keeps *.bat text eol=crlf and is included in this cleanup.
-- Parked hotkey work remains uncommitted in app/modules/specs/docs/manifest.
-  Preserve that separate work; HOTKEYS_SPEC.md remains live for the UI/chord design.
+- Hotkey subject accepted; intended code/tests/docs are being committed together.
+  Finished spec retired; maintained design docs/hotkeys.md.
 - No signing credentials or APK artifacts are committed. Current rebuilt release
   APK is unsigned; earlier successful signing verification is a separate result.
 - Personal /scripts/ remains user-retired/ignored; recovery archives are retained.
@@ -809,6 +803,8 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
   It is separate from project backups and ordinary runner retention.
 
 ## Retired files
+
+- HOTKEYS_SPEC.md: hotkeys shipped and user accepted2026-11-01. Design docs/hotkeys.md; historical spec preserved in docs/session-history.md. Deleted/ignored; tests remain registered.
 
 Keep these retired; .gitignore guards tracked replacements where applicable.
 Detailed designs, decisions and inventories are preserved in session history and the pre-cleanup snapshot.

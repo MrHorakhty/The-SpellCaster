@@ -311,6 +311,9 @@ A **plain, unencrypted zip**. No `background/` folder — see §6.
 ```
 
 - `formatVersion` is the **bundle** version, independent of `DATA_VERSION` (the in-app data schema version). Bump it only for breaking layout changes.
+  Hotkey implementation (2026-10-31) advances exports to **format 2**, adding `data.hotkeys`.
+  The reader still accepts format 1, defaulting absent bindings to empty; older readers refuse
+  format 2 rather than silently stripping bindings. The format-1 example above is historical.
 - `files[].path` is **content-addressed** (`sha256` prefix + original extension). Two profiles containing the same upload dedupe to one entry, and blobs can never conflict.
 - ⚠️ **Dedupe is now mandatory, not an optimisation.** Since move/copy shipped, two sounds in one profile can legitimately name the **same `storedName`** (`f7f316e`), so the reference count and the blob count are no longer 1:1. Hash-then-dedupe (§7 step 4) is what keeps that correct — keying blobs by `storedName` instead would emit the same bytes twice under two names.
 - `originalName` preserves the human-readable filename for restore/inspection. On import, the app may keep the content-addressed name as `storedName` and show `originalName` as `displayName` — matching the existing `files[]` entry shape (App.jsx:2698-2699 writes `{name: storedName, displayName: file.name, url: storedName}`; the hydrate path reads the same four fields at App.jsx:1677-1679).

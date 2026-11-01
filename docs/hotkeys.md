@@ -1,14 +1,13 @@
-# Hotkeys — Planning Spec
+# Profile hotkeys — shipped design
 
-> Status: design reviewed against the working tree on 2026-10-31. Spec review is
-> authorized; app implementation is not yet authorized. No hotkey code is shipped.
-> Profiles v1 and one-shot priming are shipped, so the original prerequisite is met.
-> Related: PROJECT_STATE.md and PROFILE_SYNC_SPEC.md (future merge/sync scope).
+> User accepted the searchable picker and working modifier combinations on 2026-11-01.
+> This is the maintained design record. Verification and operational warnings live in PROJECT_STATE.md.
+> Related future work: PROFILE_SYNC_SPEC.md (timestamps, merge, transport sync).
 
 ## 1. Scope and behavior
 
-V1 binds one physical key to one sound in the active profile, while the app has
-focus. No new native dependency or OS-wide registration. Global shortcuts, chords,
+Each binding assigns one physical trigger key to one sound in the active profile, while the app has
+focus. No new native dependency or OS-wide registration. Ctrl/Alt/Shift combinations are supported in-app. Global shortcuts,
 macros, MIDI and separate binding-set export remain deferred.
 
 A press behaves like clicking the sound card: call `playWithPrimes`, not
@@ -20,7 +19,7 @@ the first accepted trigger consumes it; rejected/unresolved presses do not.
 
 Bindings work across all tabs of the active profile, including sounds off screen.
 A sound may have several different keys; each key has exactly one target.
-Duplicate codes are refused with the existing target named; no silent reassignment.
+Duplicate code/mask combinations are refused with the existing target named; no silent reassignment.
 
 ## 2. Key policy and event handling
 
@@ -28,12 +27,18 @@ Store and compare `KeyboardEvent.code`, with a separate recorded `key` label for
 display. Physical position is the contract across keyboard layouts; the recorded
 label can become stale after a layout change, so show the code alongside it.
 
-V1 allowlist: `KeyA`–`KeyZ`, `Digit0`–`Digit9`, `Numpad0`–`Numpad9`.
-Reserve Enter, Space, Escape, Tab, arrows, navigation keys, function keys,
-punctuation and all modifier keys. This avoids card activation, focus navigation,
-modal Escape and platform shortcut collisions. Reject Ctrl, Meta, Alt, Shift,
-AltGraph, composition/dead/process/unidentified events and auto-repeat during both
-recording and triggering. A shifted key is not a second binding.
+Supported triggers: letters, top-row/numpad digits, punctuation (including the
+international backslash), numpad operators/decimal/comma, F1–F4 and F6–F10.
+Combine a trigger with any subset of Ctrl, Alt and Shift. Modifier keys alone keep
+recording active; Escape cancels. Store a bit mask (Ctrl=1,Alt=2,Shift=4), and match
+the physical code AND exact mask. Bare1,Ctrl+1 and Shift+1 are distinct bindings.
+
+Keep Enter, Space, Escape, Tab, arrows, navigation, Meta, AltGraph, F5/F11/F12 and
+common browser/window shortcuts reserved. The explicit reserved chords are Ctrl+
+W/T/R/L/P/O/S/H/J/D/N/F/Q,Ctrl+F4,Alt+F4 and Ctrl+Shift+I/C. The same policy validates
+saved rows and records/dispatches events. Reject composition/dead/process/unidentified
+events and auto-repeat. Hardware/OS shortcuts intercepted before the WebView cannot
+be assigned. Numpad navigation without Num Lock remains reserved.
 
 Use one bubble-phase document listener with cleanup. Before triggering, reject:
 
@@ -60,7 +65,8 @@ container reference and display snapshot for the picker and unresolved row:
 {
   "id": "hk_a1b2c3",
   "code": "Digit1",
-  "label": "1",
+  "modifiers": 1,
+  "label": "Ctrl+1",
   "target": {
     "soundId": "sound_1757_k3f9x2",
     "containerType": "character",
@@ -89,8 +95,10 @@ existing playback error path; do not present success when playback fails.
 ## 4. Persistence and profile bundles
 
 Planned scoped key: `ttrpg_hotkeys`, accessed through profileStorage wrappers.
-Payload: `{ "version": 1, "bindings": [] }`. Missing key means no bindings.
-Validate ids, codes, target shapes and duplicate codes on load/import. Invalid
+Payload: `{ "version": 2, "bindings": [] }`. Missing key means no bindings.
+Version1 remains readable as unmodified bindings; explicit edits save version2.
+Older builds refuse version2 rather than silently firing chords as bare keys.
+Validate ids, codes, modifier masks, target shapes and duplicate code/mask pairs on load/import. Invalid
 rows must never register; surface an actionable warning and preserve original
 stored data until repair is explicitly saved. An unknown payload version must
 not be overwritten by an automatic empty-state save.
@@ -103,19 +111,19 @@ Bindings must be wired explicitly into all of these paths during implementation:
 - Snapshot/restore, rollback, replacement import and restore-default behavior.
 - Profile storage/key guards and browser/native fixture seed/cleanup inventories.
 
-Planned bundle field: `data.hotkeys`, using the versioned payload above. A bundle
+Bundle field: `data.hotkeys`, using the versioned payload above. A bundle
 without it imports as empty bindings, including replace-active; it must not retain
 the previous board's keys. A new-profile import keeps sound ids and resolves only
 within that new profile. Profile duplication copies bindings into the new namespace.
 No bindings belong in GLOBAL_KEYS. Do not add a new key to the legacy migration
 list merely because it is profile-scoped; it never existed before profiles.
 
-Export is currently an explicit field selection, and replace-import deletes keys
-outside its allowlist. A separate binding collection does NOT ride the bundle
-for free. Test format compatibility and decide whether the bundle format version
-must advance before shipping; older builds must not silently destroy bindings
-under a claimed lossless round trip. Native bundle support does not authorize or
-supply web audio bundle export/import, which remains deferred.
+Export, pruning, replace-import allowlists and key commits explicitly carry the
+binding collection. Bundle format2 carries data.hotkeys; format1 imports default
+to empty bindings, including replacement. Old readers refuse unsupported bundle
+or hotkey payload versions rather than silently dropping bindings/modifiers.
+Native bundle support does not supply web audio bundle export/import, which
+remains deferred.
 
 During switching/import, stop hotkey dispatch before changing the profile and
 resume only after target data and bindings are hydrated. A failed switch/import
@@ -127,7 +135,7 @@ namespace. Failed storage writes must use the existing actionable error handling
 Add a Hotkeys section to the existing Settings modal, alongside the shipped
 Profiles controls. Show key label/code, sound and location, and explicit unresolved
 status. Provide Add, Record/rebind, Choose/repair target and Remove actions.
-Use the existing move/copy picker patterns across all five container shapes.
+User approved a searchable sound picker with location paths and compact assigned-binding rows on 2026-11-01. Search matches sound names and their full locations across all five container shapes; results scroll within a bounded list. Keep the selected sound visible beneath results even when the query changes. Duplicate sound IDs are unavailable. User accepted this picker UI and requested working modifier combinations; these passed all automatic gates and the built-app user hand-test.
 Keep empty states and errors visible and keyboard accessible.
 
 Recording starts from a button, never a text input. Settings blocks playback while
@@ -142,19 +150,23 @@ Bindings/settings must survive Android profile/bundle operations. Touch-only use
 needs no keyboard to inspect, choose targets or remove bindings. In-app dispatch
 may work with attached keyboards; do not promise hardware behavior without testing.
 
-## 6. Implementation and coverage plan
+## 6. Verification and maintenance
 
-Hotkeys are already registered as a planned feature
-in `e2e/coverage.manifest.json`. When implementation is authorized, add pure
-validation/resolution/event-policy Node
-checks and register their command/count in AGENTS.md gate 5. Pick a fresh suite
-prefix after checking the manifest; do not reserve a supposedly free numeric
-range in an existing suite. Register platform wiring, run --update and review ids.
+Hotkeys is shipped in `e2e/coverage.manifest.json`, covered by `specs/hotkeys.mjs::HK`.
+The user accepted the initial behavior, revised picker, and modifier combinations.
+`e2e/hotkeys.check.mjs` is registered as the tenth gate-5 check (120/120). Shared
+`specs/hotkeys.mjs` registers HK0–HK46 on all three platforms. The id diff was
+reviewed: no existing ids changed. Android physical keyboard delivery remains a
+visible gap; emulator CDP input is covered. Final modifier results2026-11-01:web360/0/0(exit0),
+Windows379/0/3 and Android369/0/3(expected native WARN exit1). Initial unrelated
+icon/loop-fade failures passed unchanged retries; evidence retained. Android
+original28-key debug-app snapshot was manually restored and verified FROM DISK;
+runner flush/cold-read safety debt is recorded in PROJECT_STATE.md.
 
-Required cases:
+Covered cases:
 
 - Trigger, repeated presses/overlap, loop behavior, priming consumed once and edit
-  mode; no repeat/composition/modifier activation or Enter/Space double trigger.
+  mode; exact modifier matching, no repeat/composition/Meta/AltGraph activation or Enter/Space double trigger.
 - Editable descendants, every modal/drawer, drag, prevented event, capture cancel,
   listener cleanup/remount, blur and profile/import transition suppression.
 - Duplicate refusal, rebind removes old dispatch, canceled draft unchanged,
@@ -168,24 +180,18 @@ Required cases:
   keyboard coverage or a registered, visible hardware-test gap. Never use
   DOM.setFileInputFiles on Android; the renderer crash warning still applies.
 
-Before shipping run all AGENTS.md gates in order, report actual counts/exits, and
+After changes run the applicable AGENTS.md gates, report actual counts/exits, and
 obtain the user's hand-test of the built app. Do not run E2E/orphan cleanup during
 an active Android Studio release companion session. Spec review alone proves no
 hotkey behavior and needs no app hand-test.
 
-## 7. Current-code anchors (reviewed 2026-10-31)
+## 7. Current code anchors
 
-- `src/App.jsx:1280`: drawer key handler; `:3066`: move/copy capture handler;
-  `:4802`: drag Escape handler (recheck exact positions before implementation).
-- `src/App.jsx:2661`: transfer references; `:2739`: five-shape sound index;
-  `:2757`: sound-container lookup. Existing first-match lookup needs ambiguity
-  handling for imported hotkey targets, not blind reuse.
-- `src/App.jsx:4189`: playback entry; `:4496`: stopTrigger; `:4511`:
-  playWithPrimes; `:4860` and `:4868`: card click/keyboard paths.
-- `src/App.jsx:7470`: Settings; `src/profileStorage.js:53`: legacy keys;
-  `src/profileBundle.js:889`: commitKeys; `:1102`: collectProfileForExport.
+- src/hotkeys.js:4: supported physical codes; :6: modifier mask and identity;
+  :18: payload validation; :83: event policy.
+- src/HotkeySettings.jsx:34: recording conflicts; :56: durable binding draft;
+  :86: searchable target picker.
+- src/App.jsx:897: profile state; :4566: exact dispatch; :7680: Settings.
+- src/profileBundle.js:64: bundle format2; :898: key commit; :1129: export collection.
 
-The earlier plan changed because profiles have shipped, card triggering is now
-verified, groupTop exists, and bundle serialization requires explicit work.
-Global-shortcut plugin placement is deferred research: inspect current platform
-entry points, dependency cfgs and capabilities if global scope is later requested.
+Historical planning/code anchors are preserved in docs/session-history.md.

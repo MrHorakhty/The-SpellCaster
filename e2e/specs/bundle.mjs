@@ -824,7 +824,7 @@ export const bundle = {
       log('BUNDLE', 'I17: a bundle from a newer format is refused, and the message names both versions',
         ok(future?.ok === false && future?.code === 'too-new'
           && /format 99/.test(future?.message || '')
-          && /format 1\b/.test(future?.message || '')
+          && (future?.message || '').includes(`up to format ${exported.manifest.formatVersion}.`)
           && dumpAfterFuture === dumpBeforeRefusal),
         `code=${future?.code} message="${future?.message}" boardUnchanged=${dumpAfterFuture === dumpBeforeRefusal}`);
 

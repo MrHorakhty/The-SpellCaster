@@ -267,10 +267,12 @@
     },
     {
       "name": "Keyboard hotkeys",
-      "spec": "HOTKEYS_SPEC.md",
-      "status": "planned",
-      "coveredBy": [],
-      "note": "NOT IMPLEMENTED and not authorised. Recommended AFTER profiles."
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/hotkeys.mjs::HK"
+      ],
+      "note": "Shipped and user hand-tested 2026-11-01: searchable profile bindings, exact Ctrl/Alt/Shift combinations, expanded keys, priming and bundle persistence. Design: docs/hotkeys.md. Physical Android keyboard remains an explicit visible suite coverage gap (emulator CDP only)."
     },
     {
       "name": "Per-file fades",
@@ -1371,6 +1373,69 @@
         "IP7",
         "IP8",
         "IP9"
+      ]
+    },
+    {
+      "key": "HK",
+      "cat": "HOTKEY",
+      "title": "Profile hotkeys",
+      "file": "specs/hotkeys.mjs",
+      "export": "hotkeys",
+      "covers": "Settings recording/editing/cancel, duplicate refusal, trusted key dispatch and suppression, priming, rebind/reload, move/rename/delete repair, profile isolation/deletion, native bundle v2 and future-version preservation; storage failure/retry, capture blur/reset, ambiguous ids, focus restoration, searchable picker names/locations/empty results and selected-path feedback; all Ctrl/Alt/Shift combinations, exact-mask dispatch, modifier-only recording, duplicate chords, reload, punctuation and modifier bundle round trip. GAP: physical Android keyboard untested (emulator CDP only)",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^HK\\d",
+      "ids": [
+        "HK0",
+        "HK1",
+        "HK10",
+        "HK11",
+        "HK12",
+        "HK13",
+        "HK14",
+        "HK15",
+        "HK16",
+        "HK17",
+        "HK18",
+        "HK19",
+        "HK2",
+        "HK20",
+        "HK21",
+        "HK22",
+        "HK23",
+        "HK24",
+        "HK25",
+        "HK26",
+        "HK27",
+        "HK28",
+        "HK29",
+        "HK3",
+        "HK30",
+        "HK31",
+        "HK32",
+        "HK33",
+        "HK34",
+        "HK35",
+        "HK36",
+        "HK37",
+        "HK38",
+        "HK39",
+        "HK4",
+        "HK40",
+        "HK41",
+        "HK42",
+        "HK43",
+        "HK44",
+        "HK45",
+        "HK46",
+        "HK5",
+        "HK6",
+        "HK7",
+        "HK8",
+        "HK9"
       ]
     }
   ]
