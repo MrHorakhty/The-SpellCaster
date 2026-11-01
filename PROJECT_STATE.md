@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 17:37 — working on: finish accepted hotkeys; commit, push and audited backup pruning
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 20:30)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -442,9 +442,14 @@ Standalone src-tauri/target/debug/app.exe:45007360bytes,SHA256
 0613FA54E1240C85D89D164C665F4D854BB77F5A585AD0DF45D4FE41B5DDA98A.
 Open for user hand-test,PID21072,title The SpellCaster,launched through Explorer
 without a console. No test/dev listeners or emulator. Do not run E2E cleanup against
-this review app without arranging another interval. Hotkey subject complete and user accepted. Finishing commit/push/audited prune
-in progress; no new app changes since successful gates and hand-test. Completed
-HOTKEYS_SPEC.md retired/ignored; design preserved in docs/hotkeys.md and history.
+this review app without arranging another interval. Hotkey subject complete and user accepted. Implementation86546bd55b32bedcc7464f3661918a1946fe4c49
+pushed to origin/mobile-support and git ls-remote matched. Audited/pruned6 older
+backups;68 differing entries preserved under logs/keep/hotkeys-finish-prune-20261101-202845/
+with manifest/proofs. All1374 keeper hashes rechecked; only verified newest backup
+20261101-202657 remains. Final bookkeeping and prune archives intentionally postdate
+keeper. Completed HOTKEYS_SPEC.md retired/ignored; design docs/hotkeys.md and history.
+No unfinished hotkey work. Claim released; Android runner restoration safety debt
+remains a separate open item before further Android E2E runs.
 
 ## Open items
 
@@ -471,8 +476,8 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 - Branch mobile-support; Windows launchers live in launchers/ (user requested).
 - Old Android environment workarounds are reverted; gradlew.bat/settings.gradle
   match HEAD. .gitattributes keeps *.bat text eol=crlf and is included in this cleanup.
-- Hotkey subject accepted; intended code/tests/docs are being committed together.
-  Finished spec retired; maintained design docs/hotkeys.md.
+- Accepted hotkey code/tests/docs committed and pushed as86546bd; final finishing
+  handover is a following bookkeeping commit. Finished spec retired; docs/hotkeys.md.
 - No signing credentials or APK artifacts are committed. Current rebuilt release
   APK is unsigned; earlier successful signing verification is a separate result.
 - Personal /scripts/ remains user-retired/ignored; recovery archives are retained.
