@@ -10396,3 +10396,26 @@ remote verification and audited prune results follow as finishing housekeeping.
 Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete, claim released; hotkey work remains parked. Final bookkeeping may postdate keeper.
 
 Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkeys plus pre-existing Android/.gitattributes edits remain uncommitted. These finishing notes intentionally postdate the keeper.
+
+## 2026-11-01 — Android Studio AI leftovers settled
+
+User authorized reverting/committing the three deferred files. gradlew.bat cleared
+ANDROID_PREFS_ROOT; settings.gradle attempted reflective JVM environment mutation.
+Both relevant variables were unset at Process/User/Machine scope; reverted these
+inactive workarounds to HEAD. Kept .gitattributes (*.bat text eol=crlf), a useful
+independent batch checkout policy. No global environment/signing settings changed.
+Recovery copies/patch outside excluded gen/:logs/keep/android-remnants-20261101-170732/.
+Pre-change verified backup20261101-170734:1172/1172,75.6MB(exit0).
+
+ReleaseSession19/19(0),preflight fault checks9/9(0),CRLF10/10 PASS.
+Actual ARM64 release build native0; preflight27 PASS/0 FAIL/1 WARN(wrapper1) only
+because separate signed-APK inspection was not requested. Produced unsigned APK:
+src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk,
+SHA256 E3E6A07FC907C03226E331B54118158B8677439F611C4EE24C29430A4C0FB831.
+Sandbox restore failed index.lock; host restore at17:08:36 preceded Gradle wrapper
+and fresh Java daemon at17:09:03/04, so actual build loaded restored sources.
+No app runtime changes/full E2E rerun or new UI hand-test required. Signing wizard
+was not rerun. Corrected current working-tree/root-launcher/.gitattributes warnings
+in Project State. Hotkey work remains parked and excluded from this commit.
+Final backup, commit/push/remote verification and audited prune results follow.
+Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). Probe-owned idle Gradle daemon20332 (started17:09:04) closed after build success to release inherited output handle; preflight wrapper then returned expected1. No active pipelines/test listeners remain. Subject complete; claim released. Final housekeeping may postdate keeper.

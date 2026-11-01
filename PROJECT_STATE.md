@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:05)
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:11)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,35 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Android build leftovers — settled
+
+User authorized settling the old Android Studio AI attempt. Restored
+src-tauri/gen/android/gradlew.bat and settings.gradle to HEAD, removing the
+ANDROID_PREFS_ROOT clearing and reflective JVM environment mutation. Both
+ANDROID_PREFS_ROOT and ANDROID_USER_HOME are unset at process/user/machine scope,
+so these workarounds were inactive; they were separate from the verified
+Rust/Tauri private-session fix. No global environment or signing credentials changed.
+Keep/commit .gitattributes:1 (*.bat text eol=crlf) as useful Windows checkout policy.
+Original dirty files are preserved in logs/keep/android-remnants-20261101-170732/;
+these copies sit outside gen/ so the complete project backup includes them.
+
+Verification2026-11-01:
+- Pre-change backup20261101-170734 VERIFY OK1172/1172,75.6MB(exit0).
+- Android release session19/19(exit0),preflight fault checks9/9(exit0).
+- Batch line endings10/10 CRLF PASS; git attributes match, no renormalization needed.
+- Real ARM64 release APK build PASS(native exit0); preflight27 PASS/0 FAIL/1 WARN
+  (wrapper exit1), solely because separate signed-APK inspection was not requested.
+  Output:src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk,
+  SHA256 E3E6A07FC907C03226E331B54118158B8677439F611C4EE24C29430A4C0FB831.
+- Sandbox restore was denied index.lock; host restore17:08:36 succeeded before
+  Gradle wrapper/fresh Java daemon started17:09:03/04. Build consumed restored files.
+- No app UI/runtime changes. Full app/E2E gates not repeated for this focused
+  cleanup; prior same-session app checks are documented in installer section.
+  No new user app hand-test or signing-wizard run claimed or required.
+- Evidence/recovery:logs/keep/android-remnants-20261101-170732/.
+Android files are now clean, not deferred edits. Only parked hotkey work remains
+outside the intended commit. Final backup20261101-171109 VERIFY OK1204/1204,75.7MB(exit0). No active build/test pipelines or test listeners remain. The probe-owned idle Gradle daemon was identified by PID/start-time and closed after native success because it held the completed preflight output handle open. Cleanup complete; commit/push/prune housekeeping follows.
 
 ## Windows installer launcher and launcher folder — verified
 
@@ -27,8 +56,8 @@ stays in its required location. No application/runtime code changed in this subj
 
 User authorized taking over the interrupted hotkey claim; that work is parked,
 unfinished, and preserved uncommitted for the user to revisit. This subject does
-not complete the hotkey UI/chord work. Existing Android edits/.gitattributes are
-untouched. Commit staging must exclude those and the pre-existing hotkey changes.
+not complete the hotkey UI/chord work. Android leftovers are settled in the section
+above; pre-existing hotkey changes remain separate.
 
 Verification on 2026-11-01:
 - Backup before changes:20261101-164754 VERIFY OK1070/1070,69MB(exit0).
@@ -53,7 +82,7 @@ Verification on 2026-11-01:
   WiX download DNS(exit1); launcher preserved that exit/log; host builds passed.
 - Evidence:logs/keep/windows-installers-20261101/, including final artifact hashes.
   No build/test processes or listeners on5173/5183/5233/9222/9224/9225/9333 remain.
-Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkeys plus pre-existing Android/.gitattributes edits remain uncommitted. These finishing notes intentionally postdate the keeper.
+Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkey changes remain uncommitted; Android leftovers were settled subsequently as recorded above. These finishing notes intentionally postdate the keeper.
 
 ## Android Studio release build — verified
 
@@ -445,24 +474,16 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Repository and working tree
 
-- Current sound-editor/live-drag work is complete and user accepted; implementation 49b7da0 pushed/remote-verified, final verified backup retained and six older folders audited/pruned. See current section above. Preserve the two user-owned Android files and .gitattributes.
-
-
-- Current maintenance implementation ba2c64a is pushed and remote-verified: App.jsx, shared soundintogroup tests, web E2E cache setup, coverage manifest, state/history. Final housekeeping is a following docs commit; use git log for latest HEAD. User-owned Android build edits and .gitattributes excluded.
-
-
-- Branch `mobile-support`; previous identity/sync work through `02ae174` is pushed.
-  Completed changes: Gradle error propagation fix, guarded root release launcher,
-  README workflow, signed-output ignore rule, state/history. All applicable gates passed;
-  implementation commit `bd219b9e788bd9f69a4237d6749b0cfdb9e42a59` is pushed to origin/mobile-support and remote SHA verified.
-  Final housekeeping is a following docs commit; use git log for latest HEAD.
-- **Unrelated untracked `.gitattributes` is preserved and excluded.** It contains only
-  `*.bat text eol=crlf`; do not sweep it into this commit or broaden it casually.
-- Signed APK `src-tauri/gen/android/app/universal/release/app-universal-release.apk`
-  stays on disk and is now ignored. No keystore, credential or signed artifact is staged.
-- Personal `/scripts/` remains user-retired/ignored; recovery archives below are retained.
-- User prefers root BAT launchers. `Open Android Release.bat` is guarded and CRLF;
-  existing Build/Run Android scripts remain available. No Studio reset or lock deletion.
+- Branch mobile-support; Windows launchers live in launchers/ (user requested).
+- Old Android environment workarounds are reverted; gradlew.bat/settings.gradle
+  match HEAD. .gitattributes keeps *.bat text eol=crlf and is included in this cleanup.
+- Parked hotkey work remains uncommitted in app/modules/specs/docs/manifest.
+  Preserve that separate work; HOTKEYS_SPEC.md remains live for the UI/chord design.
+- No signing credentials or APK artifacts are committed. Current rebuilt release
+  APK is unsigned; earlier successful signing verification is a separate result.
+- Personal /scripts/ remains user-retired/ignored; recovery archives are retained.
+- Generated Android wrapper stays in gen/android; hand-maintained launchers stay
+  outside gen/ in launchers/. No Studio reset, environment edits or lock deletion.
 
 ## Finishing status
 
