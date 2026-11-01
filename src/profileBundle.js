@@ -831,14 +831,14 @@ export function pruneUnresolvableSounds(data, manifestFiles) {
     return { data: out, dropped }
 }
 
-// --- the pre-import snapshot (the "Replace active" safety story) ------------
+// --- the pre-import snapshot (the Merge safety snapshot) ------------
 
 const BACKUP_KEY = 'spellcaster_import_backups'
 const BACKUP_LIMIT = 3
 
 /**
- * Copy every key a profile owns into ONE global key before "Replace active"
- * wipes it, so the previous board is recoverable rather than merely promised to
+ * Copy every key a profile owns into ONE global key before Merge
+ * changes it, so the previous board is recoverable rather than merely promised to
  * be (§8).
  *
  * Deliberately GLOBAL, not profile-scoped: the whole point is to read it back
@@ -975,7 +975,7 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion, preserv
  *
  * Order matters and is the whole atomicity story (rule 4):
  *   1. parse + verify every checksum        - throws, writes nothing
- *   2. snapshot, if replacing or merging the live profile
+ *   2. snapshot, if merging the live profile
  *   3. write every blob                     - a failure here aborts before
  *                                             any key is touched
  *   4. commit the keys
@@ -997,7 +997,7 @@ export async function importBundle(bytes, {
     if (typeof normalize !== 'function') {
         throw new BundleError('importBundle needs the app\'s normalizeStoredData to repair imported shapes.', 'internal')
     }
-    if (!['new', 'replace', 'merge'].includes(mode)) throw new BundleError('Unknown import mode. Nothing was imported.', 'invalid-mode')
+    if (!['new', 'merge'].includes(mode)) throw new BundleError('Unknown import mode. Nothing was imported.', 'invalid-mode')
 
     const { manifest, data, files } = parseBundle(bytes)
     const manifestFiles = manifest.files || []
@@ -1007,9 +1007,9 @@ export async function importBundle(bytes, {
     let profileId = targetProfileId
     let snapshot = null
 
-    if (mode === 'replace' || mode === 'merge') {
+    if (mode === 'merge') {
         profileId = targetProfileId || getActiveProfileId()
-        if (!profileId) throw new BundleError('There is no active profile to replace.', 'no-active')
+        if (!profileId) throw new BundleError('There is no active profile to merge into.', 'no-active')
         snapshot = snapshotProfile(profileId)
     } else {
         profileId = createProfile(bundleProfileName)
@@ -1033,7 +1033,7 @@ export async function importBundle(bytes, {
         try {
             if (canSkip && await blobStore.has(storedName)) {
                 // §8 step 7's "skipped (already present)". Re-writing a byte-identical
-                // blob is the common case for "replace active" on a board that came
+                // blob is the common case for Merge on a board that came
                 // from its own export, and it is the slowest part of the import.
                 skipped++
                 fileReport.push({ path: file.path, label, status: 'skipped' })
@@ -1083,7 +1083,7 @@ export async function importBundle(bytes, {
         })
     } catch (err) {
         // A quota/permission failure on the new binding key must not leave the
-        // replacement board paired with the old board's bindings. Native blob
+        // merged board paired with the old board's bindings. Native blob
         // names are content-addressed; restoring keys keeps the old board valid.
         try {
             if (snapshot) restoreProfileSnapshot(snapshot)
@@ -1098,7 +1098,7 @@ export async function importBundle(bytes, {
     }
 
     if (setActive) {
-        if (mode === 'replace' || mode === 'merge') {
+        if (mode === 'merge') {
             // The live profile just changed under the app's feet. A remount is
             // the only thing that makes the auto-save effects agree with the
             // profile they are about to write to - §11 risk 10's residual case,
@@ -1117,7 +1117,7 @@ export async function importBundle(bytes, {
         //
         // GLOBAL, like the index and like spellcaster_import_backups above: an
         // import can create a new profile, so this must not be namespaced under
-        // the profile it just replaced. The app reads and removes it on the next
+        // the profile it just merged into. The app reads and removes it on the next
         // mount, so it is one-shot.
         try {
             const ls = typeof window !== 'undefined' ? window.localStorage : null

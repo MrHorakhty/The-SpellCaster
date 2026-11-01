@@ -117,8 +117,8 @@ await check('modifier payload survives export and import', async () => {
   const result = await bundle.importBundle(bytes.bytes, importOptions)
   assert.deepEqual(JSON.parse(storage.readProfileValue(result.profileId, 'ttrpg_hotkeys')), chords)
 })
-await check('replacement round trip preserves bindings', async () => {
-  await bundle.importBundle(exported.bytes, { ...importOptions, mode: 'replace', targetProfileId: p })
+await check('merge preserves destination bindings', async () => {
+  await bundle.importBundle(exported.bytes, { ...importOptions, mode: 'merge', targetProfileId: p })
   assert.deepEqual(JSON.parse(storage.readProfileValue(p, 'ttrpg_hotkeys')), payload)
 })
 const changeBundle = (changeData, format = 2) => {
@@ -127,10 +127,11 @@ const changeBundle = (changeData, format = 2) => {
   const manifest = JSON.parse(new TextDecoder().decode(zip['manifest.json'])); manifest.formatVersion = format
   zip['manifest.json'] = strToU8(JSON.stringify(manifest)); return zipSync(zip)
 }
-await check('v1 bundle without bindings clears replacement keys', async () => {
+await check('v1 bundle without bindings creates a profile with empty bindings', async () => {
   const legacy = changeBundle(data => { delete data.hotkeys }, 1)
-  await bundle.importBundle(legacy, { ...importOptions, mode: 'replace', targetProfileId: p })
-  assert.deepEqual(JSON.parse(storage.readProfileValue(p, 'ttrpg_hotkeys')), emptyHotkeys())
+  const imported = await bundle.importBundle(legacy, { ...importOptions, mode: 'new' })
+  assert.deepEqual(JSON.parse(storage.readProfileValue(imported.profileId, 'ttrpg_hotkeys')), emptyHotkeys())
+  assert.deepEqual(JSON.parse(storage.readProfileValue(p, 'ttrpg_hotkeys')), payload)
 })
 await check('snapshot restores bindings byte for byte', () => {
   storage.writeProfileValue(p, 'ttrpg_hotkeys', JSON.stringify(payload)); const snapshot = bundle.snapshotProfile(p)
@@ -142,12 +143,12 @@ await check('invalid bundle refuses before creating profile or writing keys', as
   await assert.rejects(bundle.importBundle(changeBundle(data => { data.hotkeys.version = 99 }), importOptions), /invalid or unsupported hotkeys/)
   assert.deepEqual([...values.entries()], before)
 })
-await check('failed native blob import preserves replaced profile bindings', async () => {
+await check('failed native blob import preserves destination profile bindings', async () => {
   const bytes = await bundle.exportBundle({ profileId: p, profileName: 'Upload', data: {
     characters: [{ id: 'c', sounds: [{ id: 's', files: [{ name: 'u.wav', displayName: 'u.wav', storedName: 'u.wav' }] }] }],
     environmentSounds: [], groups: [], hotkeys: payload }, settings: {}, store: { read: async () => new Uint8Array([1, 2, 3]) } })
   const before = storage.readProfileValue(p, 'ttrpg_hotkeys')
-  await assert.rejects(bundle.importBundle(bytes.bytes, { ...importOptions, mode: 'replace', targetProfileId: p,
+  await assert.rejects(bundle.importBundle(bytes.bytes, { ...importOptions, mode: 'merge', targetProfileId: p,
     store: { write: async () => { throw new Error('Injected write failure') } } }), /nothing was imported/)
   assert.equal(storage.readProfileValue(p, 'ttrpg_hotkeys'), before)
 })
@@ -156,7 +157,7 @@ await check('deleting profile removes bindings only from that namespace', () => 
   storage.deleteProfile(other); assert.equal(storage.readProfileValue(other, 'ttrpg_hotkeys'), null)
   assert.equal(storage.readProfileValue(p, 'ttrpg_hotkeys'), JSON.stringify(payload))
 })
-await check('binding key write failure restores the entire replacement snapshot', async () => {
+await check('binding key write failure restores the entire pre-merge snapshot', async () => {
   storage.writeProfileValue(p, 'ttrpg_characters', JSON.stringify([{ id: 'old', sounds: [] }]))
   const before = bundle.snapshotProfile(p).keys, set = ls.setItem
   let injected = false
@@ -164,7 +165,7 @@ await check('binding key write failure restores the entire replacement snapshot'
     if (key === `profile:${p}:ttrpg_hotkeys` && !injected) { injected = true; throw new Error('Injected key-write failure') }
     set(key, value)
   }
-  try { await assert.rejects(bundle.importBundle(exported.bytes, { ...importOptions, mode: 'replace', targetProfileId: p }), /previous profile was preserved/) }
+  try { await assert.rejects(bundle.importBundle(exported.bytes, { ...importOptions, mode: 'merge', targetProfileId: p }), /previous profile was preserved/) }
   finally { ls.setItem = set }
   assert.equal(injected, true); assert.deepEqual(bundle.snapshotProfile(p).keys, before)
 })

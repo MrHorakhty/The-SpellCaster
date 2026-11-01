@@ -236,10 +236,10 @@ window.__bk.blobShape = (b64, path) => {
 };
 window.__bk.importBundle = async (b64, mode, target, setActive) => {
   // The target profile is settled inside importBundle, so the store resolves it
-  // lazily: a new import appends the profile to the index, a replace targets the
+  // lazily: a new import appends the profile to the index, a merge targets the
   // one it was given.
   const store = window.__bk.makeStore(() => {
-    if (mode === 'replace') return target;
+    if (mode === 'merge') return target;
     const i = window.__bk.P.readProfileIndex();
     return i.profiles[i.profiles.length - 1].id;
   });
@@ -363,7 +363,7 @@ const SEED = `(() => {
 })()`;
 
 const SEED_ONLY_CHARACTER = `(() => {
-  window.__pseed({ ttrpg_characters: [{ id:'bk_c1', name:'Hero', sounds:[] }] });
+  window.__pseed({ ttrpg_characters: [{ id:'bk_c1', name:'Hero', sounds:[] }, { id:'bk_local', name:'Local Only', sounds:[] }] });
   return 'stripped';
 })()`;
 
@@ -378,7 +378,7 @@ const shareTheUpload = (newId) => `(() => {
   for (const c of list) for (const s of c.sounds || []) if ((s.files || []).some(f => f.storedName)) source = s;
   const other = list.find(c => !((c.sounds || []).some(s => (s.files || []).some(f => f.storedName))));
   if (!source || !other) return 'NO_SHARE_TARGET';
-  other.sounds = (other.sounds || []).concat([Object.assign({}, source, { id: '${newId}', name: 'Uploaded Roar (copy)' })]);
+  other.sounds = (other.sounds || []).concat([Object.assign({}, source, { id: '${newId}', syncId: 'fixture:${newId}', name: 'Uploaded Roar (copy)' })]);
   localStorage.setItem('profile:' + pid + ':ttrpg_characters', JSON.stringify(list));
   return 'shared';
 })()`;
@@ -498,31 +498,18 @@ export const bundle = {
       await reload();
       await rehydrate();
 
-      // ---- I3: "replace this profile" asks first, and declining is a real out -
-      // The confirm is the only gate before the picker, so this is the one piece
-      // of the UI's import path that can be driven without opening a native
-      // dialog - which is also what makes it the proof that declining never
-      // REACHES the dialog. If it had, a #32770 would be open and the click below
-      // would be swallowed; `stillResponsive` is that check.
+      // I3: the retired destructive mode must not return. Both supported modes
+      // remain selectable; no picker or confirmation is invoked for this check.
       await evalJs(`window.__ui.openSettings()`);
       await sleep(800);
-      await evalJs(`window.__ui.mode('replace')`);
-      await sleep(300);
-      const modePressed = await evalJs(`window.__ui.pressed('replace')`);
-      const beforeDecline = await evalJs(`JSON.stringify(window.__bk.dump(${JSON.stringify(pid)}))`);
-      await evalJs(`window.__confirmCalls = 0; window.__origConfirm = window.confirm; window.confirm = () => { window.__confirmCalls++; return false; }`);
-      await evalJs(`window.__ui.click('[data-profile-import]')`);
-      await sleep(2500);
-      const confirmCalls = await evalJs(`window.__confirmCalls`);
-      const afterDecline = await evalJs(`JSON.stringify(window.__bk.dump(${JSON.stringify(pid)}))`);
+      const modes = await evalJs(`[...document.querySelectorAll('[data-import-mode]')].map(b => b.dataset.importMode)`);
+      await evalJs(`window.__ui.mode('merge')`);
+      const mergePressed = await evalJs(`window.__ui.pressed('merge')`);
       await evalJs(`window.__ui.mode('new')`);
-      await sleep(300);
-      const stillResponsive = await evalJs(`window.__ui.pressed('new')`);
-      await evalJs(`window.confirm = window.__origConfirm`);
-
-      log('BUNDLE', 'I3: "replace this profile" asks first; declining changes nothing and never reaches the picker',
-        ok(modePressed === 'true' && confirmCalls === 1 && afterDecline === beforeDecline && stillResponsive === 'true'),
-        `replacePressed=${modePressed} confirmCalls=${confirmCalls} boardUnchanged=${afterDecline === beforeDecline} newModeStillWorks=${stillResponsive}`);
+      const newPressed = await evalJs(`window.__ui.pressed('new')`);
+      log('BUNDLE', 'I3: import offers only selectable New Profile and Merge modes',
+        ok(JSON.stringify(modes) === JSON.stringify(['new','merge']) && mergePressed === 'true' && newPressed === 'true'),
+        `modes=${JSON.stringify(modes)} merge=${mergePressed} new=${newPressed}`);
 
       // ============================ export ============================
       const exported = await evalJs(`window.__bk.exportProfile(${JSON.stringify(pid)}, '3')`);
@@ -746,9 +733,9 @@ export const bundle = {
       await evalJs(`window.__bk.removeBundleFile(${JSON.stringify(bundlePath)}, ${isDesktop})`);
       if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
 
-      // ============================ replace active ============================
-      // Strip the source profile down first, so "the board was replaced" is a
-      // real observation rather than writing the same content back over itself.
+      // ============================ merge active ============================
+      // Remove imported sounds and add an independent local container first, so
+      // additive merge and the safety snapshot are genuine observations.
       await evalJs(`window.__bk.P.setActiveProfile(${JSON.stringify(pid)})`);
       await sleep(1200);
       await rehydrate();
@@ -756,9 +743,9 @@ export const bundle = {
       await reload();
       await rehydrate();
       const stripped = await evalJs(`JSON.stringify(window.__bk.dump(${JSON.stringify(pid)}))`);
-      const profilesBeforeReplace = await evalJs(`window.__bk.profiles()`);
+      const profilesBeforeMerge = await evalJs(`window.__bk.profiles()`);
 
-      const replaced = await evalJs(`window.__bk.importBundle(${JSON.stringify(bundleB64)}, 'replace', ${JSON.stringify(pid)})`);
+      const merged = await evalJs(`window.__bk.importBundle(${JSON.stringify(bundleB64)}, 'merge', ${JSON.stringify(pid)})`);
       await sleep(2000);
       await rehydrate();
       const readBack = await evalJs(`(() => {
@@ -775,15 +762,20 @@ export const bundle = {
         };
       })()`);
 
-      log('BUNDLE', 'I15: replace swaps the board in place, leaves the profile count alone, and keeps the previous board in the snapshot',
-        ok(replaced?.ok === true && !!readBack?.board && sameJson(readBack.board, payload.characters)
-          && readBack.backupCount === 1
-          && readBack.snapshotOf[0] === pid
-          && readBack.snapshotCharacters.length === 1
-          && readBack.snapshotCharacters[0] === 'Hero'
+      const incomingRetained = payload.characters.every(incoming => {
+        const found = readBack?.board?.find(record => record.id === incoming.id);
+        return found && Object.entries(incoming).filter(([key]) => key !== 'sounds').every(([key,value]) => sameJson(found[key], value))
+          && (incoming.sounds || []).every(sound => sameJson(found.sounds.find(entry => entry.id === sound.id), sound));
+      });
+      log('BUNDLE', 'I15: merge adds incoming content, retains local content and snapshots the previous board',
+        ok(merged?.ok === true && incomingRetained
+          && readBack.board.some(record => record.id === 'bk_local' && record.name === 'Local Only')
+          && readBack.backupCount === 1 && readBack.snapshotOf[0] === pid
+          && readBack.snapshotCharacters.length === 2
+          && readBack.snapshotCharacters.includes('Hero') && readBack.snapshotCharacters.includes('Local Only')
           && readBack.snapshotKeys.includes('ttrpg_characters')
-          && readBack.profiles.count === profilesBeforeReplace.count),
-        `imported=${JSON.stringify(replaced)} boardMatches=${!!readBack?.board && sameJson(readBack.board, payload.characters)} backups=${readBack?.backupCount} snapshotOf=${JSON.stringify(readBack?.snapshotOf)} snapshottedChars=${JSON.stringify(readBack?.snapshotCharacters)} profiles=${JSON.stringify(readBack?.profiles)} before=${JSON.stringify(profilesBeforeReplace)} strippedBoardHad=${stripped.includes('Hero')}`);
+          && readBack.profiles.count === profilesBeforeMerge.count),
+        `incomingRetained=${incomingRetained} backups=${readBack?.backupCount} profiles=${JSON.stringify(readBack?.profiles)} before=${JSON.stringify(profilesBeforeMerge)} strippedBoardHad=${stripped.includes('Hero')}`);
 
       // ============================ refusals ============================
       // Both throw inside parseBundle, which runs BEFORE the snapshot and before
@@ -801,7 +793,7 @@ export const bundle = {
       corruptEntries[audioEntries[0]] = flipped;
       const corruptB64 = Buffer.from(zipSync(corruptEntries)).toString('base64');
 
-      const corrupt = await evalJs(`window.__bk.importBundle(${JSON.stringify(corruptB64)}, 'replace', ${JSON.stringify(pid)})`);
+      const corrupt = await evalJs(`window.__bk.importBundle(${JSON.stringify(corruptB64)}, 'merge', ${JSON.stringify(pid)})`);
       const dumpAfterCorrupt = await evalJs(`JSON.stringify(window.__bk.dump(${JSON.stringify(pid)}))`);
       const snapshotCountAfter = await evalJs(`(JSON.parse(localStorage.getItem('spellcaster_import_backups') || '[]')).length`);
 
@@ -818,7 +810,7 @@ export const bundle = {
       futureEntries['manifest.json'] = strToU8(JSON.stringify(futureManifest, null, 2));
       const futureB64 = Buffer.from(zipSync(futureEntries)).toString('base64');
 
-      const future = await evalJs(`window.__bk.importBundle(${JSON.stringify(futureB64)}, 'replace', ${JSON.stringify(pid)})`);
+      const future = await evalJs(`window.__bk.importBundle(${JSON.stringify(futureB64)}, 'merge', ${JSON.stringify(pid)})`);
       const dumpAfterFuture = await evalJs(`JSON.stringify(window.__bk.dump(${JSON.stringify(pid)}))`);
 
       log('BUNDLE', 'I17: a bundle from a newer format is refused, and the message names both versions',
@@ -833,7 +825,7 @@ export const bundle = {
       // present there. That makes this the natural place for `skipped` to be real
       // rather than theoretical: the honest count for a re-import is "nothing to
       // write", and an implementation that rewrote all of it would say otherwise.
-      const reimport = await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)})`);
+      const reimport = await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'merge', ${JSON.stringify(pid)})`);
       const manifestCount = exported.manifest.files.length;
       const statuses = (reimport?.files || []).map(f => f.status);
       const allLabelled = (reimport?.files || []).every(f => typeof f.label === 'string' && f.label.length > 0);
@@ -855,7 +847,7 @@ export const bundle = {
       // pinning, because "always park it" would leave a notice behind for a mount
       // that never comes, and the first real import after it would show a stale
       // summary. It also means the key cannot be observed from here...
-      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)}, false)`);
+      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'merge', ${JSON.stringify(pid)}, false)`);
       const quiet = await evalJs(`(() => ({
         global: localStorage.getItem('spellcaster_import_notice'),
         scoped: localStorage.getItem('profile:' + ${JSON.stringify(pid)} + ':spellcaster_import_notice'),
@@ -871,7 +863,7 @@ export const bundle = {
       // already consumed. An earlier version reloaded first and asserted the key
       // was still there - which failed, because the app had done exactly what it
       // was built to do.
-      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'replace', ${JSON.stringify(pid)})`);
+      await evalJs(`window.__bk.importBundle(${JSON.stringify(exported.b64)}, 'merge', ${JSON.stringify(pid)})`);
       await sleep(1500);
       const shown = await evalJs(`(() => {
         const b = document.querySelector('[data-import-notice]');
@@ -889,7 +881,7 @@ export const bundle = {
 
       log('BUNDLE', 'I20: a real import remounts and the banner is already on screen, global key consumed',
         ok(shown?.present === true
-          && /Replaced/.test(shown?.text || '')
+          && /Merged/.test(shown?.text || '')
           && new RegExp(`${manifestCount} file`).test(shown?.text || '')
           && /already present/.test(shown?.text || '')
           && shown?.keyLeft === null

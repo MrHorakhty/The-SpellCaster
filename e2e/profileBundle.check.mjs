@@ -1,5 +1,5 @@
 // Quick node check for src/profileBundle.js - the bundle format, the provenance
-// rule and all three import modes. Not part of the E2E suite: it exercises the whole
+// rule and both import modes. Not part of the E2E suite: it exercises the whole
 // pipeline against a fake localStorage and a fake blob store, so a logic bug
 // shows up in a second rather than after a 3-minute browser run.
 //
@@ -8,6 +8,7 @@
 //
 // Run: node e2e/profileBundle.check.mjs
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 // Minimal localStorage stand-in (same shape as profileStorage.check.mjs).
 function makeStore(initial = {}) {
@@ -342,25 +343,26 @@ await ok('a sound the bundle cannot resolve is DROPPED but its container is kept
 })
 
 // ---------------------------------------------------------------------------
-// 6. "Replace active" - the risky mode, and the snapshot that makes it safe
+// 6. Merge into the active profile, protected by a safety snapshot
 // ---------------------------------------------------------------------------
-await ok('"replace active" installs into the LIVE profile and snapshots it first', async () => {
+await ok('merge adds to the LIVE profile and snapshots it first', async () => {
   const live = storage.createProfile('Live Board')
   storage.setActiveProfile(live)
   storage.writeProfileValue(live, 'ttrpg_characters', JSON.stringify([{ id: 'old', name: 'Previous Board', sounds: [] }]))
   storage.writeProfileValue(live, 'ttrpg_characters_icon', 'Skull')
 
   const report = await bundle.importBundle(exported.bytes, {
-    mode: 'replace', targetProfileId: live, normalize, dataVersion: '3', store: blobs.store,
+    mode: 'merge', targetProfileId: live, normalize, dataVersion: '3', store: blobs.store,
   })
   assert.equal(report.profileId, live)
-  assert.equal(report.mode, 'replace')
+  assert.equal(report.mode, 'merge')
 
   const got = JSON.parse(ls.getItem(`profile:${live}:ttrpg_characters`))
-  assert.equal(got[0].name, 'Human Paladin', 'the bundle board must now be installed')
+  assert.ok(got.some(c => c.name === 'Human Paladin'), 'incoming board must be present')
+  assert.ok(got.some(c => c.id === 'old'), 'local board must be retained')
 })
 
-await ok('the replaced profile is RECOVERABLE - a snapshot holds its old board', () => {
+await ok('the pre-merge profile is RECOVERABLE - a snapshot holds its old board', () => {
   const backups = JSON.parse(ls.getItem('spellcaster_import_backups'))
   assert.ok(Array.isArray(backups) && backups.length > 0, 'no snapshot was taken')
   const snap = backups[backups.length - 1]
@@ -393,7 +395,7 @@ await ok('a failed blob write aborts BEFORE any key is touched', async () => {
   console.error = (...a) => quiet.push(a.map(String).join(' '))
   let code = null
   try {
-    await bundle.importBundle(exported.bytes, { mode: 'replace', targetProfileId: live, normalize, dataVersion: '3', store: angryStore })
+    await bundle.importBundle(exported.bytes, { mode: 'merge', targetProfileId: live, normalize, dataVersion: '3', store: angryStore })
   } catch (e) { code = e.code }
   console.error = realError
 
@@ -653,6 +655,16 @@ await ok('failed blob write removes an incomplete new profile from the index', a
   } finally { console.error = originalError }
   assert.deepEqual(storage.readProfileIndex().profiles.map(profile => profile.id), before)
   assert.equal(storage.getActiveProfileId(), active)
+})
+await ok('retired replace mode is refused without writing any profile or snapshot', async () => {
+  const before = ls.snapshot()
+  await assert.rejects(bundle.importBundle(exported.bytes, { mode: 'replace', targetProfileId: storage.getActiveProfileId(), normalize, store: blobs.store }), error => error.code === 'invalid-mode')
+  assert.deepEqual(ls.snapshot(), before)
+})
+await ok('import UI offers only New Profile and Merge', () => {
+  const source = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.deepEqual([...source.matchAll(/data-import-mode="([^"]+)"/g)].map(match => match[1]), ['new', 'merge'])
+  assert.ok(!source.includes('Replace this profile'))
 })
 console.log(`\n${pass} passed, ${fail} failed\n`)
 if (fail > 0) process.exitCode = 1

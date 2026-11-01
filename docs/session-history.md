@@ -11047,3 +11047,28 @@ merely to record pruning. Scope complete: manual file transfer and Merge; no
 server sync planned. Claim released. Final bookkeeping is a separate commit and
 intentionally postdates keeper. No unfinished subject work; unrelated parked work
 remains in Project State.
+
+
+## 2026-11-01 — Remove Replace Profile (Codex)
+
+User explicitly requested removing Replace Profile and targeted testing instead of
+full E2E. Removed UI choice, its early destructive confirmation and backend mode;
+New Profile and Merge remain. API refuses replace before storage mutation. Existing
+snapshot/recovery/blob-write failure/reimport/notice coverage ported to Merge; legacy
+hotkey defaults use New Profile. Retired UI test I3 now checks two selectable modes;
+I15 checks additive import, retained local content and snapshot. No files/IDs removed.
+Fixture audio copies get fresh sync identity, matching actual app copy behavior.
+
+Pre-change backup20261101-225554 VERIFY OK1749/1749,108.1MB(exit0). Targeted results
+(all0):bundle55/55,hotkeys120/120,records43/43,affected lint0 errors/2 baseline warnings,
+Vite build PASS,built UI text3/3. Coverage44 suites/507 IDs,31 shipped features covered;
+--update0 changed suites/IDs. Shared E2E specs updated and linted,NOT run. Full web,
+Windows and Android suites deliberately NOT run per user instruction; prior full
+results are not claimed as new verification. No additional human hand-test claimed.
+Standalone Windows build0 at22:59:17,45009920 bytes,SHA256
+1A109472E36FAC049A46452C8560D2E9DC86422A750FA18FF3570DC36EE49952. Only a build ran,
+no E2E/browser/emulator or clicks. Final finishing backup/push/prune results follow.
+
+Final removal backup20261101-230139 VERIFY OK1763/1763,108.1MB(exit0).
+Fourteen intended paths reviewed; no untracked/unrelated source changes. Commit,
+verified push and audited pruning follow. Final bookkeeping postdates keeper.

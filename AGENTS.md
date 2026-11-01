@@ -276,7 +276,7 @@ cold restart, fresh CDP forwarding, disk comparison and failure propagation with
 node e2e/profileBundle.check.mjs; node e2e/profileStorage.check.mjs; node e2e/bundleGuard.check.mjs; node e2e/check-profile-keys.mjs; node e2e/fadeMath.check.mjs; node e2e/soundFiles.check.mjs; node e2e/iconPrep.check.mjs; node e2e/snapshotUploads.check.mjs; node e2e/androidReleaseSession.check.mjs; node e2e/hotkeys.check.mjs; node e2e/profileRecords.check.mjs
 ```
 
-Run **all eleven even when one fails**, and report each count. Current baseline: `profileBundle` **53/53**,
+Run **all eleven even when one fails**, and report each count. Current baseline: `profileBundle` **55/55**,
 `profileStorage` **35/35**, `bundleGuard` **20/20**, `check-profile-keys` **OK**, `fadeMath` **46/46**,
 `soundFiles` **32/32**, `iconPrep` **35/35**, `snapshotUploads` **19/19**,
 `androidReleaseSession` **19/19**, `hotkeys` **120/120**, `profileRecords` **43/43**. They

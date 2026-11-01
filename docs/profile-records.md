@@ -31,8 +31,9 @@ Restore Defaults creates a fresh identity when restoring a deleted entry.
 
 ## Merge import
 
-Create a new profile remains the default. Native export/import additionally offers
-Merge into this profile. The complete bundle is parsed and its payload checksums
+Create a new profile remains the default. Native export/import has exactly two
+modes: New Profile and Merge. Replace was removed at the user’s request.
+The complete bundle is parsed and its payload checksums
 verified before a read-only preview reports record additions, updates and deletions.
 The user confirms the preview before any snapshot or import writes occur.
 
@@ -40,7 +41,7 @@ Merge snapshots the active profile, imports its own content-addressed uploads an
 commits the merged keys last. A key-write failure uses the existing snapshot rollback.
 It never links files between profiles. Local uploaded web keys and device display
 preferences are retained. Imported display settings and hotkeys are intentionally
-not merged: those need their own clocks and conflict policy before automatic sync.
+not merged: those remain destination-local by policy.
 Local hotkey targets follow any remapped local sound id; deleted targets remain
 unresolved as they do after an ordinary UI deletion.
 

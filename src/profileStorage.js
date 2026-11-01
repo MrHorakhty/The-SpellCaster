@@ -331,7 +331,7 @@ export function subscribeProfileSwitch(listener) {
  * does not - it is a lie to call it here, and it would stop being the right
  * call the moment the id check tightened.
  *
- * It exists for one case: "Replace active" import writes a new board into the
+ * It exists for one case: Merge import writes the merged board into the
  * live profile's keys while React still holds the old one. The three auto-save
  * effects then fire on the next state change and write that stale state straight
  * back over the import. A remount is the fix, and it is the same fix a switch

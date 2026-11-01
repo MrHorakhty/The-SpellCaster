@@ -108,19 +108,19 @@ Bindings must be wired explicitly into all of these paths during implementation:
 - App initialization, durable writes and profile switch/create/duplicate/delete.
 - `collectProfileForExport`, bundle payload validation and `commitKeys` (including
   its written-key allowlist), plus normalized return/state hydration.
-- Snapshot/restore, rollback, replacement import and restore-default behavior.
+- Snapshot/restore, rollback, merge import and restore-default behavior.
 - Profile storage/key guards and browser/native fixture seed/cleanup inventories.
 
 Bundle field: `data.hotkeys`, using the versioned payload above. A bundle
-without it imports as empty bindings, including replace-active; it must not retain
-the previous board's keys. A new-profile import keeps sound ids and resolves only
+without it creates a new profile with empty bindings; Merge keeps destination
+bindings. A new import must not inherit another profile's keys. A new-profile import keeps sound ids and resolves only
 within that new profile. Profile duplication copies bindings into the new namespace.
 No bindings belong in GLOBAL_KEYS. Do not add a new key to the legacy migration
 list merely because it is profile-scoped; it never existed before profiles.
 
-Export, pruning, replace-import allowlists and key commits explicitly carry the
+Export, pruning, new-import allowlists and key commits explicitly carry the
 binding collection. Bundle formats2/3 carry data.hotkeys; format1 imports default
-to empty bindings, including replacement. Old readers refuse unsupported bundle
+to empty bindings in a new profile; Merge retains destination bindings. Old readers refuse unsupported bundle
 or hotkey payload versions rather than silently dropping bindings/modifiers.
 Native bundle support does not supply web audio bundle export/import, which
 remains deferred.
@@ -174,7 +174,7 @@ Covered cases:
   duplicate sound id inert, repair and removal.
 - Independent profiles, rapid switch without stale dispatch, reload persistence,
   duplicate/delete/defaults, native bundle round trip, legacy bundle with no field,
-  replace-active clears old keys, malformed/unknown versions and failure rollback.
+  new-profile legacy imports default to empty bindings; Merge keeps local bindings, malformed/unknown versions and failure rollback.
 - Web and Windows real key dispatch through CDP, not only calling a helper.
   Android management/persistence/bundle regression tests plus explicit hardware
   keyboard coverage or a registered, visible hardware-test gap. Never use

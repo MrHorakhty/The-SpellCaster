@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 22:52)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 22:55 — working on: remove Replace Profile; targeted verification only
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,35 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Replace Profile removal — verified; finishing workflow active
+
+User requested removing Replace Profile and explicitly requested targeted testing,
+not full E2E. UI now offers only New Profile(default) and Merge. Retired replace API
+mode is rejected before parsing or any storage writes. No data migration required.
+Merge snapshots, rollback, blob failures, repeat imports and notice coverage remain;
+positive Replace tests ported to Merge, legacy binding defaults tested via New Profile.
+No test files/IDs deleted; I3 now asserts two selectable modes and I15 additive merge.
+Shared-upload fixture copy gets its own sync identity, matching real copy semantics.
+Code:src/App.jsx:1223/7802;src/profileBundle.js:1000;src/profileStorage.js:334.
+README,hotkey/design docs and registry descriptions match the two-mode contract.
+Original v1 spec references to Replace are historical; top banner records retirement.
+
+Pre-change backup20261101-225554 VERIFY OK1749/1749,108.1MB(exit0).
+Targeted checks(all exit0):bundle55/55,hotkeys120/120,records43/43;
+ESLint affected code/tests0 errors/2 baseline warnings;Vite build PASS;
+built JS text3/3(New present,Merge present,Replace label/confirmation absent).
+Coverage44 suites/507 IDs,31/31 shipped covered;--update changed0 suites/IDs.
+Full web/Windows/Android E2E NOT RUN,by explicit user instruction. Updated shared
+specs lint/coverage checked but not executed. No new human hand-test claimed;
+this removes a mode and leaves already accepted New/Merge behavior intact.
+Standalone Windows build22:59:17 PASS(exit0),45009920 bytes,Explorer parent verified:
+src-tauri/target/debug/app.exe,SHA256
+1A109472E36FAC049A46452C8560D2E9DC86422A750FA18FF3570DC36EE49952.
+Evidence will be retained in logs/keep/remove-replace-20261101/.
+No E2E browser/app/emulator process started; only the completed build ran.
+Finishing:14 intended paths reviewed. Final backup20261101-230139 VERIFY OK
+1763/1763,108.1MB(exit0). Next commit,push/remote verify,then audited old-backup pruning. Claim remains held until finishing completes.
 
 ## Manual profile file sync — accepted and complete
 
@@ -32,7 +61,7 @@ registry check:44 suites/507 IDs,31/31 shipped features covered,0 planned,exit0;
 Design: docs/profile-records.md. Code: src/profileRecords.js:33(normalization),
 :60(setter reconciliation),:101(remove-wins merge); src/useProfileRecords.js:4;
 src/profileMerge.js:42; src/profileBundle.js:67(format3),:910(read-only preview),
-:1053(failed-blob guard); src/App.jsx:915(state),:1249(preview),:7820(merge choice).
+:1053(failed-blob guard); src/App.jsx:915(state),:1239(preview),:7802(merge choice).
 Persistence/flush/export retain raw history; UI renders live records. Fresh restore
 gets fresh identity. Removal wins for an identity, including later offline edits;
 this refines draft LWW-delete semantics because payload-free tombstones must not
@@ -862,7 +891,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: …-20261101-224941,1692/1692 files,96.7MB,VERIFY OK(exit0).** Seven older backups removed only after verified push and content audit.88 differing entries preserved at logs/keep/manual-sync-prune-20261101-225107/. Exactly1 backup remains;all1692 hashes rechecked. Final housekeeping intentionally postdates keeper.
+- **Latest verified: …-20261101-230139,1763/1763 files,108.1MB,VERIFY OK(exit0).** Replace Profile removal and targeted results included. Older225554 and224941 remain until verified push/content audit. Final bookkeeping postdates keeper.
 
 - **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
   26 differing older versions / 11 unique contents, all entries round-trip/hash verified.

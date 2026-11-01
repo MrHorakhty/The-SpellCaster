@@ -2,6 +2,7 @@
 
 > **Manual file sync is complete and user accepted2026-11-01.** Export a
 > `.spellcaster` file, move it yourself, then import with Merge on the other device.
+> Replace Profile was retired by user request2026-11-01; only New Profile and Merge remain.
 > Current design: [docs/profile-records.md](docs/profile-records.md). The user
 > explicitly declined app-managed WebDAV/folder/cloud sync. Those proposals are
 > abandoned, not a remaining stage. The v1 notes below are historical; independent

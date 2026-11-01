@@ -927,7 +927,7 @@ function AppBoard() {
     // -----------------------------------------------------------------------
     // The one-shot import notice.
     //
-    // A successful import REMOUNTS the tree (a new profile activates; a replaced
+    // A successful import REMOUNTS the tree (a new profile activates; a merged
     // one calls requestProfileRemount), so the Settings modal unmounts with it and
     // any message set in it is thrown away. That is why the import used to be
     // silent on success and why putting the message back in the modal cannot work.
@@ -936,7 +936,7 @@ function AppBoard() {
     // next mount (PROFILE_SYNC_SPEC.md §9.2, step 7 plan). The key is GLOBAL, like
     // the profile index, for a sharper reason than consistency: an import can
     // create a brand new profile, so the notice cannot be namespaced under the
-    // profile it just replaced - and it has to be readable before any profile id
+    // profile it just merged into - and it has to be readable before any profile id
     // is settled.
     //
     // Read-and-remove in the same tick, so it is genuinely one-shot: a stale notice
@@ -981,7 +981,7 @@ function AppBoard() {
     // Persist the live board into the ACTIVE profile's keys. Needed before
     // anything that changes or reads another profile's keys, because the three
     // auto-save effects are undebounced and may not have run for a just-made
-    // edit - and in the "replace active" case the next thing that happens is a
+    // edit - and before a merge import the next thing that happens is a
     // snapshot, which reads storage, not React state.
     const flushCurrentProfile = () => {
         try {
@@ -1077,7 +1077,7 @@ function AppBoard() {
     // -----------------------------------------------------------------------
     const [bundleBusy, setBundleBusy] = useState(null)          // null | 'export' | 'import'
     const [bundleNotice, setBundleNotice] = useState('')
-    const [importMode, setImportMode] = useState('new')          // 'new' | 'replace' | 'merge'
+    const [importMode, setImportMode] = useState('new')          // 'new' | 'merge'
 
     // A hung Tauri IPC cannot be aborted - there is no handle for it, and
     // `abort()` is not offered on the plugin calls we make. So the honest fix is
@@ -1220,18 +1220,8 @@ function AppBoard() {
         if (bundleBusy) return
         setBundleNotice('')
 
-        if (importMode === 'replace' || importMode === 'merge') {
-            // "Replace active" overwrites the live profile. Confirm first, and
-            // flush live state first - the snapshot that makes this recoverable
-            // reads storage, not React state, so unflushed edits would be lost
-            // from BOTH the new board and the backup.
-            if (!flushCurrentProfile()) return
-            const confirmed = importMode === 'merge' || window.confirm(
-                'Replace the active profile\'s board with the imported one?\n\n' +
-                'The current profile is snapshotted first and stays recoverable, but its audio files are left on disk.'
-            )
-            if (!confirmed) return
-        }
+        // The merge preview and safety snapshot must include the latest edits.
+        if (importMode === 'merge' && !flushCurrentProfile()) return
 
         setBundleBusy('import')
         try {
@@ -5579,7 +5569,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             <Upload size={18} className="shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold truncate">
-                                    {importNotice.mode === 'merge' ? 'Merged' : importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
+                                    {importNotice.mode === 'merge' ? 'Merged' : 'Imported'} &quot;{importNotice.profileName}&quot;
                                 </p>
                                 <p className="text-xs opacity-90 break-words">{importNoticeSummary}</p>
                                 {(importNotice.files || []).length > 0 && (
@@ -7806,14 +7796,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                     className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'new' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
                                                 >
                                                     Create a new profile
-                                                </button>
-                                                <button
-                                                    onClick={() => setImportMode('replace')}
-                                                    data-import-mode="replace"
-                                                    aria-pressed={importMode === 'replace'}
-                                                    className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'replace' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
-                                                >
-                                                    Replace this profile
                                                 </button>
                                                 <button
                                                     onClick={() => setImportMode('merge')}
