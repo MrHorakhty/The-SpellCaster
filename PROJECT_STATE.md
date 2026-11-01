@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 21:01 — working on: Android E2E durable storage restoration
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 21:33)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -51,7 +51,7 @@ Verification 2026-11-01:
 - No app runtime/UI changes; no new built-app hand-test required or claimed.
 - Evidence/recovery: logs/keep/android-restore-20261101/. Final host inspection:
   0 test listeners on5173/5183/5233/9222/9224/9225/9333;0 app/emulator processes.
-Final backup20261101-213220 VERIFY OK1516/1516,92.2MB(exit0). Subject verified; commit/push verification and backup retention workflow in progress. Final bookkeeping intentionally postdates keeper.
+Final backup20261101-213220 VERIFY OK1516/1516,92.2MB(exit0). Implementation ca729f7cb92213e6cb29d131fa327d3c9a30228c pushed to origin/mobile-support; git ls-remote matched. Audited/pruned2 older backups after remote verification, preserving13 differing entries under logs/keep/android-restore-prune-20261101-213302/. All1516 keeper hashes rechecked; only verified newest backup20261101-213220 remains. Subject and finishing workflow complete; no unfinished work or uncommitted code. Final bookkeeping intentionally postdates keeper.
 
 ## Android build leftovers — settled
 
@@ -524,7 +524,7 @@ The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade
 
 ## Finishing status
 
-Current UI follow-ups complete: automated gates and user hand-test pass. Implementation 49b7da0 pushed/remote-verified; final keeper 20261030-011909 (265 files, 40.8 MB), six older folders audited/pruned with differing versions archived. User-owned Android files/.gitattributes remain uncommitted. Built preview on 5233 and pre-existing emulator remain available. Claim released; final bookkeeping committed separately. Earlier maintenance results follow.
+Android runner repair complete: all gates pass, original28 Android keys and12 Windows keys verified FROM DISK. Implementation ca729f7 pushed/remote-verified; keeper20261101-213220(1516 files,92.2MB),2 older backups audited/pruned with13 differing entries preserved. No app/emulator processes or test listeners remain. No new UI hand-test required. Claim released; final bookkeeping follows in a docs commit. Earlier UI follow-up results remain in the completed sound-editor section and session history.
 
 
 Earlier maintenance complete: all automated gates pass and user confirmed glow retention in the web build. Implementation ba2c64a pushed/remote-verified. Three older backups audited/pruned, keeper 20261028-022427 (265 files, 40.8 MB). Unrelated Android edits/.gitattributes remain; preview stays on 5233. Claim released. Previous Android release finishing result follows.
@@ -690,7 +690,7 @@ There is no account, server or automatic cloud sync.
   shipped features need coverage or an explicit visible gap. After test-ID edits run
   `node e2e/check-coverage.mjs --update` and review the ID diff. Check used prefixes before choosing new ones.
   Add new Node checks to AGENTS gate 5 in the same change.
-- Run all eight Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
+- Run all ten Node checks, even if one fails. Browser specs cannot cover a never-settling post-picker promise
   or a cancel after completion; `bundleGuard.check` supplies that coverage.
 - **Windows tests touch the user's real storage and uploads**, shared by installed/dev app.
   Runner snapshots uploads before launch, restores afterward, gracefully closes WebView2, restarts
@@ -718,7 +718,7 @@ There is no account, server or automatic cloud sync.
 
 ## Verification gates
 
-Commands and reporting rules live in [AGENTS.md](AGENTS.md). Results below freshly verify the release-helper/launcher follow-up before the requested finishing workflow.
+Commands and reporting rules live in [AGENTS.md](AGENTS.md). The table below preserves historical release-helper verification; current Android-runner verification is in the Android E2E restoration section above.
 
 | Gate | Release follow-up result | Exit |
 |---|---|---|
@@ -788,7 +788,7 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: `…-20261028-011044`, 265/265 files, 40.8 MB, VERIFY OK (exit 0).** Six older backups removed after verified push and audited preservation; exactly one remains, all 265 hashes rechecked. Final housekeeping notes postdate keeper. Includes helper recovery log; gen itself excluded.
+- **Keeper: …-20261101-213220,1516/1516 files,92.2MB,VERIFY OK(exit0).** Two older backups removed after verified push and audited preservation of13 differing entries at logs/keep/android-restore-prune-20261101-213302/. Exactly one backup remains; all1516 hashes rechecked. Final bookkeeping postdates keeper.
 - **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
   26 differing older versions / 11 unique contents, all entries round-trip/hash verified.
   SHA256 `2e56a8e66272e1ef6429844667c92942293c0a935040ab158ae724b5ed38a4a6`.
