@@ -45,6 +45,23 @@
   ],
   "features": [
     {
+      "name": "Profile record timestamps and tombstones",
+      "spec": "PROFILE_SYNC_SPEC.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/profileRecords.mjs::PR"
+      ],
+      "note": "User hand-tested and accepted 2026-11-01: rename, addition, deletion, playback and persistence after restart. Supports manual .spellcaster file transfer and Merge import."
+    },
+    {
+      "name": "Merge profile import",
+      "spec": "PROFILE_SYNC_SPEC.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/profileRecords.mjs::PR"
+      ]
+    },
+    {
       "name": "Sound priming",
       "spec": null,
       "status": "shipped",
@@ -321,6 +338,34 @@
     "e2e-features.ps1"
   ],
   "suites": [
+    {
+      "key": "PR",
+      "cat": "RECORD",
+      "title": "Record timestamps, deletion history and merge import",
+      "file": "specs/profileRecords.mjs",
+      "export": "profileRecords",
+      "covers": "Legacy migration, live edit clocks, reload, UI deletion markers, native merge availability, bundle version, stale deletion and additive merge. Pure conflict and collision cases additionally run in profileRecords.check.mjs.",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^PR\\d",
+      "ids": [
+        "PR1",
+        "PR10",
+        "PR11",
+        "PR12",
+        "PR2",
+        "PR3",
+        "PR4",
+        "PR5",
+        "PR6",
+        "PR7",
+        "PR8",
+        "PR9"
+      ]
+    },
     {
       "key": "S",
       "cat": "SEED",
@@ -1381,7 +1426,7 @@
       "title": "Profile hotkeys",
       "file": "specs/hotkeys.mjs",
       "export": "hotkeys",
-      "covers": "Settings recording/editing/cancel, duplicate refusal, trusted key dispatch and suppression, priming, rebind/reload, move/rename/delete repair, profile isolation/deletion, native bundle v2 and future-version preservation; storage failure/retry, capture blur/reset, ambiguous ids, focus restoration, searchable picker names/locations/empty results and selected-path feedback; all Ctrl/Alt/Shift combinations, exact-mask dispatch, modifier-only recording, duplicate chords, reload, punctuation and modifier bundle round trip. GAP: physical Android keyboard untested (emulator CDP only)",
+      "covers": "Settings recording/editing/cancel, duplicate refusal, trusted key dispatch and suppression, priming, rebind/reload, move/rename/delete repair, profile isolation/deletion, native bundle v3 and future-version preservation; storage failure/retry, capture blur/reset, ambiguous ids, focus restoration, searchable picker names/locations/empty results and selected-path feedback; all Ctrl/Alt/Shift combinations, exact-mask dispatch, modifier-only recording, duplicate chords, reload, punctuation and modifier bundle round trip. GAP: physical Android keyboard untested (emulator CDP only)",
       "platforms": [
         "web",
         "win",

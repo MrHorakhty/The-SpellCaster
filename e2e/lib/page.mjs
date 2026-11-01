@@ -41,6 +41,17 @@ export const PK_KEYS = [
 // CURRENT active profile. Returns '' when there is no profile yet, which makes
 // __pk produce a key the app will never read - loud, not silent.
 export const PROFILE_HELPER = `(() => {
+  // Board assertions inspect the same live projection as React. Raw record
+  // history is asserted separately by specs/profileRecords.mjs.
+  window.__liveBoard = function project(records) {
+    if (!Array.isArray(records)) return records;
+    return records.filter(r => r && !r.deletedAt).map(r => {
+      const out = { ...r };
+      for (const key of ['sounds', 'categories', 'characters']) if (Array.isArray(r[key])) out[key] = project(r[key]);
+      return out;
+    });
+  };
+
   // The active profile id, creating the profile if the app has not booted yet.
   //
   // SELF-HEALING ON PURPOSE. A suite may seed before the app has created its

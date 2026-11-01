@@ -126,7 +126,7 @@ export const refcount = {
 
     // A copy needs a second character to land in.
     await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       c.push({ id:'c2', name:'Elf Sorcerer', sounds:[] });
       localStorage.setItem(window.__pk('ttrpg_characters'), JSON.stringify(c));
       return 'added';
@@ -143,7 +143,7 @@ export const refcount = {
     await sleep(700);
 
     const guardAfterCopy = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       const orig = l.find(c => c.name === 'Human Paladin')?.sounds?.find(s => s.name === 'Guard Test');
       return {
@@ -162,7 +162,7 @@ export const refcount = {
     await ctx.deleteCharacter('Human Paladin');
 
     const guardAfterDelete = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       return {
         paladinGone: !l.find(c => c.name === 'Human Paladin'),
@@ -186,7 +186,7 @@ export const refcount = {
       await ctx.deleteCharacter('Lone Character');
       const guardNegative = await evalJs(`(() => ({
         fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_orphan_test.mp3')),
-        chars: JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]').length
+        chars: window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]')).length
       }))()`);
       log('GUARD', 'G5: unreferenced file IS removed',
         guardNegative?.fileKeyExists === false && guardNegative?.chars === 0 ? 'PASS' : 'FAIL', JSON.stringify(guardNegative));
@@ -238,7 +238,7 @@ export const refcount = {
     await submitModal('Add Sound');
     await sleep(1400);
     const uploadedNames = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       for (const c of l) for (const s of (c.sounds || [])) if (s.name === 'Upload Probe') return (s.files || []).map(f => f.storedName).filter(Boolean);
       return [];
     })()`);
@@ -269,7 +269,7 @@ export const refcount = {
     await submitModal('Save Changes');
     await sleep(900);
     const g6 = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const paladin = l.find(c => c.name === 'Human Paladin');
       const edited = paladin?.sounds?.find(s => s.id === 'share_s1');
       const sibling = paladin?.sounds?.find(s => s.id === 'share_s2');
@@ -350,7 +350,7 @@ export const refcount = {
     })()`);
     await sleep(700);
     const g7 = await evalJs(`(() => {
-      const l = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const paladin = l.find(c => c.name === 'Human Paladin');
       const edited = paladin?.sounds?.find(s => s.id === 'share_s1');
       return {

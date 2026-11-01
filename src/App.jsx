@@ -1,6 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import IconPrepDialog from './IconPrepDialog.jsx'
 import HotkeySettings from './HotkeySettings.jsx'
+import { normalizeRecords } from './profileRecords.js'
+import { useProfileRecords } from './useProfileRecords.js'
 import { HOTKEYS_KEY, inspectHotkeys, hotkeyTargets, resolveHotkey, refreshHotkeys, hotkeyEventAllowed, hotkeyModifiers, hotkeySignature } from './hotkeys.js'
 /* global __APP_VERSION__ */
 import {
@@ -42,6 +44,7 @@ import {
 import {
     exportBundle,
     importBundle,
+    previewMergeBundle,
     bundleFileName,
     assertUint8Array,
     BundleError,
@@ -379,7 +382,7 @@ const normalizeStoredData = (key, list) => {
     }
     const isCharData = key === 'ttrpg_characters'
     const isGroupData = key === 'ttrpg_groups'
-    return list.map(entry => {
+    return normalizeRecords(list.map(entry => {
         if (!entry || typeof entry !== 'object') {
             return isCharData ? { id: '', name: '', sounds: [] } : isGroupData ? { id: '', name: '', categories: [] } : { category: '', sounds: [] }
         }
@@ -418,7 +421,7 @@ const normalizeStoredData = (key, list) => {
             }
         }
         return { ...entry, sounds }
-    })
+    }), key)
 }
 
 // Read a collection from the active profile. All persistence goes through here
@@ -909,15 +912,15 @@ function AppBoard() {
         }
     }
 
-    const [characters, setCharacters] = useState(() => {
+    const [characters, setCharacters, characterRecords] = useProfileRecords(() => {
         return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_characters', data.characters)
     })
 
-    const [environmentSounds, setEnvironmentSounds] = useState(() => {
+    const [environmentSounds, setEnvironmentSounds, environmentRecords] = useProfileRecords(() => {
         return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_environment', data.environmentSounds)
     })
 
-    const [groups, setGroups] = useState(() => {
+    const [groups, setGroups, groupRecords] = useProfileRecords(() => {
         return readStoredData(ensureProfileStore(DATA_VERSION), 'ttrpg_groups', data.groups)
     })
 
@@ -982,12 +985,15 @@ function AppBoard() {
     // snapshot, which reads storage, not React state.
     const flushCurrentProfile = () => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
-            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
-            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
+            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characterRecords))
+            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentRecords))
+            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groupRecords))
         } catch (err) {
             console.error('Failed to flush the current profile:', err)
+            setProfileNotice('Could not save this profile. Free storage before switching or importing.')
+            return false
         }
+        return true
     }
 
     const handleSwitchProfile = (profileId) => {
@@ -997,7 +1003,7 @@ function AppBoard() {
         }
         // Persist the current board BEFORE switching, so the profile we are
         // leaving is fully written.
-        flushCurrentProfile()
+        if (!flushCurrentProfile()) return
         setProfileNotice('')
         setActiveProfile(profileId)
     }
@@ -1071,7 +1077,7 @@ function AppBoard() {
     // -----------------------------------------------------------------------
     const [bundleBusy, setBundleBusy] = useState(null)          // null | 'export' | 'import'
     const [bundleNotice, setBundleNotice] = useState('')
-    const [importMode, setImportMode] = useState('new')          // 'new' | 'replace'
+    const [importMode, setImportMode] = useState('new')          // 'new' | 'replace' | 'merge'
 
     // A hung Tauri IPC cannot be aborted - there is no handle for it, and
     // `abort()` is not offered on the plugin calls we make. So the honest fix is
@@ -1158,7 +1164,7 @@ function AppBoard() {
             // Read the LIVE state, not storage: the user is exporting what is on
             // screen, and the auto-save effects may lag a keystroke behind it.
             const { data: boardData, settings } = collectProfileForExport({
-                characters, environmentSounds, groups,
+                characters: characterRecords, environmentSounds: environmentRecords, groups: groupRecords,
                 hotkeys: hotkeyState.error ? undefined : refreshHotkeys(hotkeyState.payload, hotkeyTargets(allSoundContainers())),
                 boxSize, backgroundSettings, charSectionIcon, envSectionIcon,
                 parse: key => readProfileValue(activeProfileId, key),
@@ -1214,13 +1220,13 @@ function AppBoard() {
         if (bundleBusy) return
         setBundleNotice('')
 
-        if (importMode === 'replace') {
+        if (importMode === 'replace' || importMode === 'merge') {
             // "Replace active" overwrites the live profile. Confirm first, and
             // flush live state first - the snapshot that makes this recoverable
             // reads storage, not React state, so unflushed edits would be lost
             // from BOTH the new board and the backup.
-            flushCurrentProfile()
-            const confirmed = window.confirm(
+            if (!flushCurrentProfile()) return
+            const confirmed = importMode === 'merge' || window.confirm(
                 'Replace the active profile\'s board with the imported one?\n\n' +
                 'The current profile is snapshotted first and stays recoverable, but its audio files are left on disk.'
             )
@@ -1238,6 +1244,14 @@ function AppBoard() {
             const { readFile } = await import('@tauri-apps/plugin-fs')
             await grantPickedPath(path)
             const bytes = await runBundleStep(() => readFile(path), 'Reading the bundle')
+
+            if (importMode === 'merge') {
+                const preview = previewMergeBundle(bytes, activeProfileId)
+                if (!window.confirm(`Merge preview (sounds and containers):\n${preview.added} added, ${preview.updated} updated, ${preview.deleted} deleted.\n${preview.dropped} incoming sound(s) omitted because their uploads are missing.\n\nNewer live edits win. Deletions win for a matching record; restoring creates a new record. Equal timestamps use a deterministic tie-break; older untracked data uses epoch. Entry order may change. Settings and hotkeys stay local. A safety snapshot is taken first.\n\nMerge now?`)) {
+                    setBundleNotice('Merge cancelled, nothing was changed.')
+                    return
+                }
+            }
 
             const report = await runBundleStep(() => importBundle(bytes, {
                 mode: importMode,
@@ -4667,32 +4681,32 @@ function AppBoard() {
     // another profile's namespace (§0.3 decision 2, §11 risk 10).
     useEffect(() => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characters))
+            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characterRecords))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your characters and their sounds', err)
         }
-    }, [characters])
+    }, [characterRecords])
 
     // Auto-save Environment Sounds to localStorage whenever they change
     useEffect(() => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentSounds))
+            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentRecords))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your environment sounds', err)
         }
-    }, [environmentSounds])
+    }, [environmentRecords])
 
     // Auto-save Groups to localStorage whenever they change
     useEffect(() => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groups))
+            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groupRecords))
             setSaveError(null)
         } catch (err) {
             reportSaveFailure('your groups', err)
         }
-    }, [groups])
+    }, [groupRecords])
 
     useEffect(() => {
         if (characters.length > 0 && !activeCharacterId) {
@@ -5565,7 +5579,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             <Upload size={18} className="shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold truncate">
-                                    {importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
+                                    {importNotice.mode === 'merge' ? 'Merged' : importNotice.mode === 'replace' ? 'Replaced' : 'Imported'} &quot;{importNotice.profileName}&quot;
                                 </p>
                                 <p className="text-xs opacity-90 break-words">{importNoticeSummary}</p>
                                 {(importNotice.files || []).length > 0 && (
@@ -7800,6 +7814,14 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                     className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'replace' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
                                                 >
                                                     Replace this profile
+                                                </button>
+                                                <button
+                                                    onClick={() => setImportMode('merge')}
+                                                    data-import-mode="merge"
+                                                    aria-pressed={importMode === 'merge'}
+                                                    className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${importMode === 'merge' ? 'bg-lime-600 text-white' : 'bg-dark-800 text-slate-400 hover:bg-dark-700'}`}
+                                                >
+                                                    Merge into this profile
                                                 </button>
                                             </div>
 

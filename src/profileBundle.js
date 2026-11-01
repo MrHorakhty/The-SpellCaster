@@ -31,9 +31,10 @@
 //      textbook atomic replace - is not available. What IS available is an
 //      ordering: verify every checksum, write every blob, and only then touch
 //      the namespaced keys. A failure anywhere before that leaves the previous
-//      board byte-for-byte intact and the half-written blobs as orphans, which
-//      is harmless. A failure after it cannot happen, because it is the last
-//      thing the import does.
+//      board byte-for-byte intact and the half-written blobs as orphans. A
+//      quota/permission failure during the key commit restores the saved key
+//      snapshot (or removes an incomplete new profile); rollback failure is
+//      reported explicitly with recovery evidence retained.
 //
 // NOT IN THE BUNDLE, ON PURPOSE (§5.2, §6): the custom background image (a
 // per-device display preference that can be 5 MB of inline base64), and
@@ -44,6 +45,7 @@
 import { Zip, ZipPassThrough, unzipSync } from 'fflate'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { HOTKEYS_KEY, requireHotkeys } from './hotkeys.js'
+import { mergeProfileRecords, summarizeMerge } from './profileMerge.js'
 
 import {
     profileScopedKey,
@@ -59,9 +61,10 @@ import {
     getActiveProfileId,
 } from './profileStorage.js'
 
-// v2 explicitly carries profile-owned hotkeys. v1 readers refuse it instead of
-// accepting a round trip that silently strips bindings. We still import v1.
-export const BUNDLE_FORMAT_VERSION = 2
+// v3 retains record identities/timestamps and deletion markers. Older readers
+// must refuse it: displaying tombstones or stripping them resurrects deletions.
+// v1/v2 bundles remain importable; absent record timestamps mean epoch.
+export const BUNDLE_FORMAT_VERSION = 3
 export const BUNDLE_EXTENSION = '.spellcaster'
 
 /** Zip chunk size. Large enough to matter, small enough to yield. */
@@ -221,26 +224,26 @@ function groupNameOf(data, groupId) {
 export function walkSoundContainers(data) {
     const containers = []
     const add = (kind, id, groupId, label, sounds) => {
-        containers.push({ kind, id, groupId, label, sounds: Array.isArray(sounds) ? sounds : [] })
+        containers.push({ kind, id, groupId, label, sounds: Array.isArray(sounds) ? sounds.filter(s => !s.deletedAt) : [] })
     }
     const source = data || {}
 
     for (const character of source.characters || []) {
-        if (!character) continue
+        if (!character || character.deletedAt) continue
         add('character', character.id, null, character.name, character.sounds)
     }
     for (const category of source.environmentSounds || []) {
-        if (!category) continue
+        if (!category || category.deletedAt) continue
         add('environment', category.category, null, category.category, category.sounds)
     }
     for (const group of source.groups || []) {
-        if (!group) continue
+        if (!group || group.deletedAt) continue
         for (const category of group.categories || []) {
-            if (!category) continue
+            if (!category || category.deletedAt) continue
             add('groupCategory', category.category, group.id, category.category, category.sounds)
         }
         for (const character of group.characters || []) {
-            if (!character) continue
+            if (!character || character.deletedAt) continue
             add('groupCharacter', character.id, group.id, character.name, character.sounds)
         }
         add('groupTop', group.id, group.id, group.name, group.sounds)
@@ -571,9 +574,9 @@ export function buildManifest({ profileId, profileName, appVersion, dataVersion,
             originalName: entry.originalName,
         })),
         counts: {
-            characters: (data.characters || []).length,
-            environmentCategories: (data.environmentSounds || []).length,
-            groups: (data.groups || []).length,
+            characters: (data.characters || []).filter(r => !r.deletedAt).length,
+            environmentCategories: (data.environmentSounds || []).filter(r => !r.deletedAt).length,
+            groups: (data.groups || []).filter(r => !r.deletedAt).length,
             sounds: countSounds(data),
             files: entries.length,
         },
@@ -774,6 +777,9 @@ export function pruneUnresolvableSounds(data, manifestFiles) {
 
     const soundIsResolvable = (sound) => {
         if (!sound || typeof sound !== 'object') return false
+        // History is not playable content. Older/hand-edited records can still
+        // carry stale references; missing bytes must not discard their deletion.
+        if (Number.isSafeInteger(sound.deletedAt) && sound.deletedAt > 0) return true
         const refs = Array.isArray(sound.files) ? sound.files.filter(isUploadedReference) : []
         if (refs.length > 0 && !refs.every(ref => available.has(ref.storedName))) return false
         if (isUploadedIcon(sound) && !available.has(sound.icon)) return false
@@ -891,11 +897,28 @@ export function restoreProfileSnapshot(snapshot) {
 
 // --- commit -----------------------------------------------------------------
 
+function localMergeData(read) {
+    const array = key => JSON.parse(read(key) || '[]')
+    return {
+        characters: array('ttrpg_characters'), environmentSounds: array('ttrpg_environment'), groups: array('ttrpg_groups'),
+        hotkeys: requireHotkeys(read(HOTKEYS_KEY)),
+    }
+}
+
+// Read-only preview. Parsing verifies the complete bundle before asking the
+// user to accept a merge. No snapshots, profile creation or blob writes here.
+export function previewMergeBundle(bytes, profileId) {
+    const { data, manifest } = parseBundle(bytes)
+    const { data: incoming, dropped } = pruneUnresolvableSounds(data, manifest.files || [])
+    const local = localMergeData(key => readProfileValue(profileId, key))
+    return { ...summarizeMerge(local, mergeProfileRecords(local, incoming)), dropped: dropped.length }
+}
+
 /**
  * Write the board's keys. This is the commit point - it runs LAST, after every
  * blob is on disk (rule 4).
  */
-function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
+function commitKeys(profileId, { data, settings, normalize, dataVersion, preserveLocal = false }) {
     const normalized = {
         characters: normalize('ttrpg_characters', data.characters || []),
         environmentSounds: normalize('ttrpg_environment', data.environmentSounds || []),
@@ -907,13 +930,18 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
     // a stale icon from the previous board survives the import.
     const written = new Set([HOTKEYS_KEY, 'ttrpg_characters', 'ttrpg_environment', 'ttrpg_groups', 'ttrpg_data_version', 'boxSize', 'backgroundSettings', 'ttrpg_characters_icon', 'ttrpg_environment_icon'])
     for (const key of profileKeys(profileId)) {
-        if (!written.has(key)) removeProfileValue(profileId, key)
+        if (!preserveLocal && !written.has(key)) removeProfileValue(profileId, key)
     }
 
     writeProfileValue(profileId, 'ttrpg_characters', JSON.stringify(normalized.characters))
     writeProfileValue(profileId, 'ttrpg_environment', JSON.stringify(normalized.environmentSounds))
     writeProfileValue(profileId, 'ttrpg_groups', JSON.stringify(normalized.groups))
     writeProfileValue(profileId, HOTKEYS_KEY, JSON.stringify(normalized.hotkeys))
+
+    if (preserveLocal) {
+        if (dataVersion) writeProfileValue(profileId, 'ttrpg_data_version', dataVersion)
+        return normalized
+    }
 
     const boxSize = settings && settings.boxSize != null ? settings.boxSize : 1
     writeProfileValue(profileId, 'boxSize', String(boxSize))
@@ -947,7 +975,7 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion }) {
  *
  * Order matters and is the whole atomicity story (rule 4):
  *   1. parse + verify every checksum        - throws, writes nothing
- *   2. snapshot, if replacing the live profile
+ *   2. snapshot, if replacing or merging the live profile
  *   3. write every blob                     - a failure here aborts before
  *                                             any key is touched
  *   4. commit the keys
@@ -969,6 +997,7 @@ export async function importBundle(bytes, {
     if (typeof normalize !== 'function') {
         throw new BundleError('importBundle needs the app\'s normalizeStoredData to repair imported shapes.', 'internal')
     }
+    if (!['new', 'replace', 'merge'].includes(mode)) throw new BundleError('Unknown import mode. Nothing was imported.', 'invalid-mode')
 
     const { manifest, data, files } = parseBundle(bytes)
     const manifestFiles = manifest.files || []
@@ -978,7 +1007,7 @@ export async function importBundle(bytes, {
     let profileId = targetProfileId
     let snapshot = null
 
-    if (mode === 'replace') {
+    if (mode === 'replace' || mode === 'merge') {
         profileId = targetProfileId || getActiveProfileId()
         if (!profileId) throw new BundleError('There is no active profile to replace.', 'no-active')
         snapshot = snapshotProfile(profileId)
@@ -1021,23 +1050,36 @@ export async function importBundle(bytes, {
     }
 
     if (failed.length > 0) {
-        // Roll the key write forward is impossible and unnecessary: no key has
-        // been touched yet. Restore the snapshot so "replace" is a no-op too.
-        if (snapshot) restoreProfileSnapshot(snapshot)
+        // No board keys were touched. Rewriting them here is both unnecessary
+        // and dangerous if storage writes failed too: rollback could remove
+        // keys that were still intact. Only discard a newly created index entry.
+        let recovery = ''
+        if (mode === 'new') {
+            try { deleteProfile(profileId) } catch (error) {
+                console.error('[profiles] could not remove the incomplete new profile:', error)
+                recovery = ' An empty imported profile may remain; remove it after storage is available.'
+            }
+        }
         throw new BundleError(
-            `${failed.length} file(s) could not be written, so nothing was imported: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? ', …' : ''}`,
+            `${failed.length} file(s) could not be written, so nothing was imported: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? ', …' : ''}${recovery}`,
             'write-failed'
         )
     }
 
     const { data: pruned, dropped } = pruneUnresolvableSounds(data, manifestFiles)
+    let committed = pruned
+    if (mode === 'merge') {
+        // Read from the safety snapshot, never from changing live keys.
+        committed = mergeProfileRecords(localMergeData(key => snapshot.keys[key]), pruned)
+    }
 
     try {
         commitKeys(profileId, {
-            data: pruned,
-            settings: pruned.settings,
+            data: committed,
+            settings: committed.settings,
             normalize,
             dataVersion,
+            preserveLocal: mode === 'merge',
         })
     } catch (err) {
         // A quota/permission failure on the new binding key must not leave the
@@ -1056,7 +1098,7 @@ export async function importBundle(bytes, {
     }
 
     if (setActive) {
-        if (mode === 'replace') {
+        if (mode === 'replace' || mode === 'merge') {
             // The live profile just changed under the app's feet. A remount is
             // the only thing that makes the auto-save effects agree with the
             // profile they are about to write to - §11 risk 10's residual case,

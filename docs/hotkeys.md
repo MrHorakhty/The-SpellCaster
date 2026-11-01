@@ -119,7 +119,7 @@ No bindings belong in GLOBAL_KEYS. Do not add a new key to the legacy migration
 list merely because it is profile-scoped; it never existed before profiles.
 
 Export, pruning, replace-import allowlists and key commits explicitly carry the
-binding collection. Bundle format2 carries data.hotkeys; format1 imports default
+binding collection. Bundle formats2/3 carry data.hotkeys; format1 imports default
 to empty bindings, including replacement. Old readers refuse unsupported bundle
 or hotkey payload versions rather than silently dropping bindings/modifiers.
 Native bundle support does not supply web audio bundle export/import, which
@@ -192,6 +192,6 @@ hotkey behavior and needs no app hand-test.
 - src/HotkeySettings.jsx:34: recording conflicts; :56: durable binding draft;
   :86: searchable target picker.
 - src/App.jsx:897: profile state; :4566: exact dispatch; :7680: Settings.
-- src/profileBundle.js:64: bundle format2; :898: key commit; :1129: export collection.
+- src/profileBundle.js:67: bundle format3 (record history; hotkeys introduced in2); key commit/export collection line numbers have shifted with merge support.
 
 Historical planning/code anchors are preserved in docs/session-history.md.

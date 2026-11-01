@@ -183,7 +183,7 @@ export const volume = {
     const p10pre = await evalJs(`window.__commitVol('Half Volume', 0)`);
     await sleep(600);
     const p10stored = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
       return c[0]?.sounds?.map(s => [s.id, s.volume]);
     })()`);
     log('VOL','P10: commit wrote 0 to storage',p10pre==='0' && JSON.stringify(p10stored)?.includes('["vol_half",0]')?'PASS':'FAIL',`slider=${p10pre} stored=${JSON.stringify(p10stored)}`);
@@ -192,7 +192,7 @@ export const volume = {
     await evalJs(volHelpers);
 
     const p11 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
       const s = window.__volSlider('Half Volume');
       const none = window.__volSlider('No Field');
       return {
@@ -244,7 +244,7 @@ export const volume = {
     await sleep(1000);
     await driver.exitEditMode();
     const p16 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
       return {
         stored: c[0]?.sounds?.find(x=>x.id==='vol_half')?.volume,
         slider: window.__volSlider('Half Volume')?.value

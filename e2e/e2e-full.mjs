@@ -38,6 +38,7 @@ import { playback } from './specs/playback.mjs';
 import { fade } from './specs/fade.mjs';
 import { iconprep } from './specs/iconprep.mjs';
 import { hotkeys } from './specs/hotkeys.mjs';
+import { profileRecords } from './specs/profileRecords.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -233,9 +234,9 @@ async function main() {
   const suiteS = await evalJs(`(() => {
     const r = [];
     const log = (cat,n,s,d) => r.push({cat,n,s,d:d||''});
-    const chars = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
-    const env = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
-    const groups = JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
+    const chars = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
+    const env = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
+    const groups = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
     log('SEED','S1: 2 characters',chars.length===2?'PASS':'FAIL','count='+chars.length);
     log('SEED','S2: Human Paladin exists',chars.some(c=>c.name==='Human Paladin')?'PASS':'FAIL');
     log('SEED','S3: Elf Sorcerer exists',chars.some(c=>c.name==='Elf Sorcerer')?'PASS':'FAIL');
@@ -300,7 +301,7 @@ async function main() {
   await sleep(1200);
   const afterAdd = await evalJs(`(() => {
     const cards = document.querySelectorAll('[data-sound-card]').length;
-    const chars = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const pal = chars.find(c=>c.name==='Human Paladin');
     return { cards, soundCount: pal?.sounds?.length||0, firstName: pal?.sounds?.[pal.sounds.length-1]?.name||'' };
   })()`);
@@ -348,7 +349,7 @@ async function main() {
   log('SOUND','J5: Save Changes submitted',editSave==='OK'?'PASS':'FAIL',editSave);
   await sleep(1200);
   const afterEdit = await evalJs(`(() => {
-    const chars = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const pal = chars.find(c=>c.name==='Human Paladin');
     const smite = pal?.sounds?.find(s=>s.id==='s1');
     return { name: smite?.name, color: smite?.color, glow: smite?.glowEnabled };
@@ -370,7 +371,7 @@ async function main() {
   const charSubmit = await submitModal('Add Character');
   await sleep(900);
   const charAdded = await evalJs(`(() => {
-    const chars=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const sidebar=[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Rogue');
     return { has:chars.some(c=>c.name==='Rogue'), sidebar };
   })()`);
@@ -389,7 +390,7 @@ async function main() {
   const charEditSave = await submitModal('Save Changes');
   await sleep(900);
   const charEdited = await evalJs(`(() => {
-    const chars=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     return { hasRogue:chars.some(c=>c.name==='Rogue'), hasNew:chars.some(c=>c.name==='Rogue (Stealth)') };
   })()`);
   log('CHAR','C3: rename succeeded',charEdited?.hasNew&&!charEdited?.hasRogue?'PASS':'FAIL',JSON.stringify(charEdited));
@@ -407,7 +408,7 @@ async function main() {
   log('CHAR','C5: confirm mentions Rogue (Stealth)',confirmText.includes('Rogue')?'PASS':'FAIL',confirmText.slice(0,80));
   const delConfirm = await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(!b) return 'NO'; b.click(); return 'OK'; })()`);
   await sleep(900);
-  const charDeleted = await evalJs(`JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]').some(c=>c.name.includes('Rogue'))`);
+  const charDeleted = await evalJs(`window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]')).some(c=>c.name.includes('Rogue'))`);
   log('CHAR','C6: Rogue deleted',charDeleted===false?'PASS':'FAIL','still_exists='+charDeleted);
   await toggleEditMode(false);
 
@@ -428,7 +429,7 @@ async function main() {
   const catSubmit = await submitModal('Add Category');
   await sleep(900);
   const catAdded = await evalJs(`(() => {
-    const env=JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+    const env=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
     const sidebar=[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Cave');
     return { has:env.some(e=>e.category==='Cave'), sidebar };
   })()`);
@@ -446,7 +447,7 @@ async function main() {
   const catEditSave = await submitModal('Save Changes');
   await sleep(900);
   const catEdited = await evalJs(`(() => {
-    const env=JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+    const env=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
     return { hasCave:env.some(e=>e.category==='Cave'), hasCrystal:env.some(e=>e.category==='Crystal Cave') };
   })()`);
   log('ENV','K2: rename succeeded',catEdited?.hasCrystal&&!catEdited?.hasCave?'PASS':'FAIL',JSON.stringify(catEdited));
@@ -463,7 +464,7 @@ async function main() {
   log('ENV','K3: confirm mentions Crystal Cave',catConfirmText.includes('Crystal')?'PASS':'FAIL');
   const catDel = await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(!b) return 'NO'; b.click(); return 'OK'; })()`);
   await sleep(900);
-  const catDeleted = await evalJs(`JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]').some(e=>e.category.includes('Crystal'))`);
+  const catDeleted = await evalJs(`window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]')).some(e=>e.category.includes('Crystal'))`);
   log('ENV','K4: Crystal Cave deleted',catDeleted===false?'PASS':'FAIL');
   await toggleEditMode(false);
 
@@ -479,7 +480,7 @@ async function main() {
   const grpSubmit = await submitModal('Add Group');
   await sleep(900);
   const grpAdded = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
     const sidebar=[...document.querySelectorAll('button')].some(b=>b.textContent.trim().endsWith('Dragon Lore'));
     return { has:g.some(x=>x.name==='Dragon Lore'), sidebar, mode:g.find(x=>x.name==='Dragon Lore')?.mode };
   })()`);
@@ -503,7 +504,7 @@ async function main() {
   const grpEditSave = await submitModal('Save Changes');
   await sleep(900);
   const grpEdited = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
     return { hasOld:g.some(x=>x.name==='Dragon Lore'), hasNew:g.some(x=>x.name==='Dragon Lore Reborn') };
   })()`);
   log('GRP','G4: group renamed',grpEdited?.hasNew&&!grpEdited?.hasOld?'PASS':'FAIL',JSON.stringify(grpEdited));
@@ -520,7 +521,7 @@ async function main() {
   }
   await sleep(500);
   const conv1 = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return { mode:g?.mode, cats:g?.categories?.length, chars:g?.characters?.length, charNames:g?.characters?.map(c=>c.name) };
   })()`);
   log('GRP','G5: mode=characters after toggle',conv1?.mode==='characters'?'PASS':'FAIL',JSON.stringify(conv1));
@@ -531,7 +532,7 @@ async function main() {
   await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Environment Pack'); if(b) b.click(); return 'OK'; })()`);
   await sleep(500);
   const conv2 = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return { mode:g?.mode, cats:g?.categories?.length, chars:g?.characters?.length };
   })()`);
   log('GRP','G8: mode=environment after toggle back',conv2?.mode==='environment'?'PASS':'FAIL',JSON.stringify(conv2));
@@ -546,7 +547,7 @@ async function main() {
     await sleep(900);
   }
   const grpCatAdded = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return g?.categories?.some(c=>c.category==='Rumors');
   })()`);
   log('GRP','G10: group category added',grpCatAdded===true?'PASS':'FAIL','hasRumors='+grpCatAdded);
@@ -563,7 +564,7 @@ async function main() {
     await sleep(700);
   }
   const grpCatDeleted = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return g?.categories?.some(c=>c.category==='Rumors');
   })()`);
   log('GRP','G11: group category deleted',grpCatDeleted===false?'PASS':'FAIL');
@@ -579,7 +580,7 @@ async function main() {
     await sleep(900);
   }
   const grpCharAdded = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return g?.characters?.some(c=>c.name==='Bard');
   })()`);
   log('GRP','G12: group character added',grpCharAdded===true?'PASS':'FAIL');
@@ -596,7 +597,7 @@ async function main() {
     await sleep(700);
   }
   const grpCharDeleted = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').find(x=>x.name==='Dragon Lore Reborn');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).find(x=>x.name==='Dragon Lore Reborn');
     return g?.characters?.some(c=>c.name==='Bard');
   })()`);
   log('GRP','G13: group character deleted',grpCharDeleted===false?'PASS':'FAIL');
@@ -612,7 +613,7 @@ async function main() {
     await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
     await sleep(700);
   }
-  const grpDeleted = await evalJs(`JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]').some(g=>g.name==='Dragon Lore Reborn')`);
+  const grpDeleted = await evalJs(`window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]')).some(g=>g.name==='Dragon Lore Reborn')`);
   log('GRP','G14: group deleted',grpDeleted===false?'PASS':'FAIL','still_exists='+grpDeleted);
   await toggleEditMode(false);
 
@@ -754,7 +755,7 @@ async function main() {
   log('SOUND','D2: Cancel dismisses',cancelConfirm?.cancelled?'PASS':'FAIL');
   await sleep(500);
   const shieldStill = await evalJs(`(() => {
-    const chars=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const pal=chars.find(c=>c.name==='Human Paladin');
     return pal?.sounds?.some(s=>s.name==='Shield Bash');
   })()`);
@@ -772,7 +773,7 @@ async function main() {
   await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Delete'); if(b) b.click(); return 'OK'; })()`);
   await sleep(900);
   const healDeleted = await evalJs(`(() => {
-    const chars=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const chars=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const pal=chars.find(c=>c.name==='Human Paladin');
     return pal?.sounds?.some(s=>s.name==='Healing Light');
   })()`);
@@ -874,14 +875,14 @@ async function main() {
 
   // --- M6: COPY character -> character
   const beforeCopy = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     let sfk=0; for(let i=0;i<localStorage.length;i++){ if((localStorage.key(i)||'').startsWith('profile:'+window.__pid()+':sound_file_')) sfk++; }
     return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, soundFileKeys:sfk };
   })()`);
   const mCopy = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
   await sleep(700);
   const afterCopy = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const src=window.__soundsIn('ttrpg_characters','Divine Smite');
     const paladin=l.find(c=>c.name==='Human Paladin');
     const elf=l.find(c=>c.name==='Elf Sorcerer');
@@ -918,7 +919,7 @@ async function main() {
   const mCopy2 = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
   await sleep(700);
   const names2 = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     return l.find(c=>c.name==='Elf Sorcerer')?.sounds?.map(s=>s.name);
   })()`);
   log('MOVE','M11: second copy is "Smite (copy 2)"',mCopy2==='OK'&&Array.isArray(names2)&&names2.includes('Divine Smite (copy 2)')?'PASS':'FAIL',JSON.stringify(names2));
@@ -929,14 +930,14 @@ async function main() {
   const mCopyDungeon = await evalJs(`window.__mcClick('Environments','Dungeon','Copy')`);
   await sleep(700);
   const dungeonNames = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
     return l.find(c=>c.category==='Dungeon')?.sounds?.map(s=>s.name);
   })()`);
   log('MOVE','M12: copy elsewhere is "(copy)", not "(copy 3)"',mCopyDungeon==='OK'&&Array.isArray(dungeonNames)&&dungeonNames.includes('Divine Smite (copy)')?'PASS':'FAIL',JSON.stringify(dungeonNames));
 
   // --- M13: MOVE within the same slice preserves everything and is silent
   const beforeMove = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const s=l.find(c=>c.name==='Human Paladin')?.sounds?.find(x=>x.name==='Shield Bash');
     window.__shieldId=s?.id; window.__shieldColor=s?.color; window.__shieldFiles=JSON.stringify(s?.files);
     return { paladin:l.find(c=>c.name==='Human Paladin')?.sounds?.length, elf:l.find(c=>c.name==='Elf Sorcerer')?.sounds?.length, sound:s };
@@ -946,7 +947,7 @@ async function main() {
   const mMove = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Move')`);
   await sleep(800);
   const afterMove = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const paladin=l.find(c=>c.name==='Human Paladin');
     const elf=l.find(c=>c.name==='Elf Sorcerer');
     const moved=elf?.sounds?.find(s=>s.name==='Shield Bash');
@@ -969,8 +970,8 @@ async function main() {
   const mMoveGroup = await evalJs(`window.__mcClick('Tavern Pack','Ambience','Move')`);
   await sleep(800);
   const groupMoved = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
-    const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
+    const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     const still=c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Divine Smite');
     const landed=g.find(x=>x.name==='Tavern Pack')?.categories?.find(cat=>cat.category==='Ambience')?.sounds?.some(s=>s.name==='Divine Smite');
     return { stillInChar:!!still, landedInGroup:!!landed };
@@ -990,9 +991,9 @@ async function main() {
   const mMoveEnv = await evalJs(`window.__mcClick('Environments','Dungeon','Move')`);
   await sleep(800);
   const envMoved = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
-    const e=JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
-    const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
+    const e=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
+    const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     return {
       stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Shield Bash'),
       landedInEnv:!!e.find(x=>x.category==='Dungeon')?.sounds?.some(s=>s.name==='Shield Bash')
@@ -1013,8 +1014,8 @@ async function main() {
   const mMoveGroupChar = await evalJs(`window.__mcClick('Hero Pack','Fighter','Move')`);
   await sleep(800);
   const groupCharMoved = await evalJs(`(() => {
-    const g=JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]');
-    const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+    const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))||'[]'));
+    const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
     return {
       stillInChar:!!c.find(x=>x.name==='Human Paladin')?.sounds?.some(s=>s.name==='Divine Light'),
       landedInGroupChar:!!g.find(x=>x.name==='Hero Pack')?.characters?.find(ch=>ch.name==='Fighter')?.sounds?.some(s=>s.name==='Divine Light')
@@ -1035,7 +1036,7 @@ async function main() {
   const mCopyForest = await evalJs(`window.__mcClick('Environments','Forest','Copy')`);
   await sleep(700);
   const forestHas = await evalJs(`(() => {
-    const l=JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+    const l=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
     return l.find(c=>c.category==='Forest')?.sounds?.map(s=>s.name);
   })()`);
   log('MOVE','M19: empty destination listed and accepts copy',Array.isArray(forestRow)&&forestRow.includes('Copy to Forest')&&Array.isArray(forestHas)&&forestHas.length===1?'PASS':'FAIL',JSON.stringify({row:forestRow,sounds:forestHas}));
@@ -1663,6 +1664,7 @@ async function main() {
   await runSpecs(ctx, [fade]);
   await runSpecs(ctx, [iconprep]);
   await runSpecs(ctx, [hotkeys]);
+  await runSpecs(ctx, [profileRecords]);
 
   // ================================================================
   //  F: PROFILES (shared spec - see e2e/specs/profiles.mjs)

@@ -10951,3 +10951,88 @@ ttrpg-soundboard-backup-20261101-213220 remains alone; all1516 hashes rechecked.
 No unfinished subject work or uncommitted code; no active app/emulator/test listeners.
 Claim released 2026-11-01 21:33. Final finishing notes postdate keeper; no extra backup
 created solely for housekeeping. Final handover follows in a bookkeeping commit.
+
+
+## 2026-11-01 — Profile history and merge acceptance checkpoint (Codex, unfinished)
+
+Authorized dependency chain started: inline record identities/clocks and payload-free
+tombstones, then native merge with a read-only preview and format3 compatibility.
+UI uses a live projection; persistence/export retain history. Removal wins for an
+identity; explicit restore mints a new one. This changed the draft LWW-delete plan
+to prevent stale offline edits reviving released subtrees and preserve merge grouping
+independence. Manual merge retains local settings/hotkeys and disambiguates UI ids.
+Design in docs/profile-records.md. WebDAV has NOT been implemented; the user wants
+desktop ↔ Android first but has no known server/account. Preference/order/destination
+and conditional-write design remain, as does a user built-app hand-test.
+
+Backups: initial20261101-214235 VERIFY OK1533/1533,95.2MB; checkpoint before final
+fault guard20261101-222846 VERIFY OK1625/1625,95.5MB(each0). Final backup follows.
+Static: lint0 errors/4 existing warnings,build PASS,coverage44 suites/507 IDs with
+29 shipped features covered(each0). Reviewed+12 PR IDs,none removed. Node(each0):
+bundle53/53,storage35/35,guard20/20,profile keysOK,fade46/46,soundFiles32/32,icon35/35,
+snapshot19/19,release19/19,hotkeys120/120,records43/43. Preflight9/9 and extended16/16;
+restore23/23(each0). Web368/0/0(0),Windows391/0/3(1),Android381/0/3(1). Native WARN
+baselines unchanged. Original Windows12 keys and Android28 keys matched FROM DISK;
+uploads restored and emulator shut down. Full suites preceded a final failure-only
+guard: injected blob+key-write failure and failed-new-profile cleanup reproduced
+51/2,then passed53/53 after removing unnecessary rollback and cleaning the new index
+entry. Final static/Node/tooling gates reran afterward; healthy native paths unchanged.
+
+Standalone review app build0,45009920 bytes,SHA256
+B7948F60A6666A25AE29E186C9C82A96B704F4251D5E72855E80AD966DEDD256. Demo bundle pair and
+README: logs/keep/profile-sync-handtest-20261101/. Both parsed; rename/add/delete
+verified. Evidence copied after writers finished to logs/keep/profile-sync-20261101/;
+normal Temp/opencode runner locations unchanged. Final host inspection:0 test
+listeners on5173/5183/5233/9222/9224/9225/9333;0 app/emulator/compiler processes.
+Gradle cache daemon34480 remains untouched. Windows quiet interval ended. No human
+hand-test claimed. Intended changes remain uncommitted; no push/pruning at this
+progress checkpoint. Claim retained for unfinished acceptance/network work.
+
+Final checkpoint backup20261101-223238 VERIFY OK1676/1676,96.7MB(exit0). Four
+backups retained,0 pruned. All30 intended paths uncommitted; no push. Claim remains
+active for hand-test and network work. This bookkeeping intentionally postdates keeper.
+
+
+## 2026-11-01 — User accepts record history and Merge import
+
+User confirmed the disposable demo behaved as expected: Old name became Updated
+sound, Will be deleted disappeared, New sound appeared, both remaining sounds
+played and the state survived restart. History and merge features are now shipped
+in the registry with shared PR coverage. Network sync remains unfinished; claim
+retained and no whole-chain finishing workflow triggered at this checkpoint.
+Pre-update backup20261101-224216 VERIFY OK1678/1678,96.7MB(exit0). No app runtime
+changes in this acceptance update; only documentation and coverage metadata changed.
+
+Acceptance metadata check:44 suites/507 IDs,31/31 shipped features covered,only
+WebDAV planned(exit0). Final accepted-state backup20261101-224310 VERIFY OK1680/1680,
+96.7MB(exit0). Six backups retained,0 pruned; claim stays active for network stage.
+Final housekeeping postdates keeper. No runtime changes or full-suite rerun here.
+
+
+## 2026-11-01 — Manual-file-only sync scope confirmed
+
+User clarified: "Only synch needs to be manual by moving the file. No need for a
+web one." Final scope is export .spellcaster → manually transfer → Merge import.
+The earlier WebDAV/folder/cloud proposal was assistant-expanded scope and is now
+explicitly abandoned, not unfinished work. No network implementation existed to
+retire; its planned feature entry and active backlog were removed. The broader
+PROFILE_SYNC_SPEC.md remains because independent browser export/import is still
+parked; that separate work was not abandoned by this instruction. Current manual
+design: docs/profile-records.md. This is a plan/docs/registry correction only.
+
+User acceptance already covers rename, addition, deletion, playback and restart
+persistence. Subject is complete; permanent finishing workflow now applies.
+Pre-correction backup20261101-224712 VERIFY OK1684/1684,96.7MB(exit0). Finishing
+results and final keeper will be appended after commit/push verification and audit.
+
+Final manual-scope registry check:44 suites/507 IDs,31/31 shipped features covered,
+0 planned,exit0. --update changed0 suites/IDs; no test coverage removed. Final
+host inventory22:49:0 test listeners and0 app/emulator/compiler processes; no
+user-owned app closed. Runtime code and accepted review binary unchanged by scope
+correction. Full regression counts remain web368/0/0(0),Windows391/0/3(1),
+Android381/0/3(1); Node/tooling counts and late failure-only guard caveat are above.
+
+Final manual-sync backup20261101-224941 VERIFY OK1692/1692,96.7MB(exit0).
+Eight backup folders remain until verified push and audit; newest keeper selected
+by name. Source/test/doc diff and all6 untracked intended files reviewed;30 paths
+intended for commit. Final bookkeeping intentionally postdates this backup.

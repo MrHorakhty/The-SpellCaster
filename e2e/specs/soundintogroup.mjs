@@ -86,14 +86,14 @@ export const soundIntoGroup = {
     }
 
     const grpSoundAdded = await evalJs(`(() => {
-      const g = JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]').find(x => x.name === 'Tavern Pack');
+      const g = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]')).find(x => x.name === 'Tavern Pack');
       const cat = g?.categories?.find(c => c.category === 'Ambience');
       return cat?.sounds?.some(s => s.name === 'Tavern Echo');
     })()`);
     log('GRP', 'H2: group sound persisted', grpSoundAdded === true ? 'PASS' : 'FAIL');
 
     const storedGlow = `(() => {
-      const g = JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]').find(x => x.name === 'Tavern Pack');
+      const g = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]')).find(x => x.name === 'Tavern Pack');
       return g?.categories?.find(c => c.category === 'Ambience')?.sounds?.find(s => s.name === 'Tavern Echo');
     })()`;
     const added = await evalJs(storedGlow);
@@ -167,7 +167,7 @@ export const soundIntoGroup = {
     // Imported/seeded JSON may contain a numeric zero, while the range writes
     // strings. Both are valid: numeric 0 must not take the legacy `|| 0.5` path.
     await evalJs(`(() => {
-      const groups = JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')));
+      const groups = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups'))));
       const sound = groups.find(g => g.name === 'Tavern Pack').categories.find(c => c.category === 'Ambience').sounds.find(s => s.name === 'Tavern Echo');
       sound.glowEnabled = true;
       sound.glowProminence = 0;

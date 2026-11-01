@@ -114,9 +114,9 @@ export const resetDefaults = {
     })()`;
 
     const stored = `(() => ({
-      characters: JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'),
-      environment: JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment')) || '[]'),
-      groups: JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]'),
+      characters: window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]')),
+      environment: window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment')) || '[]')),
+      groups: window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')) || '[]')),
       version: localStorage.getItem(window.__pk('ttrpg_data_version')),
       oldKeys: window.__bareKeys().filter(k => k.endsWith('_old'))
     }))()`;

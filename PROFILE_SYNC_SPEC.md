@@ -1,5 +1,12 @@
 # Profiles + Sync — Planning Spec
 
+> **Manual file sync is complete and user accepted2026-11-01.** Export a
+> `.spellcaster` file, move it yourself, then import with Merge on the other device.
+> Current design: [docs/profile-records.md](docs/profile-records.md). The user
+> explicitly declined app-managed WebDAV/folder/cloud sync. Those proposals are
+> abandoned, not a remaining stage. The v1 notes below are historical; independent
+> browser export/import planning remains parked.
+
 > **Status: v1 is COMPLETE (as of 2026-10-16).** §12's steps 0–8 are all built — step 0 (both platform spikes),
 > step 1 (storage adapter + proven switch, `577505d`), steps 3–6 (classifier, bundle format, atomic import in both
 > v1 modes, export + pickers), **step 7 (UI, 2026-10-15)** and **step 8 (the shared E2E spec `specs/bundle.mjs`,
@@ -137,13 +144,13 @@ The guiding rule: **sync the tedious thing, not the trivial thing.** Rebuilding 
 
 | # | Approach | Personal data | Accounts | Effort | Works when apart? | Verdict |
 |---|---|---|---|---|---|---|
-| A | **Folder sync** — profile stored in an ordinary folder, user's existing sync tool (Drive/OneDrive/Syncthing) moves it | none (own disk) | none | Low–Med | yes | Deferred; build the file format so A can be added later |
+| A | **Folder sync** — profile stored in an ordinary folder, user's existing sync tool (Drive/OneDrive/Syncthing) moves it | none (own disk) | none | Low–Med | yes | Out of scope by user decision2026-11-01; manual transfer only |
 | B | **LAN device-to-device** — one device hosts, the other scans a QR | none (never leaves LAN) | none | High | no (same Wi-Fi only) | Rejected |
-| C | **Self-hosted** — WebDAV / Nextcloud / S3 / R2 the user controls, client-side E2EE | none (ciphertext only) | none | Med | yes | Rejected for now; `ProfileTransport` keeps the door open |
+| C | **Self-hosted** — WebDAV / Nextcloud / S3 / R2 the user controls, client-side E2EE | none (ciphertext only) | none | Med | yes | Out of scope by user decision2026-11-01; no server transport |
 | D | **Hosted provider** (Supabase / Firebase / PocketBase Cloud) | IP + device token | yes | Low–Med | yes | Rejected — contradicts "no personal data" |
 | E | **Manual bundle** — export/import a `.spellcaster` file | none | none | Low | manual transfer | **CHOSEN** |
 
-**Decision: ship E.** It is the only option requiring no transport, no accounts and no infrastructure, and it is the primitive that A, B and C are all built on. Design the bundle + storage layer so a later sync provider is an additive change, not a rewrite.
+**Decision: ship E.** The user reaffirmed manual file transfer plus Merge as the complete sync scope on2026-11-01. No transport abstraction, folder watcher or server integration is required.
 
 ---
 
@@ -311,7 +318,7 @@ A **plain, unencrypted zip**. No `background/` folder — see §6.
 ```
 
 - `formatVersion` is the **bundle** version, independent of `DATA_VERSION` (the in-app data schema version). Bump it only for breaking layout changes.
-  Hotkey implementation (2026-10-31) advances exports to **format 2**, adding `data.hotkeys`.
+  Hotkey implementation (2026-10-31) originally advanced exports to **format 2**, adding `data.hotkeys`. The current record-history work advances exports to **format 3** (under verification); it keeps hotkeys and adds deletion-history compatibility protection.
   The reader still accepts format 1, defaulting absent bindings to empty; older readers refuse
   format 2 rather than silently stripping bindings. The format-1 example above is historical.
 - `files[].path` is **content-addressed** (`sha256` prefix + original extension). Two profiles containing the same upload dedupe to one entry, and blobs can never conflict.
@@ -865,30 +872,21 @@ logcat` cannot diagnose an import stall.** The pipeline's stream was running thr
 time" advice is therefore **withdrawn**; a future stall has to be diagnosed **in the app**, which is what
 `bundleGuard`'s named steps and **Stop waiting** button are for.
 
-### 📋 PLANNED — deliberately out of v1, in dependency order
+### Manual sync — accepted; separate browser work parked
 
-⚠️ **These are not unfinished v1 work.** v1 is complete; these were excluded from it by design, and moving them
-here keeps them from reading as a backlog of bugs. **They form a chain, and the chain has a first link:**
+- [x] **Timestamps + tombstones (§4.3)** — built and user accepted2026-11-01.
+- [x] **Merge import (§8)** — user confirmed rename, addition, deletion, playback
+      and persistence after restart. Design: docs/profile-records.md.
+- [x] **Manual file workflow** — export, move the `.spellcaster` file yourself,
+      then import with Merge on the destination. No app-managed transport required.
 
-```
-  1. Timestamps + tombstones (§4.3)      <- THE PREREQUISITE. Nothing below is safe without it.
-        |                                   Cut from v1 by decision (§0.3), not by accident. Merge and
-        |                                   folder/cloud sync both need conflict resolution, and this has
-        |                                   to be added to EXISTING user data - the expensive order.
-        v
-  2. Merge import (§8)                    id remapping, duplicate names, per-record conflict rules.
-        |                                   v1 ships only "New profile" + "Replace active" on purpose.
-        v
-  3. Folder / WebDAV / cloud sync (§2 A/C)  behind the same `ProfileTransport` boundary the export already
-                                           implies, so it needs no UI change of its own.
-```
+The former folder/WebDAV/cloud-sync stage was explicitly abandoned by the user
+on2026-11-01. Earlier historical references to possible network extensions do not
+represent a current backlog or implementation authorization.
 
-- [ ] **1. Timestamps + tombstones (§4.3)** — ✅ **cut from v1** (§0.3 decision 1). §4.3 is kept as the record
-      *for* this work. **Do this first; the other two are unsafe without it.**
-- [ ] **2. Merge import (§8)** — id remapping, duplicate names, `updatedAt` conflict rules. Needs (1).
-- [ ] **3. Folder / WebDAV / cloud sync** (options A and C in §2) — needs (1) and (2).
-- [ ] **Web export/import (§7)** — independent of the chain above. Needs web audio moved out of `localStorage`
-      first; it is base64 data-URLs today and caps around 5 MB, so a web export could only ever be metadata.
+- [ ] **Browser-platform export/import (§7)** — separate parked work, not required
+      for native manual sync. It needs browser audio moved out of quota-limited
+      localStorage into real file storage first.
 
 ---
 

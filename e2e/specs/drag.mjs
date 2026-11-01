@@ -46,7 +46,7 @@ export const dragReorder = {
     })()`;
 
     const order = `(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const pal = c.find(x => x.name === 'Human Paladin');
       return pal?.sounds?.map(s => s.name) || [];
     })()`;
@@ -88,7 +88,7 @@ export const dragReorder = {
           const matrix=ghost ? new DOMMatrix(getComputedStyle(ghost).transform) : null;
           return { dx:matrix?.m41,dy:matrix?.m42,placeholder:!!document.querySelector('[data-sound-drag-placeholder]'),
             shifted:[...document.querySelectorAll('[data-sound-layout]')].some(el=>getComputedStyle(el).transform!=='none'),
-            order:JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')))[0].sounds.map(s=>s.name) };
+            order:window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))))[0].sounds.map(s=>s.name) };
         })()`);
       }});
       log('DRAG','X6: lifted sound follows pointer and pushes neighbors before release',live?.placeholder && live?.shifted && Math.abs(live.dx-(tgt.x-src.x))<3 && Math.abs(live.dy-(tgt.y-src.y))<3 ? 'PASS':'FAIL',JSON.stringify(live));
@@ -176,7 +176,7 @@ export const dragReorder = {
       log('DRAG','X13: live reorder works across wrapped rows',wrappedLive && JSON.stringify(await evalJs(order))!==JSON.stringify(wrappedBefore) && await evalJs(clean) ? 'PASS':'FAIL',JSON.stringify({wrappedLive}));
       await evalJs(`document.querySelector('[data-sound-layout]')?.parentElement.style.removeProperty('width')`);
       await evalJs(`(() => {
-        const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')));
+        const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))));
         const base=c[0].sounds[0];c[0].sounds=Array.from({length:30},(_,i)=>({...base,id:'scroll_'+i,name:'Scroll '+i}));
         localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));
       })()`);

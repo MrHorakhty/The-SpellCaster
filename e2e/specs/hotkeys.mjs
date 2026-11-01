@@ -81,7 +81,7 @@ export const hotkeys = {
       log('HOTKEY', 'HK15: rebind removes old key and installs new key once', await count() === reb + 1 && (await stored())?.bindings?.[0]?.code === 'Digit2')
       await reload(); await awaitBoard(ctx, { min: 2 }); await spy(); await record('Digit2', '2')
       log('HOTKEY', 'HK16: reload retains binding with one listener', await count() === 1)
-      await evalJs(`(() => {const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')));const s=c[0].sounds.shift();s.name='Renamed and moved';localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));localStorage.setItem(window.__pk('ttrpg_environment'),JSON.stringify([{category:'New category',sounds:[s]}]));return true})()`)
+      await evalJs(`(() => {const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))));const s=c[0].sounds.shift();s.name='Renamed and moved';localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));localStorage.setItem(window.__pk('ttrpg_environment'),JSON.stringify([{category:'New category',sounds:[s]}]));return true})()`)
       await reload(); await spy(); await record('Digit2', '2'); await settings()
       log('HOTKEY', 'HK17: rename and cross-container move preserve off-screen target', (await played())?.includes('hk_one') && await evalJs(`document.querySelector('[data-hotkey-row]').textContent.includes('Renamed and moved')`))
       await close(); await evalJs(`localStorage.setItem(window.__pk('ttrpg_environment'),'[]')`); await reload(); await spy(); await record('Digit2', '2'); await settings()
@@ -104,7 +104,7 @@ export const hotkeys = {
           p.deleteProfile(imported.profileId);
           return {same,version:packed.manifest.formatVersion};
         })()`)
-        log('HOTKEY', 'HK21: native bundle v2 round trip preserves profile bindings', roundTrip?.same && roundTrip?.version === 2, roundTrip)
+        log('HOTKEY', 'HK21: native bundle v3 round trip preserves profile bindings', roundTrip?.same && roundTrip?.version === 3, roundTrip)
       } else console.log('SKIP HOTKEY HK21: native bundle engine; Node covers format and legacy import')
       await settings(); await click(`[data-profile-switch="${home}"]`)
       await reload(); await spy(); await record('Digit2', '2')
@@ -122,7 +122,7 @@ export const hotkeys = {
       await evalJs(`window.dispatchEvent(new Event('blur'))`); await sleep(100)
       log('HOTKEY', 'HK29: losing focus cancels recording', await evalJs(`!document.querySelector('[data-hotkey-record]').textContent.includes('Press a key')`))
       await click('[data-hotkey-cancel]'); await close()
-      await evalJs(`(() => {const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')));localStorage.setItem(window.__pk('ttrpg_environment'),JSON.stringify([{category:'Duplicate ids',sounds:[{...c[0].sounds[0]}]}]));return true})()`)
+      await evalJs(`(() => {const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))));localStorage.setItem(window.__pk('ttrpg_environment'),JSON.stringify([{category:'Duplicate ids',sounds:[{...c[0].sounds[0]}]}]));return true})()`)
       await reload(); await spy(); await record('Digit3', '3'); await settings()
       log('HOTKEY', 'HK31: ambiguous imported sound ids are visible and inert', await count() === 0 && await evalJs(`document.querySelector('[data-hotkey-status]').textContent.includes('Unresolved')`))
       await close(); await evalJs(`localStorage.setItem(window.__pk('ttrpg_environment'),'[]')`); await reload(); await spy(); await record('Digit3', '3')
@@ -136,7 +136,7 @@ export const hotkeys = {
       await evalJs(`window.__hkConfirm=window.confirm;window.confirm=()=>true`); await click('[data-hotkey-reset]'); await evalJs(`window.confirm=window.__hkConfirm;delete window.__hkConfirm`)
       log('HOTKEY', 'HK30: explicit reset repairs unsupported storage', (await stored())?.version === 2 && (await stored())?.bindings?.length === 0 && await evalJs(`!document.querySelector('[data-hotkey-add]').disabled`))
       await close()
-      await evalJs(`(() => {const c=JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')));c.push({id:'hk_chords',name:'Modifier sounds',sounds:[{id:'hk_mod',name:'Modified sound',files:[{name:'Tavern_Music.mp3',displayName:'Tavern_Music.mp3'}]}]});localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));return true})()`)
+      await evalJs(`(() => {const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))));c.push({id:'hk_chords',name:'Modifier sounds',sounds:[{id:'hk_mod',name:'Modified sound',files:[{name:'Tavern_Music.mp3',displayName:'Tavern_Music.mp3'}]}]});localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));return true})()`)
       await reload(); await spy(); await settings()
       for (let mask = 0; mask < 8; mask++) {
         await click('[data-hotkey-add]'); await click('[data-hotkey-record]')

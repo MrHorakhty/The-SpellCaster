@@ -373,7 +373,7 @@ const SEED_ONLY_CHARACTER = `(() => {
 // it dedupes by reference count instead of by content.
 const shareTheUpload = (newId) => `(() => {
   const pid = window.__pid();
-  const list = JSON.parse(localStorage.getItem('profile:' + pid + ':ttrpg_characters') || '[]');
+  const list = window.__liveBoard(JSON.parse(localStorage.getItem('profile:' + pid + ':ttrpg_characters') || '[]'));
   let source = null;
   for (const c of list) for (const s of c.sounds || []) if ((s.files || []).some(f => f.storedName)) source = s;
   const other = list.find(c => !((c.sounds || []).some(s => (s.files || []).some(f => f.storedName))));
@@ -448,7 +448,7 @@ export const bundle = {
       await driver.exitEditMode();
 
       const uploadInfo = await evalJs(`(() => {
-        const list = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]');
+        const list = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
         const hero = list.find(c => c.name === 'Hero');
         const s = (hero?.sounds || []).find(x => x.name === 'Uploaded Roar');
         const ref = s && (s.files || [])[0];

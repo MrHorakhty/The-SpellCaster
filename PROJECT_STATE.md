@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 21:33)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 21:42 — working on: finishing accepted manual profile file sync
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,76 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Manual profile file sync — accepted; finishing workflow active
+
+User clarified2026-11-01: sync means exporting a `.spellcaster` file, moving it
+manually, and importing with Merge on the other device. Record history and native
+merge are accepted: rename, addition, deletion, playback and restart persistence
+confirmed in the standalone Windows app. The WebDAV/folder/cloud transport proposal
+is abandoned, not unfinished. No server/account setup, automatic watcher,
+preference/hotkey clocks or network concurrency feature is required for this scope.
+Merge retains destination-local settings/hotkeys as documented.
+Feature registry:31 shipped features,all covered; WebDAV planned entry removed.
+Independent browser export/import remains parked, not part of this completed subject.
+No runtime changes in this scope correction; coverage metadata/docs only. Final
+registry check:44 suites/507 IDs,31/31 shipped features covered,0 planned,exit0;
+--update rewrote0 suites and IDs(no coverage removed).
+
+Design: docs/profile-records.md. Code: src/profileRecords.js:33(normalization),
+:60(setter reconciliation),:101(remove-wins merge); src/useProfileRecords.js:4;
+src/profileMerge.js:42; src/profileBundle.js:67(format3),:910(read-only preview),
+:1053(failed-blob guard); src/App.jsx:915(state),:1249(preview),:7820(merge choice).
+Persistence/flush/export retain raw history; UI renders live records. Fresh restore
+gets fresh identity. Removal wins for an identity, including later offline edits;
+this refines draft LWW-delete semantics because payload-free tombstones must not
+revive discarded subtrees and merge grouping must not change results. Merge
+retains local settings/hotkeys, disambiguates UI identities, previews changes and
+snapshots before writes. Older bundle readers refuse format3; imports1/2 remain.
+
+Verification(each exit0 except expected native suite1):
+- Pre-change backup20261101-214235 VERIFY OK1533/1533,95.2MB. Initial sandbox
+  robocopy16/script1 resolved by host retry. Checkpoint before final fault fix:
+  backup20261101-222846 VERIFY OK1625/1625,95.5MB.
+- Final static22:29: lint0 errors/4 existing warnings(two source,two recovery-copy
+  warnings);Vite PASS;coverage44 suites/507 IDs,29 shipped features covered.
+  Coverage --update reviewed:+12 PR IDs,no removed IDs.
+- Final Node:bundle53/53,storage35/35,guard20/20,profile keysOK,fade46/46,
+  soundFiles32/32,icon35/35,snapshot19/19,release19/19,hotkeys120/120,records43/43.
+  Preflight9/9 and extended isolated fake-CLI16/16;restore fault checks23/23.
+  Initial sandbox snapshot EPERM resolved by host retry; all final checks on host.
+- Web368 PASS/0 FAIL/0 WARN(exit0). Initial363/5/0(suite2,wrapper1) counted saved
+  markers as live. Existing board assertions now use __liveBoard; PR separately
+  checks raw history and DOM. No coverage removed.
+- Windows391/0/3(suite/runner1);Explorer parent14292 verified. Original12 keys
+  matched FROM DISK after restart;0 original uploads restored. Quiet interval ended.
+- Android381/0/3(suite/wrapper1);original28 keys matched FROM DISK after cold restart.
+  Graceful final closure,own Tauri-tree cleanup and emulator shutdown completed.
+- Full E2E preceded final FAILURE-ONLY guard: isolated checks reproduced unnecessary
+  restoration on blob-write failure deleting intact keys when key writes also fail,
+  plus an incomplete new-profile index entry. Regression51/2(exit1) retained; fix
+  leaves existing keys untouched and removes failed new-profile index entries.
+  Final53/53 and all static/Node/tooling checks pass AFTER fix. Healthy native paths
+  unchanged; these injected failure paths are verified in Node, not full E2E.
+- Standalone Windows review build22:29:54 PASS(exit0),45009920 bytes:
+  src-tauri/target/debug/app.exe,SHA256
+  B7948F60A6666A25AE29E186C9C82A96B704F4251D5E72855E80AD966DEDD256.
+  User hand-test PASSED and accepted2026-11-01. Demo files2/2 parsed and rename/add/delete
+  verified: logs/keep/profile-sync-handtest-20261101/{merge-base,merge-update}.spellcaster.
+- Evidence:logs/keep/profile-sync-20261101/. Actual E2E logs remain in normal
+  Temp/opencode with stamps214830(failed web),215746(web),220654(win),221644(Android).
+  Windows durable snapshot:LOCALAPPDATA/opencode/e2e-snapshots/ls-backup-20261101-220700.json;
+  Android original/cold snapshots:normal Temp/opencode/ls-backup-20261101-221743.json[.cold.json].
+- Final host inventory22:31:0 listeners5173/5183/5233/9222/9224/9225/9333;
+  0 app/emulator/compiler processes. Gradle cache daemon34480 remains,untouched.
+
+Requested subject is complete and user accepted. Finishing workflow active:
+reviewed intended30 paths; final backup20261101-224941 VERIFY OK1692/1692,
+96.7MB(exit0). Next commit,push/remote verification,then
+content-audited pruning keeping newest. No force push. Claim retained until the
+workflow finishes. Final host inventory22:49:0 test listeners on5173/5183/5233/9222/9224/9225/9333;
+0 app/emulator/compiler processes. No user-owned app was closed.
+
 
 ## Android E2E restoration — verified
 
@@ -497,14 +567,13 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| Deferred chain | [Profile sync §13](PROFILE_SYNC_SPEC.md) | **Timestamps + tombstones → Merge import → folder/WebDAV/cloud sync** behind `ProfileTransport`. Timestamps were deliberately cut from v1; merge/sync are unsafe without them. Do not reorder or implement unasked. |
 | Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
 | Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
 
-`PROFILE_SYNC_SPEC.md` remains live because it holds future scope and hotkey dependencies.
+`PROFILE_SYNC_SPEC.md` remains live for the separate parked browser export/import work and historical design dependencies. Its former network-sync backlog is abandoned.
 Its **v1 §13 checklist is complete**, including native pickers and Android same-device round trip;
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
@@ -788,7 +857,8 @@ Native G5/G6b/G7b warnings remain expected; **0 FAIL** is the healthy signal.
 
 ## Backups
 
-- **Keeper: …-20261101-213220,1516/1516 files,92.2MB,VERIFY OK(exit0).** Two older backups removed after verified push and audited preservation of13 differing entries at logs/keep/android-restore-prune-20261101-213302/. Exactly one backup remains; all1516 hashes rechecked. Final bookkeeping postdates keeper.
+- **Latest verified: …-20261101-224941,1692/1692 files,96.7MB,VERIFY OK(exit0).** Final manual-sync scope and user acceptance included. Eight backups remain until verified push and content audit. Older names:224712,224310,224216,223238,222846,214235,213220. Final housekeeping intentionally postdates keeper. Prior restore-work prune evidence stays at logs/keep/android-restore-prune-20261101-213302/.
+
 - **Release-workflow recovery archive**: `%LOCALAPPDATA%/opencode/backup-prune-history/preserved-before-prune-bd219b9-20261028-release.zip`.
   26 differing older versions / 11 unique contents, all entries round-trip/hash verified.
   SHA256 `2e56a8e66272e1ef6429844667c92942293c0a935040ab158ae724b5ed38a4a6`.

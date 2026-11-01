@@ -1,5 +1,5 @@
 // Quick node check for src/profileBundle.js - the bundle format, the provenance
-// rule and both import modes. Not part of the E2E suite: it exercises the whole
+// rule and all three import modes. Not part of the E2E suite: it exercises the whole
 // pipeline against a fake localStorage and a fake blob store, so a logic bug
 // shows up in a second rather than after a 3-minute browser run.
 //
@@ -589,5 +589,70 @@ await ok('a REFUSED import parks no notice - a failed import has nothing to repo
   assert.equal(ls.getItem('spellcaster_import_notice'), null)
 })
 
+await ok('merge preserves unrelated local records and display settings', async () => {
+  const id = storage.getActiveProfileId()
+  storage.writeProfileValue(id, 'ttrpg_characters', JSON.stringify([{ id: 'local-only', name: 'Local only', sounds: [] }]))
+  storage.writeProfileValue(id, 'boxSize', '2.5')
+  storage.writeProfileValue(id, 'backgroundSettings', JSON.stringify({ imagePreview: 'local-image' }))
+  storage.writeProfileValue(id, 'sound_file_local.mp3', 'local-bytes')
+  const report = await bundle.importBundle(exported.bytes, { mode: 'merge', targetProfileId: id, normalize, dataVersion: '3', store: makeBlobs().store, setActive: false })
+  const characters = JSON.parse(storage.readProfileValue(id, 'ttrpg_characters'))
+  assert.ok(characters.some(c => c.id === 'local-only'))
+  assert.ok(characters.length > 1)
+  assert.equal(storage.readProfileValue(id, 'boxSize'), '2.5')
+  assert.equal(storage.readProfileValue(id, 'sound_file_local.mp3'), 'local-bytes')
+  assert.equal(JSON.parse(storage.readProfileValue(id, 'backgroundSettings')).imagePreview, 'local-image')
+  assert.ok(report.snapshot.keys.ttrpg_characters.includes('local-only'))
+})
+await ok('merge round-trips a deletion marker without requiring deleted audio', async () => {
+  const id = storage.getActiveProfileId()
+  const marker = { syncId: 'deleted-sound', id: 'gone', updatedAt: 30, deletedAt: 30 }
+  const board = { characters: [{ id: 'delete-test', syncId: 'delete-test', updatedAt: 0, sounds: [marker] }], environmentSounds: [], groups: [] }
+  const saved = await bundle.exportBundle({ profileId: id, data: board, settings: {}, store: makeBlobs().store })
+  await bundle.importBundle(saved.bytes, { mode: 'merge', targetProfileId: id, normalize, dataVersion: '3', store: makeBlobs().store, setActive: false })
+  const result = JSON.parse(storage.readProfileValue(id, 'ttrpg_characters')).find(c => c.syncId === 'delete-test')
+  assert.deepEqual(result.sounds[0], marker)
+})
+await ok('unknown import mode refuses before creating any profile', async () => {
+  const before = ls.snapshot()
+  await assert.rejects(bundle.importBundle(exported.bytes, { mode: 'typo', normalize }), /Unknown import mode/)
+  assert.deepEqual(ls.snapshot(), before)
+})
+await ok('merge preview reports additions without writing storage or blobs', () => {
+  const before = ls.snapshot()
+  const summary = bundle.previewMergeBundle(exported.bytes, storage.getActiveProfileId())
+  assert.ok(Number.isInteger(summary.added) && Number.isInteger(summary.updated) && Number.isInteger(summary.deleted))
+  assert.deepEqual(ls.snapshot(), before)
+})
+await ok('missing bytes cannot discard an incoming deletion marker', () => {
+  const marker = { id: 'deleted', syncId: 'deleted', updatedAt: 20, deletedAt: 20, files: [{ storedName: 'already-released.mp3' }] }
+  const result = bundle.pruneUnresolvableSounds({ characters: [{ id: 'parent', sounds: [marker] }] }, [])
+  assert.equal(result.dropped.length, 0)
+  assert.equal(result.data.characters[0].sounds[0].deletedAt, 20)
+})
+await ok('failed blob write leaves existing keys untouched when key writes are also unavailable', async () => {
+  const id = storage.getActiveProfileId()
+  const readKeys = () => Object.fromEntries(storage.profileKeys(id).map(key => [key, storage.readProfileValue(id, key)]))
+  const before = readKeys(), originalSet = ls.setItem, originalError = console.error
+  let denied = false
+  ls.setItem = (key, value) => { if (denied) throw new Error('Injected key-write denial'); originalSet(key, value) }
+  console.error = () => {}
+  try {
+    await assert.rejects(bundle.importBundle(exported.bytes, { mode: 'merge', targetProfileId: id, normalize, dataVersion: '3', setActive: false,
+      store: { async write() { denied = true; throw new Error('Injected blob failure') } } }), error => error.code === 'write-failed')
+  } finally { denied = false; ls.setItem = originalSet; console.error = originalError }
+  assert.deepEqual(readKeys(), before)
+})
+await ok('failed blob write removes an incomplete new profile from the index', async () => {
+  const before = storage.readProfileIndex().profiles.map(profile => profile.id)
+  const active = storage.getActiveProfileId(), originalError = console.error
+  console.error = () => {}
+  try {
+    await assert.rejects(bundle.importBundle(exported.bytes, { mode: 'new', normalize, dataVersion: '3', setActive: false,
+      store: { async write() { throw new Error('Injected blob failure') } } }), error => error.code === 'write-failed')
+  } finally { console.error = originalError }
+  assert.deepEqual(storage.readProfileIndex().profiles.map(profile => profile.id), before)
+  assert.equal(storage.getActiveProfileId(), active)
+})
 console.log(`\n${pass} passed, ${fail} failed\n`)
 if (fail > 0) process.exitCode = 1

@@ -372,7 +372,7 @@ export const fade = {
     // means "upload" - and the profile bundle export then tried to carry the
     // bundled file as an upload, could not find it, and refused to export.
     const f10c = await evalJs(`(() => {
-      const chars = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      const chars = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
       let found = null;
       for (const c of chars) for (const s of (c.sounds||[])) if (s.id === 'fade_probe') found = s;
       const f = (found?.files||[])[0] || null;
@@ -433,7 +433,7 @@ export const fade = {
     const f11save = await submitModal('Save Changes');
     await sleep(1200);
     const f11store = await evalJs(`(() => {
-      const cats = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+      const cats = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
       let found = null;
       let count = 0;
       let ids = [];
@@ -483,7 +483,7 @@ export const fade = {
     await submitModal('Save Changes');
     await sleep(1000);
     const f13b = await evalJs(`(() => {
-      const cats = JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]');
+      const cats = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_environment'))||'[]'));
       let found = null;
       for (const cat of cats) for (const s of (cat.sounds||[])) if (s.id === 'env_1') found = s;
       return { files: (found?.files||[]).length, legacyFile: found?.file ?? null };

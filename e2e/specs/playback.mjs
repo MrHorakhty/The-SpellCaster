@@ -326,7 +326,7 @@ export const playback = {
     await sleep(1000);
     await driver.exitEditMode();
     const z12 = await evalJs(`(() => {
-      const c = JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]');
+      const c = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))||'[]'));
       const s = c[0]?.sounds?.find(x => x.id === 'pb_main');
       return { loop: s?.loop, playUntil: s?.files?.[0]?.playUntil, files: s?.files };
     })()`);

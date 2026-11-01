@@ -106,7 +106,7 @@ await check('export refuses unknown data without overwriting', () => {
 })
 const exported = await bundle.exportBundle({ profileId: p, profileName: 'Hotkeys', data: { characters: [], environmentSounds: [], groups: [], hotkeys: payload }, settings: {}, store: blobs })
 const importOptions = { normalize: (_key, value) => value, dataVersion: '3', store: blobs, setActive: false }
-await check('bundle v2 prevents older readers silently stripping keys', () => assert.equal(exported.manifest.formatVersion, 2))
+await check('current bundle format prevents pre-hotkey readers stripping keys', () => { assert.equal(exported.manifest.formatVersion, bundle.BUNDLE_FORMAT_VERSION); assert.ok(exported.manifest.formatVersion >= 2) })
 await check('new-profile round trip preserves bindings and ids', async () => {
   const result = await bundle.importBundle(exported.bytes, importOptions)
   assert.notEqual(result.profileId, p); assert.deepEqual(JSON.parse(storage.readProfileValue(result.profileId, 'ttrpg_hotkeys')), payload)
