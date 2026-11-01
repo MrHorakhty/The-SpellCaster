@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:04)
+🔓 UNCLAIMED — last holder: Codex (2026-11-01 17:05)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -53,7 +53,7 @@ Verification on 2026-11-01:
   WiX download DNS(exit1); launcher preserved that exit/log; host builds passed.
 - Evidence:logs/keep/windows-installers-20261101/, including final artifact hashes.
   No build/test processes or listeners on5173/5183/5233/9222/9224/9225/9333 remain.
-Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Commit/push verification and audited prune are finishing housekeeping; these notes may postdate the keeper.
+Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete; hotkeys parked for a later session. Claim released for this completed subject. Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkeys plus pre-existing Android/.gitattributes edits remain uncommitted. These finishing notes intentionally postdate the keeper.
 
 ## Android Studio release build — verified
 

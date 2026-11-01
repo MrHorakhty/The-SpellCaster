@@ -10394,3 +10394,5 @@ release bundle folders. Evidence/hashes:logs/keep/windows-installers-20261101/.
 No build/test processes or test-port listeners remain. Final backup, scoped commit,
 remote verification and audited prune results follow as finishing housekeeping.
 Final backup20261101-170358 VERIFY OK1123/1123,69.6MB(exit0). Installer subject complete, claim released; hotkey work remains parked. Final bookkeeping may postdate keeper.
+
+Implementation516ab4e58a8783c017a68ee9d4d88cea25be2129 pushed to origin/mobile-support; git ls-remote matched. Audited/pruned3 older backups, preserving54 differing entries under logs/keep/windows-installer-prune-20261101-170441/. All1123 keeper hashes rechecked; only newest verified backup20261101-170358 remains. Parked hotkeys plus pre-existing Android/.gitattributes edits remain uncommitted. These finishing notes intentionally postdate the keeper.
