@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 23:12 — working on: browser upload storage migration and web profile import/export
+🔓 UNCLAIMED — last holder: Codex (2026-11-02 23:41)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,7 +14,7 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
-## Browser profile transfer — accepted; finishing workflow in progress
+## Browser profile transfer — accepted and complete; targeted verification
 
 User hand-tested the built browser import, uploaded playback, icon and export on
 2026-11-02: works as expected. Browser uploads now use profile-scoped IndexedDB
@@ -54,8 +54,13 @@ interception(possibly pwsh.exe,exact detection unknown);no AV settings changed o
 blocked PowerShell launcher retried. Direct Node/ADB recovery cold-verified28 keys.
 
 Pre-change backup20261101-231242 VERIFY OK1786/1786,112.1MB(exit0);initial sandbox
-robocopy16 resolved by authorized host retry. Final backup20261102-233850 VERIFY OK1927/1927,113MB(exit0). Subject code,
-tests and docs are ready for commit/push;claim remains held through finishing.
+robocopy16 resolved by authorized host retry. Final backup20261102-233850 VERIFY OK1927/1927,113MB(exit0). Implementation938f5a6753f168040a6383d51d5159ebf59d7df8 is pushed to origin/mobile-support;
+remote hash matched. Audited older backup against tracked paths ∪ working tree,
+preserved19 differing entries in logs/keep/web-transfer-prune-20261102-234020/,
+then removed1 older folder. Only backup20261102-233850 remains;all1927 keeper
+hashes rechecked. Final housekeeping postdates keeper;no extra backup merely to
+record pruning. Subject complete;claim released. Housekeeping commit records this
+final outcome separately from the implementation commit.
 Preview http://localhost:5233 is running(Node37444,exec session18705). Test frontend
 5173 stopped;owned emulator closed after data verification. No native app left open.
 Unrelated user deletion:launchers/Launch Opencode - ttrpg soundboard.bat;exclude
@@ -107,7 +112,7 @@ is abandoned, not unfinished. No server/account setup, automatic watcher,
 preference/hotkey clocks or network concurrency feature is required for this scope.
 Merge retains destination-local settings/hotkeys as documented.
 Feature registry:31 shipped features,all covered; WebDAV planned entry removed.
-Browser export/import is now a separate authorized subject in progress; see the current section above.
+Browser export/import is accepted and complete as a separate subject;see the current section above.
 No runtime changes in this scope correction; coverage metadata/docs only. Final
 registry check:44 suites/507 IDs,31/31 shipped features covered,0 planned,exit0;
 --update rewrote0 suites and IDs(no coverage removed).
@@ -655,7 +660,6 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| In progress | Web export/import | IndexedDB upload migration and browser file transfer implemented; targeted verification and user hand-test tracked above. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
