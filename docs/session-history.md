@@ -11198,3 +11198,13 @@ User explicitly approved pushing to https://github.com/MrHorakhty/The-SpellCaste
 and also authorized committing the pre-existing Opencode launcher deletion. The
 three-line personal launcher changed to project root and invoked opencode;no
 replacement requested. Added exact .gitignore guard per retired-file policy.
+
+Push succeeded and exact origin/mobile-support hash7714d2283ca91af84fed7480a0dc5dbe8cc8497e
+verified,including implementation4a13e52 ancestry. User-approved launcher deletion
+and guard committed as7714d22. Final backup20261103-011034 VERIFY OK2078/2078,122.6MB.
+After verified push,audited older backups against git-tracked paths ∪ working tree,
+preserved41 differing entries in logs/keep/group-fixes-prune-20261103-011124/,removed6
+older folders. Only backup20261103-011034 remains;all2078 hashes reverified. No extra
+backup solely for pruning notes. Final host check finds no app.exe;review app closed,
+no test frontend/emulator remains. Claim released;no unfinished work. Completion
+housekeeping committed separately;working tree clean after that commit.

@@ -1,6 +1,6 @@
 # Project State
 
-🔒 CURRENT HOLDER: Codex — claimed 2026-11-03 00:09 — working on: accepted Group Icon fix; empty-group Add Sound UX
+🔓 UNCLAIMED — last holder: Codex (2026-11-03 01:12)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -14,7 +14,7 @@ The complete state file before this cleanup is preserved in
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
 
-## Group sound icons and empty-group Add Sound — accepted; finishing workflow in progress
+## Group sound icons and empty-group Add Sound — accepted and complete
 
 User hand-tested and accepted both fixes on2026-11-03. Group sound icon loading
 and tinting share walkSoundContainers across all five shapes; tint waits for the
@@ -43,14 +43,19 @@ Backups:initial20261103-000916 VERIFY OK1968/1968,122.1MB;follow-up20261103-0059
 VERIFY OK2019/2019,122.4MB;pre-acceptance20261103-010736 VERIFY OK2074/2074,122.6MB.
 Standalone Windows build PASS(exit0),45011968bytes,SHA256
 2E3B4C72D1D69E949F0E11C10DFFF9289F0CDC87DC43B3808C5DDC819BD66212.
-Review app37192 open via Explorer13936;no preview/test frontend/emulator remains.
-User explicitly authorized committing the pre-existing deletion of
-launchers/Launch Opencode - ttrpg soundboard.bat;retired with a .gitignore guard. Implementation4a13e52d66345db1eceba5225ebee5bca90c14f3
-committed locally on mobile-support. Final backup20261103-010851 VERIFY OK2076/2076,
-122.6MB(exit0). Initial push rejected by automatic approval review for destination authorization;
-user now explicitly approves https://github.com/MrHorakhty/The-SpellCaster.git
-and including launcher deletion. Push,remote verification and backup audit/prune
-are proceeding with that approval. Claim retained until finishing workflow is complete.
+Review app closed by final host check;no app,preview/test frontend/emulator remains.
+User explicitly authorized retiring launchers/Launch Opencode - ttrpg soundboard.bat;
+committed deletion and exact .gitignore guard. Implementation4a13e52 and launcher/
+handover7714d22 pushed to origin/mobile-support;remote7714d2283ca91af84fed7480a0dc5dbe8cc8497e
+matched and implementation ancestry verified. Initial auto-review destination
+rejection resolved by the user's explicit approval of the configured GitHub repo.
+Final backup20261103-011034 VERIFY OK2078/2078,122.6MB(exit0). After remote verification,
+audited older backups against tracked paths ∪ working tree,preserved41 differing
+entries in logs/keep/group-fixes-prune-20261103-011124/,removed6 older folders.
+Only backup20261103-011034 remains;all2078 keeper hashes reverified. Final housekeeping
+notes postdate keeper;no extra backup solely to record pruning. No uncommitted source
+or unfinished work;claim released. Completion notes committed separately.
+
 
 ## Browser profile transfer — accepted and complete; targeted verification
 
