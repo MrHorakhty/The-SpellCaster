@@ -33,7 +33,6 @@ import {
     readReorderAnimation,
     writeReorderAnimation,
     writeProfileValue,
-    removeProfileValue,
     keysWithPrefix,
     profileUploadPath,
     readProfileData,
@@ -51,6 +50,7 @@ import {
     collectProfileForExport,
     IMPORT_NOTICE_KEY,
 } from './profileBundle.js'
+import { webUploads, migrateWebUploads } from './webUploads.js'
 import { boundedBundleStep, BUNDLE_STEP_TIMEOUT_MS } from './bundleGuard.js'
 import {
     audibleEnd,
@@ -1040,7 +1040,11 @@ function AppBoard() {
         // Count the audio this would destroy BEFORE asking. Deleting uploaded
         // audio is not undoable - there is no recycle bin on the user's disk -
         // so the number goes in the prompt rather than being discovered after.
-        const files = await profileUploadFileCount(profileId)
+        let files
+        try { files = await profileUploadFileCount(profileId) } catch (error) {
+            setProfileNotice(`Could not read this profile's uploaded files. Nothing was deleted. ${error.message}`)
+            return
+        }
         const audioLine = files > 0
             ? `\n\n${files} uploaded audio or icon file${files === 1 ? '' : 's'} will be permanently deleted.`
             : ''
@@ -1053,7 +1057,13 @@ function AppBoard() {
         if (!nextId) return
 
         // Only this profile's directory, and only after the keys are gone.
-        const { removed } = await removeProfileUploads(profileId)
+        let removed = 0
+        try { ({ removed } = await removeProfileUploads(profileId)) } catch (error) {
+            // Active deletion remounts this component, so a local notice could
+            // disappear. Report cleanup failure across that remount explicitly.
+            console.error('Profile deleted but upload cleanup failed:', error)
+            window.alert(`The profile was deleted, but its uploaded files could not be removed. ${error.message}`)
+        }
         refreshProfiles()
         // deleteProfile already moved the active pointer and notified listeners
         // when it was the active one, which is what triggers the remount.
@@ -1070,13 +1080,12 @@ function AppBoard() {
     // it exists so the E2E suite can test the format without ever opening a
     // native dialog, which cannot be driven from a webview.
     //
-    // NOT AVAILABLE ON WEB, deliberately (§7). Web audio lives as base64 data
-    // URLs in localStorage and caps out around 5 MB, so a web "export" could
-    // only ever be metadata - a misleading promise. The bundle functions are
-    // written so web can be switched on later behind the same byte-level API.
+    // Native pickers use filesystem paths; web uses a user-selected File and
+    // a Blob download. Both share the same bundle validation and merge engine.
     // -----------------------------------------------------------------------
     const [bundleBusy, setBundleBusy] = useState(null)          // null | 'export' | 'import'
     const [bundleNotice, setBundleNotice] = useState('')
+    const webImportRef = useRef(null)
     const [importMode, setImportMode] = useState('new')          // 'new' | 'merge'
 
     // A hung Tauri IPC cannot be aborted - there is no handle for it, and
@@ -1179,6 +1188,20 @@ function AppBoard() {
                 dataVersion: DATA_VERSION,
             })
 
+            if (!isTauri) {
+                const url = URL.createObjectURL(new Blob([assertUint8Array(bytes)], { type: 'application/octet-stream' }))
+                const link = document.createElement('a')
+                link.href = url
+                link.download = bundleFileName(manifest.profile.name)
+                document.body.appendChild(link)
+                link.click()
+                link.remove()
+                // Give the browser time to consume the URL before releasing it.
+                setTimeout(() => URL.revokeObjectURL(url), 60000)
+                setBundleNotice(`Download started for "${manifest.profile.name}": ${manifest.counts.sounds} sound(s), ${manifest.counts.files} uploaded file(s), ${(bytes.length / 1024).toFixed(0)} KB. Check your browser's downloads for the saved file.`)
+                return
+            }
+
             const path = await pickSavePath(bundleFileName(
                 profileIndex.profiles.find(p => p.id === activeProfileId)?.name
             ))
@@ -1216,7 +1239,7 @@ function AppBoard() {
         }
     }
 
-    const handleImportProfile = async () => {
+    const handleImportProfile = async (selectedFile = null) => {
         if (bundleBusy) return
         setBundleNotice('')
 
@@ -1225,15 +1248,20 @@ function AppBoard() {
 
         setBundleBusy('import')
         try {
-            const path = await pickOpenPath()
-            if (!path) {
-                setBundleNotice('Import cancelled, nothing was changed.')
-                return
+            let bytes
+            if (isTauri) {
+                const path = await pickOpenPath()
+                if (!path) {
+                    setBundleNotice('Import cancelled, nothing was changed.')
+                    return
+                }
+                const { readFile } = await import('@tauri-apps/plugin-fs')
+                await grantPickedPath(path)
+                bytes = await runBundleStep(() => readFile(path), 'Reading the bundle')
+            } else {
+                if (!selectedFile) return
+                bytes = new Uint8Array(await runBundleStep(() => selectedFile.arrayBuffer(), 'Reading the bundle'))
             }
-
-            const { readFile } = await import('@tauri-apps/plugin-fs')
-            await grantPickedPath(path)
-            const bytes = await runBundleStep(() => readFile(path), 'Reading the bundle')
 
             if (importMode === 'merge') {
                 const preview = previewMergeBundle(bytes, activeProfileId)
@@ -1354,11 +1382,14 @@ function AppBoard() {
     const [soundInstances, setSoundInstances] = useState({})
     const audioElementsRef = useRef(new Map())
     const objectUrlCache = useRef(new Map())
+    const objectUrlsActive = useRef(true)
 
     // Stop all audio and clear resources when the app unmounts (prevents
     // ghost sounds / leaked timers on hot reload in dev).
     useEffect(() => {
+        objectUrlsActive.current = true
         return () => {
+            objectUrlsActive.current = false
             audioElementsRef.current.forEach((audio) => {
                 if (!audio) {
                     return
@@ -1388,6 +1419,8 @@ function AppBoard() {
                 }
             })
             audioElementsRef.current.clear()
+            objectUrlCache.current.forEach(url => URL.revokeObjectURL(url))
+            objectUrlCache.current.clear()
         }
     }, [])
 
@@ -1726,7 +1759,7 @@ function AppBoard() {
                 if (cancelled) return
                 if (sound.icon && !loadedIcons[sound.icon]) {
                     try {
-                        const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.icon}`
+                        const iconUrl = await getUploadedFile(sound.icon) || `/assets/${sound.icon}`
                         newLoadedIcons[sound.icon] = iconUrl
                     } catch (error) {
                         console.error('Failed to load icon:', sound.icon, error)
@@ -1749,7 +1782,7 @@ function AppBoard() {
         const loadFormIcon = async () => {
             if (soundFormData.icon && !iconPreview && !loadedFormIcon) {
                 try {
-                    const iconUrl = await getFileFromLocalStorage(soundFormData.icon) || `/assets/${soundFormData.icon}`
+                    const iconUrl = await getUploadedFile(soundFormData.icon) || `/assets/${soundFormData.icon}`
                     setLoadedFormIcon(iconUrl)
                 } catch (error) {
                     console.error('Failed to load form icon:', soundFormData.icon, error)
@@ -2236,7 +2269,7 @@ function AppBoard() {
         if (normalizedFiles.length > 0) {
             const existingFiles = await Promise.all(normalizedFiles.map(async file => ({
                 file: null,
-                preview: await getFileFromLocalStorage(file.storedName || file.name) || `/assets/${file.displayName || file.name || file.url}`,
+                preview: await getUploadedFile(file.storedName || file.name) || `/assets/${file.displayName || file.name || file.url}`,
                 name: file.name || file.storedName,
                 // PROVENANCE, copied not derived: a bundled entry must not gain a
                 // storedName, or editing the sound would turn its bundled file
@@ -2257,7 +2290,7 @@ function AppBoard() {
         }
 
         if (sound.icon) {
-            const iconUrl = await getFileFromLocalStorage(sound.icon) || `/assets/${sound.iconDisplayName || sound.icon}`
+            const iconUrl = await getUploadedFile(sound.icon) || `/assets/${sound.iconDisplayName || sound.icon}`
             setIconPreview(iconUrl)
         } else {
             setIconPreview('')
@@ -2898,7 +2931,7 @@ function AppBoard() {
     const removeFileIfUnreferenced = (storedName, excludeRef, excludeSoundId) => {
         if (!storedName) return
         if (isFileReferencedElsewhere(storedName, excludeRef, excludeSoundId)) return
-        return removeFileFromLocalStorage(storedName)
+        return removeUploadedFile(storedName)
     }
 
     // Stop playback and release every file the given sounds reference, skipping
@@ -3190,7 +3223,7 @@ function AppBoard() {
     const confirmPreparedIcon = async (blob, displayName) => {
         const storedName = toStoredFileName('icon', displayName)
         // Do not point the editor at bytes until the write has actually succeeded.
-        await storeFileInLocalStorage(storedName, blob, { throwOnError: true })
+        await storeUploadedFile(storedName, blob, { throwOnError: true })
         setTintedPreview('')
         setLoadedFormIcon('')
         setIconPreview(getObjectUrlForBlob(storedName, blob))
@@ -3200,6 +3233,7 @@ function AppBoard() {
 
     // Reuse a single object URL per file name so blob: URLs don't accumulate
     const getObjectUrlForBlob = (key, blob) => {
+        if (!objectUrlsActive.current) return null
         const existing = objectUrlCache.current.get(key)
         if (existing) {
             return existing
@@ -3241,7 +3275,7 @@ function AppBoard() {
         }
     }
 
-    const storeFileInLocalStorage = async (fileName, file, { throwOnError = false } = {}) => {
+    const storeUploadedFile = async (fileName, file, { throwOnError = false } = {}) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
@@ -3259,35 +3293,19 @@ function AppBoard() {
 
                 await writeFile(storagePath, uint8Array, { baseDir: BaseDirectory.AppData })
             } else {
-                // Web environment - fallback to localStorage, under this profile
-                return await new Promise((resolve, reject) => {
-                    const reader = new FileReader()
-                    reader.onload = (e) => {
-                        try {
-                            writeProfileValue(activeProfileId, `sound_file_${fileName}`, e.target.result)
-                            setSaveError(null)
-                            resolve()
-                        } catch (err) {
-                            reportSaveFailure(`the uploaded audio file "${fileName}"`, err)
-                            reject(err)
-                        }
-                    }
-                    reader.onerror = () => {
-                        console.error('Failed to read file:', fileName)
-                        reject(new Error('File read failed'))
-                    }
-                    reader.readAsDataURL(file)
-                })
+                await webUploads.write(activeProfileId, fileName, file)
+                setSaveError(null)
             }
         } catch (error) {
             console.error('Failed to save file locally:', error)
+            if (!isTauri) reportSaveFailure(`the uploaded file "${fileName}"`, error)
             // Web writes already rejected before the strict icon path was
             // added. Preserve that behaviour for existing audio callers too.
             if (throwOnError || !isTauri) throw error
         }
     }
 
-    const getFileFromLocalStorage = async (fileName) => {
+    const getUploadedFile = async (fileName) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
@@ -3312,11 +3330,8 @@ function AppBoard() {
                     return convertFileSrc(absolutePath)
                 }
             } else {
-                // Web environment - fallback to localStorage, this profile's copy
-                const fileDataUrl = readProfileValue(activeProfileId, `sound_file_${fileName}`)
-                if (fileDataUrl) {
-                    return fileDataUrl
-                }
+                const blob = await webUploads.read(activeProfileId, fileName)
+                if (blob) return getObjectUrlForBlob(fileName, blob)
             }
         } catch (error) {
             console.error('Failed to read local file:', error)
@@ -3355,7 +3370,7 @@ function AppBoard() {
             }))
 
             files.forEach((file, index) => {
-                storeFileInLocalStorage(newFiles[index].storedName, file)
+                storeUploadedFile(newFiles[index].storedName, file)
             })
         }
     }
@@ -4188,7 +4203,7 @@ function AppBoard() {
         setShowGroupModal(true)
     }
 
-    const removeFileFromLocalStorage = async (fileName) => {
+    const removeUploadedFile = async (fileName) => {
         try {
             if (isTauri) {
                 // Tauri environment - use file system
@@ -4200,8 +4215,7 @@ function AppBoard() {
                     await remove(storagePath, { baseDir: BaseDirectory.AppData })
                 }
             } else {
-                // Web environment - fallback to localStorage, this profile's copy
-                removeProfileValue(activeProfileId, `sound_file_${fileName}`)
+                await webUploads.remove(activeProfileId, fileName)
             }
             revokeObjectUrl(fileName)
         } catch (error) {
@@ -4238,7 +4252,7 @@ function AppBoard() {
 
         let soundUrl
         let createdBlobUrl = null
-        const storedFile = fileNameKey ? await getFileFromLocalStorage(fileNameKey) : null
+        const storedFile = fileNameKey ? await getUploadedFile(fileNameKey) : null
         if (storedFile) {
             soundUrl = storedFile
         } else if (fileToPlay.file && typeof fileToPlay.file === 'object' && fileToPlay.file instanceof Blob) {
@@ -4246,12 +4260,18 @@ function AppBoard() {
             createdBlobUrl = soundUrl
         } else if (displayName) {
             const fallbackKey = fileToPlay.url || fileToPlay.storedName || fileToPlay.name
-            const fallbackFile = fallbackKey ? await getFileFromLocalStorage(fallbackKey) : null
+            const fallbackFile = fallbackKey ? await getUploadedFile(fallbackKey) : null
             soundUrl = fallbackFile || `/assets/${displayName}`
         } else {
             soundUrl = `/assets/${fileNameKey}`
         }
 
+        // File storage can finish after a profile switch has unmounted this
+        // board. Do not create an orphan player for that outgoing profile.
+        if (!objectUrlsActive.current) {
+            if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl)
+            return
+        }
         const audio = new Audio(soundUrl)
         audio.loop = false
         // The sound's own level is a trim on the master volume. Record both parts
@@ -4656,6 +4676,16 @@ function AppBoard() {
     // Set when a localStorage write fails, so the user is told instead of
     // silently losing the change on the next reload.
     const [saveError, setSaveError] = useState(null)
+
+    useEffect(() => {
+        if (isTauri) return
+        let mounted = true
+        migrateWebUploads(activeProfileId).catch(error => {
+            console.error('Browser upload migration failed; original files retained:', error)
+            if (mounted) setSaveError(`Existing uploads could not be moved to browser file storage. Originals were retained. ${error.message}`)
+        })
+        return () => { mounted = false }
+    }, [activeProfileId])
 
     // Declared as a function so it is hoisted and usable by the earlier
     // file-upload helper below.
@@ -7765,12 +7795,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                         <p data-profile-notice className="text-xs text-slate-400 mt-2">{profileNotice}</p>
                                     )}
 
-                                    {/* Export / Import. Desktop + Android only - web keeps no buttons here
-                                        on purpose (PROFILE_SYNC_SPEC.md §7): its audio lives as base64 in
-                                        localStorage and caps out around 5 MB, so a web export could only
-                                        ever be metadata. The engine behind these buttons is platform-
-                                        agnostic and is ready to be switched on for web later. */}
-                                    {isTauri && (
+                                    {/* File transfer uses the same bundle format on every platform. */}
                                         <div className="mt-4 pt-4 border-t border-dark-700" data-bundle-section>
                                             <h4 className="text-sm font-medium mb-2">Export &amp; Import</h4>
                                             <p className="text-xs text-slate-400 mb-3">
@@ -7787,6 +7812,19 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <Download size={16} />
                                                 <span>{bundleBusy === 'export' ? 'Exporting…' : 'Export this profile…'}</span>
                                             </button>
+
+                                            {!isTauri && <input
+                                                ref={webImportRef}
+                                                type="file"
+                                                accept=".spellcaster"
+                                                hidden
+                                                data-profile-import-file
+                                                onChange={event => {
+                                                    const file = event.target.files?.[0]
+                                                    event.target.value = ''
+                                                    if (file) handleImportProfile(file)
+                                                }}
+                                            />}
 
                                             <div className="flex gap-2 mt-3 mb-2">
                                                 <button
@@ -7808,7 +7846,10 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                             </div>
 
                                             <button
-                                                onClick={handleImportProfile}
+                                                onClick={() => {
+                                                    if (isTauri) handleImportProfile()
+                                                    else { setBundleNotice(''); webImportRef.current?.click() }
+                                                }}
                                                 disabled={bundleBusy !== null}
                                                 data-profile-import
                                                 className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 disabled:opacity-50 text-slate-300 rounded-lg transition-colors font-medium flex items-center justify-center space-x-2"
@@ -7840,7 +7881,6 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <p data-bundle-notice role="status" className="text-xs text-slate-300 mt-2">{bundleNotice}</p>
                                             )}
                                         </div>
-                                    )}
                                 </div>
 
                                 {/* Restore Defaults */}

@@ -71,6 +71,26 @@ export const PROFILE_HELPER = `(() => {
       return 'p_e2e';
     } catch { return ''; }
   };
+  // Inspect committed browser bytes without importing dev-only app modules.
+  window.__uploadBlob = async (profileId, name) => {
+    if (typeof profileId !== 'string' || typeof name !== 'string') return null;
+    const legacy = localStorage.getItem('profile:' + profileId + ':sound_file_' + name);
+    if (legacy) return (await fetch(legacy)).blob();
+    if (window.__TAURI_INTERNALS__) return null;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('spellcaster-uploads', 1);
+      request.onupgradeneeded = () => request.transaction.abort();
+      request.onerror = () => resolve(null);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction('files', 'readonly');
+        const read = tx.objectStore('files').get([profileId, name]);
+        tx.oncomplete = () => { db.close(); resolve(read.result?.blob || null); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+      };
+    });
+  };
+  window.__uploadExists = async name => !!await window.__uploadBlob(window.__pid(), name);
   window.__pk = (key) => {
     const pid = window.__pid();
     return pid ? 'profile:' + pid + ':' + key : key;

@@ -45,6 +45,16 @@
   ],
   "features": [
     {
+      "name": "Browser upload storage and profile file transfer",
+      "spec": "docs/web-profile-transfer.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/bundle.mjs::I",
+        "specs/refcount.mjs::G"
+      ],
+      "note": "User hand-tested browser import, uploaded audio, icon and export successfully on2026-11-02. Browser I24-I36 cover real downloads, 7MiB/native-engine imports, refusals, Merge, reload playback, cleanup and outgoing-profile async-read suppression. webUploads.check.mjs48/48 covers migration and transaction failures."
+    },
+    {
       "name": "Profile record timestamps and tombstones",
       "spec": "PROFILE_SYNC_SPEC.md",
       "status": "shipped",
@@ -1364,7 +1374,20 @@
         "I21",
         "I22",
         "I23",
+        "I24",
+        "I25",
+        "I26",
+        "I27",
+        "I28",
+        "I29",
         "I3",
+        "I30",
+        "I31",
+        "I32",
+        "I33",
+        "I34",
+        "I35",
+        "I36",
         "I4",
         "I5",
         "I6",
@@ -1372,7 +1395,7 @@
         "I8",
         "I9"
       ],
-      "note": "PROFILE_SYNC_SPEC.md step 8. The engine is reached by importing /src/profileBundle.js - the same module URL the app imported, so it is the live instance - which only the Vite DEV server serves; the web phase runs a built dist under vite preview, and export/import is Tauri-only by design (§7), so the web arm is I1 and I2 alone. THE NATIVE PICKER IS NEVER STUBBED AND NEVER OPENED, because it cannot be: every property on window.__TAURI_INTERNALS__ is writable:false/configurable:false, and the one writable seam (chrome.webview.postMessage) is bypassed because Tauri's injected ipc captures it in a closure - both measured 2026-10-14. The spec therefore drives everything below the picker, running the app's own destination sequence against a path the test names; only the picker's two-line handoff is left to the user's hand-test. Clicking Export/Import here would open a #32770 that wedges the run. I0 logs ONLY when the spec's try/catch contains an exception, which is a real failure - it exists so a throw cannot unwind main() and skip the entrypoint's localStorage restore. Skipped ids print a SKIP line rather than logging a WARN, which would push the web phase off its exit-0 baseline. Runs after profiles (F) and before refcount (G) and reset (O), which re-seed for themselves"
+      "note": "PROFILE_SYNC_SPEC.md step 8. Browser I24-I35 now exercise built UI downloads, native-engine import with 7MiB audio and PNG, persistence, re-export checksums, refusals, merge/cancel and profile cleanup. Native-only engine checks I3-I23 are reached by importing /src/profileBundle.js - the same module URL the app imported, so it is the live instance - which only the Vite DEV server serves; the web phase runs a built dist under vite preview, and native engine introspection remains Tauri-dev-only, so the web arm is I1/I2 and I24-I35. THE NATIVE PICKER IS NEVER STUBBED AND NEVER OPENED, because it cannot be: every property on window.__TAURI_INTERNALS__ is writable:false/configurable:false, and the one writable seam (chrome.webview.postMessage) is bypassed because Tauri's injected ipc captures it in a closure - both measured 2026-10-14. The spec therefore drives everything below the picker, running the app's own destination sequence against a path the test names; only the picker's two-line handoff is left to the user's hand-test. Clicking Export/Import here would open a #32770 that wedges the run. I0 logs ONLY when the spec's try/catch contains an exception, which is a real failure - it exists so a throw cannot unwind main() and skip the entrypoint's localStorage restore. Skipped ids print a SKIP line rather than logging a WARN, which would push the web phase off its exit-0 baseline. Runs after profiles (F) and before refcount (G) and reset (O), which re-seed for themselves"
     },
     {
       "key": "IP",

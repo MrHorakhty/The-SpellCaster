@@ -43,11 +43,12 @@
 
 import { unzipSync, zipSync, strToU8 } from 'fflate';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { exportBundle as makeTransferBundle } from '../../src/profileBundle.js';
 import { PAGE_HELPERS } from '../lib/page.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -132,8 +133,8 @@ window.__bk.core = () => window.__bk.mod([
 ]);
 // The SAME module URLs the app imported, so this is the app's live module and not
 // a second copy of it. Only the dev server serves /src/, which is why the web
-// phase (vite preview on a built dist) runs I1 and I2 only - export/import is
-// Tauri-only by design (PROFILE_SYNC_SPEC.md §7).
+// phase (vite preview on a built dist) runs I1/I2 plus browser UI checks I24-I35. Native engine introspection below
+// stays dev-only; browser checks exercise the built application.
 window.__bk.load = async () => {
   const B = await import('/src/profileBundle.js');
   const P = await import('/src/profileStorage.js');
@@ -383,6 +384,189 @@ const shareTheUpload = (newId) => `(() => {
   return 'shared';
 })()`;
 
+// Exercise the built browser UI. File input assignment uses CDP's real File
+// objects; export is read from the browser's actual download directory.
+async function webTransferTests(ctx, sourceId, sourceName, rehydrate) {
+  const { evalJs, cdp, sleep, reload, log } = ctx;
+  const directory = mkdtempSync(join(tmpdir(), 'spellcaster-web-transfer-'));
+  const ok = value => value ? 'PASS' : 'FAIL';
+  const waitFor = async expression => {
+    for (let i = 0; i < 60; i++) {
+      const value = await evalJs(expression);
+      if (value === true) return true;
+      await sleep(200);
+    }
+    return false;
+  };
+  const settings = async () => {
+    await evalJs(`window.__ui.openSettings()`);
+    await sleep(250);
+  };
+  const selectFile = async path => {
+    const doc = await cdp('DOM.getDocument', { depth: 1 });
+    const input = await cdp('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '[data-profile-import-file]' });
+    if (!input.result?.nodeId) throw new Error('Browser import file input is absent');
+    const set = await cdp('DOM.setFileInputFiles', { nodeId: input.result.nodeId, files: [path] });
+    if (set.error) throw new Error(JSON.stringify(set.error));
+    await waitFor(`!document.querySelector('[data-profile-import]')?.disabled`);
+    await sleep(300);
+  };
+  const download = async () => {
+    const before = new Set(readdirSync(directory));
+    await evalJs(`document.querySelector('[data-profile-export]').click()`);
+    for (let i = 0; i < 100; i++) {
+      const name = readdirSync(directory).find(name => name.endsWith('.spellcaster') && !before.has(name));
+      if (name) return readFileSync(join(directory, name));
+      await sleep(200);
+    }
+    throw new Error('Browser did not save the profile download');
+  };
+  // PROFILE-GUARD-OFF: compare all profiles and global index/snapshots; enumerated keys are already fully scoped
+  const metadata = () => evalJs(`JSON.stringify(Object.fromEntries(Object.keys(localStorage).filter(k => !k.includes(':sound_file_')).sort().map(k => [k, localStorage.getItem(k)])))`);
+  // PROFILE-GUARD-ON
+  try {
+    await cdp('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: directory });
+    const small = await download();
+    const entries = unzipSync(small);
+    const manifest = JSON.parse(new TextDecoder().decode(entries['manifest.json']));
+    const data = JSON.parse(new TextDecoder().decode(entries['data.json']));
+    log('BUNDLE', 'I24: browser download is a full compatible bundle with verified upload payloads',
+      ok(manifest.formatVersion === 3 && manifest.files.length > 0 && manifest.files.every(file => sha256(entries[file.path]) === file.sha256)), `bytes=${small.length} files=${manifest.files.length}`);
+
+    // A native-engine export, with a large audio file and uploaded PNG. This
+    // exceeds the old localStorage ceiling without consuming metadata quota.
+    const large = new Uint8Array(7 * 1024 * 1024).fill(13);
+    const icon = new Uint8Array(readFileSync(join(HERE, '..', '..', 'public', 'assets', 'Caustic_Blast_Acid.png')));
+    const files = new Map(manifest.files.map(file => [file.path.split('/').pop(), entries[file.path]]));
+    files.set('web-large.wav', large); files.set('web-icon.png', icon);
+    data.characters.push({ id: 'web-native-fixture', name: 'Native Transfer', sounds: [{ id: 'web-large-sound', name: 'Large Browser Upload', files: [{ name: 'large.wav', storedName: 'web-large.wav' }], icon: 'web-icon.png', iconDisplayName: 'web-icon.png' }] });
+    const native = await makeTransferBundle({ profileId: 'native-fixture', profileName: 'Native Transfer', data, settings: data.settings, appVersion: 'e2e-native-engine', dataVersion: '3', store: { read: async name => files.get(name) || null } });
+    const fixture = join(directory, 'native-input.spellcaster'); writeFileSync(fixture, native.bytes);
+    const sourceBefore = await evalJs(`window.__bk.dump(${JSON.stringify(sourceId)})`);
+    await selectFile(fixture);
+    await rehydrate();
+    const importedId = await evalJs(`window.__pid()`);
+    log('BUNDLE', 'I25: browser imports a native-engine bundle into a new profile and leaves source intact',
+      ok(importedId !== sourceId && sameJson(sourceBefore, await evalJs(`window.__bk.dump(${JSON.stringify(sourceId)})`))), `source=${sourceId} target=${importedId}`);
+    const largeEntry = native.manifest.files.find(file => file.originalName === 'large.wav');
+    const iconEntry = native.manifest.files.find(file => file.originalName === 'web-icon.png');
+    const largeName = largeEntry?.path.split('/').pop();
+    const iconName = iconEntry?.path.split('/').pop();
+    // PROFILE-GUARD-OFF: __keysFor(pid) already scopes this audio-key count to the imported profile
+    const probe = await evalJs(`(async () => {
+      const blob = await window.__uploadBlob(${JSON.stringify(importedId)}, ${JSON.stringify(largeName)});
+      const icon = await window.__uploadBlob(${JSON.stringify(importedId)}, ${JSON.stringify(iconName)});
+      return { size: blob?.size, icon: icon?.size, base64Keys: window.__keysFor(window.__pid()).filter(k => k.startsWith('sound_file_')).length };
+    })()`);
+    // PROFILE-GUARD-ON
+    log('BUNDLE', 'I26: large audio and uploaded icon live in browser file storage without base64 metadata',
+      ok(probe?.size === large.length && probe?.icon === icon.length && probe?.base64Keys === 0), JSON.stringify(probe));
+    await reload(); await rehydrate();
+    const persisted = await evalJs(`(async () => (await window.__uploadBlob(window.__pid(), ${JSON.stringify(largeName)}))?.size === ${large.length})()`);
+    log('BUNDLE', 'I27: imported browser files and profile survive reload', ok(persisted === true && await evalJs(`window.__pid()`) === importedId), '');
+
+    await ctx.navigateTo('Hero');
+    await evalJs(`window.__webRevoked = []; window.__webOriginalRevoke = URL.revokeObjectURL; URL.revokeObjectURL = function(url) { window.__webRevoked.push(url); return window.__webOriginalRevoke.call(URL, url) }; window.__webPlayed = []; window.__webOriginalPlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function(...args) { window.__webPlayed.push(this); return window.__webOriginalPlay.apply(this, args) }`);
+    const uploadedSound = data.characters.flatMap(character => character.sounds || []).find(sound => sound.name === 'Uploaded Roar');
+    const card = await ctx.driver.centeredCard(`[data-sound-card][data-sound-id="${uploadedSound?.id}"]`);
+    if (card) await ctx.driver.trustedTap(card.x, card.y);
+    await sleep(1000);
+    const playback = await evalJs(`(() => { const audio = window.__webPlayed[0]; return audio ? { src: audio.src, ready: audio.readyState, error: audio.error?.code || null } : null })()`);
+    log('BUNDLE', 'I34: imported browser audio resolves from stored bytes and decodes after reload',
+      ok(playback?.src?.startsWith('blob:') && playback.ready > 0 && !playback.error), JSON.stringify(playback));
+    await evalJs(`window.__webPlayed.forEach(audio => audio.pause()); HTMLMediaElement.prototype.play = window.__webOriginalPlay`);
+
+    await settings();
+    const roundtrip = unzipSync(await download());
+    const roundManifest = JSON.parse(new TextDecoder().decode(roundtrip['manifest.json']));
+    log('BUNDLE', 'I28: browser re-export preserves native audio and icon checksums',
+      ok(native.manifest.files.every(file => roundManifest.files.some(other => other.sha256 === file.sha256 && sha256(roundtrip[other.path]) === file.sha256))), `files=${roundManifest.files.length}`);
+
+    // Cancel and refusal must leave ALL metadata byte-identical, including the
+    // profile index and safety snapshots. Use the real browser input each time.
+    const beforeRefusal = await metadata();
+    const corrupt = unzipSync(native.bytes); corrupt[largeEntry.path] = strToU8('corrupted');
+    const corruptPath = join(directory, 'corrupt.spellcaster'); writeFileSync(corruptPath, zipSync(corrupt));
+    await selectFile(corruptPath);
+    const corruptNotice = await evalJs(`document.querySelector('[data-bundle-notice]')?.textContent || ''`);
+    log('BUNDLE', 'I29: corrupt browser import reports checksum failure and changes no metadata',
+      ok(/checksum mismatch/i.test(corruptNotice) && beforeRefusal === await metadata()), corruptNotice);
+    const future = unzipSync(native.bytes); const futureManifest = JSON.parse(new TextDecoder().decode(future['manifest.json'])); futureManifest.formatVersion = 999; future['manifest.json'] = strToU8(JSON.stringify(futureManifest));
+    const futurePath = join(directory, 'future.spellcaster'); writeFileSync(futurePath, zipSync(future));
+    await selectFile(futurePath);
+    const futureNotice = await evalJs(`document.querySelector('[data-bundle-notice]')?.textContent || ''`);
+    log('BUNDLE', 'I30: future-format browser import is refused without metadata changes',
+      ok(/999/.test(futureNotice) && beforeRefusal === await metadata()), futureNotice);
+
+    await evalJs(`window.__ui.mode('merge'); window.__savedConfirm = window.confirm; window.confirm = () => false`);
+    await selectFile(fixture);
+    log('BUNDLE', 'I31: cancelling browser merge preview preserves profile and snapshots',
+      ok(beforeRefusal === await metadata() && /Merge cancelled/.test(await evalJs(`document.querySelector('[data-bundle-notice]')?.textContent || ''`))), '');
+    const mergeEntries = unzipSync(native.bytes); const mergeData = JSON.parse(new TextDecoder().decode(mergeEntries['data.json']));
+    mergeData.characters.push({ id: 'web-merge-added', name: 'Web Merge Added', sounds: [] });
+    mergeEntries['data.json'] = strToU8(JSON.stringify(mergeData));
+    const mergePath = join(directory, 'merge.spellcaster'); writeFileSync(mergePath, zipSync(mergeEntries));
+    await evalJs(`window.confirm = () => true`);
+    await selectFile(mergePath); await rehydrate();
+    const merged = await evalJs(`({ active: window.__pid(), names: JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]').map(c => c.name), snapshots: JSON.parse(localStorage.getItem('spellcaster_import_backups') || '[]').filter(s => s.profileId === window.__pid()).length })`);
+    log('BUNDLE', 'I32: browser merge adds incoming content, retains existing board and takes a snapshot',
+      ok(merged?.active === importedId && merged.names.includes('Web Merge Added') && merged.names.includes('Hero') && merged.snapshots === 1), JSON.stringify(merged));
+    log('BUNDLE', 'I35: profile remount releases cached browser audio URLs',
+      ok(!!playback?.src && await evalJs(`window.__webRevoked.includes(${JSON.stringify(playback?.src)})`)), '');
+    await evalJs(`URL.revokeObjectURL = window.__webOriginalRevoke`);
+    await settings();
+    await evalJs(`window.confirm = () => true; document.querySelector('[data-profile-delete="${importedId}"]').click()`);
+    await waitFor(`JSON.parse(localStorage.getItem('spellcaster_profiles')).activeProfileId !== ${JSON.stringify(importedId)}`);
+    await rehydrate();
+    // Deletion follows the index switch asynchronously; wait for bytes too.
+    let deleted = false;
+    for (let i = 0; i < 50; i++) {
+      deleted = await evalJs(`(async () => !await window.__uploadBlob(${JSON.stringify(importedId)}, ${JSON.stringify(largeName)}))()`);
+      if (deleted === true) break;
+      await sleep(100);
+    }
+    log('BUNDLE', 'I33: deleting imported browser profile removes its files and preserves source uploads',
+      ok(deleted === true && await evalJs(`(async () => !!await window.__uploadBlob(${JSON.stringify(sourceId)}, ${JSON.stringify(sourceName)}))()`)), '');
+    await ctx.navigateTo('Hero');
+    await evalJs(`(() => {
+      window.__raceCreated = [];
+      window.__raceOriginalAudio = window.Audio;
+      window.Audio = function(...args) { window.__raceCreated.push(args[0]); return new window.__raceOriginalAudio(...args) };
+      window.Audio.prototype = window.__raceOriginalAudio.prototype;
+      window.__raceLocked = false;
+      window.__raceHold = navigator.locks.request('spellcaster-uploads:' + window.__pid(), async () => {
+        window.__raceLocked = true;
+        await new Promise(resolve => { window.__raceRelease = resolve });
+      });
+      return true;
+    })()`);
+    await waitFor(`window.__raceLocked === true`);
+    const pendingCard = await ctx.driver.centeredCard(`[data-sound-card][data-sound-id="${uploadedSound?.id}"]`);
+    if (pendingCard) await ctx.driver.trustedTap(pendingCard.x, pendingCard.y);
+    await sleep(200);
+    await settings();
+    await evalJs(`window.__raceOriginalPrompt = window.prompt; window.prompt = () => 'Pending Read Target'; document.querySelector('[data-profile-create]').click()`);
+    await waitFor(`JSON.parse(localStorage.getItem('spellcaster_profiles')).activeProfileId !== ${JSON.stringify(sourceId)}`);
+    const raceTarget = await evalJs(`window.__pid()`);
+    await evalJs(`window.__raceRelease(); navigator.locks.request('spellcaster-uploads:' + ${JSON.stringify(sourceId)}, () => true)`);
+    await evalJs(`navigator.locks.request('spellcaster-uploads:' + ${JSON.stringify(sourceId)}, () => true)`);
+    await sleep(500);
+    const createdAfterSwitch = await evalJs(`window.__raceCreated`);
+    log('BUNDLE', 'I36: a pending browser audio read cannot start playback after switching profiles',
+      ok(!!pendingCard && raceTarget !== sourceId && Array.isArray(createdAfterSwitch) && createdAfterSwitch.length === 0), JSON.stringify(createdAfterSwitch));
+    await evalJs(`window.Audio = window.__raceOriginalAudio; window.prompt = window.__raceOriginalPrompt`);
+    await settings();
+    await evalJs(`document.querySelector('[data-profile-delete="${raceTarget}"]').click()`);
+    await waitFor(`JSON.parse(localStorage.getItem('spellcaster_profiles')).activeProfileId === ${JSON.stringify(sourceId)}`);
+    await rehydrate();
+    await evalJs(`if (window.__savedConfirm) { window.confirm = window.__savedConfirm; delete window.__savedConfirm }`);
+  } finally {
+    await evalJs(`window.__raceRelease?.(); if (window.__raceOriginalAudio) window.Audio = window.__raceOriginalAudio; if (window.__raceOriginalPrompt) window.prompt = window.__raceOriginalPrompt`);
+    await cdp('Browser.setDownloadBehavior', { behavior: 'default' });
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 export const bundle = {
   title: 'SUITE I: PROFILE BUNDLES (EXPORT / IMPORT)',
   async run(ctx) {
@@ -465,25 +649,23 @@ export const bundle = {
         const probe = await evalJs(`window.__bk.readBlob(${JSON.stringify(pid)}, ${JSON.stringify(storedName)})`);
         probeBytes = probe?.len || 0;
       } else {
-        probeBytes = await evalJs(`(localStorage.getItem(window.__pk('sound_file_' + ${JSON.stringify(storedName)})) || '').length`);
+        probeBytes = await evalJs(`(async () => (await window.__uploadBlob(${JSON.stringify(pid)}, ${JSON.stringify(storedName)}))?.size || 0)()`);
       }
       log('BUNDLE', 'I2: the fixture upload is a real upload - storedName plus bytes the profile store can read',
         ok(openedModal && submitted && uploadInfo?.storedName && probeBytes > 0),
         `modal=${openedModal} submit=${submitted} upload=${uploaded} storedName=${storedName} bytes=${probeBytes}`);
 
-      // ---- I1: the platform gate -------------------------------------------
-      // Export & Import renders under Tauri only, on purpose: web keeps audio as
-      // base64 in localStorage and caps out around 5 MB, so a web export could
-      // only ever be metadata (PROFILE_SYNC_SPEC.md §7). Both arms PASS - each
-      // asserts the behaviour its own platform is supposed to have.
+      // ---- I1: platform availability -------------------------------------------
+      // Browser and native builds expose the same profile transfer controls.
       await evalJs(`window.__ui.openSettings()`);
       await sleep(800);
       const sectionShown = await evalJs(`window.__ui.section()`);
-      log('BUNDLE', 'I1: Export & Import is offered under Tauri and deliberately absent on web',
-        ok(sectionShown === isTauri), `isTauri=${isTauri} sectionRendered=${sectionShown}`);
+      log('BUNDLE', 'I1: Export & Import is offered on every platform',
+        ok(sectionShown === true), `isTauri=${isTauri} sectionRendered=${sectionShown}`);
 
       if (!isTauri) {
-        skip('I3-I22', 'the engine modules are served only by the Vite dev server and the web phase runs a built dist; export/import is Tauri-only by design (§7)');
+        await webTransferTests(ctx, pid, storedName, rehydrate);
+        skip('I3-I23', 'native engine/disk checks; browser UI and file-transfer checks are I24-I34');
         return;
       }
 

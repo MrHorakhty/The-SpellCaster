@@ -152,9 +152,9 @@ export const iconprep = {
       const original = await evalJs(`window.__ipPixels('[data-icon-result]')`);
       log('ICON','IP12: use-as-is preview preserves exact original bytes',await evalJs(`JSON.stringify(window.__ipBytes)===${JSON.stringify(JSON.stringify(original?.bytes))}`) ? 'PASS':'FAIL');
       if (!isTauri) {
-        await evalJs(`window.__ipSetItem=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){if(k.includes('sound_file_icon_'))throw new Error('Icon write failure probe');return window.__ipSetItem.call(this,k,v)}; document.querySelector('[data-icon-confirm]').click()`);
+        await evalJs(`window.__ipPut=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v,...args){if(v.storedName?.startsWith('icon_'))throw new Error('Icon write failure probe');return window.__ipPut.call(this,v,...args)}; document.querySelector('[data-icon-confirm]').click()`);
         const errorShown = await waitFor(`document.querySelector('[data-icon-prep] [role="alert"]')?.textContent.includes('Icon write failure probe')`);
-        await evalJs(`Storage.prototype.setItem=window.__ipSetItem`);
+        await evalJs(`IDBObjectStore.prototype.put=window.__ipPut`);
         log('ICON','IP13: failed write leaves old editor icon and allows retry',errorShown && await evalJs(`document.querySelector('img[alt="Icon preview"]').getAttribute('src')===window.__ipOriginalIcon && !document.querySelector('[data-icon-confirm]').disabled`) ? 'PASS':'FAIL');
       } else console.log('SKIP ICON IP13: web quota/write injection; native writes exercised by IP14-15');
       await evalJs(`document.querySelector('[data-icon-confirm]').click()`);
@@ -211,7 +211,7 @@ export const iconprep = {
     } catch (error) {
       log('ICON','IP0: icon preparation suite completed without exception','FAIL',String(error.stack || error));
     } finally {
-      await evalJs(`(() => {if(window.__ipSetItem)Storage.prototype.setItem=window.__ipSetItem;if(window.__ipNativeImage)window.Image=window.__ipNativeImage;if(window.__ipNativeToBlob)HTMLCanvasElement.prototype.toBlob=window.__ipNativeToBlob;document.querySelector('[data-icon-cancel]')?.click();document.querySelector('[data-sound-modal-close]')?.click();return true})()`);
+      await evalJs(`(() => {if(window.__ipPut)IDBObjectStore.prototype.put=window.__ipPut;if(window.__ipNativeImage)window.Image=window.__ipNativeImage;if(window.__ipNativeToBlob)HTMLCanvasElement.prototype.toBlob=window.__ipNativeToBlob;document.querySelector('[data-icon-cancel]')?.click();document.querySelector('[data-sound-modal-close]')?.click();return true})()`);
     }
   },
 };

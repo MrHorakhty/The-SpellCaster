@@ -142,14 +142,14 @@ export const refcount = {
     const clickCopy = await evalJs(`window.__mcClick('Characters','Elf Sorcerer','Copy')`);
     await sleep(700);
 
-    const guardAfterCopy = await evalJs(`(() => {
+    const guardAfterCopy = await evalJs(`(async () => {
       const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       const orig = l.find(c => c.name === 'Human Paladin')?.sounds?.find(s => s.name === 'Guard Test');
       return {
         copyExists: !!copy,
         sharedFile: !!copy && !!orig && copy.files?.[0]?.storedName === orig.files?.[0]?.storedName,
-        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_guard_test.mp3'))
+        fileKeyExists: await window.__uploadExists('guard_test.mp3')
       };
     })()`);
     log('GUARD', 'G1: copy shares storedName', guardAfterCopy?.sharedFile ? 'PASS' : 'FAIL',
@@ -161,13 +161,13 @@ export const refcount = {
     // leave the copy pointing at a deleted file.
     await ctx.deleteCharacter('Human Paladin');
 
-    const guardAfterDelete = await evalJs(`(() => {
+    const guardAfterDelete = await evalJs(`(async () => {
       const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const copy = l.find(c => c.name === 'Elf Sorcerer')?.sounds?.find(s => s.name === 'Guard Test (copy)');
       return {
         paladinGone: !l.find(c => c.name === 'Human Paladin'),
         copyExists: !!copy,
-        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_guard_test.mp3')),
+        fileKeyExists: await window.__uploadExists('guard_test.mp3'),
         copyFile: copy?.files?.[0]?.storedName
       };
     })()`);
@@ -184,8 +184,8 @@ export const refcount = {
       await rehydrate();
       await driver.enterEditMode();
       await ctx.deleteCharacter('Lone Character');
-      const guardNegative = await evalJs(`(() => ({
-        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_orphan_test.mp3')),
+      const guardNegative = await evalJs(`(async () => ({
+        fileKeyExists: await window.__uploadExists('orphan_test.mp3'),
         chars: window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]')).length
       }))()`);
       log('GUARD', 'G5: unreferenced file IS removed',
@@ -268,7 +268,7 @@ export const refcount = {
     await sleep(300);
     await submitModal('Save Changes');
     await sleep(900);
-    const g6 = await evalJs(`(() => {
+    const g6 = await evalJs(`(async () => {
       const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const paladin = l.find(c => c.name === 'Human Paladin');
       const edited = paladin?.sounds?.find(s => s.id === 'share_s1');
@@ -276,7 +276,7 @@ export const refcount = {
       return {
         editedFiles: (edited?.files || []).map(f => f.storedName),
         siblingFiles: (sibling?.files || []).map(f => f.storedName),
-        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_' + ${JSON.stringify(sharedName)}))
+        fileKeyExists: await window.__uploadExists(${JSON.stringify(sharedName)})
       };
     })()`);
     const g6ok = g6 && Array.isArray(g6.editedFiles) && g6.editedFiles.length === 1
@@ -349,13 +349,13 @@ export const refcount = {
       return 'OK';
     })()`);
     await sleep(700);
-    const g7 = await evalJs(`(() => {
+    const g7 = await evalJs(`(async () => {
       const l = window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters')) || '[]'));
       const paladin = l.find(c => c.name === 'Human Paladin');
       const edited = paladin?.sounds?.find(s => s.id === 'share_s1');
       return {
         editedFiles: (edited?.files || []).map(f => f.storedName),
-        fileKeyExists: !!localStorage.getItem(window.__pk('sound_file_' + ${JSON.stringify(sharedName)}))
+        fileKeyExists: await window.__uploadExists(${JSON.stringify(sharedName)})
       };
     })()`);
     const g7ok = g7 && Array.isArray(g7.editedFiles) && g7.editedFiles.length === 2

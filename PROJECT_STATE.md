@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-01 23:03)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-01 23:12 — working on: browser upload storage migration and web profile import/export
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,53 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Browser profile transfer — accepted; finishing workflow in progress
+
+User hand-tested the built browser import, uploaded playback, icon and export on
+2026-11-02: works as expected. Browser uploads now use profile-scoped IndexedDB
+Blobs; copy/commit/read-back verification precedes legacy localStorage removal.
+Retained originals remain readable/exportable after migration failure. The same
+format3 engine handles browser download/File import,New Profile and Merge.
+Native pickers and the format are unchanged. URL caches release on remount;
+pending audio reads cannot create a player after leaving their profile.
+Design:docs/web-profile-transfer.md. Code:src/webUploads.js;App.jsx:1168/1242
+(transfer),:1385(resource lifetime),:3296/3333/4218(storage),:4271(async playback
+lifetime),:4683(migration);profileBundle.js:341(adapter);profileStorage.js:582/606.
+
+Verification scope changed because user explicitly requested targeted E2E rather
+than whole suites. No final full rerun or full native suites. Final static all exit0:
+lint0 errors/4 warnings(2 source baseline+2 preserved recovery-copy warnings),Vite
+PASS;coverage44 suites/520 IDs,32/32 shipped covered,+13 IDs and0 removals.
+Final Node(all exit0):bundle55/55,storage35/35,guard20/20,keysOK,fade46/46,
+soundFiles32/32,icon35/35,snapshot19/19,release19/19,hotkeys120/120,records43/43,
+webUploads48/48. Extended Android preflight16/16;restore fault checks23/23.
+Targeted web62/0/0(exit0),then final bundle/race15/0/0(exit0). Windows59/0/3
+(expected suite/runner1),Explorer parent14292 verified;22 original keys match from
+disk and uploads restored. Android icon28/0/0 and bundle23/0/0 passed;initial
+cleanup5/3/3 was a fixture-driver issue. Final focused cleanup8/0/3(exit1) passes
+with the app's profile-remount hydration boundary;28 original keys match before
+and after cold restart. Original broad web377/1/0 failed stale PR8(native-only
+expectation),fixed and proven in targeted run. I36 reproduced pending-read orphan
+playback and now passes. Detailed actual counts and failure/pass evidence:
+logs/keep/web-transfer-20261101/verification.md.
+
+Android fixture warning:Page.reload retained old React board;BACK during cold
+fixture reload could write old state over the seed. Focused native driver uses
+actual profile remount after writing keys(the same boundary as Merge). Tracked
+platform runner files remain unchanged;do not describe original harness as fully
+rerun/green. Browser runner cleanup also stopped an Android frontend in one
+exploratory retry;successful final runs were sequential. User reported Bitdefender
+interception(possibly pwsh.exe,exact detection unknown);no AV settings changed or
+blocked PowerShell launcher retried. Direct Node/ADB recovery cold-verified28 keys.
+
+Pre-change backup20261101-231242 VERIFY OK1786/1786,112.1MB(exit0);initial sandbox
+robocopy16 resolved by authorized host retry. Final backup20261102-233850 VERIFY OK1927/1927,113MB(exit0). Subject code,
+tests and docs are ready for commit/push;claim remains held through finishing.
+Preview http://localhost:5233 is running(Node37444,exec session18705). Test frontend
+5173 stopped;owned emulator closed after data verification. No native app left open.
+Unrelated user deletion:launchers/Launch Opencode - ttrpg soundboard.bat;exclude
+from this subject's commit. Working tree was clean at subject start.
 
 ## Replace Profile removal — complete; targeted verification
 
@@ -60,7 +107,7 @@ is abandoned, not unfinished. No server/account setup, automatic watcher,
 preference/hotkey clocks or network concurrency feature is required for this scope.
 Merge retains destination-local settings/hotkeys as documented.
 Feature registry:31 shipped features,all covered; WebDAV planned entry removed.
-Independent browser export/import remains parked, not part of this completed subject.
+Browser export/import is now a separate authorized subject in progress; see the current section above.
 No runtime changes in this scope correction; coverage metadata/docs only. Final
 registry check:44 suites/507 IDs,31/31 shipped features covered,0 planned,exit0;
 --update rewrote0 suites and IDs(no coverage removed).
@@ -608,7 +655,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| Independent deferral | Web export/import | First move web audio out of localStorage into real file storage; current base64 storage is quota-limited. Native export/import does not imply web support. |
+| In progress | Web export/import | IndexedDB upload migration and browser file transfer implemented; targeted verification and user hand-test tracked above. |
 | Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
 | Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
@@ -681,15 +728,15 @@ There is no account, server or automatic cloud sync.
 
 - Board keys are `profile:<id>:<key>`. Use `profileStorage.js` for reads, writes, removal **and enumeration**.
   Board keys include `ttrpg_characters`, **`ttrpg_environment` (singular)**, `ttrpg_groups`,
-  `ttrpg_data_version`, the two `ttrpg_*_icon` keys, `boxSize`, `backgroundSettings` and web `sound_file_*` keys.
+  `ttrpg_data_version`, the two `ttrpg_*_icon` keys, `boxSize`, `backgroundSettings`; legacy web `sound_file_*` keys migrate into IndexedDB.
 - **Five global keys are intentional**: `spellcaster_profiles` (index), `localStorageMigrationCompleted`
-  (device migration), `spellcaster_import_backups` (last 3 replace snapshots), and `spellcaster_import_notice`
+  (device migration), `spellcaster_import_backups` (last 3 merge safety snapshots), and `spellcaster_import_notice`
   (read-and-removed after remount; an import may create its target profile). Keep the shared
   `KNOWN_KEYS` in `e2e/lib/page.mjs` current. `spellcaster_reorder_animation` is the fifth global key: an app-installation UI preference shared by profiles and excluded from bundles. The harness's `ttrpg_themes` seed is not an app storage feature.
 - Profile switching is a **full remount**, preventing old auto-save effects from writing into the next profile.
   New/adopted/imported profiles must be stamped with **`DATA_VERSION = '3'`** from birth.
   A version mismatch **repairs forward, never resets**; casually bumping it affects every profile.
-- Native uploads live in `AppData/uploads/<profileId>/`; web uses scoped localStorage data-URLs.
+- Native uploads live in `AppData/uploads/<profileId>/`; browser uploads are profile-scoped IndexedDB Blobs.
   Never share/hardlink blobs across profiles. Account for object-URL caches during profile switch.
 - There are **five sound-container shapes**: characters, environments, group categories, group characters,
   and vestigial `groups[].sounds`. Use the shared walkers. Group normalization migrates a legacy top-level
@@ -772,8 +819,8 @@ There is no account, server or automatic cloud sync.
   repairing affected profiles; native phases perform actual export. The user's current board also exported
   and parsed in memory: **366,906 bytes / 19 sounds / 7 uploaded files / format 1**.
 - `.spellcaster` is a plain zip with manifest/checksums, content-hash dedupe, uploaded files and profile settings.
-  Native-only v1 offers New profile / Replace active. Replace snapshots metadata first, writes blobs before
-  committing keys, and retains old bytes for recovery. Missing exports refuse an incomplete bundle;
+  Current format3 offers New profile / Merge on native and browser builds. Merge snapshots metadata first;
+  every import writes blobs before committing keys. Replace was removed. Missing exports refuse an incomplete bundle;
   unresolved imported sounds are dropped and reported. Custom background images and priming do not travel.
 - The per-file import report survives remount via the global one-shot notice. A separate progress dialog was
   declined by the user. The picker has **no timeout**; steps after it have a 30 s bound + Stop waiting.

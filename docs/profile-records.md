@@ -94,5 +94,6 @@ receiving profile's settings and hotkeys.
 The user explicitly chose this scope on2026-11-01. There is no app-managed folder
 watcher, WebDAV, cloud transport, account or server setup planned. The earlier
 server-sync proposal was abandoned, not left as unfinished work. Independent
-browser-platform export/import remains parked in PROFILE_SYNC_SPEC.md; it is not
-required for the native manual workflow.
+browser-platform export/import now uses IndexedDB
+upload storage and was user accepted on2026-11-02; see [web profile transfer](web-profile-transfer.md). The accepted
+native manual workflow remains the same.

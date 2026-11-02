@@ -580,7 +580,11 @@ export function ensureUploadsMigrated(profileId) {
  * need another capability for very little benefit.
  */
 export async function profileUploadFileCount(profileId) {
-    if (!isTauriApp() || !profileId) return 0
+    if (!profileId) return 0
+    if (!isTauriApp()) {
+        const { webUploads } = await import('./webUploads.js')
+        return (await webUploads.list(profileId)).length
+    }
     const { readDir, BaseDirectory } = await import('@tauri-apps/plugin-fs')
     try {
         const entries = await readDir(profileUploadDir(profileId), { baseDir: BaseDirectory.AppData })
@@ -600,7 +604,11 @@ export async function profileUploadFileCount(profileId) {
  * fall back on being active; the UI owns the "are you sure".
  */
 export async function removeProfileUploads(profileId) {
-    if (!isTauriApp() || !profileId) return { removed: 0 }
+    if (!profileId) return { removed: 0 }
+    if (!isTauriApp()) {
+        const { webUploads } = await import('./webUploads.js')
+        return webUploads.clear(profileId)
+    }
     const { readDir, remove, BaseDirectory } = await import('@tauri-apps/plugin-fs')
     let entries = []
     try {

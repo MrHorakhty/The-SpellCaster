@@ -58,7 +58,7 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 - **Visible Save Failures**: Storage errors (for example a full browser quota) surface in-app instead of failing silently
 - **In-app Hotkeys**: In Settings → Hotkeys, choose Add hotkey, record a key (optionally holding Ctrl, Alt or Shift), search for a sound by name or location, select it and save. A key triggers the sound like a card click, including primed sounds; pressing again starts another instance. Bindings belong to the current profile and follow sounds through moves and renames. Typing, edit mode and dialogs pause shortcuts. Letters, digits, punctuation, numpad operators and F1–F4/F6–F10 are supported. Bare keys and each exact modifier combination can have separate targets. Space, Enter, navigation, Meta/AltGraph, F5/F11/F12 and common browser/window shortcuts are reserved; numpad digits need Num Lock. These are focused-app shortcuts. Android management and emulator key dispatch are covered; a physical external keyboard still needs a device test.
 - **Profiles**: Each profile keeps its own characters, environment categories, groups, settings and uploaded audio, on one device. Create, rename, switch or delete them from Settings; switching reloads the board. Deleting a profile warns how many uploaded files go with it, and only ever removes that profile's own audio
-- **Profile Export & Import**: Move a whole board between devices as one `.spellcaster` file *(desktop and Android; see Platform Support)*. Export writes a plain zip containing the audio **you** added — the sounds that ship with the app are identical everywhere and are not duplicated into it. Import offers **Create a new profile** (leaves everything as it is) or **Merge into this profile** (previews changes and snapshots the current board first). A corrupted or newer-format bundle is refused before anything is written, naming the problem; a sound whose audio is missing is dropped and reported rather than installed half-broken. **There is no account, no sign-in and no server — the file goes wherever you save it, and nothing leaves your machine unless you send it somewhere yourself.** Current exports use bundle format 3 to retain hotkeys and deletion history. This build also reads formats 1/2 (format 1 has no bindings); older builds refuse format 3 rather than misreading deletion markers. For manual sync, export the file, move it yourself, and import it with **Merge into this profile** on the other device. This mode is user-tested and accepted: it previews changes and retains local settings/hotkeys; see [record history and merge](docs/profile-records.md). Two things deliberately do *not* travel: your **custom background image** (a per-device display choice — the theme and colour do travel) and **priming**, which is deliberately one-shot and lasts for a single trigger in the session
+- **Profile Export & Import**: Move a whole board between devices as one `.spellcaster` file *(desktop, Android and browser; see Platform Support)*. Export writes a plain zip containing the audio **you** added — the sounds that ship with the app are identical everywhere and are not duplicated into it. Import offers **Create a new profile** (leaves everything as it is) or **Merge into this profile** (previews changes and snapshots the current board first). A corrupted or newer-format bundle is refused before anything is written, naming the problem; a sound whose audio is missing is dropped and reported rather than installed half-broken. **There is no account, no sign-in and no server — the file goes wherever you save it, and nothing leaves your machine unless you send it somewhere yourself.** Current exports use bundle format 3 to retain hotkeys and deletion history. This build also reads formats 1/2 (format 1 has no bindings); older builds refuse format 3 rather than misreading deletion markers. For manual sync, export the file, move it yourself, and import it with **Merge into this profile** on the other device. This mode is user-tested and accepted: it previews changes and retains local settings/hotkeys; see [record history and merge](docs/profile-records.md). Two things deliberately do *not* travel: your **custom background image** (a per-device display choice — the theme and colour do travel) and **priming**, which is deliberately one-shot and lasts for a single trigger in the session
 
 ## Platform Support
 
@@ -67,14 +67,21 @@ NOTICE: This project is done via vibe coding and features AI made content (both 
 | Sound playback, characters, environment, groups | ✅ | ✅ | ✅ |
 | Persistent storage | Filesystem + localStorage | Filesystem + localStorage | localStorage only |
 | Profiles (create / switch / rename / delete) | ✅ | ✅ | ✅ |
-| Profile export & import (`.spellcaster`) | ✅ | ✅ | — |
+| Profile export & import (`.spellcaster`) | ✅ | ✅ | ✅ |
 | Split View | ✅ | — (single column) | ✅ |
 | Custom backgrounds & themes | ✅ | ✅ | ✅ |
 | Minimum version | — | Android 7.0 (API 24) | Any modern browser |
 
-Audio files uploaded on desktop/web are stored through the Tauri filesystem plugin where available, and fall back to `localStorage` in the browser. On Android they are written to the app's private data directory.
+Desktop and Android uploads use the app's private files, accessed through the Tauri filesystem plugin. Browser uploads use IndexedDB.
 
-⚠️ **Export/import is deliberately not offered in the web build.** Browser audio lives as base64 data-URLs inside `localStorage` and caps out around 5 MB, so a web export could only ever be metadata — a misleading promise. Supporting it properly means first moving web audio out of `localStorage` into real files, which is separate work. The bundle format itself is platform-agnostic and already written so web can be enabled behind it with no rework.
+Browser audio and uploaded sound icons use IndexedDB rather than the small localStorage
+metadata store. Existing uploads migrate with a verified copy before their originals
+are removed. Export starts a browser download; check Downloads to confirm the saved
+file. Import selects a `.spellcaster` file and offers the same New Profile and Merge
+choices. Browser storage is local to that browser and site address; clearing site data
+removes it. Keep exported files for transfer and backup. See [browser file transfer](docs/web-profile-transfer.md).
+
+Browser import, uploaded playback, icons and export were user hand-tested successfully on 2026-11-02.
 
 ## Tech Stack
 

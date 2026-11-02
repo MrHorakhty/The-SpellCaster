@@ -6,7 +6,10 @@
 > Current design: [docs/profile-records.md](docs/profile-records.md). The user
 > explicitly declined app-managed WebDAV/folder/cloud sync. Those proposals are
 > abandoned, not a remaining stage. The v1 notes below are historical; independent
-> browser export/import planning remains parked.
+> browser export/import is now being implemented; current design and status:
+> [docs/web-profile-transfer.md](docs/web-profile-transfer.md). The v1 web exclusion
+> and localStorage rationale below are historical. A full export can carry browser
+> uploads; the old storage capacity chiefly constrained incoming native profiles.
 
 > **Status: v1 is COMPLETE (as of 2026-10-16).** §12's steps 0–8 are all built — step 0 (both platform spikes),
 > step 1 (storage adapter + proven switch, `577505d`), steps 3–6 (classifier, bundle format, atomic import in both

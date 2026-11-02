@@ -44,11 +44,11 @@
 
 import { Zip, ZipPassThrough, unzipSync } from 'fflate'
 import { sha256 } from '@noble/hashes/sha2.js'
+import { webUploads } from './webUploads.js'
 import { HOTKEYS_KEY, requireHotkeys } from './hotkeys.js'
 import { mergeProfileRecords, summarizeMerge } from './profileMerge.js'
 
 import {
-    profileScopedKey,
     profileKeys,
     readProfileValue,
     writeProfileValue,
@@ -280,7 +280,7 @@ export function missingBlobsMessage(missing) {
     return `${missing.length} ${noun} an audio file that is no longer on disk, so the export was stopped before it could produce an incomplete bundle: ${shown}${more}. Delete ${missing.length === 1 ? 'it' : 'them'}, or upload the audio again, then export.`
 }
 
-// --- blob IO: Tauri files vs web data-URLs ---------------------------------
+// --- blob IO: Tauri files vs browser IndexedDB Blobs ---------------------------------
 //
 // One shape, two backends, so nothing above this line branches on platform.
 // The `options` override exists so `e2e/profileBundle.check.mjs` can drive the
@@ -341,32 +341,15 @@ export function defaultBlobStore(profileId) {
 function webBlobStore(profileId) {
     return {
         async read(storedName) {
-            const value = readProfileValue(profileId, `sound_file_${storedName}`)
-            if (!value) return null
-            return dataUrlToBytes(value)
+            const blob = await webUploads.read(profileId, storedName)
+            return blob ? new Uint8Array(await blob.arrayBuffer()) : null
         },
         async write(storedName, bytes) {
-            writeProfileValue(profileId, `sound_file_${storedName}`, bytesToDataUrl(bytes))
+            await webUploads.write(profileId, storedName, new Blob([bytes]))
         },
-        async list() {
-            return webAudioKeys(profileId)
-        },
-        async has(storedName) {
-            return readProfileValue(profileId, `sound_file_${storedName}`) != null
-        },
+        async list() { return webUploads.list(profileId) },
+        async has(storedName) { return (await webUploads.read(profileId, storedName)) !== null },
     }
-}
-
-function webAudioKeys(profileId) {
-    const prefix = `${profileScopedKey(profileId, '')}sound_file_`
-    const ls = typeof window !== 'undefined' ? window.localStorage : null
-    if (!ls) return []
-    const found = []
-    for (let i = 0; i < ls.length; i++) {
-        const key = ls.key(i)
-        if (key && key.startsWith(prefix)) found.push(key.slice(prefix.length))
-    }
-    return found
 }
 
 export function dataUrlToBytes(dataUrl) {

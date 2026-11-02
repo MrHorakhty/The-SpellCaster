@@ -11080,3 +11080,40 @@ entries under logs/keep/remove-replace-prune-20261101-230258/,then removed2 olde
 folders. Only backup20261101-230139 remains;all1763 keeper hashes rechecked.
 No extra backup merely to record pruning. Claim released;subject complete.
 Final bookkeeping committed separately and intentionally postdates keeper.
+
+
+## 2026-11-02 — Browser profile transfer accepted
+
+User requested browser import/export and approved migrating browser uploads out of
+localStorage first. Audio and uploaded icons now use profile-scoped IndexedDB;
+legacy data URLs are removed only after committed bytes/type read back exactly.
+Failed migration retains recovery playback/export. The existing format3 engine
+serves browser downloads/File input,New Profile and Merge. No native picker or
+bundle-format change. Object URLs release on profile remount,and a delayed audio
+read cannot construct a player after its board unmounts(I36 reproduced then fixed).
+User hand-tested import,uploaded sound/icon and export:works as expected.
+
+User explicitly narrowed E2E to targeted parts. Static:lint0 errors/4 existing
+warnings(2 source+2 recovery-copy),Vite PASS,coverage44 suites/520 IDs32/32 shipped
+covered,+13 IDs,no removals;all exit0. Node:bundle55,storage35,guard20,keysOK,fade46,
+soundFiles32,icon35,snapshot19,release19,hotkeys120,records43,webUploads48(all exact
+passing counts,exit0). Preflight16/16,restore faults23/23. Targeted web62/0/0,then
+final browser bundle15/0/0(exit0). Windows59/0/3(expected1),Explorer parent verified,
+22-key disk comparison and uploads restoration passed. Android icon28/0/0 and
+bundle23/0/0;initial cleanup5/3/3 due fixture hydration. Focused native cleanup8/0/3
+(expected1) passes through actual profile-remount hydration;original28 keys compared
+before/after cold restart. A prior broad web377/1/0 failed stale native-only PR8;
+corrected assertion passed targeted run. No final full/native-full suite claimed.
+
+Android Page.reload left old React board visible;BACK could persist old state over
+fresh fixture keys. The focused driver now hydrates via the app's profile-remount
+boundary,same as Merge. Tracked platform runners unchanged. Avoid concurrent browser
+runner cleanup and Android frontend:cleanup stopped that server during one retry.
+User reported Bitdefender intercept(possibly pwsh.exe);no AV changes or blocked
+PowerShell launcher retry. Direct Node/ADB recovery restored and cold-verified data.
+Evidence and all actual counts:logs/keep/web-transfer-20261101/verification.md.
+
+Pre-change backup20261101-231242 VERIFY OK1786/1786,112.1MB. Final backup and commit/
+push/prune finishing in progress. Unrelated user launcher deletion stays outside
+this commit. Preview5233(Node37444) remains available;test frontend5173 and owned
+emulator are closed. Claim remains held until finishing is complete.

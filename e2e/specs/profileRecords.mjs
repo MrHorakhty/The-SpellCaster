@@ -29,7 +29,7 @@ export const profileRecords = {
     await reload(); await sleep(400)
     log('RECORD', 'PR7: deleted sound stays absent after reload', !await evalJs(`!!document.querySelector('[data-sound-id="pr_sound"]')`))
     await ctx.closeDrawer(); await evalJs(`document.querySelector('button[title="Settings"]')?.click()`); await sleep(250)
-    log('RECORD', 'PR8: merge import availability follows native export/import support', await evalJs(`!!document.querySelector('[data-import-mode="merge"]')`) === isTauri)
+    log('RECORD', 'PR8: merge import is available on every platform', await evalJs(`!!document.querySelector('[data-import-mode="merge"]')`) === true)
     await evalJs(`window.__clickText('Close Settings')`)
     if (isTauri) {
       const merged = await evalJs(`(async () => {

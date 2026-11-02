@@ -122,8 +122,9 @@ Export, pruning, new-import allowlists and key commits explicitly carry the
 binding collection. Bundle formats2/3 carry data.hotkeys; format1 imports default
 to empty bindings in a new profile; Merge retains destination bindings. Old readers refuse unsupported bundle
 or hotkey payload versions rather than silently dropping bindings/modifiers.
-Native bundle support does not supply web audio bundle export/import, which
-remains deferred.
+Browser file transfer now uses the same bundle engine and hotkey rules, backed
+by IndexedDB uploads; browser file transfer was user accepted on2026-11-02. See
+[web profile transfer](web-profile-transfer.md).
 
 During switching/import, stop hotkey dispatch before changing the profile and
 resume only after target data and bindings are hydrated. A failed switch/import
