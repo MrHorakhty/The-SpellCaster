@@ -311,6 +311,24 @@
       "note": "SHIPPED 2026-10-21 (FADE_SPEC.md). Per-file fadeIn/fadeOut/playUntil on each files[] entry, sliders capped by the real measured audio length (~200 steps), a per-row timeline that also sets Play Until, exactly one red state (fadeIn + fadeOut >= audibleEnd), and a seam hint when a loop has a fade-in but no fade-out. A legacy sound-level fade is copied onto every file entry, so shared fades keep working instead of being lost. Fixes the four silent no-ops that specs/playback.mjs Z15 pins, and firstLoopPlay is removed so the fade-in re-runs at every loop seam."
     },
     {
+      "name": "Sound creation requires a visible destination",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/soundintogroup.mjs::H"
+      ],
+      "note": "Empty group actions explain that a category or character must be created first; opening and saving validate the destination."
+    },
+    {
+      "name": "Group sound icon loading and tinting",
+      "spec": null,
+      "status": "shipped",
+      "coveredBy": [
+        "specs/iconprep.mjs::IP"
+      ],
+      "note": "Include all five sound container shapes, including uncached uploaded group icons."
+    },
+    {
       "name": "Icon preparation (use as-is / crop to square / silhouette)",
       "spec": null,
       "status": "shipped",
@@ -1077,6 +1095,10 @@
         "H11",
         "H12",
         "H13",
+        "H14",
+        "H15",
+        "H16",
+        "H17",
         "H2",
         "H3",
         "H4",
@@ -1435,6 +1457,9 @@
         "IP28",
         "IP29",
         "IP3",
+        "IP30",
+        "IP31",
+        "IP32",
         "IP4",
         "IP5",
         "IP6",

@@ -48,6 +48,7 @@ import {
     assertUint8Array,
     BundleError,
     collectProfileForExport,
+    walkSoundContainers,
     IMPORT_NOTICE_KEY,
 } from './profileBundle.js'
 import { webUploads, migrateWebUploads } from './webUploads.js'
@@ -1748,14 +1749,18 @@ function AppBoard() {
     // even after it leaves the bar (capture-based drag, per FADE_SPEC §5).
     const [timelineDrag, setTimelineDrag] = useState(null)
 
+    // Use the same five-container traversal as profile export, including legacy
+    // direct group sounds as well as group categories and characters.
+    const iconSounds = useMemo(() => walkSoundContainers({ characters, environmentSounds, groups })
+        .flatMap(container => container.sounds), [characters, environmentSounds, groups])
+
     // Load icons for sounds
     useEffect(() => {
         let cancelled = false
         const loadIcons = async () => {
-            const allSounds = [...characters.flatMap(char => char.sounds || []), ...environmentSounds.flatMap(env => env.sounds || [])]
             const newLoadedIcons = {}
 
-            for (const sound of allSounds) {
+            for (const sound of iconSounds) {
                 if (cancelled) return
                 if (sound.icon && !loadedIcons[sound.icon]) {
                     try {
@@ -1775,7 +1780,7 @@ function AppBoard() {
 
         loadIcons()
         return () => { cancelled = true }
-    }, [characters, environmentSounds])
+    }, [iconSounds])
 
     // Load form icon
     useEffect(() => {
@@ -1798,8 +1803,7 @@ function AppBoard() {
     useEffect(() => {
         let cancelled = false
         const processTints = async () => {
-            const allSounds = [...characters.flatMap(char => char.sounds || []), ...environmentSounds.flatMap(env => env.sounds || [])]
-            const tasks = allSounds.map(async (sound) => {
+            const tasks = iconSounds.map(async (sound) => {
                 if (cancelled) return
                 if (!sound.icon || sound.color === '#84cc16') {
                     return
@@ -1810,7 +1814,10 @@ function AppBoard() {
                     return
                 }
 
-                const sourceUrl = loadedIcons[sound.icon] || `/assets/${sound.icon}`
+                // Wait for upload resolution before tinting; an assets fallback can
+                // otherwise win the cache race against the actual uploaded bytes.
+                const sourceUrl = loadedIcons[sound.icon]
+                if (!sourceUrl) return
                 const tintedUrl = await recolorImageToColor(sourceUrl, sound.color, sound.brightness)
                 if (!cancelled && tintedUrl) {
                     setTintedIcons(prev => ({ ...prev, [key]: tintedUrl }))
@@ -1822,7 +1829,7 @@ function AppBoard() {
 
         processTints()
         return () => { cancelled = true }
-    }, [characters, environmentSounds, loadedIcons])
+    }, [iconSounds, loadedIcons])
 
     // Recolor the icon preview in the sound modal when the tint changes
     useEffect(() => {
@@ -2201,9 +2208,37 @@ function AppBoard() {
         }
     }
 
-    const openAddSoundModal = (overrideType) => {
+    // Capture the exact destination when opening, including split-panel targets.
+    // An empty group is not a sound container: only its categories/characters are.
+    const getSoundDestination = (targetType = tabType, explicitTarget = null) => {
+        const target = explicitTarget || (targetType === 'characters'
+            ? { containerType: 'character', itemId: currentActiveCharId }
+            : targetType === 'environment'
+                ? { containerType: 'environment', itemId: currentActiveEnvId }
+                : activeGroup?.mode === 'characters'
+                    ? { containerType: 'groupCharacter', groupId: activeGroup?.id, itemId: activeGroupCharacterId }
+                    : { containerType: 'group', groupId: activeGroup?.id, itemId: activeGroupCategory })
+        const kind = target.containerType === 'group' ? 'groupCategory' : target.containerType
+        const container = walkSoundContainers({ characters, environmentSounds, groups })
+            .find(item => item.kind === kind && item.id === target.itemId && item.groupId === (target.groupId || null))
+        if (!container) return null
+        if (target.groupId) {
+            const group = groups.find(item => item.id === target.groupId)
+            if ((group?.mode === 'characters') !== (kind === 'groupCharacter')) return null
+        }
+        return target
+    }
+    const canAddSound = !!getSoundDestination()
+    const soundDestinationHint = tabType === 'characters' || (tabType === 'groups' && activeGroup?.mode === 'characters')
+        ? 'Add a character first to add sounds.'
+        : 'Add a category first to add sounds.'
+
+    const openAddSoundModal = (overrideType, explicitTarget = null) => {
         // Support overriding the tab type dynamically to handle asynchronous state issues in split view
         const targetTabType = typeof overrideType === 'string' ? overrideType : tabType
+        const destination = getSoundDestination(targetTabType, explicitTarget)
+        if (!destination) return
+        setSplitSoundTarget(destination)
         const defaultLoop = targetTabType === 'environment' || targetTabType === 'groups'
 
         if (typeof overrideType === 'string') {
@@ -2334,6 +2369,8 @@ function AppBoard() {
             return
         }
 
+        if (!editingSound && !getSoundDestination(tabType, splitSoundTarget)) return
+
         // Build the persisted file list from audioFiles as the single source of truth
         // so added/removed files during the modal session are never lost. The
         // per-file fade values ride along here; `length`/`error`/`preview` are
@@ -2368,7 +2405,7 @@ function AppBoard() {
         if (editingSound) {
             updateSound(editingSound.id, payload)
         } else {
-            addSound(payload)
+            if (!addSound(payload)) return
         }
 
         // Commit the removals. A file that left the sound in this modal session
@@ -2398,6 +2435,7 @@ function AppBoard() {
     }
 
     const addSound = (newSoundData) => {
+        if (!getSoundDestination(tabType, splitSoundTarget)) return false
         const newId = mintId('sound')
         const normalizedFiles = normalizeStoredFileList(newSoundData.files || [])
 
@@ -2511,7 +2549,9 @@ function AppBoard() {
             }
         } else {
             console.error('addSound: no target container for sound', newSound.name)
+            return false
         }
+        return true
     }
 
     const updateSound = (soundId, newSoundData) => {
@@ -5294,10 +5334,10 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
         }
 
         const handlePanelAddSound = () => {
-            setSplitSoundTarget(activeItem?.splitTarget || null)
-            openAddSoundModal(activeItem?.containerType === 'group' || activeItem?.containerType === 'groupCharacter'
+            if (!activeItem) return
+            openAddSoundModal(activeItem.containerType === 'group' || activeItem.containerType === 'groupCharacter'
                 ? 'groups'
-                : isCharSection ? 'characters' : 'environment')
+                : isCharSection ? 'characters' : 'environment', activeItem.splitTarget)
         }
 
         const handlePanelAddItem = () => {
@@ -5376,6 +5416,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                     {/* Panel-Specific Edit Actions */}
                     {editMode && (
                         <div className="flex flex-col gap-2 mb-4 pb-4 border-b border-dark-700">
+                            {!activeItem && <p className="text-xs text-slate-400">{isCharSection ? 'Add a character first to add sounds.' : 'Add a category first to add sounds.'}</p>}
                             {isCharSection ? (
                                 <>
                                     <button
@@ -5387,7 +5428,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     </button>
                                     <button
                                         onClick={handlePanelAddSound}
-                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
+                                        disabled={!activeItem}
+                                        title={activeItem ? undefined : (isCharSection ? 'Add a character first to add sounds.' : 'Add a category first to add sounds.')}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <Plus size={16} />
                                         <span>Add Sound{selection?.kind === 'group' && activeItem ? '' : ' to Character'}</span>
@@ -5404,7 +5447,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     </button>
                                     <button
                                         onClick={handlePanelAddSound}
-                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400"
+                                        disabled={!activeItem}
+                                        title={activeItem ? undefined : (isCharSection ? 'Add a character first to add sounds.' : 'Add a category first to add sounds.')}
+                                        className="flex items-center space-x-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <Plus size={16} />
                                         <span>Add Sound{selection?.kind === 'group' && activeItem ? '' : ' to Environment'}</span>
@@ -6003,14 +6048,16 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 )}
                                 <button
                                     onClick={() => openAddSoundModal()}
-                                    className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors"
+                                    disabled={!canAddSound}
+                                    title={canAddSound ? undefined : soundDestinationHint}
+                                    className="flex items-center space-x-2 px-3 py-1 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Plus size={16} />
                                     <span>Add Sound</span>
                                 </button>
                             </div>
                         </div>
-                        <div className="text-sm mt-1">Sounds are disabled in edit mode</div>
+                        <div className="text-sm mt-1">{canAddSound ? 'Sounds are disabled in edit mode' : soundDestinationHint}</div>
                     </div>
                 )}
 
@@ -6226,6 +6273,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                                                 {editMode && (
                                                     <div className="space-y-2 mb-3">
+                                                        {!canAddSound && <p className="px-4 text-xs text-slate-400">{soundDestinationHint}</p>}
                                                         <CollectionIconEditor
                                                             label="Characters icon"
                                                             value={charSectionIcon}
@@ -6261,6 +6309,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 )}
                                                 {editMode && (
                                                     <div className="space-y-2 mb-3">
+                                                        {!canAddSound && <p className="px-4 text-xs text-slate-400">{soundDestinationHint}</p>}
                                                         {tabType === 'characters' ? (
                                                             <>
                                                                 <button
@@ -6272,7 +6321,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('characters')}
-                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                    disabled={!canAddSound}
+                                                                    title={canAddSound ? undefined : soundDestinationHint}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
                                                                     <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
@@ -6289,7 +6340,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('groups')}
-                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                    disabled={!canAddSound}
+                                                                    title={canAddSound ? undefined : soundDestinationHint}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
                                                                     <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
@@ -6306,7 +6359,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('groups')}
-                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                    disabled={!canAddSound}
+                                                                    title={canAddSound ? undefined : soundDestinationHint}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
                                                                     <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
@@ -6323,7 +6378,9 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openAddSoundModal('environment')}
-                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px]"
+                                                                    disabled={!canAddSound}
+                                                                    title={canAddSound ? undefined : soundDestinationHint}
+                                                                    className="w-full flex items-center space-x-3 px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors text-sm text-lime-400 font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
                                                                     <Plus size={16} className="shrink-0" />
                                                                     <span>Add Sound</span>
@@ -6748,6 +6805,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             </div>
 
                             <form onSubmit={handleSoundFormSubmit}>
+                                {!editingSound && !getSoundDestination(tabType, splitSoundTarget) && <p role="alert" className="px-6 py-3 text-amber-300">The destination is no longer available. Close this form and select a category or character before adding a sound.</p>}
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium mb-1">Sound Name *</label>
@@ -7221,7 +7279,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    disabled={!soundFormData.name.trim() || (!soundFormData.file && audioFiles.length === 0 && !soundFormData.files?.length)}
+                                                    disabled={(!editingSound && !getSoundDestination(tabType, splitSoundTarget)) || !soundFormData.name.trim() || (!soundFormData.file && audioFiles.length === 0 && !soundFormData.files?.length)}
                                                     className="px-4 py-2 bg-lime-600 hover:bg-lime-700 text-white rounded-lg transition-colors disabled:bg-dark-600 disabled:text-slate-500 disabled:cursor-not-allowed"
                                                 >
                                                     {editingSound ? 'Save Changes' : 'Add Sound'}

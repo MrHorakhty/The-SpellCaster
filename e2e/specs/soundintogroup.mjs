@@ -192,6 +192,54 @@ export const soundIntoGroup = {
     await submitModal('Save Changes');
     await sleep(700);
 
+    // Empty groups must not open a form whose save has nowhere to go.
+    // Keep the original shared fixture so later suites see the same board.
+    const originalGroups = await evalJs(`localStorage.getItem(window.__pk('ttrpg_groups'))`);
+    const emptySeed = `(() => {
+      const groups=JSON.parse(${JSON.stringify(originalGroups)});
+      groups.push({id:'empty_env_probe',name:'Empty Environment Probe',mode:'environment',categories:[],characters:[],sounds:[]},
+        {id:'empty_char_probe',name:'Empty Character Probe',mode:'characters',categories:[],characters:[],sounds:[]});
+      localStorage.setItem(window.__pk('ttrpg_groups'),JSON.stringify(groups));return true;
+    })()`;
+    const setName = async value => evalJs(`(() => {
+      const input=document.querySelector('input[name="name"]');if(!input)return false;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});
+      input.dispatchEvent(new Event('input',{bubbles:true}));return true;
+    })()`);
+    const probe = async (groupName, childType, childName, soundName) => {
+      await navigateTo(groupName); await driver.enterEditMode();
+      await clickModalOpener('Add Sound'); await sleep(200);
+      const blocked = await evalJs(`(() => {
+        const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Add Sound');
+        return !!button?.disabled && button.title===${JSON.stringify(`Add a ${childType.toLowerCase()} first to add sounds.`)} && !document.querySelector('[data-sound-modal-close]');
+      })()`);
+      await clickModalOpener('Add '+childType); await sleep(300);
+      await setName(childName); await submitModal('Add '+childType); await sleep(500);
+      await navigateTo(childName); await clickModalOpener('Add Sound'); await sleep(300);
+      const opened = await evalJs(`!!document.querySelector('[data-sound-modal-close]')`);
+      if (!opened) return {blocked,visible:false};
+      await setName(soundName); await upload(1); await sleep(500);
+      const submitted = await submitModal('Add Sound'); await sleep(500);
+      await closeDrawer();
+      const visible = submitted==='OK' && await evalJs(`(() => {
+        const g=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_groups')))).find(g=>g.name===${JSON.stringify(groupName)});
+        const children=g?.[${JSON.stringify(childType==='Character'?'characters':'categories')}];
+        return children?.some(c=>c.sounds?.some(s=>s.name===${JSON.stringify(soundName)})) && [...document.querySelectorAll('[data-sound-card]')].some(c=>c.textContent.includes(${JSON.stringify(soundName)})) && !g.sounds?.length;
+      })()`);
+      return {blocked,visible};
+    };
+    try {
+      await evalJs(emptySeed); await reload(); await sleep(800);
+      const environment = await probe('Empty Environment Probe','Category','Probe Category','Visible Category Sound');
+      log('GRP','H14: empty environment group disables Add Sound and explains category prerequisite',environment.blocked ? 'PASS':'FAIL');
+      log('GRP','H15: creating the first category enables adding a visible persisted sound',environment.visible ? 'PASS':'FAIL');
+      const character = await probe('Empty Character Probe','Character','Probe Character','Visible Character Sound');
+      log('GRP','H16: empty character group disables Add Sound and explains character prerequisite',character.blocked ? 'PASS':'FAIL');
+      log('GRP','H17: creating the first character enables adding a visible persisted sound',character.visible ? 'PASS':'FAIL');
+    } finally {
+      await evalJs(`document.querySelector('[data-sound-modal-close]')?.click();localStorage.setItem(window.__pk('ttrpg_groups'),${JSON.stringify(originalGroups)})`);
+      await reload(); await sleep(500);
+    }
     await driver.exitEditMode();
     await closeDrawer();
   }

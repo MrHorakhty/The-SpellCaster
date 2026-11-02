@@ -57,11 +57,11 @@ export const iconprep = {
           const c=document.createElement('canvas');
           c.width=decoded.width;c.height=decoded.height; const g=c.getContext('2d');g.drawImage(decoded,0,0);
           const p=g.getImageData(0,0,c.width,c.height).data; decoded.close();
-          let opaque=0,left=0,right=0,grey=true;
-          for(let i=0;i<p.length;i+=4) if(p[i+3]>128) {opaque++;if((i/4)%c.width<c.width/2)left++;else right++;
+          let opaque=0,left=0,right=0,grey=true; const peak=[0,0,0];
+          for(let i=0;i<p.length;i+=4) if(p[i+3]>128) {for(let c=0;c<3;c++)peak[c]=Math.max(peak[c],p[i+c]);opaque++;if((i/4)%c.width<c.width/2)left++;else right++;
             if(Math.abs(p[i]-106)>1 || Math.abs(p[i+1]-106)>1 || Math.abs(p[i+2]-106)>1)grey=false;}
           const middle=(Math.floor(c.height/2)*c.width+Math.floor(c.width/2))*4;
-          return {width:c.width,height:c.height,coverage:opaque/(c.width*c.height),left,right,grey,
+          return {peak,width:c.width,height:c.height,coverage:opaque/(c.width*c.height),left,right,grey,
             corner:p[3],middle:Array.from(p.slice(middle,middle+4)),bytes:Array.from(new Uint8Array(await blob.arrayBuffer()))};
         }; return true;
       })()`);
@@ -208,6 +208,31 @@ export const iconprep = {
       await waitFor(`!!document.querySelector('[data-sound-modal-close]')`);
       await evalJs(`(() => {const dt=new DataTransfer();dt.items.add(new File(['broken'],'bad.png',{type:'image/png'}));const input=document.querySelector('input[type="file"][accept*=".svg"]');input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
       log('ICON','IP16: undecodable upload reports operational error with cancel available',await waitFor(`!!document.querySelector('[data-icon-prep] [role="alert"]') && !!document.querySelector('[data-icon-cancel]:not(:disabled)')`) ? 'PASS':'FAIL');
+      await evalJs(`document.querySelector('[data-icon-cancel]')?.click();document.querySelector('[data-sound-modal-close]')?.click()`);
+      // Remove every built-in reference: a cache hit from a character used to
+      // conceal the missing group traversal. Keep the real uploaded bytes.
+      const groupSeed = `(() => {
+        const sound=${JSON.stringify(persisted)};
+        const probe=(id,color,brightness=1)=>({...sound,id,name:id,color,brightness});
+        localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify([{id:'ip_char',name:'Icon Tests',sounds:[{...sound,id:'ip_placeholder',icon:''}]}]));
+        localStorage.setItem(window.__pk('ttrpg_environment'),'[]');
+        localStorage.setItem(window.__pk('ttrpg_groups'),JSON.stringify([
+          {id:'ip_env_group',name:'Icon Environments',mode:'environment',sounds:[],categories:[{category:'Icon Category',sounds:[probe('ip_group_plain','#84cc16'),probe('ip_group_red','#ff0000',0.5)]}]},
+          {id:'ip_char_group',name:'Icon Characters',mode:'characters',sounds:[],characters:[{id:'ip_member',name:'Icon Member',sounds:[probe('ip_group_blue','#0000ff',0.25)]}]}
+        ])); return true;
+      })()`;
+      await evalJs(groupSeed); await reload(); await awaitBoard(ctx,{min:1,seed:groupSeed});
+      await ctx.navigateTo('Icon Environments'); await ctx.navigateTo('Icon Category'); await ctx.closeDrawer();
+      await waitFor(`document.querySelector('[data-sound-id="ip_group_plain"] img')?.complete && document.querySelector('[data-sound-id="ip_group_plain"] img')?.naturalWidth>0`);
+      const groupPlain = await evalJs(`${pixels}('[data-sound-id="ip_group_plain"] img')`);
+      log('ICON','IP30: cold group category resolves an uploaded icon without a built-in cache',groupPlain?.bytes.join(',')===original?.bytes.join(',') ? 'PASS':'FAIL');
+      await waitFor(`document.querySelector('[data-sound-id="ip_group_red"] img')?.src.startsWith('data:image/png')`);
+      const groupRed = await evalJs(`${pixels}('[data-sound-id="ip_group_red"] img')`);
+      log('ICON','IP31: group category upload receives its own red tint',groupRed?.peak[0]>0 && groupRed.peak[1]===0 && groupRed.peak[2]===0 && groupRed.corner===original.corner ? 'PASS':'FAIL');
+      await ctx.navigateTo('Icon Characters'); await ctx.navigateTo('Icon Member'); await ctx.closeDrawer();
+      await waitFor(`document.querySelector('[data-sound-id="ip_group_blue"] img')?.src.startsWith('data:image/png')`);
+      const groupBlue = await evalJs(`${pixels}('[data-sound-id="ip_group_blue"] img')`);
+      log('ICON','IP32: group character shares upload with independent blue tint and brightness',groupBlue?.peak[0]===0 && groupBlue.peak[1]===0 && groupBlue.peak[2]>0 && groupBlue.peak[2]<groupRed?.peak[0] && groupBlue.corner===original.corner ? 'PASS':'FAIL');
     } catch (error) {
       log('ICON','IP0: icon preparation suite completed without exception','FAIL',String(error.stack || error));
     } finally {

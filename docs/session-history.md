@@ -11148,3 +11148,42 @@ Signing records confirm user-generated signed releases and verified APK v2 signa
 ## 2026-11-03 — Final backlog and release sequencing decisions
 
 User explicitly declines hotkey sequences: excluded, not deferred. WebView recovery/check remains planned with investigation first; previous source/upstream findings stand. Remaining Google Play Console certificate/account/package steps and upload belong to the user after the whole app is finished, likely the final release activity unless Console requests changes. User will report completion; no Console completion or approval inferred. No application changes or processes started. Documentation-only: coverage44 suites/520 IDs,32 shipped covered,exit0; whitespace check passed. Lint/build/Node/platform E2E and human app test not rerun for planning prose. Pre-change backup20261103-000541 verified; final backup and commit/push/prune outcome reported in chat. Unrelated launcher deletion excluded. Planning complete; claim released.
+
+
+## SESSION 2026-11-03 — group sound icons and empty-group sound creation
+
+User accepted both built-app hand-tests. Group Icon backlog meant sound-card uploads
+inside groups, not heading Emoji/Lucide pickers; clarified that distinction. Both icon
+effects now traverse all five shapes with walkSoundContainers; tint waits for resolved
+upload bytes. IP30-IP32 cold uploaded category bytes,red category tint and independent
+blue character tint/brightness pass on web,Windows,Android. Existing five-shape Node
+walker coverage includes legacy direct group sounds. No heading upload capability added.
+
+During hand-test user found empty groups offered Add Sound and silently discarded
+submission. Added destination checks before opening/save/add,disabled actions and
+creation guidance in desktop/mobile/split,stable modal target,stale-target explanation.
+H14-H17 cover both empty group modes plus first-child creation and visible persisted
+sound. User requested targeted E2E for this follow-up,so no full suite rerun after it.
+
+Final static:lint0errors/4existing warnings(2source+2preserved recovery-copy),Vite PASS,
+coverage44suites/527IDs,34/34shipped covered,+7IDs,0removed,all exit0.
+Node all exit0:bundle55/55,storage35/35,guard20/20,keysOK,fade46/46,soundFiles32/32,
+icon35/35,snapshot19/19,release19/19,hotkeys120/120,records43/43,webUploads48/48.
+Android tooling preflight9/9,restore23/23(exit0). Icon revision full web384/0/0(exit0),
+Windows394/0/3(exit1),Android384/0/3(exit1). Final UX targeted group sound feature
+web17/0/0,Windows17/0/0,Android17/0/0(all exit0). Windows original22keys and uploads
+restored;keys verified FROM DISK. Android original28keys matched FROM DISK after cold
+restart;emulator closed. Original tracked platform runners unchanged;ignored copies
+selected only soundIntoGroup. Final split dimming style added after desktop runtime
+checks;affected lint/standalone build pass and Android used final source. Split actions
+code-reviewed;shared H runtime checks exercise single-view desktop/mobile drawer.
+Evidence:logs/keep/group-icon-20261103/ and logs/keep/empty-group-20261103/.
+
+Initial backup20261103-000916 VERIFY OK1968/1968,122.1MB;follow-up20261103-005932
+VERIFY OK2019/2019,122.4MB;pre-acceptance20261103-010736 VERIFY OK2074/2074,122.6MB.
+Sandbox backup robocopy16 and snapshot EPERM resolved by host retries. First Windows
+launch used missing PowerShell path;interrupted before suite start and retried installed
+runtime through Explorer13936. No app permissions widened. Standalone app45011968bytes,
+SHA2562E3B4C72D1D69E949F0E11C10DFFF9289F0CDC87DC43B3808C5DDC819BD66212;
+review app37192 remains open,Explorer parent13936. No test frontend/emulator remains.
+Unrelated pre-existing launcher deletion excluded from intended commit.

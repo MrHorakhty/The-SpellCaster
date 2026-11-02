@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-03 00:06)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-03 00:09 — working on: accepted Group Icon fix; empty-group Add Sound UX
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,40 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Group sound icons and empty-group Add Sound — accepted; finishing workflow in progress
+
+User hand-tested and accepted both fixes on2026-11-03. Group sound icon loading
+and tinting share walkSoundContainers across all five shapes; tint waits for the
+resolved upload. Group/category/character heading Emoji/Lucide pickers unchanged.
+Add Sound requires a real category/character destination before opening and saving;
+empty actions are disabled with creation guidance on desktop,mobile and split view.
+The form captures its destination; missing targets keep it open with an explanation.
+Code:src/App.jsx:1752/1817(icon),:2213/2236/2364/2437(destination),:5336/6051/6324(actions).
+Tests:e2e/specs/iconprep.mjs:210(IP30-IP32),soundintogroup.mjs:195(H14-H17).
+
+Final static exit0:lint0 errors/4 existing warnings(2source+2retained recovery-copy),
+Vite PASS;coverage44 suites/527 IDs,34/34 shipped covered,+7IDs,0removed.
+All12 Node exit0:bundle55/55,storage35/35,guard20/20,keysOK,fade46/46,
+soundFiles32/32,icon35/35,snapshot19/19,release19/19,hotkeys120/120,
+records43/43,webUploads48/48. Preflight9/9,restore23/23(exit0).
+Icon revision full:web384/0/0(exit0),Windows394/0/3(exit1),Android384/0/3(exit1).
+User explicitly requested targeted feature E2E for the UX follow-up;no full rerun.
+Final targeted group sound feature:web17/0/0,Windows17/0/0,Android17/0/0(all exit0).
+Windows22 keys restored/matched FROM DISK,uploads restored;Android28keys restored
+and matched FROM DISK after cold restart. All IP30-IP32 pass on all3 platforms;
+H14-H17 pass on all3. Split actions code-reviewed;H tests use single-view/drawer.
+Evidence:logs/keep/group-icon-20261103/verification.md and
+logs/keep/empty-group-20261103/verification.md. Original runners unchanged.
+
+Backups:initial20261103-000916 VERIFY OK1968/1968,122.1MB;follow-up20261103-005932
+VERIFY OK2019/2019,122.4MB;pre-acceptance20261103-010736 VERIFY OK2074/2074,122.6MB.
+Standalone Windows build PASS(exit0),45011968bytes,SHA256
+2E3B4C72D1D69E949F0E11C10DFFF9289F0CDC87DC43B3808C5DDC819BD66212.
+Review app37192 open via Explorer13936;no preview/test frontend/emulator remains.
+Unrelated pre-existing user deletion:launchers/Launch Opencode - ttrpg soundboard.bat;
+exclude it from this subject's commit. Implementation commit,push,remote verification
+and backup audit/prune in progress;claim retained until handover is finalized.
 
 ## Browser profile transfer — accepted and complete; targeted verification
 
@@ -667,7 +701,6 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Planned, provisional | Container/group volume | UI review required; user may cut this feature. Preserve individual sound balance. |
 | Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Sequences explicitly excluded by user 2026-11-03. |
 | Planned | Atomic cross-slice persistence | Save source and destination together or neither; storage design required. |
-| HIGH PRIORITY — planned | Group icon loading/tinting fix | Include all group sound shapes in loading/tint traversal and regression coverage. |
 | Deferred / undecided | Fullscreen guard | No new scope decision. |
 | Project-wide out of scope | iOS and macOS support | Explicit user scope decision 2026-11-02; not a deferred platform backlog. |
 | Other deliberate exclusions | Pan/balance, MIDI/CC; other expanded priming | Container volume and whole-container/undo priming are now planned above. |
@@ -678,7 +711,7 @@ Its **v1 §13 checklist is complete**, including native pickers and Android same
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
 Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Sequences are explicitly excluded by user 2026-11-03; do not retain as deferred work.
-Group icon loading/tinting is an implementation limitation, not merely a missing test: src/App.jsx:1755/1802 collects character/environment sounds only, skipping group categories and group characters. A shared cached icon may mask missing loading; otherwise uploaded group icons may fall back to an unavailable assets path. User has now prioritized this fix HIGH; implementation is future work, not part of this planning update.
+Group sound icon loading/tinting fix is accepted: src/App.jsx:1752 shares walkSoundContainers for all five shapes. Previously the two collectors skipped group sounds; cached built-in references could mask the missing upload load. Current verification status is at the top of this file.
 Release sequencing (user 2026-11-03): remaining certificate/account/package steps in Google Play Console and app upload are deferred until the whole app is finished. User owns these steps and will report completion. Expect this to be the final release activity unless Play Console requests changes. Signed release generation/signature verification already succeeded; do not infer Console completion or reintroduce the old In review status as a development blocker.
 
 ## Repository and working tree
@@ -782,7 +815,7 @@ There is no account, server or automatic cloud sync.
   Desktop synthetic segmentation median 45.87 → 6.38 ms (7.19×), 17 masks unchanged; no phone multiplier promised.
 - Code: src/iconPrep.js:71 (segmentation), :130 (decode cache), :152 (crop drawing), :161 (wrapper);
   src/IconPrepDialog.jsx:4; App.jsx:3115 (confirm) / :3169 (strict storage). ICON IP0–28 and iconPrep 35/35 cover it.
-- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; the user retains the batch pipeline as a separate personal tool; the former scripts/ copy is removed. Group-nested icon loading/tinting remains an implementation limitation (see Open items). Existing-icon editing, gradient
+- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; the user retains the batch pipeline as a separate personal tool; the former scripts/ copy is removed. Group-nested sound icon loading/tinting is fixed and user accepted (see top). Existing-icon editing, gradient
   removal, classifiers, algorithm-tuning controls and bulk conversion remain outside this feature.
 - Complete design and measurements: docs/session-history.md, “Accepted icon preparation: final design archive”.
   ICON_PREP_SPEC.md is retired and ignored; do not resurrect it. Coverage manifest spec is null.
