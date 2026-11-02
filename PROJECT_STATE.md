@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-02 23:55)
+🔓 UNCLAIMED — last holder: Codex (2026-11-03 00:03)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -663,17 +663,22 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Planned | Mobile keep-awake behavior | Audio does not guarantee the screen stays on. Design an explicit foreground keep-screen-awake option; assess playback/CPU behavior separately. |
 | Planned | Cross-container drag; whole-container move/copy | User selected these for future implementation; destination rules and container semantics still need design. |
 | Planned | Whole-container priming; undo priming | User selected both. Undo behavior (last change versus history, and behavior after consumption) still needs design. |
-| Deferred / undecided | Fullscreen guard; creating containers from the transfer picker; atomic cross-slice persistence | Picker creation means creating a destination character/category/group during move/copy. Atomic persistence means saving source and destination together or neither. |
+| Planned | Creating containers from the transfer picker | Create a destination character/category/group during move/copy. |
+| Planned, provisional | Container/group volume | UI review required; user may cut this feature. Preserve individual sound balance. |
+| Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Sequences remain undecided. |
+| Planned | Atomic cross-slice persistence | Save source and destination together or neither; storage design required. |
+| HIGH PRIORITY — planned | Group icon loading/tinting fix | Include all group sound shapes in loading/tint traversal and regression coverage. |
+| Deferred / undecided | Fullscreen guard | No new scope decision. |
 | Project-wide out of scope | iOS and macOS support | Explicit user scope decision 2026-11-02; not a deferred platform backlog. |
-| Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
-| Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
+| Other deliberate exclusions | Pan/balance, MIDI/CC; other expanded priming | Container volume and whole-container/undo priming are now planned above. |
+| Planned — investigation first | Android WebView renderer recovery | 2026-11-03 source check confirms pinned wry0.55.1 lacks the handler; Tauri integration exposes no class-extension hook in inspected crates. Upstream issue1901 remains open and reports the same gap in0.57.0. Needed as resilience work; ordinary-use frequency unproven. Assess supported upgrade/upstream patch before vendoring; never hand-edit generated clients. |
 
 Browser export/import and manual file sync are complete; see the accepted sections above. `PROFILE_SYNC_SPEC.md` remains a historical design dependency, not an unfinished browser-transfer plan. Its former network-sync backlog is abandoned.
 Its **v1 §13 checklist is complete**, including native pickers and Android same-device round trip;
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
-Per-container/group volume remains undecided: an independent bus multiplier would preserve per-sound balance, but adds another control alongside master and sound volume. Global shortcuts, sequences, macros and hotkey-only export remain undecided; full profile export already includes hotkeys.
-Group icon loading/tinting is an implementation limitation, not merely a missing test: src/App.jsx:1755/1802 collects character/environment sounds only, skipping group categories and group characters. A shared cached icon may mask missing loading; otherwise uploaded group icons may fall back to an unavailable assets path. No fix authorized in this scope discussion.
+Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Sequences remain undecided: e.g. G then A triggers one sound, G then B another (two ordered presses, not a chord).
+Group icon loading/tinting is an implementation limitation, not merely a missing test: src/App.jsx:1755/1802 collects character/environment sounds only, skipping group categories and group characters. A shared cached icon may mask missing loading; otherwise uploaded group icons may fall back to an unavailable assets path. User has now prioritized this fix HIGH; implementation is future work, not part of this planning update.
 Certificate review is no longer a current blocker per user 2026-11-02. The earlier In review report came from repository release notes, not a fresh external check; no approval outcome is inferred.
 
 ## Repository and working tree
@@ -802,7 +807,7 @@ There is no account, server or automatic cloud sync.
 - Desktop right-click / mobile 500 ms hold prime a card; 10 px movement cancels; fired flash lasts 2,000 ms.
   Touch `contextmenu` must not toggle again; arm holds only for button 0; swallow exactly the release click
   and reset its suppression on each new press. Priming is disabled in edit mode.
-- Whole-container priming, offsets, sticky priming, priming from a hotkey picker and undo remain out of scope.
+- Whole-container priming and undo are planned future additions; offsets, sticky priming and priming from a hotkey picker remain out of scope.
   Clear-all is the shipped answer to a mistaken prime.
 
 ### Fades, files and export/import
