@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-02 23:41)
+🔓 UNCLAIMED — last holder: Codex (2026-11-02 23:55)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -447,7 +447,7 @@ untouched/uncommitted. Subject complete; final bookkeeping commit follows.
 Signed APK generation previously succeeded. The previously recorded signed APK path is currently absent; the preflight section above records the current unsigned output. Previously verified APK package `com.thespellcaster.mrhorakhty` and v2
 signature verified by aapt2/apksigner (exit 0), file `app/universal/release/app-universal-release.apk`.
 User added its actual signing certificate to the registered package; Google Play Console
-reports **In review**. No further key/account action by this agent is pending; do not
+previously reported **In review**; user says that status is no longer relevant (2026-11-02). No current review blocker is tracked; do not
 change keys to make an existing APK match a different certificate. APK certificate:
 `6E:E2:C6:2B:43:4B:A6:A6:A1:D6:63:A0:60:D4:A1:56:49:41:26:A2:5D:CF:55:48:0A:78:3E:D2:0C:3C:F3:C8`.
 AAB package-only status and APK certificate-aware registration are different checks.
@@ -498,7 +498,7 @@ Web localStorage remains under its browser origin; user confirmed it is intact.
 User manually verified the renamed app opens and plays correctly on 2026-10-27.
 Android Studio was resynced with Gradle on 2026-10-27; Modules → app → Default Config
 visibly shows the new ID. User confirmed the delayed sync resolved their signed AAB/APK concern.
-Fresh release APK/AAB use the new ID; user signed APK verified. Actual certificate registration is in Google review.
+Fresh release APK/AAB use the new ID; user signed APK verified. Earlier certificate-review status is superseded by the user; no current review blocker is tracked.
 Debug output metadata has the new .debug ID. No app code/config changes were needed for Studio sync.
 
 Sources: `src-tauri/tauri.conf.json:5`; Android `app/build.gradle.kts:18,21`;
@@ -660,15 +660,21 @@ No export/import defect remains open from the fade work: the user confirmed expo
 
 | Priority | Work | Status / constraint |
 |---|---|---|
-| Other deferred work | Wake lock; fullscreen guard; iOS | iOS needs macOS. Signed APK generation is verified; developer-verification certificate review is pending externally. No additional implementation authorization implied. |
-| Other deliberate exclusions | Cross-container drag, whole-container move/copy, creating containers from the transfer picker, atomic cross-slice persistence | Existing move/copy does not include these. Atomic persistence requires storage design work. |
+| Planned | Mobile keep-awake behavior | Audio does not guarantee the screen stays on. Design an explicit foreground keep-screen-awake option; assess playback/CPU behavior separately. |
+| Planned | Cross-container drag; whole-container move/copy | User selected these for future implementation; destination rules and container semantics still need design. |
+| Planned | Whole-container priming; undo priming | User selected both. Undo behavior (last change versus history, and behavior after consumption) still needs design. |
+| Deferred / undecided | Fullscreen guard; creating containers from the transfer picker; atomic cross-slice persistence | Picker creation means creating a destination character/category/group during move/copy. Atomic persistence means saving source and destination together or neither. |
+| Project-wide out of scope | iOS and macOS support | Explicit user scope decision 2026-11-02; not a deferred platform backlog. |
 | Other deliberate exclusions | Per-container/group default volume, pan/balance, MIDI/CC; expanded priming | A group default volume needs a profile-storage census. Priming exclusions and rejected saved layers are below. |
 | Native debt | Android `onRenderProcessGone` | Previous investigation found no supported hook in the generated wry WebView client; an upstream change or vendoring would be needed. Do not repeatedly edit generated code expecting a lasting fix. |
 
-`PROFILE_SYNC_SPEC.md` remains live for the separate parked browser export/import work and historical design dependencies. Its former network-sync backlog is abandoned.
+Browser export/import and manual file sync are complete; see the accepted sections above. `PROFILE_SYNC_SPEC.md` remains a historical design dependency, not an unfinished browser-transfer plan. Its former network-sync backlog is abandoned.
 Its **v1 §13 checklist is complete**, including native pickers and Android same-device round trip;
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
+Per-container/group volume remains undecided: an independent bus multiplier would preserve per-sound balance, but adds another control alongside master and sound volume. Global shortcuts, sequences, macros and hotkey-only export remain undecided; full profile export already includes hotkeys.
+Group icon loading/tinting is an implementation limitation, not merely a missing test: src/App.jsx:1755/1802 collects character/environment sounds only, skipping group categories and group characters. A shared cached icon may mask missing loading; otherwise uploaded group icons may fall back to an unavailable assets path. No fix authorized in this scope discussion.
+Certificate review is no longer a current blocker per user 2026-11-02. The earlier In review report came from repository release notes, not a fresh external check; no approval outcome is inferred.
 
 ## Repository and working tree
 
@@ -692,8 +698,7 @@ Earlier maintenance complete: all automated gates pass and user confirmed glow r
 
 
 Local signing/build subject is complete: user generated a signed APK; package and v2
-signature verified. Actual certificate registration is **In review** externally in Play
-Console, per user report. Do not change keys or claim Google review has completed.
+signature verified. The earlier Play Console **In review** status is superseded by the user (2026-11-02); no current review blocker is tracked. Do not change keys or claim Google review has completed.
 
 Fresh gates: lint 0 errors/3 warnings, build/coverage PASS, eight Node checks all pass;
 Web 290/0/0 (0), Windows 307/0/3 (1), Android 297/0/3 (1). Windows disk restoration
@@ -772,7 +777,7 @@ There is no account, server or automatic cloud sync.
   Desktop synthetic segmentation median 45.87 → 6.38 ms (7.19×), 17 masks unchanged; no phone multiplier promised.
 - Code: src/iconPrep.js:71 (segmentation), :130 (decode cache), :152 (crop drawing), :161 (wrapper);
   src/IconPrepDialog.jsx:4; App.jsx:3115 (confirm) / :3169 (strict storage). ICON IP0–28 and iconPrep 35/35 cover it.
-- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; the user retains the batch pipeline as a separate personal tool; the former scripts/ copy is removed. Group-nested tint/load coverage remains a pre-existing gap. Existing-icon editing, gradient
+- Two 256px example inputs cost 18,448 bytes. Shipped icons were not reprocessed; the user retains the batch pipeline as a separate personal tool; the former scripts/ copy is removed. Group-nested icon loading/tinting remains an implementation limitation (see Open items). Existing-icon editing, gradient
   removal, classifiers, algorithm-tuning controls and bulk conversion remain outside this feature.
 - Complete design and measurements: docs/session-history.md, “Accepted icon preparation: final design archive”.
   ICON_PREP_SPEC.md is retired and ignored; do not resurrect it. Coverage manifest spec is null.

@@ -6,7 +6,7 @@
 > Current design: [docs/profile-records.md](docs/profile-records.md). The user
 > explicitly declined app-managed WebDAV/folder/cloud sync. Those proposals are
 > abandoned, not a remaining stage. The v1 notes below are historical; independent
-> browser export/import is now being implemented; current design and status:
+> browser export/import is complete and user accepted 2026-11-02; current design:
 > [docs/web-profile-transfer.md](docs/web-profile-transfer.md). The v1 web exclusion
 > and localStorage rationale below are historical. A full export can carry browser
 > uploads; the old storage capacity chiefly constrained incoming native profiles.

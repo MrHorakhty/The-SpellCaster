@@ -11132,3 +11132,9 @@ separately. Browser transfer subject complete,user accepted,targeted final check
 passed as detailed above. Claim released. Unrelated user launcher deletion remains
 uncommitted. Preview http://localhost:5233(Node37444,exec18705) is available;
 owned emulator and test frontend5173 are closed. No antivirus settings changed.
+
+## 2026-11-02 — Scope and future-work clarification
+
+User excludes iOS/macOS project-wide. Planned future work: mobile keep-awake behavior, cross-container drag, whole-container move/copy, whole-container priming and undo priming. These are backlog decisions, not implemented features or started implementation; no feature registry entries added yet. Container volume, picker destination creation, hotkey extensions, atomic persistence and renderer recovery remain undecided/deferred. Full profile bundles already carry hotkeys. Source inspection confirms group sounds are absent from icon-loading/tint collectors (App.jsx:1755/1802); corrected the misleading coverage-only wording. Earlier certificate review status originated in repository release notes; user says it is no longer relevant, so it is no longer a current blocker, without inferring external approval. Corrected stale browser-transfer planning text.
+
+Documentation-only change; no runtime/test/config edits. Coverage check: 44 suites/520 IDs,32 shipped covered,0 planned,exit0 before edits; repeated after edits. Full lint/build/Node/platform gates and human app test are not applicable to this scope clarification and were not rerun. No processes started. Pre-change backup20261102-235029 verified1949/1949,115.5MB,exit0 after sandbox robocopy16 retried successfully on host. Final verified backup and finishing results are reported in chat. Unrelated user deletion launchers/Launch Opencode - ttrpg soundboard.bat excluded. Claim released; scope clarification complete.
