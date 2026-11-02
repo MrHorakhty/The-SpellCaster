@@ -44,9 +44,13 @@ VERIFY OK2019/2019,122.4MB;pre-acceptance20261103-010736 VERIFY OK2074/2074,122.
 Standalone Windows build PASS(exit0),45011968bytes,SHA256
 2E3B4C72D1D69E949F0E11C10DFFF9289F0CDC87DC43B3808C5DDC819BD66212.
 Review app37192 open via Explorer13936;no preview/test frontend/emulator remains.
-Unrelated pre-existing user deletion:launchers/Launch Opencode - ttrpg soundboard.bat;
-exclude it from this subject's commit. Implementation commit,push,remote verification
-and backup audit/prune in progress;claim retained until handover is finalized.
+User explicitly authorized committing the pre-existing deletion of
+launchers/Launch Opencode - ttrpg soundboard.bat;retired with a .gitignore guard. Implementation4a13e52d66345db1eceba5225ebee5bca90c14f3
+committed locally on mobile-support. Final backup20261103-010851 VERIFY OK2076/2076,
+122.6MB(exit0). Initial push rejected by automatic approval review for destination authorization;
+user now explicitly approves https://github.com/MrHorakhty/The-SpellCaster.git
+and including launcher deletion. Push,remote verification and backup audit/prune
+are proceeding with that approval. Claim retained until finishing workflow is complete.
 
 ## Browser profile transfer — accepted and complete; targeted verification
 
@@ -97,8 +101,8 @@ record pruning. Subject complete;claim released. Housekeeping commit records thi
 final outcome separately from the implementation commit.
 Preview http://localhost:5233 is running(Node37444,exec session18705). Test frontend
 5173 stopped;owned emulator closed after data verification. No native app left open.
-Unrelated user deletion:launchers/Launch Opencode - ttrpg soundboard.bat;exclude
-from this subject's commit. Working tree was clean at subject start.
+The user later authorized committing the pre-existing Opencode launcher deletion
+on2026-11-03;see the current completed subject at the top. Working tree was clean at subject start.
 
 ## Replace Profile removal — complete; targeted verification
 
@@ -1059,6 +1063,7 @@ Detailed designs, decisions and inventories are preserved in session history and
 
 | Retired | Replacement / retained knowledge |
 |---|---|
+| `launchers/Launch Opencode - ttrpg soundboard.bat` | Personal tool launcher retired by user on2026-11-03; it changed to the project directory and invoked `opencode`. No replacement requested. |
 | `opencode-summary.md` | Agent-neutral `PROJECT_STATE.md`; AGENTS owns the cooperative claim protocol. |
 | `e2e/e2e-all.ps1`, `e2e-all.ps1.new` | Current full/Android runners; AV-blocked name. |
 | `e2e/e2e-run.mjs`, `e2e/e2e-features.mjs`, `e2e/e2e-features.ps1` | Shared platform/scroll/playback specs; unique coverage was ported **before deletion**. Repeat that audit for future test retirement. |

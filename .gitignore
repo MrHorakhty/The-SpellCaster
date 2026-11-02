@@ -386,3 +386,6 @@ ICON_PREP_SPEC.md
 
 # Hotkeys shipped and user accepted 2026-11-01; design in docs/hotkeys.md.
 /HOTKEYS_SPEC.md
+
+# Retired personal Opencode launcher; deletion authorized by user 2026-11-03.
+/launchers/Launch Opencode - ttrpg soundboard.bat

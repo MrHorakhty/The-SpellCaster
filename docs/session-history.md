@@ -11187,3 +11187,14 @@ runtime through Explorer13936. No app permissions widened. Standalone app4501196
 SHA2562E3B4C72D1D69E949F0E11C10DFFF9289F0CDC87DC43B3808C5DDC819BD66212;
 review app37192 remains open,Explorer parent13936. No test frontend/emulator remains.
 Unrelated pre-existing launcher deletion excluded from intended commit.
+
+Final verified backup20261103-010851:2076/2076,122.6MB(exit0). Implementation commit
+4a13e52d66345db1eceba5225ebee5bca90c14f3 on mobile-support. Push rejected by automatic
+approval review for missing explicit authorization of the configured GitHub destination
+https://github.com/MrHorakhty/The-SpellCaster.git. Approval requested;no push/prune
+performed. Claim retained while finishing workflow awaits approval.
+
+User explicitly approved pushing to https://github.com/MrHorakhty/The-SpellCaster.git
+and also authorized committing the pre-existing Opencode launcher deletion. The
+three-line personal launcher changed to project root and invoked opencode;no
+replacement requested. Added exact .gitignore guard per retired-file policy.
