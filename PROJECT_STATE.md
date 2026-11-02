@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-03 00:03)
+🔓 UNCLAIMED — last holder: Codex (2026-11-03 00:06)
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -665,7 +665,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Planned | Whole-container priming; undo priming | User selected both. Undo behavior (last change versus history, and behavior after consumption) still needs design. |
 | Planned | Creating containers from the transfer picker | Create a destination character/category/group during move/copy. |
 | Planned, provisional | Container/group volume | UI review required; user may cut this feature. Preserve individual sound balance. |
-| Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Sequences remain undecided. |
+| Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Sequences explicitly excluded by user 2026-11-03. |
 | Planned | Atomic cross-slice persistence | Save source and destination together or neither; storage design required. |
 | HIGH PRIORITY — planned | Group icon loading/tinting fix | Include all group sound shapes in loading/tint traversal and regression coverage. |
 | Deferred / undecided | Fullscreen guard | No new scope decision. |
@@ -677,9 +677,9 @@ Browser export/import and manual file sync are complete; see the accepted sectio
 Its **v1 §13 checklist is complete**, including native pickers and Android same-device round trip;
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
-Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Sequences remain undecided: e.g. G then A triggers one sound, G then B another (two ordered presses, not a chord).
+Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Sequences are explicitly excluded by user 2026-11-03; do not retain as deferred work.
 Group icon loading/tinting is an implementation limitation, not merely a missing test: src/App.jsx:1755/1802 collects character/environment sounds only, skipping group categories and group characters. A shared cached icon may mask missing loading; otherwise uploaded group icons may fall back to an unavailable assets path. User has now prioritized this fix HIGH; implementation is future work, not part of this planning update.
-Certificate review is no longer a current blocker per user 2026-11-02. The earlier In review report came from repository release notes, not a fresh external check; no approval outcome is inferred.
+Release sequencing (user 2026-11-03): remaining certificate/account/package steps in Google Play Console and app upload are deferred until the whole app is finished. User owns these steps and will report completion. Expect this to be the final release activity unless Play Console requests changes. Signed release generation/signature verification already succeeded; do not infer Console completion or reintroduce the old In review status as a development blocker.
 
 ## Repository and working tree
 
