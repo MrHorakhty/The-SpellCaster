@@ -20,7 +20,7 @@ User explicitly requested checkpoint/commit/push/prune and STOP on2026-11-03,
 then clarified: checkpoint CURRENT work; do not finish timed macros first.
 Overall upgrade remains unfinished: RETAIN the Codex claim. Do not resume feature
 work until the user asks. Leave PC ON. Branch mobile-support; base2683dfa;
-checkpoint commit/push/prune result will be recorded after remote verification.
+implementation checkpoint16643b00a502effa76fc8c5ef45da802b0ca56b8 committed/pushed to origin/mobile-support and exact remote SHA verified. Backup pruning completed; final bookkeeping follows separately.
 
 ### Completed and accepted
 
@@ -115,9 +115,15 @@ its window. Secondary monitorx1920/y0; CUA app access was denied. Speaker mute i
 No app.exe or test listeners5173/5183/5238/9224/9225/9333/9343 at final host inspection.
 No regression/build jobs remain active. No unrelated changes discarded. All current
 code/docs/tests are intended checkpoint work; no macro runtime file exists.
-Backups: pre-session011601 VERIFY2104/2104,129.8MB;checkpoint0140382195/2195,
-130.1MB;resume1949052196/2196,130.1MB;atomic2006282272/2272,132.5MB;
-pre-controls2124552450/2450,134MB. Final checkpoint backup20261103-213836 VERIFY OK2551/2551,134.3MB(exit0);remote/prune pending. Final bookkeeping may postdate this keeper; do not create another backup solely for prune notes.
+Sole backup:20261103-213836 VERIFY OK2551/2551,134.3MB(exit0). After verified
+checkpoint push,audited13295entries against tracked paths and working tree,
+preserved119differing entries as48unique contents (all recovery hashes rechecked),
+removed6older backup folders. Keeper's2551hashes reverified;only expected keeper
+remains. Recovery archive:logs/keep/controls-checkpoint-prune-20261103-214006/;
+manifest/result JSON and logscurrentcheckpoint-prune captures retain evidence.
+Final housekeeping postdates keeper;no extra backup merely for prune notes.
+Implementation16643b0 is remote-verified. Remaining work is deliberately checkpointed,
+not accepted as finished. Claim retained;STOP after final metadata push verification.
 
 ## Group sound icons and empty-group Add Sound — accepted and complete
 

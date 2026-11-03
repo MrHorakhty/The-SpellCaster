@@ -11231,3 +11231,13 @@ file export/import are NOT implemented. User confirmed future timed-macro repeat
 restart pending steps while already-playing audio continues. Current design and
 resume details:docs/controls-upgrade.md and PROJECT_STATE.md. No app/test listeners
 remain;PC stays on. Final backup/commit/push/prune completion follows below.
+
+Checkpoint finishing result:16643b00a502effa76fc8c5ef45da802b0ca56b8 pushed to
+origin/mobile-support;exact remote SHA verified before pruning. Final verified
+backup20261103-213836 holds2551files/134.3MB(exit0). Audited13295older backup entries,
+preserved119differing entries as48unique contents,verified recovery hashes,removed6
+older folders,then reverified all2551keeper hashes and sole remaining folder.
+Recovery archive:logs/keep/controls-checkpoint-prune-20261103-214006/. No backup was
+created merely for prune notes. Final bookkeeping is committed separately. Claim
+retained because global verification/macros/control-file work remains unfinished;
+user requested STOP after checkpoint. No app/test process remains; PC left on.
