@@ -1,6 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import IconPrepDialog from './IconPrepDialog.jsx'
 import HotkeySettings from './HotkeySettings.jsx'
+import useGlobalShortcuts from './useGlobalShortcuts.js'
+import TransferDialog from './TransferDialog.jsx'
+import { applyTransfer, sameTransferRef, transferContainers, transferSections, transferSource } from './transfers.js'
 import { normalizeRecords } from './profileRecords.js'
 import { useProfileRecords } from './useProfileRecords.js'
 import { HOTKEYS_KEY, inspectHotkeys, hotkeyTargets, resolveHotkey, refreshHotkeys, hotkeyEventAllowed, hotkeyModifiers, hotkeySignature } from './hotkeys.js'
@@ -33,6 +36,7 @@ import {
     readReorderAnimation,
     writeReorderAnimation,
     writeProfileValue,
+    writeProfileValues,
     keysWithPrefix,
     profileUploadPath,
     readProfileData,
@@ -960,9 +964,9 @@ function AppBoard() {
     //
     // Switching is a FULL REMOUNT (§0.3 decision 2), not a state swap. The
     // remount is the safety property: it makes the new profile the first-load
-    // state, so the three undebounced auto-save effects can never run with one
+    // state, so the combined undebounced board auto-save effect can never run with one
     // profile's data and another profile's key prefix. In-place swapping would
-    // need a `switchingRef` guard on all three effects and would still leave a
+    // need a `switchingRef` guard on the board effect and would still leave a
     // window where they disagree.
     //
     // The remount itself is owned by the App shell (the `key` on <AppBoard/>),
@@ -980,15 +984,17 @@ function AppBoard() {
     const refreshProfiles = () => setProfileIndex(readProfileIndex())
 
     // Persist the live board into the ACTIVE profile's keys. Needed before
-    // anything that changes or reads another profile's keys, because the three
-    // auto-save effects are undebounced and may not have run for a just-made
+    // anything that changes or reads another profile's keys, because the board
+    // auto-save effect is undebounced and may not have run for a just-made
     // edit - and before a merge import the next thing that happens is a
     // snapshot, which reads storage, not React state.
     const flushCurrentProfile = () => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characterRecords))
-            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentRecords))
-            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groupRecords))
+            writeProfileValues(activeProfileId, {
+                ttrpg_characters: JSON.stringify(characterRecords),
+                ttrpg_environment: JSON.stringify(environmentRecords),
+                ttrpg_groups: JSON.stringify(groupRecords),
+            })
         } catch (err) {
             console.error('Failed to flush the current profile:', err)
             setProfileNotice('Could not save this profile. Free storage before switching or importing.')
@@ -1172,7 +1178,7 @@ function AppBoard() {
         setBundleBusy('export')
         try {
             // Read the LIVE state, not storage: the user is exporting what is on
-            // screen, and the auto-save effects may lag a keystroke behind it.
+            // screen, and the board auto-save effect may lag a keystroke behind it.
             const { data: boardData, settings } = collectProfileForExport({
                 characters: characterRecords, environmentSounds: environmentRecords, groups: groupRecords,
                 hotkeys: hotkeyState.error ? undefined : refreshHotkeys(hotkeyState.payload, hotkeyTargets(allSoundContainers())),
@@ -1635,6 +1641,11 @@ function AppBoard() {
     const [showMoveCopyModal, setShowMoveCopyModal] = useState(false)
     const [moveCopySoundId, setMoveCopySoundId] = useState(null)
     const [moveCopySource, setMoveCopySource] = useState(null)
+    const [moveCopyScope, setMoveCopyScope] = useState('sound')
+    const [transferError, setTransferError] = useState('')
+    const [dropTrayOpen, setDropTrayOpen] = useState(false)
+    const transferBoardRef = useRef(null)
+    transferBoardRef.current = { characters, environmentSounds, groups }
 
     // When a split-view-targeted modal closes, drop the group-modal target so it
     // doesn't leak into subsequent single-tab operations.
@@ -2780,7 +2791,7 @@ function AppBoard() {
 
     // Every container that can hold a sound, flattened. Walks all FIVE shapes:
     // characters, environment categories, group categories, group characters and
-    // the vestigial groups[].sounds. Order is fixed and matches findSoundContainer,
+    // the vestigial groups[].sounds. Order is fixed and matches transferContainers,
     // which relies on first-hit-wins being deterministic.
     const allSoundContainers = () => {
         const containers = []
@@ -2844,81 +2855,6 @@ function AppBoard() {
         })
         return map
     }, [characters, environmentSounds, groups])
-
-    const findContainerByRef = (ref) =>
-        allSoundContainers().find(container => sameContainer(container, ref)) || null
-
-    // Locates a sound by id. Sound ids are app-unique (mintId), so the first hit
-    // wins and no ambiguity handling is needed.
-    const findSoundContainer = (soundId) => {
-        for (const container of allSoundContainers()) {
-            const index = container.sounds.findIndex(sound => sound.id === soundId)
-            if (index !== -1) {
-                return {
-                    containerType: container.containerType,
-                    containerId: container.containerId,
-                    groupId: container.groupId,
-                    index,
-                    sound: container.sounds[index]
-                }
-            }
-        }
-        return null
-    }
-
-    // Applies `updater(sounds)` to exactly one container's sounds array, via the
-    // setter that owns it. Branch structure mirrors addSound's append path.
-    // Returns false for an unknown containerType so callers can reject.
-    const patchContainerSounds = (ref, updater) => {
-        if (ref.containerType === 'character') {
-            setCharacters(prev => prev.map(character =>
-                character.id === ref.containerId
-                    ? { ...character, sounds: updater(character.sounds || []) }
-                    : character
-            ))
-        } else if (ref.containerType === 'environment') {
-            setEnvironmentSounds(prev => prev.map(category =>
-                category.category === ref.containerId
-                    ? { ...category, sounds: updater(category.sounds || []) }
-                    : category
-            ))
-        } else if (ref.containerType === 'groupCharacter') {
-            setGroups(prev => prev.map(group =>
-                group.id === ref.groupId
-                    ? {
-                        ...group,
-                        characters: (group.characters || []).map(ch =>
-                            ch.id === ref.containerId
-                                ? { ...ch, sounds: updater(ch.sounds || []) }
-                                : ch
-                        )
-                    }
-                    : group
-            ))
-        } else if (ref.containerType === 'groupTop') {
-            setGroups(prev => prev.map(group =>
-                group.id === ref.groupId
-                    ? { ...group, sounds: updater(group.sounds || []) }
-                    : group
-            ))
-        } else if (ref.containerType === 'group') {
-            setGroups(prev => prev.map(group =>
-                group.id === ref.groupId
-                    ? {
-                        ...group,
-                        categories: (group.categories || []).map(cat =>
-                            cat.category === ref.containerId
-                                ? { ...cat, sounds: updater(cat.sounds || []) }
-                                : cat
-                        )
-                    }
-                    : group
-            ))
-        } else {
-            return false
-        }
-        return true
-    }
 
     // -- File ownership ------------------------------------------------------
     //
@@ -2991,96 +2927,62 @@ function AppBoard() {
     // the first free suffix IN THE DESTINATION ONLY. The same name legitimately
     // exists in several containers already - that is the point of copying - so a
     // global uniqueness check would walk to `Fireball (copy 97)`.
-    const nextCopyName = (name, destinationSounds) => {
-        const taken = new Set((destinationSounds || []).map(sound => sound.name))
-        const first = `${name} (copy)`
-        if (!taken.has(first)) return first
-        let n = 2
-        while (taken.has(`${name} (copy ${n})`)) {
-            n++
-        }
-        return `${name} (copy ${n})`
-    }
-
-    // Moves or copies a sound into another container. `mode` is 'move' | 'copy'.
-    //
-    // On copy the new sound SHARES the source's audio reference (files[] and the
-    // legacy `file` field are carried verbatim, never rebuilt). That is why
-    // deleting a container can no longer assume it owns the bytes it references -
-    // see the isFileReferencedElsewhere guard further down.
-    //
-    // Persistence is best-effort, not atomic: the three auto-save effects are
-    // declared characters -> environmentSounds -> groups, so in any cross-slice
-    // transfer the characters/groups side persists FIRST. A move is net-zero
-    // bytes and a copy adds metadata only, so it can rarely cause a quota
-    // breach - only trip over one that was already full and already reported by
-    // the role="alert" banner.
-    const transferSound = (soundId, targetRef, mode) => {
-        const source = findSoundContainer(soundId)
-        if (!source) {
-            alert('That sound no longer exists.')
-            return false
-        }
-
-        const target = findContainerByRef(targetRef)
-        if (!target) {
-            alert('That destination no longer exists.')
-            return false
-        }
-
-        // Moving a sound into the container it is already in is a no-op at best.
-        if (mode === 'move' && sameContainer(source, targetRef)) {
-            return false
-        }
-
-        if (mode === 'copy') {
-            const copy = {
-                ...source.sound,
-                // A reused id would give two cards the same data-sound-id and
-                // break every assertion that keys off it.
-                id: mintId('sound'),
-                name: nextCopyName(source.sound.name, target.sounds)
+    // Every transfer is calculated before touching state. These three setters
+    // share one React commit and the atomic board save, including destination creation.
+    const commitTransfer = request => {
+        try {
+            const result = applyTransfer(transferBoardRef.current, request, { mint: mintId })
+            setCharacters(result.board.characters)
+            setEnvironmentSounds(result.board.environmentSounds)
+            setGroups(result.board.groups)
+            // A moved wrapper is no longer at its old selection. Keep the same
+            // container visible at its new location; copies leave the source open.
+            if (request.scope === 'container' && request.mode === 'move') {
+                const ref = result.destinationRef
+                const character = ['character', 'groupCharacter'].includes(ref.containerType)
+                const root = !ref.groupId
+                setTabType(root ? (character ? 'characters' : 'environment') : 'groups')
+                setActiveTab(root ? ref.containerId : ref.groupId)
+                if (character) setActiveCharacterId(ref.containerId)
+                else setActiveEnvironmentId(ref.containerId)
+                if (!root) {
+                    setActiveGroupId(ref.groupId)
+                    if (character) setActiveGroupCharacterId(ref.containerId)
+                    else setActiveGroupCategory(ref.containerId)
+                }
+                const selection = root ? { kind: 'top', id: ref.containerId }
+                    : { kind: 'group', groupId: ref.groupId, itemId: ref.containerId }
+                if (character) { setSplitCharSource(root ? 'top' : ref.groupId); setSplitCharSelection(selection) }
+                else { setSplitEnvSource(root ? 'top' : ref.groupId); setSplitEnvSelection(selection) }
             }
-            patchContainerSounds(targetRef, list => [...list, copy])
+            setTransferError('')
             return true
-        }
-
-        // A move relocates the SAME object reference - nothing about the sound
-        // changes, including its audio reference.
-        const appended = patchContainerSounds(targetRef, list => [...list, source.sound])
-        if (!appended) {
-            alert('That destination no longer exists.')
+        } catch (error) {
+            setTransferError(error.message)
             return false
         }
-
-        // ⚠️ NOT a delete. This removal is the source half of a silent move, so it
-        // must never grow a confirm dialog - and it must never be reused for real
-        // deletes or merged into deleteSound. Deleting a sound confirms 100% of
-        // the time, and deleteSound has exactly one call site (confirmDelete); if
-        // these two ever share code the delete confirmation silently stops firing.
-        //
-        // Scoped to the ONE source container on purpose. deleteSound's global
-        // sweep - filtering the id out of every character, category and group -
-        // is correct for delete (ids are unique) but wrong here: it would also
-        // strip a same-id sound out of an unrelated container.
-        patchContainerSounds(
-            { containerType: source.containerType, containerId: source.containerId, groupId: source.groupId },
-            list => list.filter(sound => sound.id !== soundId)
-        )
-        return true
     }
 
-    // The card knows the container it was rendered from, so opening the picker
-    // only has to capture that. splitTarget?.groupId is the owning group for both
-    // group shapes - never activeGroup, which is what makes this work from a
-    // split panel as well as the single view.
+    const transferSound = (soundId, targetRef, mode, sourceRef = null) => {
+        const source = sourceRef || transferContainers(transferBoardRef.current)
+            .find(row => row.sounds.some(sound => sound.id === soundId))?.ref
+        return commitTransfer({ source, target: targetRef, mode, scope: 'sound', soundId })
+    }
+
     const openMoveCopyModal = (sound, containerType, containerId, splitTarget = null) => {
         setMoveCopySoundId(sound.id)
-        setMoveCopySource({
-            containerType,
-            containerId,
-            groupId: splitTarget?.groupId || null
-        })
+        setMoveCopySource({ containerType, containerId, groupId: splitTarget?.groupId || null })
+        setMoveCopyScope('sound')
+        setTransferError('')
+        setShowMoveCopyModal(true)
+    }
+
+    const openContainerTransfer = ref => {
+        setMoveCopySoundId(null)
+        setMoveCopySource(ref)
+        setMoveCopyScope('sounds')
+        setTransferError('')
+        setIsPanelOpen(false)
         setShowMoveCopyModal(true)
     }
 
@@ -3088,69 +2990,31 @@ function AppBoard() {
         setShowMoveCopyModal(false)
         setMoveCopySoundId(null)
         setMoveCopySource(null)
+        setTransferError('')
     }
 
-    // Picker rows, grouped into sections in sidebar order: Characters -> each
-    // group -> Environments. Sections keep duplicate category names in different
-    // groups distinguishable (categories are name-keyed and have no id), and a
-    // group contributes only the rows it actually has - never an empty header.
-    const moveCopyTargetSections = () => {
-        const sections = [{
-            key: 'characters',
-            label: 'Characters',
-            rows: characters.map(character => ({
-                key: `character-${character.id}`,
-                label: character.name,
-                ref: { containerType: 'character', containerId: character.id, groupId: null }
-            }))
-        }]
-
-        groups.forEach(group => {
-            const rows = []
-            // Listed by what the group actually holds, not by `mode`: mode-based
-            // listing would hide a container whose sounds are still reachable, and
-            // both arrays can be populated by hand-edited localStorage.
-            ;(group.categories || []).forEach(cat => {
-                rows.push({
-                    // Row keys are index-suffixed: two categories in different
-                    // groups may share a name, and that must not collide.
-                    key: `group-cat-${group.id}-${rows.length}`,
-                    label: cat.category,
-                    ref: { containerType: 'group', containerId: cat.category, groupId: group.id }
-                })
-            })
-            ;(group.characters || []).forEach(ch => {
-                rows.push({
-                    key: `group-char-${group.id}-${rows.length}`,
-                    label: ch.name,
-                    ref: { containerType: 'groupCharacter', containerId: ch.id, groupId: group.id }
-                })
-            })
-            if (rows.length > 0) {
-                sections.push({ key: `group-${group.id}`, label: group.name, rows })
-            }
-        })
-
-        sections.push({
-            key: 'environment',
-            label: 'Environments',
-            rows: environmentSounds.map(category => ({
-                key: `environment-${category.category}`,
-                label: category.category,
-                ref: { containerType: 'environment', containerId: category.category, groupId: null }
-            }))
-        })
-
-        return sections
+    const handleMoveCopyTransfer = (target, mode, create = null) => {
+        if (commitTransfer({ source: moveCopySource, target, mode, create,
+            scope: moveCopyScope, soundId: moveCopySoundId })) closeMoveCopyModal()
     }
 
-    const handleMoveCopyTransfer = (targetRef, mode) => {
-        const ok = transferSound(moveCopySoundId, targetRef, mode)
-        if (ok) {
-            closeMoveCopyModal()
-        }
-    }
-
+    const activeTransferRef = activeCharacter
+        ? { containerType: 'character', containerId: activeCharacter.id, groupId: null }
+        : activeEnvironmentCategory
+            ? { containerType: 'environment', containerId: activeEnvironmentCategory.category, groupId: null }
+            : activeGroup?.mode === 'characters' && activeGroupCharacter
+                ? { containerType: 'groupCharacter', containerId: activeGroupCharacter.id, groupId: activeGroup.id }
+                : activeGroupCategoryObj
+                    ? { containerType: 'group', containerId: activeGroupCategoryObj.category, groupId: activeGroup.id }
+                    : null
+    const renderTransferButton = ref => editMode && ref && (
+        <button type="button" data-transfer-current data-transfer-container={JSON.stringify(ref)}
+            title="Move or Copy Container" aria-label="Move or Copy Container"
+            onClick={() => openContainerTransfer(ref)}
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-lg bg-dark-700 text-lime-400 hover:bg-dark-600 shrink-0">
+            <ArrowRightLeft size={16} />
+        </button>
+    )
     // Esc closes the picker. Registered in the capture phase so it runs before the
     // drawer's own Escape handler (App.jsx:722, bubble phase on document): stopping
     // propagation here means the event never reaches the drawer, so on mobile a
@@ -4623,10 +4487,22 @@ function AppBoard() {
     const hotkeyBlocked = editMode || isPanelOpen || showSoundModal || pendingIconFile ||
         showCharacterModal || showCategoryModal || showGroupModal || showMoveCopyModal ||
         showSettingsModal || showAboutModal || showRestoreConfirm || showDeleteConfirm || !!bundleBusy
+    const globalHotkeys = useGlobalShortcuts({ native: isTauri, profileId: activeProfileId,
+        rows: hotkeyState.payload.bindings.filter(row => row.global && resolveHotkey(row, hotkeyTargetList)),
+        blocked: hotkeyBlocked,
+        onTrigger: id => {
+            if (hotkeyBlocked || dragRef.current || readProfileIndex().activeProfileId !== activeProfileId ||
+                globalHotkeys.focused() && document.activeElement?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return
+            const binding = hotkeyState.payload.bindings.find(row => row.id === id)
+            const resolved = binding && resolveHotkey(binding, hotkeyTargetList)
+            if (resolved) playWithPrimes(resolved.sound).catch(err => console.error('Global shortcut playback failed:', err))
+        } })
+    const globalShortcutErrors = Object.entries(globalHotkeys.errors).filter(([id]) => id === '__system' || hotkeyState.payload.bindings.some(row => row.id === id && row.global))
     useEffect(() => {
         const key = event => {
             if (hotkeyBlocked || dragRef.current || readProfileIndex().activeProfileId !== activeProfileId ||
                 !hotkeyEventAllowed(event)) return
+            if (globalHotkeys.owns(event)) { event.preventDefault(); return }
             const binding = hotkeyState.payload.bindings.find(row => hotkeySignature(row) === hotkeySignature({ code: event.code, modifiers: hotkeyModifiers(event) }))
             const resolved = binding && resolveHotkey(binding, hotkeyTargetList)
             if (!resolved) return
@@ -4734,40 +4610,20 @@ function AppBoard() {
         setSaveError(describeSaveFailure(scope, err))
     }
 
-    // Auto-save Characters to localStorage whenever they change.
-    // These three effects are undebounced and stringify the whole slice, and they
-    // are also the reason a profile switch REMOUNTS rather than swapping state:
-    // `activeProfileId` is fixed for this mount, so a write can never land in
-    // another profile's namespace (§0.3 decision 2, §11 risk 10).
+    // Save one React commit as one board transaction. The fixed profile ID and
+    // full remount still prevent writes into a different profile on switching.
     useEffect(() => {
         try {
-            writeProfileValue(activeProfileId, 'ttrpg_characters', JSON.stringify(characterRecords))
+            writeProfileValues(activeProfileId, {
+                ttrpg_characters: JSON.stringify(characterRecords),
+                ttrpg_environment: JSON.stringify(environmentRecords),
+                ttrpg_groups: JSON.stringify(groupRecords),
+            })
             setSaveError(null)
         } catch (err) {
-            reportSaveFailure('your characters and their sounds', err)
+            reportSaveFailure('your board', err)
         }
-    }, [characterRecords])
-
-    // Auto-save Environment Sounds to localStorage whenever they change
-    useEffect(() => {
-        try {
-            writeProfileValue(activeProfileId, 'ttrpg_environment', JSON.stringify(environmentRecords))
-            setSaveError(null)
-        } catch (err) {
-            reportSaveFailure('your environment sounds', err)
-        }
-    }, [environmentRecords])
-
-    // Auto-save Groups to localStorage whenever they change
-    useEffect(() => {
-        try {
-            writeProfileValue(activeProfileId, 'ttrpg_groups', JSON.stringify(groupRecords))
-            setSaveError(null)
-        } catch (err) {
-            reportSaveFailure('your groups', err)
-        }
-    }, [groupRecords])
-
+    }, [characterRecords, environmentRecords, groupRecords])
     useEffect(() => {
         if (characters.length > 0 && !activeCharacterId) {
             setActiveCharacterId(characters[0].id)
@@ -4807,7 +4663,8 @@ function AppBoard() {
         let scroller = grid.parentElement
         while (scroller && !(/auto|scroll/.test(window.getComputedStyle(scroller).overflowY) && scroller.scrollHeight > scroller.clientHeight)) scroller = scroller.parentElement
         const anchor = scroller?.style.overflowAnchor
-        const state = { draggedId, from, target: from, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, valid: false, cancel: null }
+        const state = { draggedId, from, target: from, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, valid: false, cancel: null,
+            sourceRef: { containerType, containerId, groupId: groupId || null }, transferTarget: null, tray: false }
         const startX = event.clientX, startY = event.clientY
         let ghost = null, placeholder = null, frame = null, ended = false
         try { card.setPointerCapture(event.pointerId) } catch { /* capture may be unavailable */ }
@@ -4818,12 +4675,24 @@ function AppBoard() {
             const ox = now.left - gridRect.left, oy = now.top - gridRect.top
             const clip = scroller?.getBoundingClientRect() || { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
             state.valid = state.x >= Math.max(now.left, clip.left) && state.x <= Math.min(now.right, clip.right) && state.y >= Math.max(now.top, clip.top) && state.y <= Math.min(now.bottom, clip.bottom)
+            if (!state.valid && !state.tray && (state.y < 90 || state.x < 12 || state.x > window.innerWidth - 12)) {
+                state.tray = true; setDropTrayOpen(true)
+            }
+            const hit = document.elementFromPoint(state.x, state.y)?.closest('[data-transfer-drop]')
+            let drop = null
+            try { if (hit) drop = JSON.parse(hit.dataset.transferDrop) } catch { /* stale destination */ }
+            if (sameTransferRef(drop, state.sourceRef)) drop = null
+            state.transferTarget = drop
+            document.querySelectorAll('[data-transfer-hover]').forEach(el => {
+                if (el !== hit || !drop) { el.removeAttribute('data-transfer-hover'); el.style.outline = '' }
+            })
+            if (hit && drop) { hit.setAttribute('data-transfer-hover', ''); hit.style.outline = '2px solid var(--theme-accent)' }
             let target = from, nearest = Infinity
             if (state.valid) rects.forEach((r, i) => {
                 const distance = Math.hypot(state.x - (r.left + ox + r.width / 2), state.y - (r.top + oy + r.height / 2))
                 if (distance < nearest) { nearest = distance; target = i }
             })
-            placeholder.style.visibility = state.valid ? 'visible' : 'hidden'
+            placeholder.style.visibility = state.valid && !drop ? 'visible' : 'hidden'
             const slot = rects[target]
             placeholder.style.left = `${slot.left + ox}px`
             placeholder.style.top = `${slot.top + oy}px`
@@ -4855,6 +4724,13 @@ function AppBoard() {
                     scroller.scrollTop += speed
                 }
             }
+            const tray = document.querySelector('[data-transfer-drop-list]')
+            if (tray) {
+                const r = tray.getBoundingClientRect()
+                if (state.x >= r.left && state.x <= r.right && state.y >= r.top && state.y <= r.bottom) {
+                    tray.scrollTop += state.y < r.top + 28 ? -8 : state.y > r.bottom - 28 ? 8 : 0
+                }
+            }
             update()
             frame = window.requestAnimationFrame(tick)
         }
@@ -4868,7 +4744,8 @@ function AppBoard() {
             document.removeEventListener('keydown', key, true)
             window.removeEventListener('blur', cancel)
             window.removeEventListener('resize', cancel)
-            const changed = commit && state.active && state.valid && state.target !== from
+            const transfer = commit && state.active && state.transferTarget
+            const changed = commit && state.active && !transfer && state.valid && state.target !== from
             const before = changed ? new Map(nodes.map(el => [el, el === source ? ghost.getBoundingClientRect() : el.getBoundingClientRect()])) : null
             for (const el of nodes) {
                 el.getAnimations().forEach(a => a.cancel())
@@ -4880,6 +4757,9 @@ function AppBoard() {
             try { card.releasePointerCapture(event.pointerId) } catch { /* capture may already be released */ }
             dragRef.current = null
             setDraggedSoundId(null)
+            setDropTrayOpen(false)
+            document.querySelectorAll('[data-transfer-hover]').forEach(el => { el.removeAttribute('data-transfer-hover'); el.style.outline = '' })
+            if (transfer) transferSound(draggedId, state.transferTarget, 'move', state.sourceRef)
             if (changed) moveSound(draggedId, nodes[state.target].dataset.soundLayout, containerType, containerId, groupId, before)
             if (scroller) window.requestAnimationFrame(() => { scroller.style.overflowAnchor = anchor })
         }
@@ -5470,6 +5350,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {isCharSection && characters.map(c => (
                                     <div key={c.id} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'character', containerId: c.id, groupId: null })}
                                             onClick={() => setSelection({ kind: 'top', id: c.id })}
                                             className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(c.id) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -5500,6 +5381,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {!isCharSection && environmentSounds.map(e => (
                                     <div key={e.category} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'environment', containerId: e.category, groupId: null })}
                                             onClick={() => setSelection({ kind: 'top', id: e.category })}
                                             className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isTopActive(e.category) ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -5541,6 +5423,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     return (
                                         <div key={itemId} className="relative group">
                                             <button
+                                                data-transfer-drop={JSON.stringify({ containerType: isCharSection ? 'groupCharacter' : 'group', containerId: itemId, groupId: source })}
                                                 onClick={() => setSelection({ kind: 'group', groupId: source, itemId })}
                                                 className={`w-full text-left px-4 py-3 rounded-lg text-base flex items-center space-x-3 transition-colors ${isActive ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                     } ${editMode ? 'pt-8' : ''}`}
@@ -5575,13 +5458,19 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                 </div>
 
                 {/* Sound Grid */}
-                <div className="flex-1 min-h-0 min-w-0 bg-dark-800 rounded-xl p-4 overflow-y-auto">
-                    <h2 className="text-lg font-semibold mb-4 text-slate-200 truncate">
+                <div className="flex-1 min-h-0 min-w-0 bg-dark-800 rounded-xl p-4 overflow-y-auto" data-transfer-drop={activeItem ? JSON.stringify({ containerType: activeItem.containerType, containerId: activeItem.containerId, groupId: activeItem.splitTarget?.groupId || null }) : undefined}>
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                    <h2 className="text-lg font-semibold text-slate-200 truncate">
                         {activeItem
                             ? (activeItem.groupName ? `${activeItem.groupName}, ${activeItem.displayName}` : activeItem.displayName)
                             : (isCharSection ? 'Select Character' : 'Select Category')}
                     </h2>
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex gap-1 shrink-0">
+                        {renderTransferButton(activeItem ? { containerType: activeItem.containerType, containerId: activeItem.containerId, groupId: activeItem.splitTarget?.groupId || null } : null)}
+                        {editMode && sourceGroup && <button data-transfer-group title="Move or Copy Group" onClick={() => openContainerTransfer({ containerType: 'groupRoot', containerId: sourceGroup.id, groupId: sourceGroup.id })} className="px-2 py-1 rounded-lg bg-dark-700 text-xs text-lime-400">Group</button>}
+                    </div>
+                    </div>
+                    <div className="flex flex-wrap gap-4" data-transfer-drop={activeItem ? JSON.stringify({ containerType: activeItem.containerType, containerId: activeItem.containerId, groupId: activeItem.splitTarget?.groupId || null }) : undefined}>
                         {activeItem?.sounds?.map(sound => renderSoundCard(
                             sound,
                             activeItem.containerType,
@@ -5631,7 +5520,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                 with no save error, and a failed write can show the alert with no
                 summary. One wrapper is the only place that question does not have to
                 be asked twice. It is a no-op on desktop, where the inset is 0. */}
-            {(importNotice || saveError) && (
+            {(importNotice || saveError || globalShortcutErrors.length > 0) && (
                 <div
                     className="shrink-0"
                     style={isMobile ? { paddingTop: 'env(safe-area-inset-top)' } : undefined}
@@ -5673,6 +5562,10 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                             </button>
                         </div>
                     )}
+                    {globalShortcutErrors.length > 0 && <div role="alert" data-global-shortcut-error className="flex items-center gap-3 px-4 py-2 bg-amber-900 text-amber-100">
+                        <p className="flex-1 min-w-0 text-sm break-words">{globalShortcutErrors[0][1]}</p>
+                        <button className="min-h-[44px] px-3 rounded-lg bg-dark-800 shrink-0 text-sm" onClick={() => setShowSettingsModal(true)}>Review hotkeys</button>
+                    </div>}
                     {/* Save failure banner: a failed localStorage write is otherwise invisible */}
                     {saveError && (
                         <div role="alert" className="flex items-start gap-3 px-4 py-2.5 bg-red-700 text-white">
@@ -5843,6 +5736,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 <span className="text-xs font-medium text-slate-300 sm:hidden">Split</span>
                                 <button
                                     type="button"
+                                    data-split-view aria-label="Split View"
                                     onClick={() => setIsSplitView(!isSplitView)}
                                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${isSplitView ? 'bg-lime-600' : 'bg-dark-600'
                                         }`}
@@ -6148,7 +6042,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                                 {/* Sound grid takes the rest */}
                                 <div className="flex-1 min-w-0 flex flex-col">
-                                    <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
+                                    <div className="flex-1 min-w-0 bg-dark-800 rounded-xl p-3" data-transfer-drop={activeTransferRef ? JSON.stringify(activeTransferRef) : undefined} style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
                                         <div className="flex items-center justify-between mb-3">
                                             <h2
                                                 onClick={() => {
@@ -6171,6 +6065,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 <span className="truncate">{activeHeadingName}</span>
                                             </h2>
                                             <div className="flex items-center gap-2 shrink-0">
+                                                {renderTransferButton(activeTransferRef)}
+                                                {editMode && tabType === 'groups' && activeGroup && <button data-transfer-group title="Move or Copy Group" onClick={() => openContainerTransfer({ containerType: 'groupRoot', containerId: activeGroup.id, groupId: activeGroup.id })} className="p-2 rounded-lg bg-dark-700 text-xs text-lime-400">Group</button>}
                                                 <button
                                                     onClick={() => { if (!isPanelOpen) setEditMode(!editMode) }}
                                                     className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors z-30 ${editMode ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'} ${isPanelOpen ? 'pointer-events-none opacity-40' : ''}`}
@@ -6180,7 +6076,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-4">
+                                        <div className="flex flex-wrap gap-4" data-transfer-drop={activeTransferRef ? JSON.stringify(activeTransferRef) : undefined}>
                                             {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.sounds : activeGroupCategoryObj?.sounds) || []).map(sound => renderSoundCard(
                                                 sound,
                                                 activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : (activeGroup?.mode === 'characters' ? 'groupCharacter' : 'group'),
@@ -6407,7 +6303,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 {tabType === 'characters' && characters.map(char => (
                                                     <div key={char.id} className="relative">
                                                         <button
-                                                            onClick={() => selectItem('characters', char.id)}
+                                                            data-transfer-drop={JSON.stringify({ containerType: 'character', containerId: char.id, groupId: null })}
+                                            onClick={() => selectItem('characters', char.id)}
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
@@ -6429,7 +6326,8 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 {tabType === 'environment' && environmentSounds.map(cat => (
                                                     <div key={cat.category} className="relative">
                                                         <button
-                                                            onClick={() => selectItem('environment', cat.category)}
+                                                            data-transfer-drop={JSON.stringify({ containerType: 'environment', containerId: cat.category, groupId: null })}
+                                            onClick={() => selectItem('environment', cat.category)}
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
                                                         >
@@ -6451,6 +6349,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).map(ch => (
                                                     <div key={ch.id} className="relative">
                                                         <button
+                                                            data-transfer-drop={JSON.stringify({ containerType: 'groupCharacter', containerId: ch.id, groupId: activeGroup.id })}
                                                             onClick={() => selectGroupCharacter(ch.id)}
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
@@ -6473,6 +6372,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                                 {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).map(cat => (
                                                     <div key={cat.category} className="relative">
                                                         <button
+                                                            data-transfer-drop={JSON.stringify({ containerType: 'group', containerId: cat.category, groupId: activeGroup.id })}
                                                             onClick={() => selectGroupCategory(cat.category)}
                                                             className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium flex items-center space-x-3 min-h-[44px] ${activeGroupCategory === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                                 }`}
@@ -6618,6 +6518,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {tabType === 'characters' && characters.map(char => (
                                     <div key={char.id} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'character', containerId: char.id, groupId: null })}
                                             onClick={() => selectItem('characters', char.id)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === char.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -6649,6 +6550,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {tabType === 'environment' && environmentSounds.map(cat => (
                                     <div key={cat.category} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'environment', containerId: cat.category, groupId: null })}
                                             onClick={() => selectItem('environment', cat.category)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeTab === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -6680,6 +6582,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {tabType === 'groups' && activeGroup?.mode === 'characters' && (activeGroup?.characters || []).map(ch => (
                                     <div key={ch.id} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'groupCharacter', containerId: ch.id, groupId: activeGroup.id })}
                                             onClick={() => selectGroupCharacter(ch.id)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeGroupCharacterId === ch.id ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -6710,6 +6613,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                 {tabType === 'groups' && activeGroup?.mode !== 'characters' && (activeGroup?.categories || []).map(cat => (
                                     <div key={cat.category} className="relative group">
                                         <button
+                                            data-transfer-drop={JSON.stringify({ containerType: 'group', containerId: cat.category, groupId: activeGroup.id })}
                                             onClick={() => selectGroupCategory(cat.category)}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center space-x-3 ${activeGroupCategory === cat.category ? 'bg-lime-600 text-white' : 'bg-dark-700 text-slate-300 hover:bg-dark-600'
                                                 } ${editMode ? 'pt-8' : ''}`}
@@ -6743,14 +6647,16 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 
                         {/* Standard Sound Grid (desktop only; mobile uses the grid in the left-panel layout) */}
                         {!isMobile && (
-                        <div className="flex-1 min-w-0 min-h-0 bg-dark-800 rounded-xl p-6 overflow-y-auto">
+                        <div className="flex-1 min-w-0 min-h-0 bg-dark-800 rounded-xl p-6 overflow-y-auto" data-transfer-drop={activeTransferRef ? JSON.stringify(activeTransferRef) : undefined}>
                             <div className="flex items-center justify-between gap-3 mb-4">
                                 <h2 className="flex items-center gap-2 min-w-0 text-xl font-semibold">
                     {renderHeadingIcon(20)}
                     <span className="truncate">{activeHeadingName}</span>
                                 </h2>
+                                {renderTransferButton(activeTransferRef)}
                                 {editMode && tabType === 'groups' && activeGroup && (
                                     <div className="flex items-center gap-2 shrink-0">
+                                        <button data-transfer-group title="Move or Copy Group" onClick={() => openContainerTransfer({ containerType: 'groupRoot', containerId: activeGroup.id, groupId: activeGroup.id })} className="p-2 rounded-lg bg-dark-700 text-xs text-lime-400">Transfer group</button>
                                         <button
                                             onClick={() => handleEditGroup(activeGroup.id)}
                                             className="p-2 rounded-lg bg-dark-700 text-slate-300 hover:bg-dark-600 transition-colors"
@@ -6768,7 +6674,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     </div>
                                 )}
                             </div>
-                            <div className="flex flex-wrap gap-4">
+                            <div className="flex flex-wrap gap-4" data-transfer-drop={activeTransferRef ? JSON.stringify(activeTransferRef) : undefined}>
                                 {(activeCharacter?.sounds || activeEnvironmentCategory?.sounds || (activeGroup?.mode === 'characters' ? activeGroupCharacter?.sounds : activeGroupCategoryObj?.sounds) || []).map(sound => renderSoundCard(
                                     sound,
                                     activeCharacter ? 'character' : activeEnvironmentCategory ? 'environment' : (activeGroup?.mode === 'characters' ? 'groupCharacter' : 'group'),
@@ -7486,77 +7392,36 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                 </div>
             )}
 
-            {/* Move / Copy Sound Picker */}
-            {showMoveCopyModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
-                    <div className={`bg-dark-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto ${isMobile ? 'min-h-[80vh]' : ''}`}>
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-xl font-bold">
-                                    Move or Copy
-                                </h2>
-                                <button
-                                    onClick={closeMoveCopyModal}
-                                    className="p-1 hover:bg-dark-700 rounded-lg"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            <div className="max-h-[35vh] overflow-y-auto">
-                                {moveCopyTargetSections().map(section => (
-                                    <div key={section.key} className="mb-3">
-                                        <p className="px-3 py-2 text-xs font-semibold uppercase text-slate-400">
-                                            {section.label}
-                                        </p>
-                                        {section.rows.map(row => {
-                                            // Move into the current container is a no-op, so
-                                            // that row is not offered. Copying into it is
-                                            // allowed - it is the natural way to get the same
-                                            // audio with a different colour, fade or icon.
-                                            const isCurrent = sameContainer(moveCopySource, row.ref)
-                                            return (
-                                                <div
-                                                    key={row.key}
-                                                    className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-dark-700 rounded-lg"
-                                                >
-                                                    <span className="text-sm text-slate-200 truncate">
-                                                        {row.label}
-                                                        {isCurrent && (
-                                                            <span className="ml-2 text-xs text-slate-400">
-                                                                (duplicate here)
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                    <span className="flex items-center gap-2 shrink-0">
-                                                        {!isCurrent && (
-                                                            <button
-                                                                onClick={() => handleMoveCopyTransfer(row.ref, 'move')}
-                                                                className="px-3 py-1 rounded-lg bg-lime-600 text-white hover:bg-lime-700 transition-colors"
-                                                                title={`Move to ${row.label}`}
-                                                            >
-                                                                Move
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => handleMoveCopyTransfer(row.ref, 'copy')}
-                                                            className="px-3 py-1 rounded-lg bg-dark-700 text-slate-200 hover:bg-dark-600 border border-dark-600 transition-colors"
-                                                            title={`Copy to ${row.label}`}
-                                                        >
-                                                            Copy
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                ))}
-                            </div>
+            {draggedSoundId && !dropTrayOpen && <p data-transfer-drop-hint className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none rounded-lg bg-dark-950/95 border border-dark-600 px-3 py-2 text-xs text-slate-200">Drag to a container, or towards the top edge for more destinations.</p>}
+            {dropTrayOpen && draggedSoundId && <div data-transfer-drop-tray className="fixed right-3 top-20 z-50 w-56 max-w-[75vw] rounded-xl border border-lime-600 bg-dark-950 shadow-xl p-2">
+                <p className="px-2 py-2 text-xs font-semibold text-lime-400">Release on a destination to move</p>
+                <div data-transfer-drop-list className="max-h-[55dvh] overflow-y-auto space-y-1">
+                    {transferContainers(transferBoardRef.current).filter(row => !sameTransferRef(row.ref, dragRef.current?.sourceRef)).map(row => (
+                        <div key={row.key} data-transfer-drop={JSON.stringify(row.ref)} className="rounded-lg bg-dark-700 p-3 text-sm">
+                            <span className="block text-xs text-slate-400 truncate">{row.section}</span>
+                            <span className="block truncate">{row.label}</span>
                         </div>
-                    </div>
+                    ))}
                 </div>
-            )}
+            </div>}
 
+            {showMoveCopyModal && moveCopySource && (() => {
+                let source
+                try {
+                    source = transferSource(transferBoardRef.current, moveCopySource)
+                    if (moveCopyScope === 'sound') {
+                        const sound = transferContainers(transferBoardRef.current).flatMap(row => row.sounds).find(s => s.id === moveCopySoundId)
+                        source = { ...source, name: sound?.name || 'Sound', count: 1 }
+                    }
+                } catch { source = { name: 'Missing container', count: 0 } }
+                return <TransferDialog source={source} scope={moveCopyScope}
+                    allowContainer={moveCopySoundId === null} groups={groups} error={transferError}
+                    sections={transferSections(transferBoardRef.current, moveCopySource, moveCopyScope)}
+                    onScope={scope => { setMoveCopyScope(scope); setTransferError('') }}
+                    onTransfer={handleMoveCopyTransfer}
+                    onCreate={(create, mode) => handleMoveCopyTransfer(null, mode, create)}
+                    onClose={closeMoveCopyModal} />
+            })()}
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" style={{ paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : undefined }}>
@@ -7769,7 +7634,7 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
                                     )}
                                 </div>
 
-                                <HotkeySettings state={hotkeyState} targets={hotkeyTargetList} onSave={saveHotkeys} createId={() => mintId('hk')} />
+                                <HotkeySettings state={hotkeyState} targets={hotkeyTargetList} onSave={saveHotkeys} createId={() => mintId('hk')} globalState={globalHotkeys} />
 
                                 {/* Profiles. A section of Settings rather than a seventh modal - the Settings
                                     modal is already a bottom sheet on mobile and a centered dialog on
@@ -8083,13 +7948,13 @@ const wasFired = !editMode && firedPrimeIds.includes(sound.id)
 // profile changes, the whole board is unmounted and mounted again, so every
 // `useState` initialiser re-runs and reads the NEW profile's storage. That is
 // the whole safety argument for switching by remount - there is no window in
-// which the auto-save effects hold one profile's state while writing another's
+// which the board auto-save effect holds one profile's state while writing another's
 // keys.
 //
 // Deliberately not a router or a re-read: a remount is blunt, and blunt is
 // correct here. If this ever needs to become an in-place switch, the price is a
-// `switchingRef` guard on all three auto-save effects (App.jsx, the
-// ttrpg_characters/environment/groups effects).
+// `switchingRef` guard on the board auto-save effect (App.jsx, the
+// combined board effect).
 function App() {
     const [remountKey, setRemountKey] = useState(0)
 

@@ -159,6 +159,9 @@ await check('deleting profile removes bindings only from that namespace', () => 
 })
 await check('binding key write failure restores the entire pre-merge snapshot', async () => {
   storage.writeProfileValue(p, 'ttrpg_characters', JSON.stringify([{ id: 'old', sounds: [] }]))
+  // Force an actual binding write: atomic commits correctly skip byte-identical
+  // keys. Preserve meaningful existing bindings and verify exact old bytes.
+  storage.writeProfileValue(p, 'ttrpg_hotkeys', JSON.stringify(payload, null, 2))
   const before = bundle.snapshotProfile(p).keys, set = ls.setItem
   let injected = false
   ls.setItem = (key, value) => {

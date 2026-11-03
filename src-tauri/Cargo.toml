@@ -30,3 +30,7 @@ tauri-plugin-os = "2.2.0"
 # registered only in main.rs is silently missing on mobile, which fails with
 # "dialog.save not allowed. Plugin not found".
 tauri-plugin-dialog = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Keep native Tauri 2.11; the plugin's 2.4 series requires Tauri 2.12.
+tauri-plugin-global-shortcut = "=2.3.2"

@@ -234,5 +234,109 @@ ok('reorder animation is shared across profile switches and deletions', () => {
   assert.equal(m.readReorderAnimation(), false)
 })
 
+// Fault-test every mutation boundary, including a rollback that cannot write.
+const T = await import('../src/profileTransaction.js')
+const prefix = 'profile:atomic:'
+const original = { [prefix + 'a']: 'old-a', [prefix + 'b']: 'old-b', [prefix + 'gone']: 'keep' }
+const next = { a: 'new-a', b: 'new-b', gone: null, added: 'new' }
+function faultStore(at, persistent = false) {
+  const store = makeStore(original)
+  let mutations = 0
+  let enabled = true
+  for (const method of ['setItem', 'removeItem']) {
+    const apply = store[method]
+    store[method] = (...args) => {
+      mutations++
+      if (enabled && (persistent ? mutations >= at : mutations === at)) throw new Error('injected storage failure')
+      return apply(...args)
+    }
+  }
+  store.unblock = () => { enabled = false }
+  return store
+}
+for (let at = 1; at <= 6; at++) {
+  for (const persistent of [false, true]) {
+    ok(`transaction mutation ${at}, persistent=${persistent}: complete old state and restart recovery`, () => {
+      const store = faultStore(at, persistent)
+      assert.throws(() => T.commitTransaction(store, prefix, next), /injected/)
+      assert.equal(T.readTransactionValue(store, prefix, 'a'), 'old-a')
+      assert.equal(T.readTransactionValue(store, prefix, 'b'), 'old-b')
+      assert.equal(T.readTransactionValue(store, prefix, 'gone'), 'keep')
+      assert.equal(T.readTransactionValue(store, prefix, 'added'), null)
+      const physicalKeys = [...store._map.keys()].map(k => k.slice(prefix.length))
+      assert.deepEqual(T.transactionKeys(store, prefix, physicalKeys).sort(), ['a', 'b', 'gone'])
+      if (persistent && at > 1) {
+        assert.throws(() => T.commitTransaction(store, prefix, { a: 'do not overwrite recovery' }))
+        assert.equal(T.readTransactionValue(store, prefix, 'a'), 'old-a')
+      }
+      store.unblock()
+      T.recoverTransaction(store, prefix)
+      assert.deepEqual(store.snapshot(), original)
+      T.recoverTransaction(store, prefix)
+      assert.deepEqual(store.snapshot(), original)
+    })
+  }
+}
+for (let applied = 0; applied <= 4; applied++) {
+  ok(`restart after ${applied} applied changes rolls back the entire transaction`, () => {
+    const store = makeStore(original)
+    store.setItem(prefix + T.TRANSACTION_KEY, JSON.stringify({ version: 1,
+      before: Object.keys(next).map(key => [key, store.getItem(prefix + key)]) }))
+    for (const [key, value] of Object.entries(next).slice(0, applied)) {
+      if (value === null) store.removeItem(prefix + key)
+      else store.setItem(prefix + key, value)
+    }
+    T.recoverTransaction(store, prefix)
+    assert.deepEqual(store.snapshot(), original)
+  })
+}
+ok('successful transaction persists new values with no journal; no-op consumes no quota', () => {
+  const store = makeStore(original)
+  T.commitTransaction(store, prefix, next)
+  assert.deepEqual(store.snapshot(), { [prefix + 'a']: 'new-a', [prefix + 'b']: 'new-b', [prefix + 'added']: 'new' })
+  store.setItem = () => { throw new Error('no writes allowed') }
+  T.commitTransaction(store, prefix, next)
+})
+ok('malformed journal is preserved and blocks writes', () => {
+  const store = makeStore(original)
+  store.setItem(prefix + T.TRANSACTION_KEY, '{broken')
+  const before = store.snapshot()
+  assert.throws(() => T.commitTransaction(store, prefix, next))
+  assert.deepEqual(store.snapshot(), before)
+})
+ok('journal cannot name itself or contain duplicate keys or invalid values', () => {
+  for (const before of [[[T.TRANSACTION_KEY, null]], [['a', 'x'], ['a', 'y']], [['a', 1]]]) {
+    const store = makeStore(original)
+    store.setItem(prefix + T.TRANSACTION_KEY, JSON.stringify({ version: 1, before }))
+    assert.throws(() => T.recoverTransaction(store, prefix), /Invalid profile recovery/)
+  }
+})
+ok('transaction validation occurs before mutation', () => {
+  const store = makeStore(original)
+  assert.throws(() => T.commitTransaction(store, prefix, { a: 1 }))
+  assert.throws(() => T.commitTransaction(store, prefix, { [T.TRANSACTION_KEY]: 'bad' }))
+  assert.deepEqual(store.snapshot(), original)
+})
+ok('profile accessors expose journal old values and exclude internal metadata', () => {
+  const priorWindow = globalThis.window
+  const store = makeStore(original)
+  globalThis.window = { localStorage: store }
+  try {
+    store.setItem(prefix + T.TRANSACTION_KEY, JSON.stringify({ version: 1, before: [['a', 'old-a'], ['gone', 'keep'], ['added', null]] }))
+    store.setItem(prefix + 'a', 'partial')
+    store.removeItem(prefix + 'gone')
+    store.setItem(prefix + 'added', 'partial')
+    assert.equal(m.readProfileValue('atomic', 'a'), 'old-a')
+    assert.equal(m.readProfileData('atomic', 'a', [], (_, x) => x, '3').length, 0)
+    // readProfileData's repair path may recover; recreate the interrupted state.
+    T.recoverTransaction(store, prefix)
+    assert.deepEqual(m.profileKeys('atomic').filter(k => !k.endsWith('_old') && k !== 'ttrpg_data_version').sort(), ['a', 'b', 'gone'])
+    store.setItem('profile:other:a', 'other')
+    m.writeProfileValues('atomic', { a: 'committed', b: 'together' })
+    assert.equal(m.readProfileValue('other', 'a'), 'other')
+    assert.equal(m.readProfileValue('atomic', 'a'), 'committed')
+  } finally { globalThis.window = priorWindow }
+})
+
 await Promise.all(pending);
 console.log(`\n${pass} passed${process.exitCode ? ', with failures' : ''}\n`)

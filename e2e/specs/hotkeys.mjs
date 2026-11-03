@@ -134,7 +134,7 @@ export const hotkeys = {
       await evalJs(`window.confirm=window.__hkConfirm;delete window.__hkConfirm`)
       log('HOTKEY', 'HK25: deleting other profile preserves owning bindings', await evalJs(`!JSON.parse(localStorage.getItem('spellcaster_profiles')).profiles.some(p=>p.id===${JSON.stringify(other)}) && JSON.parse(localStorage.getItem(window.__pk('ttrpg_hotkeys'))).version===99`))
       await evalJs(`window.__hkConfirm=window.confirm;window.confirm=()=>true`); await click('[data-hotkey-reset]'); await evalJs(`window.confirm=window.__hkConfirm;delete window.__hkConfirm`)
-      log('HOTKEY', 'HK30: explicit reset repairs unsupported storage', (await stored())?.version === 2 && (await stored())?.bindings?.length === 0 && await evalJs(`!document.querySelector('[data-hotkey-add]').disabled`))
+      log('HOTKEY', 'HK30: explicit reset repairs unsupported storage', (await stored())?.version === 3 && (await stored())?.bindings?.length === 0 && await evalJs(`!document.querySelector('[data-hotkey-add]').disabled`))
       await close()
       await evalJs(`(() => {const c=window.__liveBoard(JSON.parse(localStorage.getItem(window.__pk('ttrpg_characters'))));c.push({id:'hk_chords',name:'Modifier sounds',sounds:[{id:'hk_mod',name:'Modified sound',files:[{name:'Tavern_Music.mp3',displayName:'Tavern_Music.mp3'}]}]});localStorage.setItem(window.__pk('ttrpg_characters'),JSON.stringify(c));return true})()`)
       await reload(); await spy(); await settings()
@@ -149,7 +149,7 @@ export const hotkeys = {
         await click(`[data-hotkey-target="${mask ? 'hk_mod' : 'hk_two'}"]`); await click('[data-hotkey-save]')
       }
       const chords = await stored()
-      log('HOTKEY', 'HK40: all seven modifier combinations coexist with the bare key', chords?.version === 2 && chords.bindings.length === 8 && new Set(chords.bindings.map(r=>r.modifiers)).size === 8)
+      log('HOTKEY', 'HK40: all seven modifier combinations coexist with the bare key', chords?.version === 3 && chords.bindings.length === 8 && new Set(chords.bindings.map(r=>r.modifiers)).size === 8)
       await close(); await evalJs(`document.activeElement?.blur()`)
       let exact = true
       for (let mask = 0; mask < 8; mask++) {

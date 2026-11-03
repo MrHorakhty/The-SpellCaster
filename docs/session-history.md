@@ -11208,3 +11208,26 @@ older folders. Only backup20261103-011034 remains;all2078 hashes reverified. No 
 backup solely for pruning notes. Final host check finds no app.exe;review app closed,
 no test frontend/emulator remains. Claim released;no unfinished work. Completion
 housekeeping committed separately;working tree clean after that commit.
+
+## 2026-11-03 — Persistence and controls upgrade checkpoint (Codex)
+
+User requested checkpoint/commit/push/prune and stop, explicitly choosing current
+work rather than implementing macros first. Claim remains active: overall upgrade
+unfinished. User accepted transfer behavior after testing; atomic and transfers
+passed full platform gates, latest web417/0/0(exit0),Windows427/0/3(exit1),Android
+417/0/3(exit1). Original Windows22keys/8uploads restored and Android28keys cold-
+verified. Initial WindowsZ22 sampling failure passed unchanged retry; evidence kept.
+
+Global shortcut implementation checkpoint: compatible plugin2.3.2, Windows-only
+native registration in both entry points, schema3 global bindings, serialized/
+fenced registration, visible errors and focused-platform fallback. Static checks:
+lint0errors4baselineWARN,buildPASS,coverage46suites567IDs(+11GS/0removed),all exits0.
+All14Node gates passed:55,57,20,profile-keyOK,46,32,35,19,19,120,43,48,80,51.
+Snapshot fixture sandbox EPERM passed unchanged on host19/19. Android tooling16/16
+and23/23;native cargo checkPASS(exit0);focused hotkeys/global web55/0/0(exit0).
+No full platform E2E after global implementation and no physical background-key
+acceptance yet. Native GS OS-conflict fixture remains unexecuted. Macros and control-
+file export/import are NOT implemented. User confirmed future timed-macro repeats
+restart pending steps while already-playing audio continues. Current design and
+resume details:docs/controls-upgrade.md and PROJECT_STATE.md. No app/test listeners
+remain;PC stays on. Final backup/commit/push/prune completion follows below.

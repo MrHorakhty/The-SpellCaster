@@ -1,6 +1,6 @@
 # Project State
 
-🔓 UNCLAIMED — last holder: Codex (2026-11-03 01:12)
+🔒 CURRENT HOLDER: Codex — claimed 2026-11-03 01:15 — working on: atomic persistence, transfer improvements, global shortcuts, macros and hotkey-only transfer
 
 Current handover for **The SpellCaster**. Read this with [AGENTS.md](AGENTS.md), which owns the
 standing rules and definition of done. Its session finishing workflow runs once the subject is complete
@@ -13,6 +13,111 @@ The complete state file before this cleanup is preserved in
 [the 2026-10-25 snapshot](docs/session-history.md#project-state-snapshot-2026-10-25),
 including every old decision, measurement, correction and retired-file explanation.
 That snapshot is historical and contains contradictions; current code, this handover and live specs take precedence.
+
+## Persistence and controls upgrade — user-requested checkpoint
+
+User explicitly requested checkpoint/commit/push/prune and STOP on2026-11-03,
+then clarified: checkpoint CURRENT work; do not finish timed macros first.
+Overall upgrade remains unfinished: RETAIN the Codex claim. Do not resume feature
+work until the user asks. Leave PC ON. Branch mobile-support; base2683dfa;
+checkpoint commit/push/prune result will be recorded after remote verification.
+
+### Completed and accepted
+
+Atomic persistence: synchronous namespaced undo journal, recovery before reads/
+writes, combined board autosave and transactional bundle commit/restore. Design
+src/profileTransaction.js:18/43,src/profileStorage.js:363,src/profileBundle.js:878,
+src/App.jsx:993/4617; docs/atomic-persistence.md. profileStorage57/57 includes22
+new failure/recovery assertions. Shared F13–F16 include interrupted-journal and UI
+quota failure/reload. No literal power-loss test or user UI test claimed for this
+internal refactor.
+
+Transfer scope: cross-container mouse/touch drag; staged picker destination
+creation; both all-sounds and whole-wrapper move/copy; group duplication/bulk
+sound transfer while groups remain top-level. User hand-tested the standalone
+build and ACCEPTED on2026-11-03. Moves preserve sound IDs/hotkeys; copies mint fresh
+recursive IDs and independent settings. Wrapper-ID collisions remap only wrapper
+ID. Hierarchical record merge requires old-location tombstones/new-location sync
+identity; playback IDs survive. This corrected the draft sync-ID promise without
+changing the merge format. Code src/transfers.js:175,src/TransferDialog.jsx:4,
+src/App.jsx:2932; docs/transfer-improvements.md. transfers80/80 and sharedTR1–TR25.
+
+Final transfer platform evidence:
+- Web417 PASS/0 FAIL/0 WARN(exit0),runner203013.
+- Windows427/0/3(suite/runner1,expected WARN),runner205728,Explorer6900 verified.
+  Original22keys matched FROM DISK(snapshot205734/disk210828),8uploads restored.
+  Initial runner204549 had426/1/3(suite2/runner1),sole existingZ22 fade sampling
+  failure(two descending steps). Unchanged retry observed3steps tozero and passed;
+  root cause unconfirmed, no playback/threshold changes. Failure evidence retained.
+- Android417/0/3(suite/runner1),runner211109. Original28keys matched FROM DISK after
+  cold restart(snapshot211203/cold companion). Emulator/ADB mappings/dev tree cleaned.
+- Picker/new-group form reviewed on desktop and Android, no horizontal overflow.
+  Standalone release210903 PASS(exit0),40,758,272bytes,SHA256
+  2AE1D483848ACF05BDB9F04AFFA7CDAB4DBBD17A92CC6321B5C4E85BC4F20CED.
+  Review app was opened from Explorer and is now CLOSED(host process check).
+  Evidence logs/keep/transfers-20261103/verification.md.
+
+Atomic's earlier platform gates: web392/0/0(0),Windows402/0/3(1),Android392/0/3(1).
+First Android attempt was interrupted by a Play WebView provider update (Activity-
+Manager installPackageLI killed app4205); original28keys manually restored/cold
+verified before unchanged successful retry. Evidence logs/keep/atomic-persistence-
+20261103/verification.md. This was not an app assertion failure.
+
+### Global shortcuts — implementation checkpoint, NOT fully verified/accepted
+
+Official JS/Rust plugin2.3.2 pinned; newer2.4.x requires native Tauri2.12, so retain
+existing locked Tauri2.11.5. Cargo.lock adds5 packages; no existing versions change.
+Windows-only dependency/capability, both native entry points register configure/
+availability command. Hotkeys schema3 reads1/2, preserves future/malformed data;
+macro-target data validation is preparation only, no macro executor/UI exists.
+Native key recording uses Windows WebView2 virtual keyCode (not physical code or
+letter guesses); Ctrl+Alt global combinations are reserved for AltGr. Local keys
+retain existing combinations. Global callbacks/profile ownership are fenced and
+native operations serialized; stalled setup reports an error without overlapping
+calls. Settings/edit/dialogs pause registration, native ownership suppresses local
+double dispatch. Browser/Android retain focused playback for saved global bindings.
+Code src/globalKeys.js:15,src/globalShortcuts.js:5,src/useGlobalShortcuts.js:4,
+src/App.jsx:4490,src/HotkeySettings.jsx; native src-tauri/src/controls.rs and
+capabilities/windows-shortcuts.json. Design/current limitations docs/controls-upgrade.md.
+
+Checkpoint verification (all latest exits0 unless stated):
+- Lint0errors/4baseline warnings(two source plus two archived duplicate warnings).
+- Vite build PASS; coverage46suites/567IDs,GS1–GS11 added,0IDs removed;37shipped/
+  37covered features,2planned. git diff --check passes.
+- Node14:profileBundle55/55,profileStorage57/57,bundleGuard20/20,profile-key guardOK,
+  fadeMath46/46,soundFiles32/32,iconPrep35/35,snapshotUploads19/19,
+  androidReleaseSession19/19,hotkeys120/120,profileRecords43/43,webUploads48/48,
+  transfers80/80,globalShortcuts51/51. Snapshot fixture initially hit sandbox EPERM
+  renaming its temp directory; unchanged host retry passed19/19. Failure retained.
+- Extended Android preflight16/16 and restore23/23 PASS.
+- Native cargo check PASS(33.47s,exit0). Focused headless hotkey/global web check
+ 55PASS/0FAIL/0WARN(exit0),finished21:35:57; browser/preview cleaned up.
+- Full web/Windows/Android gates have NOT run after global shortcut implementation;
+  earlier transfer counts above are NOT final global-shortcut regression results.
+  The new native GS fixture reserves a chord in a separate process to exercise OS
+  conflict/recovery, but has NOT run on Windows yet. CDP cannot prove physical
+  background hotkey activation: actual Windows hand-test remains required.
+
+### Resume work and operational facts
+
+User confirmed timed macro repeat behavior: RESTART pending sequence, leave already-
+playing audio until a stop action. This is a recorded decision ONLY. Macros/timed
+scheduler, UI, full-bundle macro compatibility and hotkey-only export/import are
+NOT implemented. Design notes in docs/controls-upgrade.md cover cancellation,
+async audio read fencing, merge identity remapping, atomic controls import and a
+planned bundle-format4/min-reader4 upgrade (current full bundles stillformat3).
+Finish/review global native integration, then macros, then control-file transfer;
+run full combined keyboard gates and required user hand-test before acceptance.
+Next Windows E2E needs a NEW quiet interval arranged with user; the transfer quiet
+interval ENDED. Do not bypass Computer Use denial for SpellCaster or reposition
+its window. Secondary monitorx1920/y0; CUA app access was denied. Speaker mute is safe.
+
+No app.exe or test listeners5173/5183/5238/9224/9225/9333/9343 at final host inspection.
+No regression/build jobs remain active. No unrelated changes discarded. All current
+code/docs/tests are intended checkpoint work; no macro runtime file exists.
+Backups: pre-session011601 VERIFY2104/2104,129.8MB;checkpoint0140382195/2195,
+130.1MB;resume1949052196/2196,130.1MB;atomic2006282272/2272,132.5MB;
+pre-controls2124552450/2450,134MB. Final checkpoint backup20261103-213836 VERIFY OK2551/2551,134.3MB(exit0);remote/prune pending. Final bookkeeping may postdate this keeper; do not create another backup solely for prune notes.
 
 ## Group sound icons and empty-group Add Sound — accepted and complete
 
@@ -708,7 +813,7 @@ No export/import defect remains open from the fade work: the user confirmed expo
 | Planned | Whole-container priming; undo priming | User selected both. Undo behavior (last change versus history, and behavior after consumption) still needs design. |
 | Planned | Creating containers from the transfer picker | Create a destination character/category/group during move/copy. |
 | Planned, provisional | Container/group volume | UI review required; user may cut this feature. Preserve individual sound balance. |
-| Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Sequences explicitly excluded by user 2026-11-03. |
+| Planned | Global shortcuts; hotkey-only export; macros | Full profile export already includes hotkeys. These are additional capabilities. Timed sequences inside macros explicitly included by user 2026-11-03. |
 | Planned | Atomic cross-slice persistence | Save source and destination together or neither; storage design required. |
 | Deferred / undecided | Fullscreen guard | No new scope decision. |
 | Project-wide out of scope | iOS and macOS support | Explicit user scope decision 2026-11-02; not a deferred platform backlog. |
@@ -719,7 +824,7 @@ Browser export/import and manual file sync are complete; see the accepted sectio
 Its **v1 §13 checklist is complete**, including native pickers and Android same-device round trip;
 older state notes claiming otherwise are superseded. `FADE_SPEC.md` is a shipped design record, not work waiting to be built.
 The playback gaps once listed for Z13–Z21 are closed; Z22 covers the loop fade-out ramp.
-Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Sequences are explicitly excluded by user 2026-11-03; do not retain as deferred work.
+Container/group volume is provisionally planned pending UI review. Global shortcuts, macros and hotkey-only export are planned; full profile export already includes hotkeys. Timed sequences inside macros are explicitly included by user 2026-11-03 (reverses earlier exclusion).
 Group sound icon loading/tinting fix is accepted: src/App.jsx:1752 shares walkSoundContainers for all five shapes. Previously the two collectors skipped group sounds; cached built-in references could mask the missing upload load. Current verification status is at the top of this file.
 Release sequencing (user 2026-11-03): remaining certificate/account/package steps in Google Play Console and app upload are deferred until the whole app is finished. User owns these steps and will report completion. Expect this to be the final release activity unless Play Console requests changes. Signed release generation/signature verification already succeeded; do not infer Console completion or reintroduce the old In review status as a development blocker.
 

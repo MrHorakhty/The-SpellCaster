@@ -285,6 +285,57 @@ export const profiles = {
       (migrated?.names || []).includes('A After Switch') && migrated?.version === '3'
         ? 'PASS' : 'FAIL', JSON.stringify(migrated));
 
+    // An interrupted cross-slice save: leave its journal on disk and only two
+    // of its writes applied. Reload must recover before React loads the board.
+    const atomicBefore = await evalJs(`(() => {
+      const id=window.__profiles().active;
+      const keys=['ttrpg_characters','ttrpg_environment','ttrpg_groups'];
+      const before=keys.map(key=>[key,localStorage.getItem('profile:'+id+':'+key)]);
+      localStorage.setItem('profile:'+id+':__profile_transaction',JSON.stringify({version:1,before}));
+      localStorage.setItem('profile:'+id+':ttrpg_characters','[]');
+      localStorage.setItem('profile:'+id+':ttrpg_environment','[]');
+      return {id,before};
+    })()`);
+    await reload();
+    await REHYDRATE(ctx);
+    await sleep(500);
+    const recovered = await evalJs(`(() => {
+      const prefix='profile:'+${JSON.stringify(atomicBefore.id)}+':';
+      return {values:${JSON.stringify(atomicBefore.before)}.map(([key])=>[key,localStorage.getItem(prefix+key)]),
+        journal:localStorage.getItem(prefix+'__profile_transaction'),
+        names:window.__charNames(window.__profiles().active)};
+    })()`);
+    log('PROFILE', 'F13: restart rolls back all slices of an interrupted transaction',
+      JSON.stringify(recovered?.values) === JSON.stringify(atomicBefore.before) ? 'PASS' : 'FAIL', JSON.stringify(recovered));
+    log('PROFILE', 'F14: recovered board remains usable and journal is removed',
+      recovered?.journal === null && recovered?.names?.includes('A After Switch') ? 'PASS' : 'FAIL', '');
+
+    await evalJs(`(() => {
+      window.__atomicOriginalSet=Storage.prototype.setItem;
+      const target='profile:'+window.__profiles().active+':ttrpg_characters';
+      let fired=false;
+      Storage.prototype.setItem=function(key,value){
+        if(key===target&&!fired){fired=true;throw new DOMException('Injected board quota failure','QuotaExceededError');}
+        return window.__atomicOriginalSet.call(this,key,value);
+      };
+    })()`);
+    try {
+      await addCharacter(ctx, 'Unsaved Atomic Hero');
+      await sleep(600);
+      const failedSave = await evalJs(`({
+        saved:window.__charNames(window.__profiles().active),
+        alert:[...document.querySelectorAll('[role="alert"]')].some(el=>/lost when you close|storage|save/i.test(el.textContent))
+      })`);
+      log('PROFILE', 'F15: failed UI save preserves old storage and shows the unsaved warning',
+        !failedSave?.saved?.includes('Unsaved Atomic Hero') && failedSave?.alert ? 'PASS' : 'FAIL', JSON.stringify(failedSave));
+    } finally {
+      await evalJs(`Storage.prototype.setItem=window.__atomicOriginalSet;delete window.__atomicOriginalSet`);
+    }
+    await reload();
+    await REHYDRATE(ctx);
+    log('PROFILE', 'F16: reload after failed save keeps the previous complete board',
+      await evalJs(`window.__charNames(window.__profiles().active).includes('A After Switch')&&!window.__charNames(window.__profiles().active).includes('Unsaved Atomic Hero')`) ? 'PASS' : 'FAIL', '');
+
     // ---- deleting a profile removes ONLY its own keys --------------------------
     // Order matters and was wrong the first time round: the "last profile cannot
     // be deleted" check needs to be DOWN to one profile, so the scoped delete

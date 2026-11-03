@@ -4,9 +4,10 @@
 // Shared with lib.rs - `grant_path` must exist in BOTH entry points. See the
 // note in scope.rs for why a runtime grant is used instead of `fs:scope: ["**"]`.
 mod scope;
+mod controls;
 
 fn main() {
-    tauri::Builder::default()
+    controls::configure(tauri::Builder::default())
         // Register the file system plugin here
         .plugin(tauri_plugin_fs::init())
         // Save/open pickers for profile export and import. Registering the
@@ -15,7 +16,7 @@ fn main() {
         // "Permissions associated with this command: dialog:allow-save,
         // dialog:default", which reads like a registration bug and is not one.
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![scope::grant_path])
+        .invoke_handler(tauri::generate_handler![scope::grant_path, controls::global_shortcuts_available])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

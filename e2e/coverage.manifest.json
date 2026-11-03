@@ -45,6 +45,46 @@
   ],
   "features": [
     {
+      "name": "Windows global shortcuts",
+      "spec": "docs/controls-upgrade.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/globalShortcuts.mjs::GS"
+      ],
+      "note": "Implemented, focused/full verification and user background-key hand-test pending. Node globalShortcuts51/51 covers lifecycle faults; native GS uses real registration/conflict, not physical background input."
+    },
+    {
+      "name": "Macros with timed sequences",
+      "spec": "docs/controls-upgrade.md",
+      "status": "planned",
+      "coveredBy": []
+    },
+    {
+      "name": "Hotkey-only control export and import",
+      "spec": "docs/controls-upgrade.md",
+      "status": "planned",
+      "coveredBy": []
+    },
+    {
+      "name": "Transfer creation, bulk containers and cross-container dragging",
+      "spec": "docs/transfer-improvements.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/transfers.mjs::TR"
+      ],
+      "note": "Accepted after user hand-test2026-11-03. TR1–TR25 passed on web417/0/0,Windows427/0/3,Android417/0/3; transfers80/80. Desktop/mobile visuals reviewed; original storage restored from disk."
+    },
+    {
+      "name": "Atomic cross-slice profile persistence",
+      "spec": "docs/atomic-persistence.md",
+      "status": "shipped",
+      "coveredBy": [
+        "specs/profiles.mjs::F",
+        "specs/bundle.mjs::I"
+      ],
+      "note": "profileStorage57/57 fault-tests transaction boundaries and recovery; shared F13-F16 pass on web, Windows and Android. Seeded interrupted writes, not literal power-loss testing."
+    },
+    {
       "name": "Browser upload storage and profile file transfer",
       "spec": "docs/web-profile-transfer.md",
       "status": "shipped",
@@ -366,6 +406,47 @@
     "e2e-features.ps1"
   ],
   "suites": [
+    {
+      "key": "TR",
+      "cat": "TRANSFER",
+      "title": "Destination creation, bulk containers and cross-container drag",
+      "file": "specs/transfers.mjs",
+      "export": "transfers",
+      "covers": "staged creation/cancellation and duplicate refusal, atomic create-and-transfer, all-sounds move/copy, character/category wrapper move/copy and name conflicts, group duplication/bulk transfer, preserved playback IDs/file settings, source deletion history and reload, new-group destinations, empty containers, real mouse/touch tray drops, drag cancellation and direct split-panel drops",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^TR\\d",
+      "ids": [
+        "TR1",
+        "TR10",
+        "TR11",
+        "TR12",
+        "TR13",
+        "TR14",
+        "TR15",
+        "TR16",
+        "TR17",
+        "TR18",
+        "TR19",
+        "TR2",
+        "TR20",
+        "TR21",
+        "TR22",
+        "TR23",
+        "TR24",
+        "TR25",
+        "TR3",
+        "TR4",
+        "TR5",
+        "TR6",
+        "TR7",
+        "TR8",
+        "TR9"
+      ]
+    },
     {
       "key": "PR",
       "cat": "RECORD",
@@ -1353,6 +1434,10 @@
         "F10",
         "F11",
         "F12",
+        "F13",
+        "F14",
+        "F15",
+        "F16",
         "F2",
         "F3",
         "F4",
@@ -1529,6 +1614,33 @@
         "HK7",
         "HK8",
         "HK9"
+      ]
+    },
+    {
+      "key": "GS",
+      "cat": "GLOBAL",
+      "title": "Windows global shortcuts and portable fallback",
+      "file": "specs/globalShortcuts.mjs",
+      "export": "globalShortcuts",
+      "covers": "Windows capability, native key recording, reload, real registration, local duplicate suppression, modal pause, separate-process OS conflict and recovery, profile ownership, removal and OEM layout metadata. GAP: physical background key activation requires user hand-test; CDP is not OS input.",
+      "platforms": [
+        "web",
+        "win",
+        "android"
+      ],
+      "idPattern": "^GS\\d",
+      "ids": [
+        "GS1",
+        "GS10",
+        "GS11",
+        "GS2",
+        "GS3",
+        "GS4",
+        "GS5",
+        "GS6",
+        "GS7",
+        "GS8",
+        "GS9"
       ]
     }
   ]

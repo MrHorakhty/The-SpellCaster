@@ -35,6 +35,8 @@
 // hardlinked or shared between profiles (§11 risk 6).
 // ---------------------------------------------------------------------------
 
+import { TRANSACTION_KEY, commitTransaction, recoverTransaction, readTransactionValue, transactionKeys } from './profileTransaction.js'
+
 export const PROFILE_INDEX_KEY = 'spellcaster_profiles'
 export const PROFILE_PREFIX = 'profile:'
 export const UPLOADS_ROOT = 'uploads'
@@ -180,7 +182,12 @@ export function ensureProfileStore(dataVersion) {
     if (!ls) return null
 
     const existing = readProfileIndex()
-    if (existing.profiles.length > 0) return existing.activeProfileId
+    if (existing.profiles.length > 0) {
+        try { recoverTransaction(ls, `${PROFILE_PREFIX}${existing.activeProfileId}:`) } catch (error) {
+            console.error('[profiles] recovery pending; previous values remain authoritative:', error)
+        }
+        return existing.activeProfileId
+    }
 
     const id = makeId()
     const now = Date.now()
@@ -332,8 +339,8 @@ export function subscribeProfileSwitch(listener) {
  * call the moment the id check tightened.
  *
  * It exists for one case: Merge import writes the merged board into the
- * live profile's keys while React still holds the old one. The three auto-save
- * effects then fire on the next state change and write that stale state straight
+ * live profile's keys while React still holds the old one. The board auto-save
+ * effect then fires on the next state change and write that stale state straight
  * back over the import. A remount is the fix, and it is the same fix a switch
  * uses (PROFILE_SYNC_SPEC.md §11 risk 10's residual case).
  */
@@ -348,18 +355,30 @@ export function requestProfileRemount() {
 export function readProfileValue(profileId, key) {
     const ls = storage()
     if (!ls || !profileId) return null
-    return ls.getItem(profileScopedKey(profileId, key))
+    if (key === TRANSACTION_KEY) throw new Error('The profile journal is internal')
+    return readTransactionValue(ls, `${PROFILE_PREFIX}${profileId}:`, key)
+}
+
+/** Commit string values and null removals together, or preserve the old state. */
+export function writeProfileValues(profileId, values) {
+    const ls = storage()
+    if (!ls || !profileId) throw new Error('Profile storage is unavailable')
+    commitTransaction(ls, `${PROFILE_PREFIX}${profileId}:`, values)
 }
 
 export function writeProfileValue(profileId, key, value) {
     const ls = storage()
     if (!ls || !profileId) return
+    if (key === TRANSACTION_KEY) throw new Error('The profile journal is internal')
+    recoverTransaction(ls, `${PROFILE_PREFIX}${profileId}:`)
     ls.setItem(profileScopedKey(profileId, key), value)
 }
 
 export function removeProfileValue(profileId, key) {
     const ls = storage()
     if (!ls || !profileId) return
+    if (key === TRANSACTION_KEY) throw new Error('The profile journal is internal')
+    recoverTransaction(ls, `${PROFILE_PREFIX}${profileId}:`)
     ls.removeItem(profileScopedKey(profileId, key))
 }
 
@@ -377,14 +396,14 @@ export function keysWithPrefix(prefix) {
 
 /** Every key belonging to one profile, unprefixed (so it can be re-scoped). */
 export function profileKeys(profileId) {
-    return keysWithPrefix(`${PROFILE_PREFIX}${profileId}:`)
-        .map(k => k.slice(`${PROFILE_PREFIX}${profileId}:`.length))
+    const prefix = `${PROFILE_PREFIX}${profileId}:`
+    const ls = storage()
+    if (!ls) return []
+    return transactionKeys(ls, prefix, keysWithPrefix(prefix).map(k => k.slice(prefix.length)))
 }
 
 export function removeAllProfileValues(profileId, keys) {
-    const ls = storage()
-    if (!ls) return
-    for (const key of keys) ls.removeItem(profileScopedKey(profileId, key))
+    writeProfileValues(profileId, Object.fromEntries(keys.map(key => [key, null])))
 }
 
 /**
@@ -400,9 +419,8 @@ export function readProfileData(profileId, key, fallback, normalize, dataVersion
     const ls = storage()
     if (!ls || !profileId) return normalize(key, fallback)
 
-    const versionKey = profileScopedKey(profileId, 'ttrpg_data_version')
-    const storedVersion = ls.getItem(versionKey)
-    const raw = ls.getItem(profileScopedKey(profileId, key))
+    const storedVersion = readProfileValue(profileId, 'ttrpg_data_version')
+    const raw = readProfileValue(profileId, key)
 
     if (raw === null) {
         return normalize(key, fallback)
@@ -415,9 +433,9 @@ export function readProfileData(profileId, key, fallback, normalize, dataVersion
         if (storedVersion === null) {
             // No version recorded at all: a key written before versioning, or an
             // imported bundle. Snapshot it once, then adopt the current version.
-            try { ls.setItem(profileScopedKey(profileId, `${key}_old`), raw) } catch { /* quota: keep going */ }
+            try { writeProfileValue(profileId, `${key}_old`, raw) } catch { /* quota: keep going */ }
         }
-        try { ls.setItem(versionKey, dataVersion) } catch { /* quota: keep going */ }
+        try { writeProfileValue(profileId, 'ttrpg_data_version', dataVersion) } catch { /* quota: keep going */ }
     }
 
     let parsed = null
@@ -426,7 +444,7 @@ export function readProfileData(profileId, key, fallback, normalize, dataVersion
     } catch {
         // Unparseable is the one case we cannot repair. Fall back to defaults
         // rather than crash, and keep the bad value for inspection.
-        try { ls.setItem(profileScopedKey(profileId, `${key}_old`), raw) } catch { /* quota */ }
+        try { writeProfileValue(profileId, `${key}_old`, raw) } catch { /* quota */ }
         return normalize(key, fallback)
     }
 

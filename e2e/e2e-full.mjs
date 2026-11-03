@@ -38,7 +38,9 @@ import { playback } from './specs/playback.mjs';
 import { fade } from './specs/fade.mjs';
 import { iconprep } from './specs/iconprep.mjs';
 import { hotkeys } from './specs/hotkeys.mjs';
+import { globalShortcuts } from './specs/globalShortcuts.mjs';
 import { profileRecords } from './specs/profileRecords.mjs';
+import { transfers } from './specs/transfers.mjs';
 import { resetDefaults } from './specs/reset.mjs';
 import { profiles } from './specs/profiles.mjs';
 import { bundle } from './specs/bundle.mjs';
@@ -1664,7 +1666,9 @@ async function main() {
   await runSpecs(ctx, [fade]);
   await runSpecs(ctx, [iconprep]);
   await runSpecs(ctx, [hotkeys]);
+  await runSpecs(ctx, [globalShortcuts]);
   await runSpecs(ctx, [profileRecords]);
+  await runSpecs(ctx, [transfers]);
 
   // ================================================================
   //  F: PROFILES (shared spec - see e2e/specs/profiles.mjs)

@@ -51,8 +51,7 @@ import { mergeProfileRecords, summarizeMerge } from './profileMerge.js'
 import {
     profileKeys,
     readProfileValue,
-    writeProfileValue,
-    removeProfileValue,
+    writeProfileValues,
     profileUploadPath,
     createProfile,
     deleteProfile,
@@ -869,12 +868,14 @@ export function snapshotProfile(profileId) {
 /** Restore a snapshot taken by `snapshotProfile`. */
 export function restoreProfileSnapshot(snapshot) {
     if (!snapshot || !snapshot.profileId) return false
+    const values = {}
     for (const key of profileKeys(snapshot.profileId)) {
-        removeProfileValue(snapshot.profileId, key)
+        values[key] = null
     }
     for (const [key, value] of Object.entries(snapshot.keys)) {
-        writeProfileValue(snapshot.profileId, key, value)
+        values[key] = value
     }
+    writeProfileValues(snapshot.profileId, values)
     return true
 }
 
@@ -912,25 +913,27 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion, preserv
     // Whatever keys the target already had that we are not setting must go, or
     // a stale icon from the previous board survives the import.
     const written = new Set([HOTKEYS_KEY, 'ttrpg_characters', 'ttrpg_environment', 'ttrpg_groups', 'ttrpg_data_version', 'boxSize', 'backgroundSettings', 'ttrpg_characters_icon', 'ttrpg_environment_icon'])
+    const values = {}
     for (const key of profileKeys(profileId)) {
-        if (!preserveLocal && !written.has(key)) removeProfileValue(profileId, key)
+        if (!preserveLocal && !written.has(key)) values[key] = null
     }
 
-    writeProfileValue(profileId, 'ttrpg_characters', JSON.stringify(normalized.characters))
-    writeProfileValue(profileId, 'ttrpg_environment', JSON.stringify(normalized.environmentSounds))
-    writeProfileValue(profileId, 'ttrpg_groups', JSON.stringify(normalized.groups))
-    writeProfileValue(profileId, HOTKEYS_KEY, JSON.stringify(normalized.hotkeys))
+    values.ttrpg_characters = JSON.stringify(normalized.characters)
+    values.ttrpg_environment = JSON.stringify(normalized.environmentSounds)
+    values.ttrpg_groups = JSON.stringify(normalized.groups)
+    values[HOTKEYS_KEY] = JSON.stringify(normalized.hotkeys)
 
     if (preserveLocal) {
-        if (dataVersion) writeProfileValue(profileId, 'ttrpg_data_version', dataVersion)
+        if (dataVersion) values.ttrpg_data_version = dataVersion
+        writeProfileValues(profileId, values)
         return normalized
     }
 
     const boxSize = settings && settings.boxSize != null ? settings.boxSize : 1
-    writeProfileValue(profileId, 'boxSize', String(boxSize))
+    values.boxSize = String(boxSize)
 
     const background = (settings && settings.background) || {}
-    writeProfileValue(profileId, 'backgroundSettings', JSON.stringify({
+    values.backgroundSettings = JSON.stringify({
         type: background.type || 'color',
         theme: background.theme || 'default',
         color: background.color || '#84cc16',
@@ -939,16 +942,17 @@ function commitKeys(profileId, { data, settings, normalize, dataVersion, preserv
         // "no image chosen", which is what the app reads as its fallback.
         imagePreview: '',
         isLoading: false,
-    }))
+    })
 
     const sectionIcons = (settings && settings.sectionIcons) || {}
-    writeProfileValue(profileId, 'ttrpg_characters_icon', sectionIcons.characters || '')
-    writeProfileValue(profileId, 'ttrpg_environment_icon', sectionIcons.environment || '')
+    values.ttrpg_characters_icon = sectionIcons.characters || ''
+    values.ttrpg_environment_icon = sectionIcons.environment || ''
 
     // Stamp the version LAST. `readProfileData` treats a MISSING version stamp as
     // a key written before versioning and snapshots it to `<key>_old`, so
     // writing this after the data avoids a spurious backup on first read.
-    if (dataVersion) writeProfileValue(profileId, 'ttrpg_data_version', dataVersion)
+    if (dataVersion) values.ttrpg_data_version = dataVersion
+    writeProfileValues(profileId, values)
 
     return normalized
 }
